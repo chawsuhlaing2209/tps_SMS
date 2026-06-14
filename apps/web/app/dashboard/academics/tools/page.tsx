@@ -12,6 +12,9 @@ type MasterData = {
 };
 type ImportResult = { grades: number; sections: number; subjects: number };
 
+const IMPORT_JSON_PLACEHOLDER =
+  '{ "grades": [], "sections": [], "subjects": [] }';
+
 export default function MasterDataToolsPage() {
   const t = useTranslations("academics");
   const c = useTranslations("common");
@@ -105,7 +108,7 @@ export default function MasterDataToolsPage() {
         <p className="muted">{t("importHelp")}</p>
         <textarea
           className="code-area"
-          placeholder={t("importPlaceholder")}
+          placeholder={IMPORT_JSON_PLACEHOLDER}
           value={importText}
           onChange={(event) => setImportText(event.target.value)}
         />

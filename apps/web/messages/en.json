@@ -103,7 +103,6 @@
     "importTitle": "Import master data",
     "importButton": "Import",
     "importHelp": "Paste a master-data JSON document to bulk-create grades, sections, and subjects.",
-    "importPlaceholder": "{ \"grades\": [], \"sections\": [], \"subjects\": [] }",
     "importSummary": "Imported {grades} grades, {sections} sections, {subjects} subjects.",
     "invalidJson": "That is not valid JSON."
   },

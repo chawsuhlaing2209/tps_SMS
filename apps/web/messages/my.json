@@ -103,7 +103,6 @@
     "importTitle": "အချက်အလက် သွင်းခြင်း",
     "importButton": "သွင်းမည်",
     "importHelp": "အတန်း၊ အတန်းခွဲနှင့် ဘာသာရပ်များကို အစုလိုက် ဖန်တီးရန် master-data JSON ကို ကူးထည့်ပါ။",
-    "importPlaceholder": "{ \"grades\": [], \"sections\": [], \"subjects\": [] }",
     "importSummary": "အတန်း {grades} ခု၊ အတန်းခွဲ {sections} ခု၊ ဘာသာရပ် {subjects} ခု သွင်းပြီးပါပြီ။",
     "invalidJson": "JSON မှန်ကန်မှု မရှိပါ။"
   },
