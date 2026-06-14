@@ -52,7 +52,7 @@ Prove tenant isolation, authentication, school master data setup, and auditabili
    - Core tenant role seeding and assignment endpoints are implemented.
    - `PermissionsGuard` resolves tenant context from assigned roles and enforces required permissions.
    - Academics and identity tenant routes are guarded.
-   - Next hardening: apply the guard to feature modules added in MVP 2+ and add teacher assignment filters before exposing class, subject, attendance, LMS, or grading data.
+   - Teacher assignment scoping is wired for classroom and attendance reads; apply the same pattern to LMS, exam, and grading modules as they land in MVP 3+.
 
 4. Audit logging
    - Audit events are persisted to `audit_logs` for tenant, identity, auth, and academic workflows.
@@ -76,7 +76,7 @@ Verified against the codebase. Grouped by whether the item blocks MVP 1 go-live.
 ### Blocking
 
 - [x] Secure session transport. Login now sets the session token in an httpOnly, `SameSite=Lax`, `secure`-in-production cookie and no longer returns it in the body. All guards authenticate by validating that cookie's session server-side and ignore the `x-user-id` header; a `logout` endpoint revokes the session and clears the cookie (`apps/api/src/identity/session-cookie.ts`, `auth.controller.ts`, `request-context.service.ts`, the three `*.guard.ts`).
-- [ ] Teacher-assignment data scoping. `RbacService.assertTeacherAssignment` exists but is never called, and `PermissionsGuard` only checks permissions. Wire assignment checks into class, subject, and attendance reads before exposing that data (`apps/api/src/identity/rbac.service.ts`).
+- [x] Teacher-assignment data scoping. `TeacherAssignmentService` resolves staff assignments from `classroom_subject_teachers` and class-teacher links, `@TeacherScoped` runs through `PermissionsGuard`, and classroom/attendance read endpoints filter or reject unassigned teacher access (`apps/api/src/identity/teacher-assignment.service.ts`, `classrooms/`, `attendance/`).
 - [x] CI runs migrations. `ci.yml` now sets `DATABASE_URL` and runs `db:migrate` and `db:seed` against the Postgres service before tests (`.github/workflows/ci.yml`).
 - [x] Automated tenant-isolation test. `tenant-isolation.test.ts` provisions two tenants and asserts user and settings reads stay scoped per tenant; runs in CI and skips locally when no `DATABASE_URL` is set (`apps/api/src/db/tenant-isolation.test.ts`).
 

@@ -23,4 +23,9 @@ describe("RbacService", () => {
       )
     ).toThrow(ForbiddenException);
   });
+
+  it("rejects teachers who are not assigned to the requested class or subject", () => {
+    expect(() => service.assertTeacherAssignment(false)).toThrow(ForbiddenException);
+    expect(() => service.assertTeacherAssignment(true)).not.toThrow();
+  });
 });

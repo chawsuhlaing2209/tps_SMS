@@ -4,7 +4,9 @@ import { IdentityManageGuard } from "./identity-manage.guard.js";
 import { PasswordService } from "./password.service.js";
 import { PermissionsGuard } from "./permissions.guard.js";
 import { PlatformAdminGuard } from "./platform-admin.guard.js";
+import { RbacService } from "./rbac.service.js";
 import { RequestContextService } from "./request-context.service.js";
+import { TeacherAssignmentService } from "./teacher-assignment.service.js";
 
 /**
  * Authorization primitives shared across feature modules. Kept free of
@@ -16,6 +18,8 @@ import { RequestContextService } from "./request-context.service.js";
   providers: [
     PasswordService,
     RequestContextService,
+    RbacService,
+    TeacherAssignmentService,
     PermissionsGuard,
     PlatformAdminGuard,
     IdentityManageGuard
@@ -23,6 +27,8 @@ import { RequestContextService } from "./request-context.service.js";
   exports: [
     PasswordService,
     RequestContextService,
+    RbacService,
+    TeacherAssignmentService,
     PermissionsGuard,
     PlatformAdminGuard,
     IdentityManageGuard
