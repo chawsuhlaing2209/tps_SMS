@@ -1,0 +1,131 @@
+"use client";
+
+import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { setSession } from "./lib/session";
+import { zodResolver } from "./lib/zod-resolver";
+
+const API_BASE_URL = "/api";
+
+type LoginResponse = {
+  sessionId?: string;
+  userId: string;
+  tenantId: string;
+  displayName?: string;
+  expiresAt?: string;
+};
+
+type LoginValues = { tenant: string; identifier: string; password: string };
+
+export default function LoginPage() {
+  const router = useRouter();
+  const t = useTranslations("auth");
+  const [serverError, setServerError] = useState<string | null>(null);
+
+  const schema = z.object({
+    tenant: z.string().trim().min(1, t("tenantRequired")),
+    identifier: z.string().trim().min(1, t("identifierRequired")),
+    password: z.string().min(1, t("passwordRequired"))
+  });
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting }
+  } = useForm<LoginValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { tenant: "", identifier: "", password: "" }
+  });
+
+  const onSubmit = handleSubmit(async (values) => {
+    setServerError(null);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/tenants/${encodeURIComponent(values.tenant)}/auth/login`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ identifier: values.identifier, password: values.password })
+        }
+      );
+
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(body?.message ?? t("invalid"));
+      }
+
+      const data = (await response.json()) as LoginResponse;
+      setSession({
+        tenantId: data.tenantId,
+        tenantSlug: values.tenant,
+        userId: data.userId,
+        displayName: data.displayName,
+        expiresAt: data.expiresAt
+      });
+      router.push("/dashboard");
+    } catch (error) {
+      setServerError(error instanceof Error ? error.message : t("invalid"));
+    }
+  });
+
+  return (
+    <main className="auth">
+      <div className="auth-card">
+        <span className="eyebrow">{t("platform")}</span>
+        <h1 className="auth-title">{t("signIn")}</h1>
+        <p className="auth-subtitle">{t("subtitle")}</p>
+
+        <form className="auth-form" onSubmit={onSubmit} noValidate>
+          <label className="auth-field">
+            <span>{t("tenant")}</span>
+            <input
+              placeholder={t("tenantPlaceholder")}
+              autoComplete="organization"
+              {...register("tenant")}
+            />
+            {errors.tenant ? <span className="field-error">{errors.tenant.message}</span> : null}
+          </label>
+
+          <label className="auth-field">
+            <span>{t("identifier")}</span>
+            <input
+              placeholder={t("identifierPlaceholder")}
+              autoComplete="username"
+              {...register("identifier")}
+            />
+            {errors.identifier ? (
+              <span className="field-error">{errors.identifier.message}</span>
+            ) : null}
+          </label>
+
+          <label className="auth-field">
+            <span>{t("password")}</span>
+            <input
+              type="password"
+              placeholder={t("passwordPlaceholder")}
+              autoComplete="current-password"
+              {...register("password")}
+            />
+            {errors.password ? (
+              <span className="field-error">{errors.password.message}</span>
+            ) : null}
+          </label>
+
+          {serverError ? (
+            <p className="auth-error" role="alert">
+              {serverError}
+            </p>
+          ) : null}
+
+          <button type="submit" className="auth-button" disabled={isSubmitting}>
+            {isSubmitting ? t("signingIn") : t("signIn")}
+          </button>
+        </form>
+      </div>
+    </main>
+  );
+}

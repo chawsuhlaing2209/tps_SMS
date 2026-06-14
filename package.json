@@ -1,0 +1,35 @@
+{
+  "name": "sms",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Multi-tenant school management system for Myanmar schools.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n api,web,worker -c blue,green,magenta \"npm run dev -w @sms/api\" \"npm run dev -w @sms/web\" \"npm run dev -w @sms/worker\"",
+    "dev:api": "npm run dev -w @sms/api",
+    "dev:web": "npm run dev -w @sms/web",
+    "dev:worker": "npm run dev -w @sms/worker",
+    "build": "npm run build -w @sms/shared && npm run build -w @sms/api && npm run build -w @sms/web && npm run build -w @sms/worker",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run build -w @sms/shared && npm run typecheck -w @sms/api && npm run typecheck -w @sms/web && npm run typecheck -w @sms/worker && npm run typecheck -w @sms/shared",
+    "test": "npm run test --workspaces --if-present",
+    "clean:web": "rm -rf apps/web/.next",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:logs": "docker compose logs -f",
+    "db:reset": "docker compose down -v && docker compose up -d",
+    "db:generate": "npm run db:generate -w @sms/api",
+    "db:migrate": "npm run db:migrate -w @sms/api",
+    "db:seed": "npm run db:seed -w @sms/api"
+  },
+  "engines": {
+    "node": ">=20.11.0 <23",
+    "npm": ">=10.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3"
+  }
+}

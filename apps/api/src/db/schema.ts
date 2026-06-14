@@ -1,0 +1,774 @@
+import {
+  boolean,
+  date,
+  index,
+  integer,
+  jsonb,
+  numeric,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid
+} from "drizzle-orm/pg-core";
+
+export const languageEnum = pgEnum("language", ["my", "en"]);
+export const tenantStatusEnum = pgEnum("tenant_status", ["active", "suspended", "archived"]);
+export const recordStatusEnum = pgEnum("record_status", ["draft", "active", "inactive", "archived"]);
+export const userStatusEnum = pgEnum("user_status", ["invited", "active", "suspended", "archived"]);
+export const studentStatusEnum = pgEnum("student_status", [
+  "draft",
+  "enrolled",
+  "transferred",
+  "withdrawn",
+  "graduated",
+  "archived"
+]);
+export const staffStatusEnum = pgEnum("staff_status", [
+  "active",
+  "probation",
+  "resigned",
+  "terminated",
+  "archived"
+]);
+export const leadStatusEnum = pgEnum("lead_status", [
+  "new",
+  "contacted",
+  "visit_scheduled",
+  "assessment_scheduled",
+  "offered",
+  "enrolled",
+  "lost"
+]);
+export const attendanceStatusEnum = pgEnum("attendance_status", [
+  "present",
+  "absent",
+  "late",
+  "excused",
+  "sick",
+  "leave",
+  "half_day"
+]);
+export const approvalStatusEnum = pgEnum("approval_status", [
+  "draft",
+  "submitted",
+  "reviewed",
+  "approved",
+  "published",
+  "archived",
+  "rejected"
+]);
+export const paymentStatusEnum = pgEnum("payment_status", [
+  "unpaid",
+  "partial",
+  "paid",
+  "overdue",
+  "waived",
+  "refunded",
+  "cancelled"
+]);
+export const paymentMethodEnum = pgEnum("payment_method", [
+  "cash",
+  "bank_transfer",
+  "kbzpay",
+  "wavepay",
+  "aya_pay",
+  "cb_pay",
+  "other"
+]);
+
+const timestamps = {
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+};
+
+const actorFields = {
+  createdBy: uuid("created_by"),
+  updatedBy: uuid("updated_by")
+};
+
+const tenantFields = {
+  tenantId: uuid("tenant_id").notNull(),
+  ...actorFields,
+  ...timestamps
+};
+
+export const tenants = pgTable(
+  "tenants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    status: tenantStatusEnum("status").default("active").notNull(),
+    timezone: text("timezone").default("Asia/Yangon").notNull(),
+    defaultLanguage: languageEnum("default_language").default("en").notNull(),
+    currency: text("currency").default("MMK").notNull(),
+    subscriptionStatus: text("subscription_status").default("trial").notNull(),
+    ...timestamps
+  },
+  (table) => ({
+    slugUnique: uniqueIndex("tenants_slug_unique").on(table.slug)
+  })
+);
+
+export const tenantSettings = pgTable(
+  "tenant_settings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+    schoolName: text("school_name").notNull(),
+    logoFileId: uuid("logo_file_id"),
+    address: text("address"),
+    contactEmail: text("contact_email"),
+    contactPhone: text("contact_phone"),
+    registrationDetails: jsonb("registration_details").$type<Record<string, unknown>>().default({}).notNull(),
+    branding: jsonb("branding").$type<Record<string, unknown>>().default({}).notNull(),
+    receiptPrefix: text("receipt_prefix").default("RCPT").notNull(),
+    invoicePrefix: text("invoice_prefix").default("INV").notNull(),
+    ...actorFields,
+    ...timestamps
+  },
+  (table) => ({
+    tenantUnique: uniqueIndex("tenant_settings_tenant_unique").on(table.tenantId)
+  })
+);
+
+export const branches = pgTable(
+  "branches",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+    name: text("name").notNull(),
+    status: recordStatusEnum("status").default("inactive").notNull(),
+    isPrimary: boolean("is_primary").default(true).notNull(),
+    ...actorFields,
+    ...timestamps
+  },
+  (table) => ({
+    tenantIdx: index("branches_tenant_idx").on(table.tenantId)
+  })
+);
+
+export const featureFlags = pgTable(
+  "feature_flags",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+    key: text("key").notNull(),
+    enabled: boolean("enabled").default(false).notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+    ...actorFields,
+    ...timestamps
+  },
+  (table) => ({
+    tenantKeyUnique: uniqueIndex("feature_flags_tenant_key_unique").on(table.tenantId, table.key)
+  })
+);
+
+export const users = pgTable(
+  "users",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").references(() => tenants.id),
+    email: text("email"),
+    phone: text("phone"),
+    passwordHash: text("password_hash"),
+    displayName: text("display_name").notNull(),
+    status: userStatusEnum("status").default("invited").notNull(),
+    lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+    ...timestamps
+  },
+  (table) => ({
+    tenantEmailUnique: uniqueIndex("users_tenant_email_unique").on(table.tenantId, table.email),
+    tenantPhoneUnique: uniqueIndex("users_tenant_phone_unique").on(table.tenantId, table.phone)
+  })
+);
+
+export const roles = pgTable(
+  "roles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").references(() => tenants.id),
+    key: text("key").notNull(),
+    name: text("name").notNull(),
+    permissions: jsonb("permissions").$type<string[]>().default([]).notNull(),
+    ...timestamps
+  },
+  (table) => ({
+    tenantKeyUnique: uniqueIndex("roles_tenant_key_unique").on(table.tenantId, table.key)
+  })
+);
+
+export const userRoles = pgTable(
+  "user_roles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+    userId: uuid("user_id").references(() => users.id).notNull(),
+    roleId: uuid("role_id").references(() => roles.id).notNull(),
+    ...timestamps
+  },
+  (table) => ({
+    tenantUserRoleUnique: uniqueIndex("user_roles_tenant_user_role_unique").on(
+      table.tenantId,
+      table.userId,
+      table.roleId
+    )
+  })
+);
+
+export const sessions = pgTable("sessions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").references(() => tenants.id),
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  tokenHash: text("token_hash").notNull(),
+  userAgent: text("user_agent"),
+  ipAddress: text("ip_address"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  ...timestamps
+});
+
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+});
+
+export const auditLogs = pgTable(
+  "audit_logs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").references(() => tenants.id),
+    actorUserId: uuid("actor_user_id").references(() => users.id),
+    action: text("action").notNull(),
+    recordType: text("record_type").notNull(),
+    recordId: text("record_id").notNull(),
+    before: jsonb("before").$type<Record<string, unknown> | null>(),
+    after: jsonb("after").$type<Record<string, unknown> | null>(),
+    reason: text("reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+  },
+  (table) => ({
+    tenantRecordIdx: index("audit_logs_tenant_record_idx").on(table.tenantId, table.recordType, table.recordId)
+  })
+);
+
+export const supportAccessGrants = pgTable("support_access_grants", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+  platformUserId: uuid("platform_user_id").references(() => users.id).notNull(),
+  approvedByUserId: uuid("approved_by_user_id").references(() => users.id).notNull(),
+  reason: text("reason").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  ...timestamps
+});
+
+export const academicYears = pgTable("academic_years", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  name: text("name").notNull(),
+  startsOn: date("starts_on").notNull(),
+  endsOn: date("ends_on").notNull(),
+  status: recordStatusEnum("status").default("draft").notNull(),
+  promotionRules: jsonb("promotion_rules").$type<Record<string, unknown>>().default({}).notNull()
+});
+
+export const terms = pgTable("terms", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  academicYearId: uuid("academic_year_id").references(() => academicYears.id).notNull(),
+  name: text("name").notNull(),
+  startsOn: date("starts_on").notNull(),
+  endsOn: date("ends_on").notNull()
+});
+
+export const grades = pgTable("grades", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  name: text("name").notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  status: recordStatusEnum("status").default("active").notNull()
+});
+
+export const sections = pgTable("sections", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  name: text("name").notNull(),
+  status: recordStatusEnum("status").default("active").notNull()
+});
+
+export const subjects = pgTable("subjects", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  name: text("name").notNull(),
+  code: text("code"),
+  subjectType: text("subject_type").default("required").notNull(),
+  status: recordStatusEnum("status").default("active").notNull()
+});
+
+export const gradeSubjects = pgTable("grade_subjects", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  academicYearId: uuid("academic_year_id").references(() => academicYears.id).notNull(),
+  gradeId: uuid("grade_id").references(() => grades.id).notNull(),
+  subjectId: uuid("subject_id").references(() => subjects.id).notNull(),
+  weight: numeric("weight", { precision: 8, scale: 2 }).default("1").notNull(),
+  isRequired: boolean("is_required").default(true).notNull()
+});
+
+export const guardians = pgTable("guardians", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  fullName: text("full_name").notNull(),
+  relationshipLabel: text("relationship_label"),
+  phone: text("phone"),
+  email: text("email"),
+  address: text("address"),
+  preferredChannel: text("preferred_channel").default("email").notNull()
+});
+
+export const familyGroups = pgTable("family_groups", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  name: text("name").notNull(),
+  primaryGuardianId: uuid("primary_guardian_id").references(() => guardians.id)
+});
+
+export const students = pgTable("students", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  familyGroupId: uuid("family_group_id").references(() => familyGroups.id),
+  admissionNumber: text("admission_number").notNull(),
+  fullName: text("full_name").notNull(),
+  dateOfBirth: date("date_of_birth"),
+  gender: text("gender"),
+  photoFileId: uuid("photo_file_id"),
+  address: text("address"),
+  township: text("township"),
+  identityNumber: text("identity_number"),
+  medicalNotes: text("medical_notes"),
+  status: studentStatusEnum("status").default("draft").notNull()
+});
+
+export const studentGuardians = pgTable("student_guardians", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  studentId: uuid("student_id").references(() => students.id).notNull(),
+  guardianId: uuid("guardian_id").references(() => guardians.id).notNull(),
+  relationship: text("relationship").notNull(),
+  pickupAuthorized: boolean("pickup_authorized").default(false).notNull(),
+  emergencyContact: boolean("emergency_contact").default(false).notNull()
+});
+
+export const staff = pgTable("staff", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  userId: uuid("user_id").references(() => users.id),
+  employeeNumber: text("employee_number"),
+  fullName: text("full_name").notNull(),
+  department: text("department"),
+  employmentRole: text("employment_role").notNull(),
+  phone: text("phone"),
+  email: text("email"),
+  address: text("address"),
+  joinDate: date("join_date"),
+  salaryBasis: text("salary_basis"),
+  qualifications: jsonb("qualifications").$type<Record<string, unknown>[]>().default([]).notNull(),
+  teacherProfile: jsonb("teacher_profile").$type<Record<string, unknown>>().default({}).notNull(),
+  status: staffStatusEnum("status").default("active").notNull()
+});
+
+export const classrooms = pgTable("classrooms", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  academicYearId: uuid("academic_year_id").references(() => academicYears.id).notNull(),
+  gradeId: uuid("grade_id").references(() => grades.id).notNull(),
+  sectionId: uuid("section_id").references(() => sections.id),
+  branchId: uuid("branch_id").references(() => branches.id),
+  name: text("name").notNull(),
+  capacity: integer("capacity"),
+  room: text("room"),
+  classTeacherStaffId: uuid("class_teacher_staff_id").references(() => staff.id),
+  status: recordStatusEnum("status").default("active").notNull()
+});
+
+export const classroomStudents = pgTable("classroom_students", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  classroomId: uuid("classroom_id").references(() => classrooms.id).notNull(),
+  studentId: uuid("student_id").references(() => students.id).notNull(),
+  effectiveFrom: date("effective_from").notNull(),
+  effectiveTo: date("effective_to"),
+  movementReason: text("movement_reason")
+});
+
+export const classroomSubjectTeachers = pgTable("classroom_subject_teachers", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  classroomId: uuid("classroom_id").references(() => classrooms.id).notNull(),
+  subjectId: uuid("subject_id").references(() => subjects.id).notNull(),
+  teacherStaffId: uuid("teacher_staff_id").references(() => staff.id).notNull()
+});
+
+export const enquiries = pgTable("enquiries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  prospectiveStudentName: text("prospective_student_name").notNull(),
+  guardianName: text("guardian_name"),
+  guardianPhone: text("guardian_phone"),
+  targetGrade: text("target_grade"),
+  source: text("source").notNull(),
+  status: leadStatusEnum("status").default("new").notNull(),
+  followUpDate: date("follow_up_date"),
+  assignedStaffId: uuid("assigned_staff_id").references(() => staff.id),
+  lostReason: text("lost_reason"),
+  notes: text("notes")
+});
+
+export const leadActivities = pgTable("lead_activities", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  enquiryId: uuid("enquiry_id").references(() => enquiries.id).notNull(),
+  activityType: text("activity_type").notNull(),
+  notes: text("notes"),
+  dueAt: timestamp("due_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true })
+});
+
+export const enrollments = pgTable("enrollments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  enquiryId: uuid("enquiry_id").references(() => enquiries.id),
+  studentId: uuid("student_id").references(() => students.id).notNull(),
+  academicYearId: uuid("academic_year_id").references(() => academicYears.id).notNull(),
+  gradeId: uuid("grade_id").references(() => grades.id).notNull(),
+  classroomId: uuid("classroom_id").references(() => classrooms.id),
+  status: approvalStatusEnum("status").default("draft").notNull()
+});
+
+export const calendarEvents = pgTable("calendar_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  academicYearId: uuid("academic_year_id").references(() => academicYears.id),
+  title: text("title").notNull(),
+  eventType: text("event_type").notNull(),
+  startsOn: date("starts_on").notNull(),
+  endsOn: date("ends_on").notNull(),
+  isHoliday: boolean("is_holiday").default(false).notNull(),
+  isMakeUpDay: boolean("is_make_up_day").default(false).notNull(),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull()
+});
+
+export const timetablePeriods = pgTable("timetable_periods", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  academicYearId: uuid("academic_year_id").references(() => academicYears.id).notNull(),
+  name: text("name").notNull(),
+  startsAt: text("starts_at").notNull(),
+  endsAt: text("ends_at").notNull(),
+  sortOrder: integer("sort_order").default(0).notNull()
+});
+
+export const timetableSlots = pgTable("timetable_slots", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  classroomId: uuid("classroom_id").references(() => classrooms.id).notNull(),
+  subjectId: uuid("subject_id").references(() => subjects.id).notNull(),
+  teacherStaffId: uuid("teacher_staff_id").references(() => staff.id).notNull(),
+  periodId: uuid("period_id").references(() => timetablePeriods.id).notNull(),
+  room: text("room"),
+  dayOfWeek: integer("day_of_week").notNull(),
+  effectiveFrom: date("effective_from").notNull(),
+  effectiveTo: date("effective_to"),
+  publishedAt: timestamp("published_at", { withTimezone: true })
+});
+
+export const attendanceSessions = pgTable("attendance_sessions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  classroomId: uuid("classroom_id").references(() => classrooms.id).notNull(),
+  subjectId: uuid("subject_id").references(() => subjects.id),
+  sessionDate: date("session_date").notNull(),
+  submittedByStaffId: uuid("submitted_by_staff_id").references(() => staff.id),
+  submittedAt: timestamp("submitted_at", { withTimezone: true })
+});
+
+export const attendanceRecords = pgTable("attendance_records", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  attendanceSessionId: uuid("attendance_session_id").references(() => attendanceSessions.id).notNull(),
+  studentId: uuid("student_id").references(() => students.id).notNull(),
+  status: attendanceStatusEnum("status").notNull(),
+  correctionReason: text("correction_reason")
+});
+
+export const learningMaterials = pgTable("learning_materials", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  classroomId: uuid("classroom_id").references(() => classrooms.id).notNull(),
+  subjectId: uuid("subject_id").references(() => subjects.id).notNull(),
+  teacherStaffId: uuid("teacher_staff_id").references(() => staff.id).notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  fileId: uuid("file_id"),
+  externalUrl: text("external_url"),
+  lessonDate: date("lesson_date")
+});
+
+export const assignments = pgTable("assignments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  classroomId: uuid("classroom_id").references(() => classrooms.id).notNull(),
+  subjectId: uuid("subject_id").references(() => subjects.id).notNull(),
+  teacherStaffId: uuid("teacher_staff_id").references(() => staff.id).notNull(),
+  title: text("title").notNull(),
+  instructions: text("instructions"),
+  dueAt: timestamp("due_at", { withTimezone: true }),
+  scoreEnabled: boolean("score_enabled").default(false).notNull(),
+  submissionMode: text("submission_mode").default("teacher_completion").notNull()
+});
+
+export const assignmentSubmissions = pgTable("assignment_submissions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  assignmentId: uuid("assignment_id").references(() => assignments.id).notNull(),
+  studentId: uuid("student_id").references(() => students.id).notNull(),
+  completed: boolean("completed").default(false).notNull(),
+  score: numeric("score", { precision: 8, scale: 2 }),
+  remarks: text("remarks")
+});
+
+export const examCycles = pgTable("exam_cycles", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  academicYearId: uuid("academic_year_id").references(() => academicYears.id).notNull(),
+  name: text("name").notNull(),
+  examType: text("exam_type").notNull(),
+  status: approvalStatusEnum("status").default("draft").notNull()
+});
+
+export const examSchedules = pgTable("exam_schedules", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  examCycleId: uuid("exam_cycle_id").references(() => examCycles.id).notNull(),
+  classroomId: uuid("classroom_id").references(() => classrooms.id).notNull(),
+  subjectId: uuid("subject_id").references(() => subjects.id).notNull(),
+  examDate: date("exam_date").notNull(),
+  startsAt: text("starts_at"),
+  endsAt: text("ends_at"),
+  room: text("room"),
+  fullMarks: numeric("full_marks", { precision: 8, scale: 2 }).notNull(),
+  passMarks: numeric("pass_marks", { precision: 8, scale: 2 }),
+  weight: numeric("weight", { precision: 8, scale: 2 }).default("1").notNull()
+});
+
+export const assessmentResults = pgTable("assessment_results", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  examScheduleId: uuid("exam_schedule_id").references(() => examSchedules.id).notNull(),
+  studentId: uuid("student_id").references(() => students.id).notNull(),
+  marks: numeric("marks", { precision: 8, scale: 2 }),
+  resultStatus: text("result_status").default("pending").notNull(),
+  teacherRemarks: text("teacher_remarks"),
+  status: approvalStatusEnum("status").default("draft").notNull()
+});
+
+export const gradeRules = pgTable("grade_rules", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  academicYearId: uuid("academic_year_id").references(() => academicYears.id).notNull(),
+  gradeId: uuid("grade_id").references(() => grades.id),
+  subjectId: uuid("subject_id").references(() => subjects.id),
+  name: text("name").notNull(),
+  rules: jsonb("rules").$type<Record<string, unknown>>().default({}).notNull(),
+  rankingEnabled: boolean("ranking_enabled").default(false).notNull()
+});
+
+export const reportCards = pgTable("report_cards", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  studentId: uuid("student_id").references(() => students.id).notNull(),
+  classroomId: uuid("classroom_id").references(() => classrooms.id).notNull(),
+  academicYearId: uuid("academic_year_id").references(() => academicYears.id).notNull(),
+  termId: uuid("term_id").references(() => terms.id),
+  data: jsonb("data").$type<Record<string, unknown>>().default({}).notNull(),
+  status: approvalStatusEnum("status").default("draft").notNull(),
+  publishedAt: timestamp("published_at", { withTimezone: true })
+});
+
+export const feeItems = pgTable("fee_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  name: text("name").notNull(),
+  feeType: text("fee_type").notNull(),
+  billingType: text("billing_type").notNull(),
+  status: recordStatusEnum("status").default("active").notNull()
+});
+
+export const enrollmentFeePlans = pgTable("enrollment_fee_plans", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  academicYearId: uuid("academic_year_id").references(() => academicYears.id).notNull(),
+  gradeId: uuid("grade_id").references(() => grades.id).notNull(),
+  feeItemId: uuid("fee_item_id").references(() => feeItems.id).notNull(),
+  amount: numeric("amount", { precision: 14, scale: 2 }).notNull()
+});
+
+export const studentServices = pgTable("student_services", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  studentId: uuid("student_id").references(() => students.id).notNull(),
+  feeItemId: uuid("fee_item_id").references(() => feeItems.id).notNull(),
+  effectiveFrom: date("effective_from").notNull(),
+  effectiveTo: date("effective_to")
+});
+
+export const invoices = pgTable("invoices", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  studentId: uuid("student_id").references(() => students.id).notNull(),
+  familyGroupId: uuid("family_group_id").references(() => familyGroups.id),
+  invoiceNumber: text("invoice_number").notNull(),
+  issueDate: date("issue_date").notNull(),
+  dueDate: date("due_date"),
+  subtotal: numeric("subtotal", { precision: 14, scale: 2 }).notNull(),
+  discountTotal: numeric("discount_total", { precision: 14, scale: 2 }).default("0").notNull(),
+  total: numeric("total", { precision: 14, scale: 2 }).notNull(),
+  status: paymentStatusEnum("status").default("unpaid").notNull()
+});
+
+export const invoiceItems = pgTable("invoice_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  invoiceId: uuid("invoice_id").references(() => invoices.id).notNull(),
+  feeItemId: uuid("fee_item_id").references(() => feeItems.id),
+  description: text("description").notNull(),
+  quantity: numeric("quantity", { precision: 8, scale: 2 }).default("1").notNull(),
+  unitAmount: numeric("unit_amount", { precision: 14, scale: 2 }).notNull(),
+  total: numeric("total", { precision: 14, scale: 2 }).notNull()
+});
+
+export const discountRules = pgTable("discount_rules", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  name: text("name").notNull(),
+  discountType: text("discount_type").notNull(),
+  valueType: text("value_type").notNull(),
+  value: numeric("value", { precision: 14, scale: 2 }).notNull(),
+  approvalThreshold: numeric("approval_threshold", { precision: 14, scale: 2 }),
+  status: recordStatusEnum("status").default("active").notNull()
+});
+
+export const studentDiscounts = pgTable("student_discounts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  studentId: uuid("student_id").references(() => students.id).notNull(),
+  discountRuleId: uuid("discount_rule_id").references(() => discountRules.id).notNull(),
+  reason: text("reason").notNull(),
+  supportingFileId: uuid("supporting_file_id"),
+  effectiveFrom: date("effective_from").notNull(),
+  effectiveTo: date("effective_to"),
+  status: approvalStatusEnum("status").default("draft").notNull()
+});
+
+export const payments = pgTable("payments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  invoiceId: uuid("invoice_id").references(() => invoices.id).notNull(),
+  amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+  method: paymentMethodEnum("method").notNull(),
+  referenceNumber: text("reference_number"),
+  proofFileId: uuid("proof_file_id"),
+  verifiedByUserId: uuid("verified_by_user_id").references(() => users.id),
+  verifiedAt: timestamp("verified_at", { withTimezone: true }),
+  overrideReason: text("override_reason"),
+  notes: text("notes")
+});
+
+export const receipts = pgTable("receipts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  paymentId: uuid("payment_id").references(() => payments.id).notNull(),
+  receiptNumber: text("receipt_number").notNull(),
+  issuedAt: timestamp("issued_at", { withTimezone: true }).defaultNow().notNull(),
+  pdfFileId: uuid("pdf_file_id")
+});
+
+export const salaryComponents = pgTable("salary_components", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  name: text("name").notNull(),
+  componentType: text("component_type").notNull(),
+  status: recordStatusEnum("status").default("active").notNull()
+});
+
+export const salaryRecords = pgTable("salary_records", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  staffId: uuid("staff_id").references(() => staff.id).notNull(),
+  salaryMonth: text("salary_month").notNull(),
+  grossAmount: numeric("gross_amount", { precision: 14, scale: 2 }).notNull(),
+  deductionAmount: numeric("deduction_amount", { precision: 14, scale: 2 }).default("0").notNull(),
+  netAmount: numeric("net_amount", { precision: 14, scale: 2 }).notNull(),
+  status: approvalStatusEnum("status").default("draft").notNull(),
+  approvedByUserId: uuid("approved_by_user_id").references(() => users.id),
+  paidAt: timestamp("paid_at", { withTimezone: true })
+});
+
+export const emailTemplates = pgTable("email_templates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  key: text("key").notNull(),
+  language: languageEnum("language").default("en").notNull(),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  status: recordStatusEnum("status").default("active").notNull()
+});
+
+export const notificationJobs = pgTable("notification_jobs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  jobType: text("job_type").notNull(),
+  payload: jsonb("payload").$type<Record<string, unknown>>().default({}).notNull(),
+  status: text("status").default("queued").notNull(),
+  scheduledAt: timestamp("scheduled_at", { withTimezone: true })
+});
+
+export const notificationLogs = pgTable("notification_logs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  notificationJobId: uuid("notification_job_id").references(() => notificationJobs.id),
+  recipient: text("recipient").notNull(),
+  channel: text("channel").default("email").notNull(),
+  status: text("status").notNull(),
+  providerMessageId: text("provider_message_id"),
+  error: text("error")
+});
+
+export const documentRequirements = pgTable("document_requirements", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  name: text("name").notNull(),
+  appliesTo: text("applies_to").default("student").notNull(),
+  required: boolean("required").default(false).notNull(),
+  expires: boolean("expires").default(false).notNull(),
+  status: recordStatusEnum("status").default("active").notNull()
+});
+
+export const studentDocuments = pgTable("student_documents", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  studentId: uuid("student_id").references(() => students.id).notNull(),
+  documentRequirementId: uuid("document_requirement_id").references(() => documentRequirements.id),
+  fileId: uuid("file_id").notNull(),
+  expiresOn: date("expires_on"),
+  verifiedByUserId: uuid("verified_by_user_id").references(() => users.id),
+  verifiedAt: timestamp("verified_at", { withTimezone: true })
+});
