@@ -212,6 +212,23 @@ a {
   padding: 10px 12px;
 }
 
+.auth-footer {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 16px 0 0;
+  text-align: center;
+}
+
+.auth-footer a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.auth-footer a:hover {
+  text-decoration: underline;
+}
+
 .auth-success {
   display: grid;
   gap: 16px;

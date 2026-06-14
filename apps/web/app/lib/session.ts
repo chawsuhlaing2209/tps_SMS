@@ -3,12 +3,17 @@
 const STORAGE_KEY = "sms.session";
 
 export type Session = {
-  tenantId: string;
+  tenantId: string | null;
   tenantSlug: string;
   userId: string;
   displayName?: string;
   expiresAt?: string;
+  isPlatform?: boolean;
 };
+
+export function isPlatformSession(session: Session | null | undefined): boolean {
+  return session?.isPlatform === true || session?.tenantId === null;
+}
 
 export function getSession(): Session | null {
   if (typeof window === "undefined") {

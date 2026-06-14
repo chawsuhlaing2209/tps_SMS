@@ -2,6 +2,7 @@
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useApiMutation, useApiQuery } from "../../lib/api";
@@ -28,6 +29,7 @@ const ROLES_PATH = (tenant: string) => `/tenants/${tenant}/identity/roles`;
 export default function PeoplePage() {
   const t = useTranslations("people");
   const c = useTranslations("common");
+  const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
   const users = useApiQuery<User[]>(USERS_PATH);
   const roles = useApiQuery<Role[]>(ROLES_PATH);
 
@@ -70,11 +72,15 @@ export default function PeoplePage() {
     defaultValues: { displayName: "", email: "", phone: "" }
   });
   const submitInvite = inviteForm.handleSubmit(async (values) => {
+    setInviteSuccess(null);
     await invite.mutateAsync({
       displayName: values.displayName,
       email: values.email || undefined,
       phone: values.phone || undefined
     });
+    if (values.email.trim()) {
+      setInviteSuccess(t("inviteEmailSent", { email: values.email.trim() }));
+    }
     inviteForm.reset();
   });
 
@@ -125,6 +131,7 @@ export default function PeoplePage() {
         <div className="panel-head">
           <h2>{t("inviteTitle")}</h2>
         </div>
+        <p className="muted">{t("inviteHelp")}</p>
         <form className="entity-form" onSubmit={submitInvite} noValidate>
           <Field label={c("name")} error={inviteForm.formState.errors.displayName?.message}>
             <input placeholder={t("namePlaceholder")} {...inviteForm.register("displayName")} />
@@ -141,6 +148,11 @@ export default function PeoplePage() {
             </button>
           </div>
         </form>
+        {inviteSuccess ? (
+          <p className="form-feedback form-feedback--ok" role="status">
+            {inviteSuccess}
+          </p>
+        ) : null}
       </section>
 
       <section className="panel">

@@ -1,7 +1,7 @@
 import { config } from "dotenv";
 import { rolePermissions, roles as roleKeys } from "@sms/shared";
 import argon2 from "argon2";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, isNull, ne } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import {
@@ -28,6 +28,35 @@ const demoTenants = [
 // Default password for seeded demo owners so they can sign in immediately.
 // Intended for local development only.
 const DEMO_OWNER_PASSWORD = "ChangeMe123!";
+const PLATFORM_ADMIN_EMAIL = "platform-admin@example.edu.mm";
+
+async function seedPlatformAdmin(db: ReturnType<typeof drizzle>, passwordHash: string) {
+  const [existing] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(isNull(users.tenantId), eq(users.email, PLATFORM_ADMIN_EMAIL)));
+
+  if (existing) {
+    await db
+      .update(users)
+      .set({ passwordHash, status: "active", displayName: "Platform Super Admin" })
+      .where(eq(users.id, existing.id));
+    return existing.id;
+  }
+
+  const [admin] = await db
+    .insert(users)
+    .values({
+      tenantId: null,
+      email: PLATFORM_ADMIN_EMAIL,
+      displayName: "Platform Super Admin",
+      status: "active",
+      passwordHash
+    })
+    .returning({ id: users.id });
+
+  return admin?.id;
+}
 
 async function seedTenant(
   db: ReturnType<typeof drizzle>,
@@ -137,6 +166,8 @@ async function main() {
   try {
     const ownerPasswordHash = await argon2.hash(DEMO_OWNER_PASSWORD, { type: argon2.argon2id });
 
+    await seedPlatformAdmin(db, ownerPasswordHash);
+
     const results = [];
     for (const tenantInput of demoTenants) {
       const result = await seedTenant(db, tenantInput, ownerPasswordHash);
@@ -154,6 +185,9 @@ async function main() {
       results.map((result) => ({ id: result.tenant.id, slug: result.tenant.slug }))
     );
     console.log("\nDemo sign-in credentials (local development only):");
+    console.log(
+      `  • Platform console  ·  /platform/login  ·  email ${PLATFORM_ADMIN_EMAIL}  ·  password ${DEMO_OWNER_PASSWORD}`
+    );
     for (const result of results) {
       console.log(
         `  • Tenant "${result.tenant.slug}"  ·  email owner@${result.tenant.slug}.example.edu.mm  ·  password ${DEMO_OWNER_PASSWORD}`

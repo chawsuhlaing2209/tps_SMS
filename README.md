@@ -24,8 +24,17 @@ cp .env.example .env
 docker compose up -d
 npm run db:generate
 npm run db:migrate
+npm run db:seed
 npm run dev
 ```
+
+After seeding, two consoles are available:
+
+- **Platform admin** — `http://localhost:3000/platform/login`  
+  Email: `platform-admin@example.edu.mm` · Password: `ChangeMe123!`  
+  Create tenants, manage school settings, and toggle feature flags.
+- **School admin** — `http://localhost:3000/`  
+  Use a demo tenant slug such as `demo-alpha` with `owner@demo-alpha.example.edu.mm` and the same password.
 
 ## Architecture
 

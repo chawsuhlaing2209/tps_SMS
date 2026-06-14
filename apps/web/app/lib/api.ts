@@ -8,7 +8,7 @@ import {
   type UseQueryResult
 } from "@tanstack/react-query";
 import { useCallback } from "react";
-import { getSession } from "./session";
+import { getSession, isPlatformSession } from "./session";
 
 // All requests go to the Next.js origin under /api and are proxied to the API
 // (see next.config.ts), so there is never a cross-origin/CORS request.
@@ -100,7 +100,7 @@ export function useApiMutation<TVariables, TResult = unknown>(
   return useMutation<TResult, Error, TVariables>({
     mutationFn: async (variables: TVariables) => {
       const session = getSession();
-      if (!session) {
+      if (!session?.tenantId) {
         throw new ApiError("Not signed in.", 401);
       }
       const { path, init } = buildRequest(variables, session.tenantId);
@@ -108,7 +108,7 @@ export function useApiMutation<TVariables, TResult = unknown>(
     },
     onSuccess: (_result, variables) => {
       const session = getSession();
-      if (!session) {
+      if (!session?.tenantId) {
         return;
       }
       const paths = options.invalidatePaths?.(variables, session.tenantId) ?? [];
@@ -116,6 +116,43 @@ export function useApiMutation<TVariables, TResult = unknown>(
         void queryClient.invalidateQueries({
           queryKey: tenantQueryKey(session.tenantId, path)
         });
+      }
+    }
+  });
+}
+
+const PLATFORM_QUERY_KEY = ["platform"] as const;
+
+/** Platform-scoped read for the super-admin console. */
+export function usePlatformQuery<T>(path: string): UseQueryResult<T> {
+  const session = getSession();
+  const enabled = isPlatformSession(session);
+
+  return useQuery<T>({
+    queryKey: [...PLATFORM_QUERY_KEY, path],
+    queryFn: () => apiFetch<T>(path),
+    enabled
+  });
+}
+
+/** Platform-scoped write for the super-admin console. */
+export function usePlatformMutation<TVariables, TResult = unknown>(
+  buildRequest: (variables: TVariables) => { path: string; init?: RequestInit },
+  options: { invalidatePaths?: string[] } = {}
+): UseMutationResult<TResult, Error, TVariables> {
+  const queryClient = useQueryClient();
+
+  return useMutation<TResult, Error, TVariables>({
+    mutationFn: async (variables: TVariables) => {
+      if (!isPlatformSession(getSession())) {
+        throw new ApiError("Not signed in.", 401);
+      }
+      const { path, init } = buildRequest(variables);
+      return apiFetch<TResult>(path, init);
+    },
+    onSuccess: () => {
+      for (const path of options.invalidatePaths ?? []) {
+        void queryClient.invalidateQueries({ queryKey: [...PLATFORM_QUERY_KEY, path] });
       }
     }
   });

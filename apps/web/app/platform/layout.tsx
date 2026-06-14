@@ -5,57 +5,59 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { LanguageSwitcher } from "../lib/language-switcher";
-import { clearSession, getSession, type Session } from "../lib/session";
+import { clearSession, getSession, isPlatformSession, type Session } from "../lib/session";
 
-const NAV_ITEMS = [
-  { href: "/dashboard", key: "overview" },
-  { href: "/dashboard/academics", key: "academics" },
-  { href: "/dashboard/people", key: "people" },
-  { href: "/dashboard/audit", key: "audit" }
-] as const;
-
-export default function DashboardLayout({ children }: { children: ReactNode }) {
+export default function PlatformLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const t = useTranslations("nav");
+  const t = useTranslations("platformNav");
   const [session, setSessionState] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
 
+  const isLoginPage = pathname === "/platform/login";
+
   useEffect(() => {
     const current = getSession();
-    if (!current) {
-      router.replace("/");
+    if (isLoginPage) {
+      if (current && isPlatformSession(current)) {
+        router.replace("/platform/tenants");
+        return;
+      }
+      setReady(true);
       return;
     }
-    if (current.isPlatform || current.tenantId === null) {
-      router.replace("/platform/tenants");
+    if (!current || !isPlatformSession(current)) {
+      router.replace("/platform/login");
       return;
     }
     setSessionState(current);
     setReady(true);
-  }, [router]);
+  }, [router, isLoginPage]);
 
-  if (!ready || !session) {
+  if (!ready) {
     return (
       <div className="dash-loading">
-        <span>{t("loadingWorkspace")}</span>
+        <span>{t("loading")}</span>
       </div>
     );
   }
 
+  if (isLoginPage) {
+    return children;
+  }
+
+  if (!session) {
+    return null;
+  }
+
   async function handleSignOut() {
     try {
-      if (session?.tenantId) {
-        await fetch(`/api/tenants/${encodeURIComponent(session.tenantId)}/auth/logout`, {
-          method: "POST",
-          credentials: "include"
-        });
-      }
+      await fetch("/api/platform/auth/logout", { method: "POST", credentials: "include" });
     } catch {
       // Clearing local state below still signs the user out of the browser.
     } finally {
       clearSession();
-      router.replace("/");
+      router.replace("/platform/login");
     }
   }
 
@@ -64,31 +66,26 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       <aside className="dash-sidebar">
         <div className="dash-brand">
           <span className="dash-brand-mark">SMS</span>
-          <span className="dash-brand-name">{session.tenantSlug}</span>
+          <span className="dash-brand-name">{t("console")}</span>
         </div>
         <nav className="dash-nav">
-          {NAV_ITEMS.map((item) => {
-            const active =
-              item.href === "/dashboard"
-                ? pathname === item.href
-                : pathname.startsWith(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={active ? "dash-nav-link dash-nav-link--active" : "dash-nav-link"}
-              >
-                {t(item.key)}
-              </Link>
-            );
-          })}
+          <Link
+            href="/platform/tenants"
+            className={
+              pathname.startsWith("/platform/tenants")
+                ? "dash-nav-link dash-nav-link--active"
+                : "dash-nav-link"
+            }
+          >
+            {t("tenants")}
+          </Link>
         </nav>
       </aside>
 
       <div className="dash-main">
         <header className="dash-topbar">
           <div className="dash-topbar-context">
-            <span className="dash-topbar-tenant">{session.tenantSlug}</span>
+            <span className="dash-topbar-tenant">{t("platformAdmin")}</span>
           </div>
           <div className="dash-topbar-user">
             <LanguageSwitcher />

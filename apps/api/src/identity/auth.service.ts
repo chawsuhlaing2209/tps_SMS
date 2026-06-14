@@ -148,6 +148,68 @@ export class AuthService {
     };
   }
 
+  async platformLogin(dto: LoginDto) {
+    const [user] = await this.db
+      .select()
+      .from(users)
+      .where(
+        and(
+          isNull(users.tenantId),
+          or(eq(users.email, dto.identifier), eq(users.phone, dto.identifier))
+        )
+      );
+
+    if (!user || !user.passwordHash || user.status !== "active") {
+      throw new UnauthorizedException("Invalid credentials.");
+    }
+
+    const valid = await this.passwordService.verify(user.passwordHash, dto.password);
+    if (!valid) {
+      throw new UnauthorizedException("Invalid credentials.");
+    }
+
+    const token = this.passwordService.generateToken();
+    const tokenHash = this.passwordService.hashToken(token);
+    const now = Date.now();
+    const idleExpiresAt = new Date(now + SESSION_IDLE_TTL_MS);
+    const absoluteExpiresAt = new Date(now + SESSION_ABSOLUTE_TTL_MS);
+
+    const [session] = await this.db
+      .insert(sessions)
+      .values({
+        tenantId: null,
+        userId: user.id,
+        tokenHash,
+        expiresAt: idleExpiresAt,
+        userAgent: dto.userAgent,
+        ipAddress: dto.ipAddress
+      })
+      .returning({ id: sessions.id });
+
+    await this.db
+      .update(users)
+      .set({ lastLoginAt: new Date() })
+      .where(eq(users.id, user.id));
+
+    await this.auditService.recordEvent({
+      tenantId: null,
+      actorUserId: user.id,
+      action: "platform.login",
+      recordType: "Session",
+      recordId: session?.id ?? user.id,
+      after: { userId: user.id }
+    });
+
+    return {
+      token,
+      sessionId: session?.id,
+      userId: user.id,
+      tenantId: null,
+      displayName: user.displayName,
+      expiresAt: absoluteExpiresAt
+    };
+  }
+
   async requestPasswordReset(tenantId: string, dto: RequestPasswordResetDto) {
     const [user] = await this.db
       .select()

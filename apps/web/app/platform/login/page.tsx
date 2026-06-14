@@ -1,33 +1,32 @@
 "use client";
 
-import Link from "next/link";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { setSession } from "./lib/session";
-import { zodResolver } from "./lib/zod-resolver";
+import { setSession } from "../../lib/session";
+import { zodResolver } from "../../lib/zod-resolver";
 
 const API_BASE_URL = "/api";
 
-type LoginResponse = {
+type PlatformLoginResponse = {
   sessionId?: string;
   userId: string;
-  tenantId: string;
+  tenantId: null;
   displayName?: string;
   expiresAt?: string;
 };
 
-type LoginValues = { tenant: string; identifier: string; password: string };
+type LoginValues = { identifier: string; password: string };
 
-export default function LoginPage() {
+export default function PlatformLoginPage() {
   const router = useRouter();
-  const t = useTranslations("auth");
+  const t = useTranslations("platformAuth");
   const [serverError, setServerError] = useState<string | null>(null);
 
   const schema = z.object({
-    tenant: z.string().trim().min(1, t("tenantRequired")),
     identifier: z.string().trim().min(1, t("identifierRequired")),
     password: z.string().min(1, t("passwordRequired"))
   });
@@ -38,36 +37,34 @@ export default function LoginPage() {
     formState: { errors, isSubmitting }
   } = useForm<LoginValues>({
     resolver: zodResolver(schema),
-    defaultValues: { tenant: "", identifier: "", password: "" }
+    defaultValues: { identifier: "", password: "" }
   });
 
   const onSubmit = handleSubmit(async (values) => {
     setServerError(null);
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/tenants/${encodeURIComponent(values.tenant)}/auth/login`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ identifier: values.identifier, password: values.password })
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}/platform/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(values)
+      });
 
       if (!response.ok) {
         const body = (await response.json().catch(() => null)) as { message?: string } | null;
         throw new Error(body?.message ?? t("invalid"));
       }
 
-      const data = (await response.json()) as LoginResponse;
+      const data = (await response.json()) as PlatformLoginResponse;
       setSession({
-        tenantId: data.tenantId,
-        tenantSlug: values.tenant,
+        tenantId: null,
+        tenantSlug: "platform",
         userId: data.userId,
         displayName: data.displayName,
-        expiresAt: data.expiresAt
+        expiresAt: data.expiresAt,
+        isPlatform: true
       });
-      router.push("/dashboard");
+      router.push("/platform/tenants");
     } catch (error) {
       setServerError(error instanceof Error ? error.message : t("invalid"));
     }
@@ -76,21 +73,11 @@ export default function LoginPage() {
   return (
     <main className="auth">
       <div className="auth-card">
-        <span className="eyebrow">{t("platform")}</span>
+        <span className="eyebrow">{t("eyebrow")}</span>
         <h1 className="auth-title">{t("signIn")}</h1>
         <p className="auth-subtitle">{t("subtitle")}</p>
 
         <form className="auth-form" onSubmit={onSubmit} noValidate>
-          <label className="auth-field">
-            <span>{t("tenant")}</span>
-            <input
-              placeholder={t("tenantPlaceholder")}
-              autoComplete="organization"
-              {...register("tenant")}
-            />
-            {errors.tenant ? <span className="field-error">{errors.tenant.message}</span> : null}
-          </label>
-
           <label className="auth-field">
             <span>{t("identifier")}</span>
             <input
@@ -128,7 +115,7 @@ export default function LoginPage() {
         </form>
 
         <p className="auth-footer">
-          <Link href="/platform/login">{t("platformSignIn")}</Link>
+          <Link href="/">{t("schoolSignIn")}</Link>
         </p>
       </div>
     </main>

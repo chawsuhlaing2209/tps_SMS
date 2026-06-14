@@ -67,6 +67,31 @@ export class NotificationsService implements OnModuleDestroy {
     });
   }
 
+  async sendOwnerWelcomeEmail(input: {
+    tenantId: string;
+    recipient: string;
+    schoolName: string;
+    tenantSlug: string;
+    displayName: string;
+    password: string;
+  }): Promise<void> {
+    const baseUrl = this.config.get<string>("WEB_APP_URL") ?? "http://localhost:3000";
+
+    await this.sendEmail({
+      tenantId: input.tenantId,
+      templateKey: "owner-welcome",
+      recipient: input.recipient,
+      variables: {
+        schoolName: input.schoolName,
+        displayName: input.displayName,
+        loginUrl: baseUrl,
+        tenantSlug: input.tenantSlug,
+        email: input.recipient,
+        password: input.password
+      }
+    });
+  }
+
   async onModuleDestroy(): Promise<void> {
     await this.queue?.close();
   }

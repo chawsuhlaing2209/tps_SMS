@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
 import { featureFlags, tenantSettings, tenants } from "../db/schema.js";
+import { IdentityService } from "../identity/identity.service.js";
 import type {
   CreateTenantDto,
   SetFeatureFlagDto,
@@ -14,7 +15,8 @@ import type {
 export class TenantManagementService {
   constructor(
     @Inject(DB) private readonly db: Database,
-    private readonly auditService: AuditService
+    private readonly auditService: AuditService,
+    private readonly identityService: IdentityService
   ) {}
 
   listTenants() {
@@ -33,18 +35,37 @@ export class TenantManagementService {
       })
       .returning();
 
-    if (tenant) {
-      await this.auditService.recordEvent({
-        tenantId: tenant.id,
-        actorUserId: actorUserId ?? null,
-        action: "tenant.create",
-        recordType: "Tenant",
-        recordId: tenant.id,
-        after: { name: tenant.name, slug: tenant.slug, status: tenant.status }
-      });
+    if (!tenant) {
+      throw new NotFoundException("Failed to create tenant.");
     }
 
-    return tenant;
+    await this.db
+      .insert(tenantSettings)
+      .values({ tenantId: tenant.id, schoolName: dto.name })
+      .onConflictDoNothing();
+
+    await this.auditService.recordEvent({
+      tenantId: tenant.id,
+      actorUserId: actorUserId ?? null,
+      action: "tenant.create",
+      recordType: "Tenant",
+      recordId: tenant.id,
+      after: { name: tenant.name, slug: tenant.slug, status: tenant.status }
+    });
+
+    const owner = await this.identityService.provisionSchoolOwner(
+      tenant.id,
+      {
+        displayName: dto.initialOwner.displayName,
+        email: dto.initialOwner.email,
+        password: dto.initialOwner.password,
+        schoolName: dto.name,
+        tenantSlug: dto.slug
+      },
+      actorUserId
+    );
+
+    return { tenant, owner };
   }
 
   async updateTenantStatus(tenantId: string, dto: UpdateTenantStatusDto, actorUserId?: string) {

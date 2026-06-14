@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Headers, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
+import type { Request } from "express";
 import { PlatformAdminGuard } from "../identity/platform-admin.guard.js";
 import {
   CreateTenantDto,
@@ -7,6 +8,10 @@ import {
   UpsertTenantSettingsDto
 } from "./dto.js";
 import { TenantManagementService } from "./tenant-management.service.js";
+
+interface PlatformRequest extends Request {
+  platformActorUserId?: string;
+}
 
 @Controller("platform/tenants")
 @UseGuards(PlatformAdminGuard)
@@ -19,17 +24,17 @@ export class TenantManagementController {
   }
 
   @Post()
-  createTenant(@Body() dto: CreateTenantDto, @Headers("x-user-id") actorUserId?: string) {
-    return this.tenantManagementService.createTenant(dto, actorUserId);
+  createTenant(@Body() dto: CreateTenantDto, @Req() req: PlatformRequest) {
+    return this.tenantManagementService.createTenant(dto, req.platformActorUserId);
   }
 
   @Patch(":tenantId/status")
   updateTenantStatus(
     @Param("tenantId") tenantId: string,
     @Body() dto: UpdateTenantStatusDto,
-    @Headers("x-user-id") actorUserId?: string
+    @Req() req: PlatformRequest
   ) {
-    return this.tenantManagementService.updateTenantStatus(tenantId, dto, actorUserId);
+    return this.tenantManagementService.updateTenantStatus(tenantId, dto, req.platformActorUserId);
   }
 
   @Get(":tenantId/settings")
@@ -41,9 +46,9 @@ export class TenantManagementController {
   upsertSettings(
     @Param("tenantId") tenantId: string,
     @Body() dto: UpsertTenantSettingsDto,
-    @Headers("x-user-id") actorUserId?: string
+    @Req() req: PlatformRequest
   ) {
-    return this.tenantManagementService.upsertTenantSettings(tenantId, dto, actorUserId);
+    return this.tenantManagementService.upsertTenantSettings(tenantId, dto, req.platformActorUserId);
   }
 
   @Get(":tenantId/feature-flags")
@@ -55,8 +60,8 @@ export class TenantManagementController {
   setFeatureFlag(
     @Param("tenantId") tenantId: string,
     @Body() dto: SetFeatureFlagDto,
-    @Headers("x-user-id") actorUserId?: string
+    @Req() req: PlatformRequest
   ) {
-    return this.tenantManagementService.setFeatureFlag(tenantId, dto, actorUserId);
+    return this.tenantManagementService.setFeatureFlag(tenantId, dto, req.platformActorUserId);
   }
 }

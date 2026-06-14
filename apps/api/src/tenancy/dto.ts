@@ -1,4 +1,30 @@
-import { IsBoolean, IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, Matches } from "class-validator";
+import { Type } from "class-transformer";
+import {
+  IsBoolean,
+  IsEmail,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+  MinLength,
+  ValidateNested
+} from "class-validator";
+
+export class InitialOwnerDto {
+  @IsString()
+  @IsNotEmpty()
+  displayName!: string;
+
+  @IsEmail()
+  email!: string;
+
+  /** When omitted, a temporary password is generated and emailed to the owner. */
+  @IsOptional()
+  @IsString()
+  @MinLength(10)
+  password?: string;
+}
 
 export class CreateTenantDto {
   @IsString()
@@ -20,6 +46,10 @@ export class CreateTenantDto {
   @IsOptional()
   @IsString()
   currency?: string;
+
+  @ValidateNested()
+  @Type(() => InitialOwnerDto)
+  initialOwner!: InitialOwnerDto;
 }
 
 export class UpdateTenantStatusDto {
