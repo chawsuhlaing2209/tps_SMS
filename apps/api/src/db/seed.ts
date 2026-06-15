@@ -6,9 +6,13 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import {
   academicYears,
+  attendanceSessions,
+  classroomSubjectTeachers,
+  classrooms,
   grades,
   roles,
   sections,
+  staff,
   subjects,
   tenantSettings,
   tenants,
@@ -56,6 +60,176 @@ async function seedPlatformAdmin(db: ReturnType<typeof drizzle>, passwordHash: s
     .returning({ id: users.id });
 
   return admin?.id;
+}
+
+async function seedDemoClassroomData(
+  db: ReturnType<typeof drizzle>,
+  tenantId: string,
+  slug: string,
+  passwordHash: string
+) {
+  const [year] = await db
+    .select({ id: academicYears.id })
+    .from(academicYears)
+    .where(and(eq(academicYears.tenantId, tenantId), eq(academicYears.name, "2026-2027")));
+
+  const [grade] = await db
+    .select({ id: grades.id })
+    .from(grades)
+    .where(and(eq(grades.tenantId, tenantId), eq(grades.name, "Grade 1")));
+
+  const [section] = await db
+    .select({ id: sections.id })
+    .from(sections)
+    .where(and(eq(sections.tenantId, tenantId), eq(sections.name, "A")));
+
+  const [subject] = await db
+    .select({ id: subjects.id })
+    .from(subjects)
+    .where(and(eq(subjects.tenantId, tenantId), eq(subjects.code, "MATH")));
+
+  if (!year?.id || !grade?.id || !section?.id || !subject?.id) {
+    return;
+  }
+
+  const teacherEmail = `teacher@${slug}.example.edu.mm`;
+
+  const [teacherUser] = await db
+    .insert(users)
+    .values({
+      tenantId,
+      email: teacherEmail,
+      displayName: "Demo Teacher",
+      status: "active",
+      passwordHash
+    })
+    .onConflictDoUpdate({
+      target: [users.tenantId, users.email],
+      set: { status: "active", passwordHash, displayName: "Demo Teacher" }
+    })
+    .returning({ id: users.id });
+
+  const [teacherRole] = await db
+    .select({ id: roles.id })
+    .from(roles)
+    .where(and(eq(roles.tenantId, tenantId), eq(roles.key, "teacher")));
+
+  if (teacherUser && teacherRole) {
+    await db
+      .insert(userRoles)
+      .values({ tenantId, userId: teacherUser.id, roleId: teacherRole.id })
+      .onConflictDoNothing();
+  }
+
+  let staffId: string | undefined;
+  if (teacherUser) {
+    const [existingStaff] = await db
+      .select({ id: staff.id })
+      .from(staff)
+      .where(and(eq(staff.tenantId, tenantId), eq(staff.userId, teacherUser.id)));
+
+    if (existingStaff) {
+      staffId = existingStaff.id;
+    } else {
+      const [createdStaff] = await db
+        .insert(staff)
+        .values({
+          tenantId,
+          userId: teacherUser.id,
+          fullName: "Demo Teacher",
+          employmentRole: "teacher",
+          status: "active"
+        })
+        .returning({ id: staff.id });
+      staffId = createdStaff?.id;
+    }
+  }
+
+  const ensureClassroom = async (name: string) => {
+    const [existing] = await db
+      .select({ id: classrooms.id })
+      .from(classrooms)
+      .where(and(eq(classrooms.tenantId, tenantId), eq(classrooms.name, name)));
+
+    if (existing) {
+      return existing.id;
+    }
+
+    const [created] = await db
+      .insert(classrooms)
+      .values({
+        tenantId,
+        academicYearId: year.id,
+        gradeId: grade.id,
+        sectionId: section.id,
+        name,
+        room: name === "Grade 1 A" ? "Room 101" : "Room 102",
+        capacity: 30,
+        status: "active"
+      })
+      .returning({ id: classrooms.id });
+
+    return created?.id;
+  };
+
+  const classroomAId = await ensureClassroom("Grade 1 A");
+  const classroomBId = await ensureClassroom("Grade 1 B");
+
+  if (staffId && classroomAId) {
+    await db
+      .insert(classroomSubjectTeachers)
+      .values({
+        tenantId,
+        classroomId: classroomAId,
+        subjectId: subject.id,
+        teacherStaffId: staffId
+      })
+      .onConflictDoNothing();
+
+    const [existingSession] = await db
+      .select({ id: attendanceSessions.id })
+      .from(attendanceSessions)
+      .where(
+        and(
+          eq(attendanceSessions.tenantId, tenantId),
+          eq(attendanceSessions.classroomId, classroomAId),
+          eq(attendanceSessions.sessionDate, "2026-06-15")
+        )
+      );
+
+    if (!existingSession) {
+      await db.insert(attendanceSessions).values({
+        tenantId,
+        classroomId: classroomAId,
+        subjectId: subject.id,
+        sessionDate: "2026-06-15",
+        submittedByStaffId: staffId,
+        submittedAt: new Date()
+      });
+    }
+  }
+
+  if (classroomBId) {
+    const [existingSessionB] = await db
+      .select({ id: attendanceSessions.id })
+      .from(attendanceSessions)
+      .where(
+        and(
+          eq(attendanceSessions.tenantId, tenantId),
+          eq(attendanceSessions.classroomId, classroomBId),
+          eq(attendanceSessions.sessionDate, "2026-06-16")
+        )
+      );
+
+    if (!existingSessionB) {
+      await db.insert(attendanceSessions).values({
+        tenantId,
+        classroomId: classroomBId,
+        subjectId: subject.id,
+        sessionDate: "2026-06-16"
+      });
+    }
+  }
 }
 
 async function seedTenant(
@@ -143,6 +317,10 @@ async function seedTenant(
     await db.insert(subjects).values({ tenantId: tenant.id, name: "Mathematics", code: "MATH" });
   }
 
+  if (input.slug === "demo-alpha") {
+    await seedDemoClassroomData(db, tenant.id, input.slug, ownerPasswordHash);
+  }
+
   return { tenant, academicYearId };
 }
 
@@ -193,6 +371,10 @@ async function main() {
         `  • Tenant "${result.tenant.slug}"  ·  email owner@${result.tenant.slug}.example.edu.mm  ·  password ${DEMO_OWNER_PASSWORD}`
       );
     }
+    console.log(
+      `  • Demo teacher (demo-alpha only)  ·  tenant demo-alpha  ·  email teacher@demo-alpha.example.edu.mm  ·  password ${DEMO_OWNER_PASSWORD}`
+    );
+    console.log("    Assigned to Grade 1 A only — sign in and open Classrooms to verify teacher scoping.");
   } finally {
     await pool.end();
   }

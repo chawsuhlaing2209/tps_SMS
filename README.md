@@ -35,6 +35,8 @@ After seeding, two consoles are available:
   Create tenants, manage school settings, and toggle feature flags.
 - **School admin** — `http://localhost:3000/`  
   Use a demo tenant slug such as `demo-alpha` with `owner@demo-alpha.example.edu.mm` and the same password.
+- **Demo teacher (scoping check)** — same URL, tenant `demo-alpha`, email `teacher@demo-alpha.example.edu.mm`.  
+  Open **Classrooms** in the sidebar — you should see only **Grade 1 A**. The owner account sees both Grade 1 A and Grade 1 B.
 
 ## Architecture
 

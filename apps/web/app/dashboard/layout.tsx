@@ -10,6 +10,7 @@ import { clearSession, getSession, type Session } from "../lib/session";
 const NAV_ITEMS = [
   { href: "/dashboard", key: "overview" },
   { href: "/dashboard/academics", key: "academics" },
+  { href: "/dashboard/classrooms", key: "classrooms" },
   { href: "/dashboard/people", key: "people" },
   { href: "/dashboard/audit", key: "audit" }
 ] as const;

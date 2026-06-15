@@ -1,6 +1,6 @@
 import { Controller, Get, Param, Req, UseGuards } from "@nestjs/common";
 import type { Request } from "express";
-import { RequirePermissions } from "../identity/permissions.decorator.js";
+import { RequireAnyPermissions } from "../identity/permissions.decorator.js";
 import { PermissionsGuard } from "../identity/permissions.guard.js";
 import { TeacherScoped } from "../identity/teacher-scope.decorator.js";
 import type { TenantContext } from "../tenancy/tenant-context.js";
@@ -16,20 +16,20 @@ export class ClassroomsController {
   constructor(private readonly classroomsService: ClassroomsService) {}
 
   @Get()
-  @RequirePermissions("student.view")
+  @RequireAnyPermissions("student.view", "student.manage")
   listClassrooms(@Req() req: TenantRequest) {
     return this.classroomsService.listClassrooms(req.tenantContext);
   }
 
   @Get(":classroomId")
-  @RequirePermissions("student.view")
+  @RequireAnyPermissions("student.view", "student.manage")
   @TeacherScoped({ classroomIdParam: "classroomId" })
   getClassroom(@Req() req: TenantRequest, @Param("classroomId") classroomId: string) {
     return this.classroomsService.getClassroom(req.tenantContext, classroomId);
   }
 
   @Get(":classroomId/subjects")
-  @RequirePermissions("student.view")
+  @RequireAnyPermissions("student.view", "student.manage")
   @TeacherScoped({ classroomIdParam: "classroomId" })
   listClassroomSubjects(
     @Req() req: TenantRequest,

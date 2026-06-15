@@ -24,6 +24,7 @@
   "nav": {
     "overview": "ခြုံငုံသုံးသပ်ချက်",
     "academics": "ပညာရေး တည်ဆောက်ပုံ",
+    "classrooms": "အတန်းခန်းများ",
     "people": "ဝန်ထမ်းများ",
     "audit": "စစ်ဆေးမှတ်တမ်း",
     "signOut": "ထွက်မည်",
@@ -211,5 +212,31 @@
     "record": "မှတ်တမ်း",
     "actor": "ပြုလုပ်သူ",
     "noEvents": "ဖြစ်ရပ် မှတ်တမ်း မရှိသေးပါ။"
+  },
+  "classrooms": {
+    "title": "အတန်းခန်းများ",
+    "description": "သင်ဝင်ရောက်ခွင့်ရှိသော အတန်းများ။ ဆရာများသည် သတ်မှတ်ထားသော အတန်းနှင့် subject များကိုသာ မြင်ရသည်။",
+    "listTitle": "သင့် အတန်းခန်းများ",
+    "empty": "အတန်းခန်း မရှိသေးပါ။ School admin များသည် npm run db:seed ဖြင့် demo data ထည့်နိုင်သည်။",
+    "room": "Room",
+    "capacity": "Capacity",
+    "backToList": "← အတန်းခန်း အားလုံး",
+    "notFound": "အတန်းခန်း မတွေ့ပါ (သို့) ဝင်ရောက်ခွင့် မရှိပါ။",
+    "subjectsTitle": "Subjects",
+    "subject": "Subject",
+    "subjectCode": "Code",
+    "noSubjects": "ဤ အတန်းတွင် subject မသတ်မှတ်ရသေးပါ။",
+    "attendanceTitle": "Attendance sessions",
+    "sessionDate": "Date",
+    "wholeClass": "Whole class",
+    "submitted": "Submitted",
+    "notSubmitted": "Not submitted",
+    "records": "Records",
+    "viewRecords": "View records",
+    "hideRecords": "Hide records",
+    "recordsTitle": "Session records",
+    "student": "Student",
+    "noSessions": "Attendance session မရှိသေးပါ။",
+    "noRecords": "ဤ session တွင် student record မရှိပါ။"
   }
 }

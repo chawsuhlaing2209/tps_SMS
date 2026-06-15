@@ -24,6 +24,7 @@
   "nav": {
     "overview": "Overview",
     "academics": "Academic Setup",
+    "classrooms": "Classrooms",
     "people": "People",
     "audit": "Audit Log",
     "signOut": "Sign out",
@@ -211,5 +212,31 @@
     "record": "Record",
     "actor": "Actor",
     "noEvents": "No events recorded yet."
+  },
+  "classrooms": {
+    "title": "Classrooms",
+    "description": "Classes you can access. Teachers only see classrooms and subjects they are assigned to.",
+    "listTitle": "Your classrooms",
+    "empty": "No classrooms yet. School admins can seed demo data with npm run db:seed.",
+    "room": "Room",
+    "capacity": "Capacity",
+    "backToList": "← All classrooms",
+    "notFound": "Classroom not found or you do not have access.",
+    "subjectsTitle": "Subjects",
+    "subject": "Subject",
+    "subjectCode": "Code",
+    "noSubjects": "No subjects assigned in this classroom yet.",
+    "attendanceTitle": "Attendance sessions",
+    "sessionDate": "Date",
+    "wholeClass": "Whole class",
+    "submitted": "Submitted",
+    "notSubmitted": "Not submitted",
+    "records": "Records",
+    "viewRecords": "View records",
+    "hideRecords": "Hide records",
+    "recordsTitle": "Session records",
+    "student": "Student",
+    "noSessions": "No attendance sessions recorded yet.",
+    "noRecords": "No student records in this session."
   }
 }
