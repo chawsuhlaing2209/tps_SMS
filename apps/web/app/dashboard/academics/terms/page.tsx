@@ -2,11 +2,14 @@
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { DataTable } from "../../../lib/data-table";
 import { Field } from "../../../lib/form";
+import { RecordFormSheet } from "../../../lib/record-sheet";
+import { TablePanelBody, TablePanelHead } from "../../../lib/table-panel";
 import { zodResolver } from "../../../lib/zod-resolver";
 
 type AcademicYear = { id: string; name: string; status: string };
@@ -16,24 +19,47 @@ type Term = {
   name: string;
   startsOn: string;
   endsOn: string;
-  status: string;
+  updatedAt?: string;
 };
 
 type TermValues = { academicYearId: string; name: string; startsOn: string; endsOn: string };
+type FormMode = { type: "create" } | { type: "edit"; term: Term };
+
+const TERMS_PATH = (tenant: string) => `/tenants/${tenant}/academics/terms`;
 
 export default function TermsPage() {
   const t = useTranslations("academics");
   const c = useTranslations("common");
+  const [formMode, setFormMode] = useState<FormMode | null>(null);
 
   const years = useApiQuery<AcademicYear[]>((tenant) => `/tenants/${tenant}/academics/academic-years`);
-  const terms = useApiQuery<Term[]>((tenant) => `/tenants/${tenant}/academics/terms`);
+  const terms = useApiQuery<Term[]>(TERMS_PATH);
 
   const create = useApiMutation<TermValues>(
     (body, tenant) => ({
-      path: `/tenants/${tenant}/academics/terms`,
+      path: TERMS_PATH(tenant),
       init: { method: "POST", body: JSON.stringify(body) }
     }),
-    { invalidatePaths: (_b, tenant) => [`/tenants/${tenant}/academics/terms`] }
+    { invalidatePaths: (_b, tenant) => [TERMS_PATH(tenant)] }
+  );
+
+  const update = useApiMutation<{ id: string; name: string; startsOn: string; endsOn: string }>(
+    (body, tenant) => {
+      const { id, ...payload } = body;
+      return {
+        path: `${TERMS_PATH(tenant)}/${id}`,
+        init: { method: "PATCH", body: JSON.stringify(payload) }
+      };
+    },
+    { invalidatePaths: (_b, tenant) => [TERMS_PATH(tenant)] }
+  );
+
+  const remove = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({
+      path: `${TERMS_PATH(tenant)}/${id}`,
+      init: { method: "DELETE" }
+    }),
+    { invalidatePaths: (_b, tenant) => [TERMS_PATH(tenant)] }
   );
 
   const schema = z.object({
@@ -42,20 +68,26 @@ export default function TermsPage() {
     startsOn: z.string().min(1, c("required")),
     endsOn: z.string().min(1, c("required"))
   });
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors, isSubmitting }
-  } = useForm<TermValues>({
+
+  const form = useForm<TermValues>({
     resolver: zodResolver(schema),
     defaultValues: { academicYearId: "", name: "", startsOn: "", endsOn: "" }
   });
 
-  const onSubmit = handleSubmit(async (values) => {
-    await create.mutateAsync(values);
-    reset();
-  });
+  const openCreate = () => {
+    form.reset({ academicYearId: "", name: "", startsOn: "", endsOn: "" });
+    setFormMode({ type: "create" });
+  };
+
+  const openEdit = (term: Term) => {
+    form.reset({
+      academicYearId: term.academicYearId,
+      name: term.name,
+      startsOn: term.startsOn,
+      endsOn: term.endsOn
+    });
+    setFormMode({ type: "edit", term });
+  };
 
   const yearName = (id: string) => years.data?.find((y) => y.id === id)?.name ?? id.slice(0, 8);
   const openYears = years.data?.filter((y) => y.status !== "archived") ?? [];
@@ -66,26 +98,86 @@ export default function TermsPage() {
     { id: "starts", header: t("starts"), accessorFn: (term) => term.startsOn },
     { id: "ends", header: t("ends"), accessorFn: (term) => term.endsOn },
     {
-      id: "status",
-      header: c("status"),
+      id: "actions",
+      header: t("actions"),
+      enableSorting: false,
       cell: ({ row }) => (
-        <span className={`badge badge--${row.original.status}`}>{row.original.status}</span>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button type="button" className="row-action" onClick={() => openEdit(row.original)}>
+            {t("edit")}
+          </button>
+          <button
+            type="button"
+            className="row-action"
+            disabled={remove.isPending}
+            onClick={() => void remove.mutateAsync({ id: row.original.id })}
+          >
+            {c("delete")}
+          </button>
+        </div>
       )
     }
   ];
 
   return (
     <section className="panel">
-      <div className="panel-head">
-        <h2>{t("terms")}</h2>
-        <button type="button" className="btn-ghost" onClick={() => void terms.refetch()}>
-          {c("refresh")}
-        </button>
-      </div>
+      <TablePanelHead
+        title={t("terms")}
+        onRefresh={() => void terms.refetch()}
+        onAdd={openCreate}
+        addLabel={t("addTerm")}
+      />
+      <TablePanelBody
+        loading={terms.isLoading}
+        error={terms.isError ? c("somethingWrong") : null}
+        empty={!terms.data?.length}
+      >
+        <DataTable<Term> columns={columns} data={terms.data ?? []} />
+      </TablePanelBody>
 
-      <form className="entity-form" onSubmit={onSubmit} noValidate>
-        <Field label={t("year")} error={errors.academicYearId?.message}>
-          <select {...register("academicYearId")}>
+      <RecordFormSheet
+        open={formMode !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setFormMode(null);
+            form.reset();
+          }
+        }}
+        title={formMode?.type === "edit" ? t("editTermTitle") : t("addTerm")}
+        onSubmit={form.handleSubmit(async (values) => {
+          if (formMode?.type === "edit") {
+            await update.mutateAsync({
+              id: formMode.term.id,
+              name: values.name,
+              startsOn: values.startsOn,
+              endsOn: values.endsOn
+            });
+          } else {
+            await create.mutateAsync(values);
+          }
+          setFormMode(null);
+          form.reset();
+        })}
+        footer={
+          <>
+            <button type="button" className="btn-ghost" onClick={() => setFormMode(null)}>
+              {c("cancel")}
+            </button>
+            <button type="submit" className="btn-primary" disabled={form.formState.isSubmitting}>
+              {form.formState.isSubmitting
+                ? t("creating")
+                : formMode?.type === "edit"
+                  ? c("save")
+                  : t("addTerm")}
+            </button>
+          </>
+        }
+      >
+        <Field label={t("year")} error={form.formState.errors.academicYearId?.message}>
+          <select
+            {...form.register("academicYearId")}
+            disabled={formMode?.type === "edit"}
+          >
             <option value="">{t("selectYear")}</option>
             {openYears.map((year) => (
               <option key={year.id} value={year.id}>
@@ -94,31 +186,16 @@ export default function TermsPage() {
             ))}
           </select>
         </Field>
-        <Field label={c("name")} error={errors.name?.message}>
-          <input placeholder={t("termNamePlaceholder")} {...register("name")} />
+        <Field label={c("name")} error={form.formState.errors.name?.message}>
+          <input placeholder={t("termNamePlaceholder")} {...form.register("name")} />
         </Field>
-        <Field label={t("starts")} error={errors.startsOn?.message}>
-          <input type="date" {...register("startsOn")} />
+        <Field label={t("starts")} error={form.formState.errors.startsOn?.message}>
+          <input type="date" {...form.register("startsOn")} />
         </Field>
-        <Field label={t("ends")} error={errors.endsOn?.message}>
-          <input type="date" {...register("endsOn")} />
+        <Field label={t("ends")} error={form.formState.errors.endsOn?.message}>
+          <input type="date" {...form.register("endsOn")} />
         </Field>
-        <div className="form-actions">
-          <button type="submit" className="btn-primary" disabled={isSubmitting}>
-            {isSubmitting ? t("creating") : t("addTerm")}
-          </button>
-        </div>
-      </form>
-
-      {terms.isLoading ? (
-        <p className="muted">{c("loading")}</p>
-      ) : terms.isError ? (
-        <p className="error-text">{c("somethingWrong")}</p>
-      ) : !terms.data?.length ? (
-        <p className="muted">{c("empty")}</p>
-      ) : (
-        <DataTable<Term> columns={columns} data={terms.data} />
-      )}
+      </RecordFormSheet>
     </section>
   );
 }

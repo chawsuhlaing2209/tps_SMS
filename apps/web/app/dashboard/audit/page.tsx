@@ -2,8 +2,11 @@
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
+import { useState } from "react";
 import { useApiQuery } from "../../lib/api";
 import { DataTable } from "../../lib/data-table";
+import { Field } from "../../lib/form";
+import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
 
 type AuditLog = {
   id: string;
@@ -18,24 +21,32 @@ type AuditLog = {
 export default function AuditPage() {
   const t = useTranslations("audit");
   const c = useTranslations("common");
-  const audit = useApiQuery<AuditLog[]>((tenant) => `/tenants/${tenant}/audit-logs`);
+  const [recordType, setRecordType] = useState("");
+
+  const audit = useApiQuery<AuditLog[]>((tenant) =>
+    recordType
+      ? `/tenants/${tenant}/audit-logs?recordType=${encodeURIComponent(recordType)}`
+      : `/tenants/${tenant}/audit-logs`
+  );
 
   const columns: ColumnDef<AuditLog, unknown>[] = [
-    { id: "when", header: t("when"), accessorFn: (e) => new Date(e.createdAt).toLocaleString() },
     {
       id: "action",
       header: t("action"),
+      accessorKey: "action",
       cell: ({ row }) => <code>{row.original.action}</code>
     },
     { id: "recordType", header: t("recordType"), accessorFn: (e) => e.recordType },
     {
       id: "record",
       header: t("record"),
+      accessorFn: (e) => e.recordId,
       cell: ({ row }) => <span className="muted">{row.original.recordId.slice(0, 8)}</span>
     },
     {
       id: "actor",
       header: t("actor"),
+      accessorFn: (e) => e.actorUserId ?? c("system"),
       cell: ({ row }) => (
         <span className="muted">{row.original.actorUserId?.slice(0, 8) ?? c("system")}</span>
       )
@@ -50,21 +61,28 @@ export default function AuditPage() {
       </div>
 
       <section className="panel">
-        <div className="panel-head">
-          <h2>{t("events")}</h2>
-          <button type="button" className="btn-ghost" onClick={() => void audit.refetch()}>
-            {c("refresh")}
-          </button>
-        </div>
-        {audit.isLoading ? (
-          <p className="muted">{c("loading")}</p>
-        ) : audit.isError ? (
-          <p className="error-text">{c("somethingWrong")}</p>
-        ) : !audit.data?.length ? (
-          <p className="muted">{t("noEvents")}</p>
-        ) : (
-          <DataTable<AuditLog> columns={columns} data={audit.data} />
-        )}
+        <TablePanelHead
+          title={t("events")}
+          onRefresh={() => void audit.refetch()}
+          extra={
+            <div className="table-toolbar">
+              <Field label={t("filterRecordType")}>
+                <input
+                  value={recordType}
+                  onChange={(e) => setRecordType(e.target.value)}
+                  placeholder={t("filterPlaceholder")}
+                />
+              </Field>
+            </div>
+          }
+        />
+        <TablePanelBody
+          loading={audit.isLoading}
+          error={audit.isError ? c("somethingWrong") : null}
+          empty={!audit.data?.length}
+        >
+          <DataTable<AuditLog> columns={columns} data={audit.data ?? []} />
+        </TablePanelBody>
       </section>
     </div>
   );

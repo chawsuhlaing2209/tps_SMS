@@ -145,6 +145,7 @@ export default function PlatformTenantsPage() {
     {
       id: "name",
       header: c("name"),
+      accessorFn: (tenant) => tenant.name,
       cell: ({ row }) => (
         <Link href={`/platform/tenants/${row.original.id}`}>{row.original.name}</Link>
       )

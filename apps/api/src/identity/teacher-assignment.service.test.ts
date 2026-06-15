@@ -18,10 +18,19 @@ function createService(db: {
   select: () => {
     from: () => {
       where: (...args: unknown[]) => Promise<unknown[]>;
+      innerJoin?: () => { where: (...args: unknown[]) => Promise<unknown[]> };
     };
   };
 }) {
   return new TeacherAssignmentService(db as never, new RbacService());
+}
+
+function chainWhere(resolver: () => Promise<unknown[]>) {
+  const where = async () => resolver();
+  return {
+    where,
+    innerJoin: () => ({ where })
+  };
 }
 
 describe("TeacherAssignmentService", () => {
@@ -57,8 +66,8 @@ describe("TeacherAssignmentService", () => {
     let call = 0;
     const service = createService({
       select: () => ({
-        from: () => ({
-          where: async () => {
+        from: () =>
+          chainWhere(async () => {
             call += 1;
             if (call === 1) {
               return [{ id: "staff-1" }];
@@ -66,9 +75,11 @@ describe("TeacherAssignmentService", () => {
             if (call === 2) {
               return [];
             }
-            return [{ classroomId: "classroom-1" }];
-          }
-        })
+            if (call === 3) {
+              return [{ classroomId: "classroom-1" }];
+            }
+            return [];
+          })
       })
     });
 
@@ -81,15 +92,14 @@ describe("TeacherAssignmentService", () => {
     let call = 0;
     const service = createService({
       select: () => ({
-        from: () => ({
-          where: async () => {
+        from: () =>
+          chainWhere(async () => {
             call += 1;
             if (call === 1) {
               return [{ id: "staff-1" }];
             }
             return [{ id: "classroom-1" }];
-          }
-        })
+          })
       })
     });
 

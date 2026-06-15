@@ -6,6 +6,7 @@ import {
   attendanceSessions,
   classroomSubjectTeachers,
   classrooms,
+  gradeChiefAssignments,
   staff
 } from "../db/schema.js";
 import type { TenantContext } from "../tenancy/tenant-context.js";
@@ -68,10 +69,25 @@ export class TeacherAssignmentService {
         )
       );
 
+    const asGradeChief = await this.db
+      .select({ classroomId: classrooms.id })
+      .from(classrooms)
+      .innerJoin(
+        gradeChiefAssignments,
+        and(
+          eq(gradeChiefAssignments.tenantId, tenantId),
+          eq(gradeChiefAssignments.staffId, staffId),
+          eq(gradeChiefAssignments.academicYearId, classrooms.academicYearId),
+          eq(gradeChiefAssignments.gradeId, classrooms.gradeId)
+        )
+      )
+      .where(eq(classrooms.tenantId, tenantId));
+
     return [
       ...new Set([
         ...asClassTeacher.map((row) => row.classroomId),
-        ...asSubjectTeacher.map((row) => row.classroomId)
+        ...asSubjectTeacher.map((row) => row.classroomId),
+        ...asGradeChief.map((row) => row.classroomId)
       ])
     ];
   }
@@ -111,6 +127,50 @@ export class TeacherAssignmentService {
     return Boolean(classroom);
   }
 
+  async isGradeChiefOfClassroom(
+    tenantId: string,
+    staffId: string,
+    classroomId: string
+  ): Promise<boolean> {
+    const [classroom] = await this.db
+      .select({
+        academicYearId: classrooms.academicYearId,
+        gradeId: classrooms.gradeId
+      })
+      .from(classrooms)
+      .where(and(eq(classrooms.tenantId, tenantId), eq(classrooms.id, classroomId)));
+
+    if (!classroom) {
+      return false;
+    }
+
+    const [assignment] = await this.db
+      .select({ id: gradeChiefAssignments.id })
+      .from(gradeChiefAssignments)
+      .where(
+        and(
+          eq(gradeChiefAssignments.tenantId, tenantId),
+          eq(gradeChiefAssignments.staffId, staffId),
+          eq(gradeChiefAssignments.academicYearId, classroom.academicYearId),
+          eq(gradeChiefAssignments.gradeId, classroom.gradeId)
+        )
+      );
+
+    return Boolean(assignment);
+  }
+
+  async hasFullClassroomSubjectAccess(
+    tenantId: string,
+    staffId: string,
+    classroomId: string
+  ): Promise<boolean> {
+    if (await this.isClassTeacher(tenantId, staffId, classroomId)) {
+      return true;
+    }
+
+    return this.isGradeChiefOfClassroom(tenantId, staffId, classroomId);
+  }
+
   async isAssignedToClassroom(
     tenantId: string,
     staffId: string,
@@ -126,7 +186,7 @@ export class TeacherAssignmentService {
     classroomId: string,
     subjectId: string
   ): Promise<boolean> {
-    if (await this.isClassTeacher(tenantId, staffId, classroomId)) {
+    if (await this.hasFullClassroomSubjectAccess(tenantId, staffId, classroomId)) {
       return true;
     }
 

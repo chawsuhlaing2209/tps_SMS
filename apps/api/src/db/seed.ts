@@ -9,9 +9,10 @@ import {
   attendanceSessions,
   classroomSubjectTeachers,
   classrooms,
+  gradeChiefAssignments,
+  gradeSubjects,
   grades,
   roles,
-  sections,
   staff,
   subjects,
   tenantSettings,
@@ -78,18 +79,34 @@ async function seedDemoClassroomData(
     .from(grades)
     .where(and(eq(grades.tenantId, tenantId), eq(grades.name, "Grade 1")));
 
-  const [section] = await db
-    .select({ id: sections.id })
-    .from(sections)
-    .where(and(eq(sections.tenantId, tenantId), eq(sections.name, "A")));
-
   const [subject] = await db
     .select({ id: subjects.id })
     .from(subjects)
     .where(and(eq(subjects.tenantId, tenantId), eq(subjects.code, "MATH")));
 
-  if (!year?.id || !grade?.id || !section?.id || !subject?.id) {
+  if (!year?.id || !grade?.id || !subject?.id) {
     return;
+  }
+
+  const [existingMapping] = await db
+    .select({ id: gradeSubjects.id })
+    .from(gradeSubjects)
+    .where(
+      and(
+        eq(gradeSubjects.tenantId, tenantId),
+        eq(gradeSubjects.academicYearId, year.id),
+        eq(gradeSubjects.gradeId, grade.id),
+        eq(gradeSubjects.subjectId, subject.id)
+      )
+    );
+
+  if (!existingMapping) {
+    await db.insert(gradeSubjects).values({
+      tenantId,
+      academicYearId: year.id,
+      gradeId: grade.id,
+      subjectId: subject.id
+    });
   }
 
   const teacherEmail = `teacher@${slug}.example.edu.mm`;
@@ -161,9 +178,8 @@ async function seedDemoClassroomData(
         tenantId,
         academicYearId: year.id,
         gradeId: grade.id,
-        sectionId: section.id,
         name,
-        room: name === "Grade 1 A" ? "Room 101" : "Room 102",
+        room: name === "Room A" ? "Room 101" : "Room 102",
         capacity: 30,
         status: "active"
       })
@@ -172,10 +188,25 @@ async function seedDemoClassroomData(
     return created?.id;
   };
 
-  const classroomAId = await ensureClassroom("Grade 1 A");
-  const classroomBId = await ensureClassroom("Grade 1 B");
+  const classroomAId = await ensureClassroom("Room A");
+  const classroomBId = await ensureClassroom("Room B");
 
   if (staffId && classroomAId) {
+    await db
+      .update(classrooms)
+      .set({ classTeacherStaffId: staffId })
+      .where(and(eq(classrooms.tenantId, tenantId), eq(classrooms.id, classroomAId)));
+
+    await db
+      .insert(gradeChiefAssignments)
+      .values({
+        tenantId,
+        academicYearId: year.id,
+        gradeId: grade.id,
+        staffId
+      })
+      .onConflictDoNothing();
+
     await db
       .insert(classroomSubjectTeachers)
       .values({
@@ -312,8 +343,13 @@ async function seedTenant(
       .returning();
     academicYearId = academicYear?.id;
 
-    await db.insert(grades).values({ tenantId: tenant.id, name: "Grade 1", sortOrder: 1 });
-    await db.insert(sections).values({ tenantId: tenant.id, name: "A" });
+    await db.insert(grades).values({
+      tenantId: tenant.id,
+      name: "Grade 1",
+      sortOrder: 1,
+      minAge: 6,
+      maxAge: 7
+    });
     await db.insert(subjects).values({ tenantId: tenant.id, name: "Mathematics", code: "MATH" });
   }
 
@@ -374,7 +410,9 @@ async function main() {
     console.log(
       `  • Demo teacher (demo-alpha only)  ·  tenant demo-alpha  ·  email teacher@demo-alpha.example.edu.mm  ·  password ${DEMO_OWNER_PASSWORD}`
     );
-    console.log("    Assigned to Grade 1 A only — sign in and open Classrooms to verify teacher scoping.");
+    console.log(
+      "    Grade chief of Grade 1, homeroom of Room A, teaches Maths in Room A — edit under People → Teacher assignments."
+    );
   } finally {
     await pool.end();
   }

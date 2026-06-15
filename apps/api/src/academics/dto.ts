@@ -3,11 +3,12 @@ import {
   IsArray,
   IsBoolean,
   IsDateString,
+  IsInt,
   IsNotEmpty,
-  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
+  Min,
   ValidateNested
 } from "class-validator";
 
@@ -59,14 +60,62 @@ export class CreateGradeDto {
   name!: string;
 
   @IsOptional()
-  @IsNumber()
-  sortOrder?: number;
+  @IsInt()
+  @Min(0)
+  minAge?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  maxAge?: number;
+
+  @IsOptional()
+  @IsUUID()
+  academicYearId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID("4", { each: true })
+  subjectIds?: string[];
+}
+
+export class UpdateGradeDto {
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  name?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  minAge?: number | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  maxAge?: number | null;
+
+  @IsOptional()
+  @IsUUID()
+  academicYearId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID("4", { each: true })
+  subjectIds?: string[];
 }
 
 export class CreateSectionDto {
   @IsString()
   @IsNotEmpty()
   name!: string;
+}
+
+export class UpdateSectionDto {
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  name?: string;
 }
 
 export class CreateSubjectDto {
@@ -81,6 +130,54 @@ export class CreateSubjectDto {
   @IsOptional()
   @IsString()
   subjectType?: string;
+
+  @IsOptional()
+  @IsUUID()
+  academicYearId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID("4", { each: true })
+  gradeIds?: string[];
+}
+
+export class UpdateSubjectDto {
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  code?: string;
+
+  @IsOptional()
+  @IsString()
+  subjectType?: string;
+
+  @IsOptional()
+  @IsUUID()
+  academicYearId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID("4", { each: true })
+  gradeIds?: string[];
+}
+
+export class UpdateTermDto {
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  name?: string;
+
+  @IsOptional()
+  @IsDateString()
+  startsOn?: string;
+
+  @IsOptional()
+  @IsDateString()
+  endsOn?: string;
 }
 
 export class ImportMasterDataDto {
@@ -89,12 +186,6 @@ export class ImportMasterDataDto {
   @ValidateNested({ each: true })
   @Type(() => CreateGradeDto)
   grades?: CreateGradeDto[];
-
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => CreateSectionDto)
-  sections?: CreateSectionDto[];
 
   @IsOptional()
   @IsArray()
@@ -113,6 +204,16 @@ export class AssignGradeSubjectDto {
   @IsUUID()
   subjectId!: string;
 
+  @IsOptional()
+  @IsString()
+  weight?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isRequired?: boolean;
+}
+
+export class UpdateGradeSubjectDto {
   @IsOptional()
   @IsString()
   weight?: string;

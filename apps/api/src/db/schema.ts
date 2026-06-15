@@ -294,6 +294,8 @@ export const grades = pgTable("grades", {
   ...tenantFields,
   name: text("name").notNull(),
   sortOrder: integer("sort_order").default(0).notNull(),
+  minAge: integer("min_age"),
+  maxAge: integer("max_age"),
   status: recordStatusEnum("status").default("active").notNull()
 });
 
@@ -409,13 +411,42 @@ export const classroomStudents = pgTable("classroom_students", {
   movementReason: text("movement_reason")
 });
 
-export const classroomSubjectTeachers = pgTable("classroom_subject_teachers", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  ...tenantFields,
-  classroomId: uuid("classroom_id").references(() => classrooms.id).notNull(),
-  subjectId: uuid("subject_id").references(() => subjects.id).notNull(),
-  teacherStaffId: uuid("teacher_staff_id").references(() => staff.id).notNull()
-});
+export const classroomSubjectTeachers = pgTable(
+  "classroom_subject_teachers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...tenantFields,
+    classroomId: uuid("classroom_id").references(() => classrooms.id).notNull(),
+    subjectId: uuid("subject_id").references(() => subjects.id).notNull(),
+    teacherStaffId: uuid("teacher_staff_id").references(() => staff.id).notNull()
+  },
+  (table) => ({
+    classroomSubjectUnique: uniqueIndex("classroom_subject_teachers_classroom_subject_unique").on(
+      table.tenantId,
+      table.classroomId,
+      table.subjectId
+    )
+  })
+);
+
+/** Grade-level lead teacher (one per grade per academic year). */
+export const gradeChiefAssignments = pgTable(
+  "grade_chief_assignments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...tenantFields,
+    academicYearId: uuid("academic_year_id").references(() => academicYears.id).notNull(),
+    gradeId: uuid("grade_id").references(() => grades.id).notNull(),
+    staffId: uuid("staff_id").references(() => staff.id).notNull()
+  },
+  (table) => ({
+    gradeChiefUnique: uniqueIndex("grade_chief_assignments_year_grade_unique").on(
+      table.tenantId,
+      table.academicYearId,
+      table.gradeId
+    )
+  })
+);
 
 export const enquiries = pgTable("enquiries", {
   id: uuid("id").primaryKey().defaultRandom(),

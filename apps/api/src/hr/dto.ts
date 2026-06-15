@@ -1,4 +1,4 @@
-import { IsDateString, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID } from "class-validator";
+import { IsArray, IsDateString, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, ValidateNested } from "class-validator";
 import { Type } from "class-transformer";
 
 export class CreateStaffDto {
@@ -93,6 +93,10 @@ export class ListStaffQueryDto {
 
   @IsString()
   @IsOptional()
+  employmentRole?: string;
+
+  @IsString()
+  @IsOptional()
   search?: string;
 
   @IsNumber()
@@ -104,4 +108,42 @@ export class ListStaffQueryDto {
   @IsOptional()
   @Type(() => Number)
   offset?: number;
+}
+
+export class GradeChiefAssignmentItemDto {
+  @IsUUID()
+  declare academicYearId: string;
+
+  @IsUUID()
+  declare gradeId: string;
+}
+
+export class HomeroomAssignmentItemDto {
+  @IsUUID()
+  declare classroomId: string;
+}
+
+export class SubjectAssignmentItemDto {
+  @IsUUID()
+  declare classroomId: string;
+
+  @IsUUID()
+  declare subjectId: string;
+}
+
+export class UpdateTeacherAssignmentsDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => GradeChiefAssignmentItemDto)
+  gradeChief!: GradeChiefAssignmentItemDto[];
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => HomeroomAssignmentItemDto)
+  homeroom!: HomeroomAssignmentItemDto[];
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SubjectAssignmentItemDto)
+  subjectTeaching!: SubjectAssignmentItemDto[];
 }

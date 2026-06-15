@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common'
 import { and, eq, gte, lte, inArray, sql, sum, count } from 'drizzle-orm'
 import { AuditService } from '../audit/audit.service.js'
 import { DB, type Database } from '../db/db.module.js'
@@ -27,9 +27,13 @@ export class FinanceService {
   }
 
   async createFeeItem(tenantId: string, actorUserId: string, dto: CreateFeeItemDto) {
+    if (!dto.name?.trim() || !dto.feeType?.trim() || !dto.billingType?.trim()) {
+      throw new BadRequestException('Name, fee type, and billing type are required')
+    }
+
     const [item] = await this.db.insert(feeItems).values({
       tenantId, createdBy: actorUserId, updatedBy: actorUserId,
-      name: dto.name, feeType: dto.feeType, billingType: dto.billingType,
+      name: dto.name.trim(), feeType: dto.feeType.trim(), billingType: dto.billingType.trim(),
     }).returning()
     await this.auditService.recordEvent(
       this.auditService.createEvent({ tenantId, actorUserId, action: 'fee_item.create', recordType: 'fee_item', recordId: item!.id, after: item })
@@ -278,7 +282,12 @@ export class FinanceService {
   // ── Reports ────────────────────────────────────────────────────────────────
 
   async getMonthlyReport(tenantId: string, query: MonthlyReportQueryDto) {
-    const parts = query.month.split('-')
+    const selectedMonth = query.month ?? new Date().toISOString().slice(0, 7)
+    if (!/^\d{4}-\d{2}$/.test(selectedMonth)) {
+      throw new BadRequestException('Month must be in YYYY-MM format')
+    }
+
+    const parts = selectedMonth.split('-')
     const year = Number(parts[0])
     const month = Number(parts[1])
     const startDate = new Date(year, month - 1, 1)
@@ -300,7 +309,7 @@ export class FinanceService {
       .from(salaryRecords)
       .where(and(
         eq(salaryRecords.tenantId, tenantId),
-        eq(salaryRecords.salaryMonth, query.month),
+        eq(salaryRecords.salaryMonth, selectedMonth),
         inArray(salaryRecords.status, ['approved', 'paid'] as any[]),
       ))
 
@@ -308,7 +317,7 @@ export class FinanceService {
     const sal = Number(salaryResult[0]?.salaryExpenses ?? 0)
 
     return {
-      month: query.month,
+      month: selectedMonth,
       revenue: rev,
       salaryExpenses: sal,
       net: rev - sal,

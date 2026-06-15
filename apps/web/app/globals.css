@@ -408,6 +408,40 @@ a {
   padding: 16px;
 }
 
+.entity-form--sheet {
+  align-items: stretch;
+  background: transparent;
+  border: 0;
+  gap: 0;
+  grid-template-columns: 1fr;
+  padding: 0;
+}
+
+.form-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.table-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.table-toolbar .form-field {
+  min-width: 140px;
+}
+
+.table-toolbar-select {
+  min-width: 140px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 14px;
+}
+
 .entity-form .form-actions {
   display: flex;
   align-items: center;
@@ -425,7 +459,8 @@ a {
 }
 
 .form-field input,
-.form-field select {
+.form-field select,
+.form-field textarea {
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -437,7 +472,8 @@ a {
 }
 
 .form-field input:focus,
-.form-field select:focus {
+.form-field select:focus,
+.form-field textarea:focus {
   border-color: var(--brand-dark);
   box-shadow: 0 0 0 3px rgba(37, 79, 26, 0.18);
 }
@@ -568,6 +604,12 @@ a {
   justify-content: space-between;
 }
 
+.panel-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
 .panel-head h2 {
   font-size: 17px;
   margin: 0;
@@ -592,6 +634,24 @@ a {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.table-sort {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  gap: 4px;
+  letter-spacing: inherit;
+  padding: 0;
+  text-transform: inherit;
+}
+
+.table-sort:hover {
+  color: var(--foreground);
 }
 
 .table tr:last-child td {

@@ -7,7 +7,7 @@ import {
 import { and, eq } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
-import { academicYears, gradeSubjects, grades, sections, subjects, terms } from "../db/schema.js";
+import { academicYears, gradeSubjects, grades, reportCards, sections, subjects, terms } from "../db/schema.js";
 import type {
   AssignGradeSubjectDto,
   CreateAcademicYearDto,
@@ -16,7 +16,12 @@ import type {
   CreateSubjectDto,
   CreateTermDto,
   ImportMasterDataDto,
-  UpdateAcademicYearDto
+  UpdateAcademicYearDto,
+  UpdateGradeDto,
+  UpdateGradeSubjectDto,
+  UpdateSectionDto,
+  UpdateSubjectDto,
+  UpdateTermDto
 } from "./dto.js";
 
 @Injectable()
@@ -43,10 +48,98 @@ export class AcademicsService {
     const academicYear = await this.getAcademicYearOrThrow(tenantId, academicYearId);
 
     if (academicYear.status === "archived") {
-      throw new ConflictException("Academic year is closed and cannot be changed.");
+      throw new ConflictException("Academic year is archived. Reactivate it before editing.");
     }
 
     return academicYear;
+  }
+
+  private async syncGradeSubjects(
+    tenantId: string,
+    academicYearId: string,
+    gradeId: string,
+    subjectIds: string[],
+    actorUserId?: string
+  ) {
+    await this.assertAcademicYearMutable(tenantId, academicYearId);
+
+    const existing = await this.db
+      .select()
+      .from(gradeSubjects)
+      .where(
+        and(
+          eq(gradeSubjects.tenantId, tenantId),
+          eq(gradeSubjects.academicYearId, academicYearId),
+          eq(gradeSubjects.gradeId, gradeId)
+        )
+      );
+
+    const existingIds = new Set(existing.map((row) => row.subjectId));
+    const nextIds = new Set(subjectIds);
+
+    for (const row of existing) {
+      if (!nextIds.has(row.subjectId)) {
+        await this.db.delete(gradeSubjects).where(eq(gradeSubjects.id, row.id));
+      }
+    }
+
+    for (const subjectId of subjectIds) {
+      if (!existingIds.has(subjectId)) {
+        await this.getSubjectOrThrow(tenantId, subjectId);
+        await this.db.insert(gradeSubjects).values({
+          tenantId,
+          academicYearId,
+          gradeId,
+          subjectId,
+          createdBy: actorUserId,
+          updatedBy: actorUserId
+        });
+      }
+    }
+  }
+
+  private async syncSubjectGrades(
+    tenantId: string,
+    academicYearId: string,
+    subjectId: string,
+    gradeIds: string[],
+    actorUserId?: string
+  ) {
+    await this.assertAcademicYearMutable(tenantId, academicYearId);
+
+    const existing = await this.db
+      .select()
+      .from(gradeSubjects)
+      .where(
+        and(
+          eq(gradeSubjects.tenantId, tenantId),
+          eq(gradeSubjects.academicYearId, academicYearId),
+          eq(gradeSubjects.subjectId, subjectId)
+        )
+      );
+
+    const existingIds = new Set(existing.map((row) => row.gradeId));
+    const nextIds = new Set(gradeIds);
+
+    for (const row of existing) {
+      if (!nextIds.has(row.gradeId)) {
+        await this.db.delete(gradeSubjects).where(eq(gradeSubjects.id, row.id));
+      }
+    }
+
+    for (const gradeId of gradeIds) {
+      if (!existingIds.has(gradeId)) {
+        await this.getGradeOrThrow(tenantId, gradeId);
+        await this.db.insert(gradeSubjects).values({
+          tenantId,
+          academicYearId,
+          gradeId,
+          subjectId,
+          createdBy: actorUserId,
+          updatedBy: actorUserId
+        });
+      }
+    }
   }
 
   listAcademicYears(tenantId: string) {
@@ -108,11 +201,37 @@ export class AcademicsService {
     await this.auditService.recordEvent({
       tenantId,
       actorUserId: actorUserId ?? null,
-      action: "academic_year.close",
+      action: "academic_year.archive",
       recordType: "AcademicYear",
       recordId: academicYearId,
       before: { status: previous.status },
       after: { status: "archived" }
+    });
+
+    return academicYear;
+  }
+
+  async reactivateAcademicYear(tenantId: string, academicYearId: string, actorUserId?: string) {
+    const previous = await this.getAcademicYearOrThrow(tenantId, academicYearId);
+
+    if (previous.status === "active") {
+      return previous;
+    }
+
+    const [academicYear] = await this.db
+      .update(academicYears)
+      .set({ status: "active", updatedBy: actorUserId, updatedAt: new Date() })
+      .where(and(eq(academicYears.tenantId, tenantId), eq(academicYears.id, academicYearId)))
+      .returning();
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "academic_year.reactivate",
+      recordType: "AcademicYear",
+      recordId: academicYearId,
+      before: { status: previous.status },
+      after: { status: "active" }
     });
 
     return academicYear;
@@ -141,6 +260,58 @@ export class AcademicsService {
     return term;
   }
 
+  private async getTermOrThrow(tenantId: string, termId: string) {
+    const [term] = await this.db
+      .select()
+      .from(terms)
+      .where(and(eq(terms.tenantId, tenantId), eq(terms.id, termId)));
+
+    if (!term) {
+      throw new NotFoundException("Term not found.");
+    }
+
+    return term;
+  }
+
+  async updateTerm(tenantId: string, termId: string, dto: UpdateTermDto, actorUserId?: string) {
+    const previous = await this.getTermOrThrow(tenantId, termId);
+    await this.assertAcademicYearMutable(tenantId, previous.academicYearId);
+
+    const [term] = await this.db
+      .update(terms)
+      .set({
+        name: dto.name ?? previous.name,
+        startsOn: dto.startsOn ?? previous.startsOn,
+        endsOn: dto.endsOn ?? previous.endsOn,
+        updatedBy: actorUserId,
+        updatedAt: new Date()
+      })
+      .where(and(eq(terms.tenantId, tenantId), eq(terms.id, termId)))
+      .returning();
+
+    return term;
+  }
+
+  async deleteTerm(tenantId: string, termId: string) {
+    await this.getTermOrThrow(tenantId, termId);
+
+    const [used] = await this.db
+      .select({ id: reportCards.id })
+      .from(reportCards)
+      .where(and(eq(reportCards.tenantId, tenantId), eq(reportCards.termId, termId)))
+      .limit(1);
+
+    if (used) {
+      throw new ConflictException("Term is used by report cards and cannot be deleted.");
+    }
+
+    await this.db
+      .delete(terms)
+      .where(and(eq(terms.tenantId, tenantId), eq(terms.id, termId)));
+
+    return { deleted: true };
+  }
+
   listGrades(tenantId: string) {
     return this.db.select().from(grades).where(eq(grades.tenantId, tenantId));
   }
@@ -151,11 +322,147 @@ export class AcademicsService {
       .values({
         tenantId,
         name: dto.name,
-        sortOrder: dto.sortOrder ?? 0,
+        minAge: dto.minAge ?? null,
+        maxAge: dto.maxAge ?? null,
         createdBy: actorUserId,
         updatedBy: actorUserId
       })
       .returning();
+
+    if (!grade) {
+      throw new Error("Failed to create grade.");
+    }
+
+    if (dto.academicYearId && dto.subjectIds?.length) {
+      await this.syncGradeSubjects(
+        tenantId,
+        dto.academicYearId,
+        grade.id,
+        dto.subjectIds,
+        actorUserId
+      );
+    }
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "grade.create",
+      recordType: "Grade",
+      recordId: grade.id,
+      after: { name: grade.name, minAge: grade.minAge, maxAge: grade.maxAge }
+    });
+
+    return grade;
+  }
+
+  private async getGradeOrThrow(tenantId: string, gradeId: string) {
+    const [grade] = await this.db
+      .select()
+      .from(grades)
+      .where(and(eq(grades.tenantId, tenantId), eq(grades.id, gradeId)));
+
+    if (!grade) {
+      throw new NotFoundException("Grade not found.");
+    }
+
+    return grade;
+  }
+
+  async updateGrade(
+    tenantId: string,
+    gradeId: string,
+    dto: UpdateGradeDto,
+    actorUserId?: string
+  ) {
+    const previous = await this.getGradeOrThrow(tenantId, gradeId);
+
+    const [grade] = await this.db
+      .update(grades)
+      .set({
+        name: dto.name ?? previous.name,
+        minAge: dto.minAge === undefined ? previous.minAge : dto.minAge,
+        maxAge: dto.maxAge === undefined ? previous.maxAge : dto.maxAge,
+        updatedBy: actorUserId,
+        updatedAt: new Date()
+      })
+      .where(and(eq(grades.tenantId, tenantId), eq(grades.id, gradeId)))
+      .returning();
+
+    if (!grade) {
+      throw new NotFoundException("Grade not found.");
+    }
+
+    if (dto.academicYearId && dto.subjectIds !== undefined) {
+      await this.syncGradeSubjects(
+        tenantId,
+        dto.academicYearId,
+        gradeId,
+        dto.subjectIds,
+        actorUserId
+      );
+    }
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "grade.update",
+      recordType: "Grade",
+      recordId: gradeId,
+      before: { name: previous.name, minAge: previous.minAge, maxAge: previous.maxAge },
+      after: { name: grade.name, minAge: grade.minAge, maxAge: grade.maxAge }
+    });
+
+    return grade;
+  }
+
+  async archiveGrade(tenantId: string, gradeId: string, actorUserId?: string) {
+    const previous = await this.getGradeOrThrow(tenantId, gradeId);
+
+    if (previous.status === "archived") {
+      return previous;
+    }
+
+    const [grade] = await this.db
+      .update(grades)
+      .set({ status: "archived", updatedBy: actorUserId, updatedAt: new Date() })
+      .where(and(eq(grades.tenantId, tenantId), eq(grades.id, gradeId)))
+      .returning();
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "grade.archive",
+      recordType: "Grade",
+      recordId: gradeId,
+      before: { status: previous.status },
+      after: { status: "archived" }
+    });
+
+    return grade;
+  }
+
+  async reactivateGrade(tenantId: string, gradeId: string, actorUserId?: string) {
+    const previous = await this.getGradeOrThrow(tenantId, gradeId);
+
+    if (previous.status === "active") {
+      return previous;
+    }
+
+    const [grade] = await this.db
+      .update(grades)
+      .set({ status: "active", updatedBy: actorUserId, updatedAt: new Date() })
+      .where(and(eq(grades.tenantId, tenantId), eq(grades.id, gradeId)))
+      .returning();
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "grade.reactivate",
+      recordType: "Grade",
+      recordId: gradeId,
+      before: { status: previous.status },
+      after: { status: "active" }
+    });
 
     return grade;
   }
@@ -178,6 +485,72 @@ export class AcademicsService {
     return section;
   }
 
+  private async getSectionOrThrow(tenantId: string, sectionId: string) {
+    const [section] = await this.db
+      .select()
+      .from(sections)
+      .where(and(eq(sections.tenantId, tenantId), eq(sections.id, sectionId)));
+
+    if (!section) {
+      throw new NotFoundException("Section not found.");
+    }
+
+    return section;
+  }
+
+  async updateSection(
+    tenantId: string,
+    sectionId: string,
+    dto: UpdateSectionDto,
+    actorUserId?: string
+  ) {
+    const previous = await this.getSectionOrThrow(tenantId, sectionId);
+
+    const [section] = await this.db
+      .update(sections)
+      .set({
+        name: dto.name ?? previous.name,
+        updatedBy: actorUserId,
+        updatedAt: new Date()
+      })
+      .where(and(eq(sections.tenantId, tenantId), eq(sections.id, sectionId)))
+      .returning();
+
+    return section;
+  }
+
+  async archiveSection(tenantId: string, sectionId: string, actorUserId?: string) {
+    const previous = await this.getSectionOrThrow(tenantId, sectionId);
+
+    if (previous.status === "archived") {
+      return previous;
+    }
+
+    const [section] = await this.db
+      .update(sections)
+      .set({ status: "archived", updatedBy: actorUserId, updatedAt: new Date() })
+      .where(and(eq(sections.tenantId, tenantId), eq(sections.id, sectionId)))
+      .returning();
+
+    return section;
+  }
+
+  async reactivateSection(tenantId: string, sectionId: string, actorUserId?: string) {
+    const previous = await this.getSectionOrThrow(tenantId, sectionId);
+
+    if (previous.status === "active") {
+      return previous;
+    }
+
+    const [section] = await this.db
+      .update(sections)
+      .set({ status: "active", updatedBy: actorUserId, updatedAt: new Date() })
+      .where(and(eq(sections.tenantId, tenantId), eq(sections.id, sectionId)))
+      .returning();
+
+    return section;
+  }
+
   listSubjects(tenantId: string) {
     return this.db.select().from(subjects).where(eq(subjects.tenantId, tenantId));
   }
@@ -195,6 +568,94 @@ export class AcademicsService {
       })
       .returning();
 
+    if (subject && dto.academicYearId && dto.gradeIds?.length) {
+      await this.syncSubjectGrades(
+        tenantId,
+        dto.academicYearId,
+        subject.id,
+        dto.gradeIds,
+        actorUserId
+      );
+    }
+
+    return subject;
+  }
+
+  private async getSubjectOrThrow(tenantId: string, subjectId: string) {
+    const [subject] = await this.db
+      .select()
+      .from(subjects)
+      .where(and(eq(subjects.tenantId, tenantId), eq(subjects.id, subjectId)));
+
+    if (!subject) {
+      throw new NotFoundException("Subject not found.");
+    }
+
+    return subject;
+  }
+
+  async updateSubject(
+    tenantId: string,
+    subjectId: string,
+    dto: UpdateSubjectDto,
+    actorUserId?: string
+  ) {
+    const previous = await this.getSubjectOrThrow(tenantId, subjectId);
+
+    const [subject] = await this.db
+      .update(subjects)
+      .set({
+        name: dto.name ?? previous.name,
+        code: dto.code === undefined ? previous.code : dto.code || null,
+        subjectType: dto.subjectType ?? previous.subjectType,
+        updatedBy: actorUserId,
+        updatedAt: new Date()
+      })
+      .where(and(eq(subjects.tenantId, tenantId), eq(subjects.id, subjectId)))
+      .returning();
+
+    if (subject && dto.academicYearId && dto.gradeIds !== undefined) {
+      await this.syncSubjectGrades(
+        tenantId,
+        dto.academicYearId,
+        subjectId,
+        dto.gradeIds,
+        actorUserId
+      );
+    }
+
+    return subject;
+  }
+
+  async archiveSubject(tenantId: string, subjectId: string, actorUserId?: string) {
+    const previous = await this.getSubjectOrThrow(tenantId, subjectId);
+
+    if (previous.status === "archived") {
+      return previous;
+    }
+
+    const [subject] = await this.db
+      .update(subjects)
+      .set({ status: "archived", updatedBy: actorUserId, updatedAt: new Date() })
+      .where(and(eq(subjects.tenantId, tenantId), eq(subjects.id, subjectId)))
+      .returning();
+
+    return subject;
+  }
+
+  async reactivateSubject(tenantId: string, subjectId: string, actorUserId?: string) {
+    const previous = await this.getSubjectOrThrow(tenantId, subjectId);
+
+    if (previous.status === "active") {
+      return previous;
+    }
+
+    const [subject] = await this.db
+      .update(subjects)
+      .set({ status: "active", updatedBy: actorUserId, updatedAt: new Date() })
+      .where(and(eq(subjects.tenantId, tenantId), eq(subjects.id, subjectId)))
+      .returning();
+
     return subject;
   }
 
@@ -203,15 +664,17 @@ export class AcademicsService {
   }
 
   async exportMasterData(tenantId: string) {
-    const [gradeRows, sectionRows, subjectRows] = await Promise.all([
+    const [gradeRows, subjectRows] = await Promise.all([
       this.listGrades(tenantId),
-      this.listSections(tenantId),
       this.listSubjects(tenantId)
     ]);
 
     return {
-      grades: gradeRows.map((row) => ({ name: row.name, sortOrder: row.sortOrder })),
-      sections: sectionRows.map((row) => ({ name: row.name })),
+      grades: gradeRows.map((row) => ({
+        name: row.name,
+        minAge: row.minAge,
+        maxAge: row.maxAge
+      })),
       subjects: subjectRows.map((row) => ({
         name: row.name,
         code: row.code,
@@ -221,16 +684,11 @@ export class AcademicsService {
   }
 
   async importMasterData(tenantId: string, dto: ImportMasterDataDto, actorUserId?: string) {
-    const created = { grades: 0, sections: 0, subjects: 0 };
+    const created = { grades: 0, subjects: 0 };
 
     for (const grade of dto.grades ?? []) {
       await this.createGrade(tenantId, grade, actorUserId);
       created.grades += 1;
-    }
-
-    for (const section of dto.sections ?? []) {
-      await this.createSection(tenantId, section, actorUserId);
-      created.sections += 1;
     }
 
     for (const subject of dto.subjects ?? []) {
@@ -268,5 +726,52 @@ export class AcademicsService {
       .returning();
 
     return assignment;
+  }
+
+  private async getGradeSubjectOrThrow(tenantId: string, assignmentId: string) {
+    const [assignment] = await this.db
+      .select()
+      .from(gradeSubjects)
+      .where(and(eq(gradeSubjects.tenantId, tenantId), eq(gradeSubjects.id, assignmentId)));
+
+    if (!assignment) {
+      throw new NotFoundException("Grade subject mapping not found.");
+    }
+
+    return assignment;
+  }
+
+  async updateGradeSubject(
+    tenantId: string,
+    assignmentId: string,
+    dto: UpdateGradeSubjectDto,
+    actorUserId?: string
+  ) {
+    const previous = await this.getGradeSubjectOrThrow(tenantId, assignmentId);
+    await this.assertAcademicYearMutable(tenantId, previous.academicYearId);
+
+    const [assignment] = await this.db
+      .update(gradeSubjects)
+      .set({
+        weight: dto.weight ?? previous.weight,
+        isRequired: dto.isRequired ?? previous.isRequired,
+        updatedBy: actorUserId,
+        updatedAt: new Date()
+      })
+      .where(and(eq(gradeSubjects.tenantId, tenantId), eq(gradeSubjects.id, assignmentId)))
+      .returning();
+
+    return assignment;
+  }
+
+  async deleteGradeSubject(tenantId: string, assignmentId: string) {
+    const previous = await this.getGradeSubjectOrThrow(tenantId, assignmentId);
+    await this.assertAcademicYearMutable(tenantId, previous.academicYearId);
+
+    await this.db
+      .delete(gradeSubjects)
+      .where(and(eq(gradeSubjects.tenantId, tenantId), eq(gradeSubjects.id, assignmentId)));
+
+    return { deleted: true };
   }
 }

@@ -6,14 +6,12 @@ import { apiFetch, useApiMutation } from "../../../lib/api";
 import { getSession } from "../../../lib/session";
 
 type MasterData = {
-  grades: { name: string; sortOrder: number }[];
-  sections: { name: string }[];
+  grades: { name: string; minAge?: number | null; maxAge?: number | null }[];
   subjects: { name: string; code: string | null; subjectType: string }[];
 };
-type ImportResult = { grades: number; sections: number; subjects: number };
+type ImportResult = { grades: number; subjects: number };
 
-const IMPORT_JSON_PLACEHOLDER =
-  '{ "grades": [], "sections": [], "subjects": [] }';
+const IMPORT_JSON_PLACEHOLDER = '{ "grades": [], "subjects": [] }';
 
 export default function MasterDataToolsPage() {
   const t = useTranslations("academics");
@@ -117,7 +115,6 @@ export default function MasterDataToolsPage() {
           <p className="form-feedback form-feedback--ok">
             {t("importSummary", {
               grades: importResult.grades,
-              sections: importResult.sections,
               subjects: importResult.subjects
             })}
           </p>

@@ -32,3 +32,25 @@ export const auditEventSchema = z.object({
   recordId: z.string().min(1),
   reason: z.string().optional()
 });
+
+export const gradeChiefAssignmentItemSchema = z.object({
+  academicYearId: z.string().uuid(),
+  gradeId: z.string().uuid()
+});
+
+export const homeroomAssignmentItemSchema = z.object({
+  classroomId: z.string().uuid()
+});
+
+export const subjectAssignmentItemSchema = z.object({
+  classroomId: z.string().uuid(),
+  subjectId: z.string().uuid()
+});
+
+export const updateTeacherAssignmentsSchema = z.object({
+  gradeChief: z.array(gradeChiefAssignmentItemSchema).default([]),
+  homeroom: z.array(homeroomAssignmentItemSchema).default([]),
+  subjectTeaching: z.array(subjectAssignmentItemSchema).default([])
+});
+
+export type UpdateTeacherAssignmentsInput = z.infer<typeof updateTeacherAssignmentsSchema>;

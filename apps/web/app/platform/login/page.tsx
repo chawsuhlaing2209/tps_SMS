@@ -7,6 +7,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { setSession } from "../../lib/session";
+import { loginHttpError, resolveLoginError } from "../../lib/login-error";
 import { zodResolver } from "../../lib/zod-resolver";
 
 const API_BASE_URL = "/api";
@@ -52,7 +53,12 @@ export default function PlatformLoginPage() {
 
       if (!response.ok) {
         const body = (await response.json().catch(() => null)) as { message?: string } | null;
-        throw new Error(body?.message ?? t("invalid"));
+        throw new Error(
+          loginHttpError(response.status, body, {
+            invalid: t("invalid"),
+            apiUnavailable: t("apiUnavailable")
+          })
+        );
       }
 
       const data = (await response.json()) as PlatformLoginResponse;
@@ -66,7 +72,9 @@ export default function PlatformLoginPage() {
       });
       router.push("/platform/tenants");
     } catch (error) {
-      setServerError(error instanceof Error ? error.message : t("invalid"));
+      setServerError(
+        resolveLoginError(error, { invalid: t("invalid"), apiUnavailable: t("apiUnavailable") })
+      );
     }
   });
 

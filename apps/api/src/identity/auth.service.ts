@@ -17,6 +17,7 @@ import type {
   RevokeSessionDto
 } from "./auth.dto.js";
 import { PasswordService } from "./password.service.js";
+import { RequestContextService } from "./request-context.service.js";
 import { SESSION_ABSOLUTE_TTL_MS, SESSION_IDLE_TTL_MS } from "./session-cookie.js";
 
 const RESET_TTL_MS = 1000 * 60 * 30;
@@ -29,7 +30,8 @@ export class AuthService {
     @Inject(DB) private readonly db: Database,
     private readonly passwordService: PasswordService,
     private readonly auditService: AuditService,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    private readonly requestContextService: RequestContextService
   ) {}
 
   async activateAccount(tenantId: string, dto: ActivateAccountDto) {
@@ -138,13 +140,39 @@ export class AuthService {
       after: { userId: user.id }
     });
 
+    const access = await this.requestContextService.resolve(tenantId, user.id);
+
     return {
       token,
       sessionId: session?.id,
       userId: user.id,
       tenantId,
       displayName: user.displayName,
-      expiresAt: absoluteExpiresAt
+      expiresAt: absoluteExpiresAt,
+      roles: access.roles,
+      permissions: access.permissions
+    };
+  }
+
+  async getProfile(tenantId: string, token: string | undefined) {
+    const actorUserId = await this.requestContextService.actorFromSessionToken(token);
+    if (!actorUserId) {
+      throw new UnauthorizedException("Missing or expired session.");
+    }
+
+    const access = await this.requestContextService.resolve(tenantId, actorUserId);
+    const [user] = await this.db.select().from(users).where(eq(users.id, actorUserId));
+
+    if (!user) {
+      throw new UnauthorizedException("Unknown actor user.");
+    }
+
+    return {
+      userId: user.id,
+      tenantId,
+      displayName: user.displayName,
+      roles: access.roles,
+      permissions: access.permissions
     };
   }
 

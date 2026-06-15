@@ -7,6 +7,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { setSession } from "./lib/session";
+import { loginHttpError, resolveLoginError } from "./lib/login-error";
 import { zodResolver } from "./lib/zod-resolver";
 
 const API_BASE_URL = "/api";
@@ -17,6 +18,8 @@ type LoginResponse = {
   tenantId: string;
   displayName?: string;
   expiresAt?: string;
+  roles?: string[];
+  permissions?: string[];
 };
 
 type LoginValues = { tenant: string; identifier: string; password: string };
@@ -56,7 +59,12 @@ export default function LoginPage() {
 
       if (!response.ok) {
         const body = (await response.json().catch(() => null)) as { message?: string } | null;
-        throw new Error(body?.message ?? t("invalid"));
+        throw new Error(
+          loginHttpError(response.status, body, {
+            invalid: t("invalid"),
+            apiUnavailable: t("apiUnavailable")
+          })
+        );
       }
 
       const data = (await response.json()) as LoginResponse;
@@ -65,11 +73,15 @@ export default function LoginPage() {
         tenantSlug: values.tenant,
         userId: data.userId,
         displayName: data.displayName,
-        expiresAt: data.expiresAt
+        expiresAt: data.expiresAt,
+        roles: data.roles,
+        permissions: data.permissions
       });
       router.push("/dashboard");
     } catch (error) {
-      setServerError(error instanceof Error ? error.message : t("invalid"));
+      setServerError(
+        resolveLoginError(error, { invalid: t("invalid"), apiUnavailable: t("apiUnavailable") })
+      );
     }
   });
 

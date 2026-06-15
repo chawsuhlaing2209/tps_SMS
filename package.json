@@ -8,7 +8,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently -k -n api,web,worker -c blue,green,magenta \"npm run dev -w @sms/api\" \"npm run dev -w @sms/web\" \"npm run dev -w @sms/worker\"",
+    "dev": "node scripts/dev-banner.mjs && concurrently -k -n api,web,worker -c blue,green,magenta \"npm run dev -w @sms/api\" \"npm run dev -w @sms/web\" \"npm run dev -w @sms/worker\"",
     "dev:api": "npm run dev -w @sms/api",
     "dev:web": "npm run dev -w @sms/web",
     "dev:worker": "npm run dev -w @sms/worker",
@@ -17,6 +17,7 @@
     "typecheck": "npm run build -w @sms/shared && npm run typecheck -w @sms/api && npm run typecheck -w @sms/web && npm run typecheck -w @sms/worker && npm run typecheck -w @sms/shared",
     "test": "npm run test --workspaces --if-present",
     "clean:web": "rm -rf apps/web/.next",
+    "dev:clean": "npm run clean:web && npm run dev",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f",

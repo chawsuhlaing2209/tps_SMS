@@ -9,6 +9,8 @@ export type Session = {
   displayName?: string;
   expiresAt?: string;
   isPlatform?: boolean;
+  roles?: string[];
+  permissions?: string[];
 };
 
 export function isPlatformSession(session: Session | null | undefined): boolean {

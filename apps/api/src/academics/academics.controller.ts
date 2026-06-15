@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Headers, Param, Patch, Post, UseGuards } from "@nestjs/common";
 import { RequirePermissions } from "../identity/permissions.decorator.js";
 import { PermissionsGuard } from "../identity/permissions.guard.js";
 import { AcademicsService } from "./academics.service.js";
@@ -10,7 +10,12 @@ import {
   CreateSubjectDto,
   CreateTermDto,
   ImportMasterDataDto,
-  UpdateAcademicYearDto
+  UpdateAcademicYearDto,
+  UpdateGradeDto,
+  UpdateGradeSubjectDto,
+  UpdateSectionDto,
+  UpdateSubjectDto,
+  UpdateTermDto
 } from "./dto.js";
 
 @Controller("tenants/:tenantId/academics")
@@ -52,6 +57,15 @@ export class AcademicsController {
     return this.academicsService.closeAcademicYear(tenantId, academicYearId, actorUserId);
   }
 
+  @Post("academic-years/:academicYearId/reactivate")
+  reactivateAcademicYear(
+    @Param("tenantId") tenantId: string,
+    @Param("academicYearId") academicYearId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.academicsService.reactivateAcademicYear(tenantId, academicYearId, actorUserId);
+  }
+
   @Get("terms")
   listTerms(@Param("tenantId") tenantId: string) {
     return this.academicsService.listTerms(tenantId);
@@ -64,6 +78,21 @@ export class AcademicsController {
     @Headers("x-user-id") actorUserId?: string
   ) {
     return this.academicsService.createTerm(tenantId, dto, actorUserId);
+  }
+
+  @Patch("terms/:termId")
+  updateTerm(
+    @Param("tenantId") tenantId: string,
+    @Param("termId") termId: string,
+    @Body() dto: UpdateTermDto,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.academicsService.updateTerm(tenantId, termId, dto, actorUserId);
+  }
+
+  @Delete("terms/:termId")
+  deleteTerm(@Param("tenantId") tenantId: string, @Param("termId") termId: string) {
+    return this.academicsService.deleteTerm(tenantId, termId);
   }
 
   @Get("grades")
@@ -80,6 +109,34 @@ export class AcademicsController {
     return this.academicsService.createGrade(tenantId, dto, actorUserId);
   }
 
+  @Patch("grades/:gradeId")
+  updateGrade(
+    @Param("tenantId") tenantId: string,
+    @Param("gradeId") gradeId: string,
+    @Body() dto: UpdateGradeDto,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.academicsService.updateGrade(tenantId, gradeId, dto, actorUserId);
+  }
+
+  @Post("grades/:gradeId/archive")
+  archiveGrade(
+    @Param("tenantId") tenantId: string,
+    @Param("gradeId") gradeId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.academicsService.archiveGrade(tenantId, gradeId, actorUserId);
+  }
+
+  @Post("grades/:gradeId/reactivate")
+  reactivateGrade(
+    @Param("tenantId") tenantId: string,
+    @Param("gradeId") gradeId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.academicsService.reactivateGrade(tenantId, gradeId, actorUserId);
+  }
+
   @Get("sections")
   listSections(@Param("tenantId") tenantId: string) {
     return this.academicsService.listSections(tenantId);
@@ -92,6 +149,34 @@ export class AcademicsController {
     @Headers("x-user-id") actorUserId?: string
   ) {
     return this.academicsService.createSection(tenantId, dto, actorUserId);
+  }
+
+  @Patch("sections/:sectionId")
+  updateSection(
+    @Param("tenantId") tenantId: string,
+    @Param("sectionId") sectionId: string,
+    @Body() dto: UpdateSectionDto,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.academicsService.updateSection(tenantId, sectionId, dto, actorUserId);
+  }
+
+  @Post("sections/:sectionId/archive")
+  archiveSection(
+    @Param("tenantId") tenantId: string,
+    @Param("sectionId") sectionId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.academicsService.archiveSection(tenantId, sectionId, actorUserId);
+  }
+
+  @Post("sections/:sectionId/reactivate")
+  reactivateSection(
+    @Param("tenantId") tenantId: string,
+    @Param("sectionId") sectionId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.academicsService.reactivateSection(tenantId, sectionId, actorUserId);
   }
 
   @Get("subjects")
@@ -108,6 +193,34 @@ export class AcademicsController {
     return this.academicsService.createSubject(tenantId, dto, actorUserId);
   }
 
+  @Patch("subjects/:subjectId")
+  updateSubject(
+    @Param("tenantId") tenantId: string,
+    @Param("subjectId") subjectId: string,
+    @Body() dto: UpdateSubjectDto,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.academicsService.updateSubject(tenantId, subjectId, dto, actorUserId);
+  }
+
+  @Post("subjects/:subjectId/archive")
+  archiveSubject(
+    @Param("tenantId") tenantId: string,
+    @Param("subjectId") subjectId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.academicsService.archiveSubject(tenantId, subjectId, actorUserId);
+  }
+
+  @Post("subjects/:subjectId/reactivate")
+  reactivateSubject(
+    @Param("tenantId") tenantId: string,
+    @Param("subjectId") subjectId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.academicsService.reactivateSubject(tenantId, subjectId, actorUserId);
+  }
+
   @Get("grade-subjects")
   listGradeSubjects(@Param("tenantId") tenantId: string) {
     return this.academicsService.listGradeSubjects(tenantId);
@@ -120,6 +233,24 @@ export class AcademicsController {
     @Headers("x-user-id") actorUserId?: string
   ) {
     return this.academicsService.assignGradeSubject(tenantId, dto, actorUserId);
+  }
+
+  @Patch("grade-subjects/:assignmentId")
+  updateGradeSubject(
+    @Param("tenantId") tenantId: string,
+    @Param("assignmentId") assignmentId: string,
+    @Body() dto: UpdateGradeSubjectDto,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.academicsService.updateGradeSubject(tenantId, assignmentId, dto, actorUserId);
+  }
+
+  @Delete("grade-subjects/:assignmentId")
+  deleteGradeSubject(
+    @Param("tenantId") tenantId: string,
+    @Param("assignmentId") assignmentId: string
+  ) {
+    return this.academicsService.deleteGradeSubject(tenantId, assignmentId);
   }
 
   @Get("master-data/export")

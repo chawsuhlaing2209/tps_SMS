@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post, Req, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Req, Res, UseGuards } from "@nestjs/common";
 import type { Request, Response } from "express";
 import type { TenantContext } from "../tenancy/tenant-context.js";
 import {
@@ -37,6 +37,11 @@ export class AuthController {
     // The token is delivered only as an httpOnly cookie, never in the body, so
     // browser JavaScript cannot read it.
     return rest;
+  }
+
+  @Get("me")
+  me(@Param("tenantId") tenantId: string, @Req() req: Request) {
+    return this.authService.getProfile(tenantId, readSessionCookie(req));
   }
 
   @Post("logout")

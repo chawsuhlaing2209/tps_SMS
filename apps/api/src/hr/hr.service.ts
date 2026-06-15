@@ -21,6 +21,9 @@ export class HrService {
     if (query.department) {
       filters.push(eq(staff.department, query.department));
     }
+    if (query.employmentRole) {
+      filters.push(eq(staff.employmentRole, query.employmentRole));
+    }
     if (query.search) {
       filters.push(ilike(staff.fullName, `%${query.search}%`));
     }

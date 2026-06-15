@@ -8,7 +8,13 @@ import { z } from "zod";
 import { useApiMutation, useApiQuery } from "../../lib/api";
 import { DataTable } from "../../lib/data-table";
 import { Field } from "../../lib/form";
+import { hasAnyPermission } from "../../lib/permissions";
+import { RecordFormSheet } from "../../lib/record-sheet";
+import { getSession } from "../../lib/session";
+import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
 import { zodResolver } from "../../lib/zod-resolver";
+import { TeacherAssignmentsEditor } from "./teacher-assignments-editor";
+import { StaffEditor } from "./staff-editor";
 
 type User = {
   id: string;
@@ -17,8 +23,15 @@ type User = {
   displayName: string;
   status: string;
   lastLoginAt: string | null;
+  updatedAt?: string;
 };
-type Role = { id: string; key: string; name: string; permissions: string[] };
+type Role = {
+  id: string;
+  key: string;
+  name: string;
+  permissions: string[];
+  updatedAt?: string;
+};
 
 type InviteValues = { displayName: string; email: string; phone: string };
 type AssignValues = { userId: string; roleId: string };
@@ -30,8 +43,15 @@ export default function PeoplePage() {
   const t = useTranslations("people");
   const c = useTranslations("common");
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
-  const users = useApiQuery<User[]>(USERS_PATH);
-  const roles = useApiQuery<Role[]>(ROLES_PATH);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
+  const permissions = getSession()?.permissions;
+  const canManageIdentity = hasAnyPermission(permissions, ["identity.manage"]);
+  const canManageAssignments = hasAnyPermission(permissions, ["hr.manage", "classroom.manage"]);
+  const users = useApiQuery<User[]>((tenant) =>
+    canManageIdentity ? USERS_PATH(tenant) : null
+  );
+  const roles = useApiQuery<Role[]>((tenant) => (canManageIdentity ? ROLES_PATH(tenant) : null));
 
   const invite = useApiMutation<{ displayName: string; email?: string; phone?: string }>(
     (body, tenant) => ({
@@ -71,18 +91,6 @@ export default function PeoplePage() {
     resolver: zodResolver(inviteSchema),
     defaultValues: { displayName: "", email: "", phone: "" }
   });
-  const submitInvite = inviteForm.handleSubmit(async (values) => {
-    setInviteSuccess(null);
-    await invite.mutateAsync({
-      displayName: values.displayName,
-      email: values.email || undefined,
-      phone: values.phone || undefined
-    });
-    if (values.email.trim()) {
-      setInviteSuccess(t("inviteEmailSent", { email: values.email.trim() }));
-    }
-    inviteForm.reset();
-  });
 
   const assignSchema = z.object({
     userId: z.string().uuid(c("required")),
@@ -92,10 +100,6 @@ export default function PeoplePage() {
     resolver: zodResolver(assignSchema),
     defaultValues: { userId: "", roleId: "" }
   });
-  const submitAssign = assignForm.handleSubmit(async (values) => {
-    await assign.mutateAsync(values);
-    assignForm.reset();
-  });
 
   const userColumns: ColumnDef<User, unknown>[] = [
     { id: "name", header: c("name"), accessorFn: (u) => u.displayName },
@@ -103,6 +107,7 @@ export default function PeoplePage() {
     {
       id: "status",
       header: c("status"),
+      accessorKey: "status",
       cell: ({ row }) => (
         <span className={`badge badge--${row.original.status}`}>{row.original.status}</span>
       )
@@ -116,7 +121,7 @@ export default function PeoplePage() {
 
   const roleColumns: ColumnDef<Role, unknown>[] = [
     { id: "name", header: t("role"), accessorFn: (r) => r.name },
-    { id: "key", header: t("key"), cell: ({ row }) => <code>{row.original.key}</code> },
+    { id: "key", header: t("key"), accessorKey: "key", cell: ({ row }) => <code>{row.original.key}</code> },
     { id: "permissions", header: t("permissions"), accessorFn: (r) => r.permissions.length }
   ];
 
@@ -127,107 +132,154 @@ export default function PeoplePage() {
         <p>{t("description")}</p>
       </div>
 
-      <section className="panel">
-        <div className="panel-head">
-          <h2>{t("inviteTitle")}</h2>
-        </div>
-        <p className="muted">{t("inviteHelp")}</p>
-        <form className="entity-form" onSubmit={submitInvite} noValidate>
-          <Field label={c("name")} error={inviteForm.formState.errors.displayName?.message}>
-            <input placeholder={t("namePlaceholder")} {...inviteForm.register("displayName")} />
-          </Field>
-          <Field label={t("email")} error={inviteForm.formState.errors.email?.message}>
-            <input placeholder="you@school.edu.mm" {...inviteForm.register("email")} />
-          </Field>
-          <Field label={t("phone")} error={inviteForm.formState.errors.phone?.message}>
-            <input placeholder="09…" {...inviteForm.register("phone")} />
-          </Field>
-          <div className="form-actions">
-            <button type="submit" className="btn-primary" disabled={inviteForm.formState.isSubmitting}>
-              {inviteForm.formState.isSubmitting ? c("loading") : t("invite")}
-            </button>
-          </div>
-        </form>
-        {inviteSuccess ? (
-          <p className="form-feedback form-feedback--ok" role="status">
-            {inviteSuccess}
-          </p>
-        ) : null}
-      </section>
+      {canManageAssignments ? <TeacherAssignmentsEditor /> : null}
+      {canManageAssignments ? <StaffEditor /> : null}
 
-      <section className="panel">
-        <div className="panel-head">
-          <h2>{t("users")}</h2>
-          <button type="button" className="btn-ghost" onClick={() => void users.refetch()}>
-            {c("refresh")}
-          </button>
-        </div>
-        {users.isLoading ? (
-          <p className="muted">{c("loading")}</p>
-        ) : users.isError ? (
-          <p className="error-text">{c("somethingWrong")}</p>
-        ) : !users.data?.length ? (
-          <p className="muted">{t("noUsers")}</p>
-        ) : (
-          <DataTable<User> columns={userColumns} data={users.data} />
-        )}
-      </section>
+      {canManageIdentity ? (
+        <>
+          <section className="panel">
+            <TablePanelHead
+              title={t("users")}
+              onRefresh={() => void users.refetch()}
+              onAdd={() => setInviteOpen(true)}
+              addLabel={t("invite")}
+              extra={
+                <button type="button" className="btn-ghost" onClick={() => setAssignOpen(true)}>
+                  {t("assignRole")}
+                </button>
+              }
+            />
+            {inviteSuccess ? (
+              <p className="form-feedback form-feedback--ok" role="status">
+                {inviteSuccess}
+              </p>
+            ) : null}
+            <TablePanelBody
+              loading={users.isLoading}
+              error={users.isError ? c("somethingWrong") : null}
+              empty={!users.data?.length}
+            >
+              <DataTable<User> columns={userColumns} data={users.data ?? []} />
+            </TablePanelBody>
+          </section>
 
-      <section className="panel">
-        <div className="panel-head">
-          <h2>{t("assignTitle")}</h2>
-        </div>
-        <form className="entity-form" onSubmit={submitAssign} noValidate>
-          <Field label={t("user")} error={assignForm.formState.errors.userId?.message}>
-            <select {...assignForm.register("userId")}>
-              <option value="">{t("selectUser")}</option>
-              {users.data?.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.displayName}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label={t("role")} error={assignForm.formState.errors.roleId?.message}>
-            <select {...assignForm.register("roleId")}>
-              <option value="">{t("selectRole")}</option>
-              {roles.data?.map((role) => (
-                <option key={role.id} value={role.id}>
-                  {role.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <div className="form-actions">
-            <button type="submit" className="btn-primary" disabled={assignForm.formState.isSubmitting}>
-              {assignForm.formState.isSubmitting ? c("loading") : t("assignRole")}
-            </button>
-          </div>
-        </form>
-      </section>
+          <section className="panel">
+            <TablePanelHead
+              title={t("roles")}
+              onRefresh={() => void roles.refetch()}
+              extra={
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  disabled={seedRoles.isPending}
+                  onClick={() => void seedRoles.mutateAsync()}
+                >
+                  {seedRoles.isPending ? c("loading") : t("seedRoles")}
+                </button>
+              }
+            />
+            <TablePanelBody
+              loading={roles.isLoading}
+              error={roles.isError ? c("somethingWrong") : null}
+              empty={!roles.data?.length}
+            >
+              <DataTable<Role> columns={roleColumns} data={roles.data ?? []} />
+            </TablePanelBody>
+          </section>
 
-      <section className="panel">
-        <div className="panel-head">
-          <h2>{t("roles")}</h2>
-          <button
-            type="button"
-            className="btn-ghost"
-            disabled={seedRoles.isPending}
-            onClick={() => void seedRoles.mutateAsync()}
+          <RecordFormSheet
+            open={inviteOpen}
+            onOpenChange={(open) => {
+              if (!open) {
+                inviteForm.reset();
+              }
+              setInviteOpen(open);
+            }}
+            title={t("inviteTitle")}
+            help={t("inviteHelp")}
+            onSubmit={inviteForm.handleSubmit(async (values) => {
+              setInviteSuccess(null);
+              await invite.mutateAsync({
+                displayName: values.displayName,
+                email: values.email || undefined,
+                phone: values.phone || undefined
+              });
+              if (values.email.trim()) {
+                setInviteSuccess(t("inviteEmailSent", { email: values.email.trim() }));
+              }
+              inviteForm.reset();
+              setInviteOpen(false);
+            })}
+            footer={
+              <>
+                <button type="button" className="btn-ghost" onClick={() => setInviteOpen(false)}>
+                  {c("cancel")}
+                </button>
+                <button type="submit" className="btn-primary" disabled={inviteForm.formState.isSubmitting}>
+                  {inviteForm.formState.isSubmitting ? c("loading") : t("invite")}
+                </button>
+              </>
+            }
           >
-            {seedRoles.isPending ? c("loading") : t("seedRoles")}
-          </button>
-        </div>
-        {roles.isLoading ? (
-          <p className="muted">{c("loading")}</p>
-        ) : roles.isError ? (
-          <p className="error-text">{c("somethingWrong")}</p>
-        ) : !roles.data?.length ? (
-          <p className="muted">{t("noRoles")}</p>
-        ) : (
-          <DataTable<Role> columns={roleColumns} data={roles.data} />
-        )}
-      </section>
+            <Field label={c("name")} error={inviteForm.formState.errors.displayName?.message}>
+              <input placeholder={t("namePlaceholder")} {...inviteForm.register("displayName")} />
+            </Field>
+            <Field label={t("email")} error={inviteForm.formState.errors.email?.message}>
+              <input placeholder="you@school.edu.mm" {...inviteForm.register("email")} />
+            </Field>
+            <Field label={t("phone")} error={inviteForm.formState.errors.phone?.message}>
+              <input placeholder="09…" {...inviteForm.register("phone")} />
+            </Field>
+          </RecordFormSheet>
+
+          <RecordFormSheet
+            open={assignOpen}
+            onOpenChange={(open) => {
+              if (!open) {
+                assignForm.reset();
+              }
+              setAssignOpen(open);
+            }}
+            title={t("assignTitle")}
+            onSubmit={assignForm.handleSubmit(async (values) => {
+              await assign.mutateAsync(values);
+              assignForm.reset();
+              setAssignOpen(false);
+            })}
+            footer={
+              <>
+                <button type="button" className="btn-ghost" onClick={() => setAssignOpen(false)}>
+                  {c("cancel")}
+                </button>
+                <button type="submit" className="btn-primary" disabled={assignForm.formState.isSubmitting}>
+                  {assignForm.formState.isSubmitting ? c("loading") : t("assignRole")}
+                </button>
+              </>
+            }
+          >
+            <Field label={t("user")} error={assignForm.formState.errors.userId?.message}>
+              <select {...assignForm.register("userId")}>
+                <option value="">{t("selectUser")}</option>
+                {users.data?.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.displayName}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label={t("role")} error={assignForm.formState.errors.roleId?.message}>
+              <select {...assignForm.register("roleId")}>
+                <option value="">{t("selectRole")}</option>
+                {roles.data?.map((role) => (
+                  <option key={role.id} value={role.id}>
+                    {role.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </RecordFormSheet>
+        </>
+      ) : null}
     </div>
   );
 }

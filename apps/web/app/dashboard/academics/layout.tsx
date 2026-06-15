@@ -9,9 +9,8 @@ const SUBMODULES = [
   { href: "/dashboard/academics/years", key: "years" },
   { href: "/dashboard/academics/terms", key: "terms" },
   { href: "/dashboard/academics/grades", key: "grades" },
-  { href: "/dashboard/academics/sections", key: "sections" },
+  { href: "/dashboard/classrooms", key: "classrooms" },
   { href: "/dashboard/academics/subjects", key: "subjects" },
-  { href: "/dashboard/academics/mapping", key: "mapping" },
   { href: "/dashboard/academics/tools", key: "tools" }
 ] as const;
 

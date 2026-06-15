@@ -3,46 +3,40 @@
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { LanguageSwitcher } from "../lib/language-switcher";
-import { clearSession, getSession, type Session } from "../lib/session";
-
-const NAV_ITEMS = [
-  { href: "/dashboard", key: "overview" },
-  { href: "/dashboard/academics", key: "academics" },
-  { href: "/dashboard/classrooms", key: "classrooms" },
-  { href: "/dashboard/people", key: "people" },
-  { href: "/dashboard/audit", key: "audit" }
-] as const;
+import { visibleDashboardNav } from "../lib/permissions";
+import { clearSession } from "../lib/session";
+import { useWorkspace } from "../lib/use-workspace";
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const t = useTranslations("nav");
-  const [session, setSessionState] = useState<Session | null>(null);
-  const [ready, setReady] = useState(false);
+  const { session, ready } = useWorkspace();
 
   useEffect(() => {
-    const current = getSession();
-    if (!current) {
+    if (!ready) {
+      return;
+    }
+    if (!session) {
       router.replace("/");
       return;
     }
-    if (current.isPlatform || current.tenantId === null) {
+    if (session.isPlatform || session.tenantId === null) {
       router.replace("/platform/tenants");
-      return;
     }
-    setSessionState(current);
-    setReady(true);
-  }, [router]);
+  }, [ready, router, session]);
 
-  if (!ready || !session) {
+  if (!ready || !session || session.isPlatform || session.tenantId === null) {
     return (
       <div className="dash-loading">
         <span>{t("loadingWorkspace")}</span>
       </div>
     );
   }
+
+  const navItems = visibleDashboardNav(session.permissions);
 
   async function handleSignOut() {
     try {
@@ -68,7 +62,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           <span className="dash-brand-name">{session.tenantSlug}</span>
         </div>
         <nav className="dash-nav">
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const active =
               item.href === "/dashboard"
                 ? pathname === item.href
