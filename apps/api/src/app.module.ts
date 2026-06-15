@@ -7,6 +7,7 @@ import { AuditModule } from "./audit/audit.module.js";
 import { ClassroomsModule } from "./classrooms/classrooms.module.js";
 import { DbModule } from "./db/db.module.js";
 import { IdentityModule } from "./identity/identity.module.js";
+import { StudentsModule } from "./students/students.module.js";
 import { TenancyModule } from "./tenancy/tenancy.module.js";
 
 @Module({
@@ -23,7 +24,8 @@ import { TenancyModule } from "./tenancy/tenancy.module.js";
     AcademicsModule,
     ClassroomsModule,
     AttendanceModule,
-    AuditModule
+    AuditModule,
+    StudentsModule
   ],
   controllers: [AppController]
 })
