@@ -9,9 +9,14 @@ import { CalendarModule } from "./calendar/calendar.module.js";
 import { ClassroomsModule } from "./classrooms/classrooms.module.js";
 import { DbModule } from "./db/db.module.js";
 import { DiscountsModule } from "./discounts/discounts.module.js";
+import { EnrollmentsModule } from "./enrollments/enrollments.module.js";
+import { ExamsModule } from "./exams/exams.module.js";
 import { FinanceModule } from "./finance/finance.module.js";
+import { GradingModule } from "./grading/grading.module.js";
 import { HrModule } from "./hr/hr.module.js";
 import { IdentityModule } from "./identity/identity.module.js";
+import { LmsModule } from "./lms/lms.module.js";
+import { ReportCardsModule } from "./report-cards/report-cards.module.js";
 import { SalaryModule } from "./salary/salary.module.js";
 import { StudentsModule } from "./students/students.module.js";
 import { TenancyModule } from "./tenancy/tenancy.module.js";
@@ -39,7 +44,12 @@ import { TimetableModule } from "./timetable/timetable.module.js";
     SalaryModule,
     DiscountsModule,
     CalendarModule,
-    TimetableModule
+    TimetableModule,
+    LmsModule,
+    ExamsModule,
+    GradingModule,
+    ReportCardsModule,
+    EnrollmentsModule
   ],
   controllers: [AppController]
 })

@@ -1,0 +1,187 @@
+import { Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { and, eq } from "drizzle-orm";
+import { AuditService } from "../audit/audit.service.js";
+import { DB, type Database } from "../db/db.module.js";
+import { assessmentResults, examCycles, examSchedules } from "../db/schema.js";
+import type {
+  BulkResultsDto,
+  CreateExamCycleDto,
+  CreateExamScheduleDto,
+  ListExamSchedulesQueryDto
+} from "./dto.js";
+
+@Injectable()
+export class ExamsService {
+  constructor(
+    @Inject(DB) private readonly db: Database,
+    private readonly auditService: AuditService
+  ) {}
+
+  listCycles(tenantId: string) {
+    return this.db
+      .select()
+      .from(examCycles)
+      .where(eq(examCycles.tenantId, tenantId));
+  }
+
+  async createCycle(
+    tenantId: string,
+    actorUserId: string | undefined,
+    dto: CreateExamCycleDto
+  ) {
+    const rows = await this.db
+      .insert(examCycles)
+      .values({
+        tenantId,
+        academicYearId: dto.academicYearId,
+        name: dto.name,
+        examType: dto.examType,
+        createdBy: actorUserId,
+        updatedBy: actorUserId
+      })
+      .returning();
+    const row = rows[0]!;
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "exam.cycle.create",
+      recordType: "ExamCycle",
+      recordId: row.id,
+      after: row as Record<string, unknown>
+    });
+
+    return row;
+  }
+
+  listSchedules(tenantId: string, query: ListExamSchedulesQueryDto) {
+    const filters = [eq(examSchedules.tenantId, tenantId)];
+    if (query.cycleId) {
+      filters.push(eq(examSchedules.examCycleId, query.cycleId));
+    }
+    if (query.classroomId) {
+      filters.push(eq(examSchedules.classroomId, query.classroomId));
+    }
+    return this.db
+      .select()
+      .from(examSchedules)
+      .where(and(...filters));
+  }
+
+  async createSchedule(
+    tenantId: string,
+    actorUserId: string | undefined,
+    dto: CreateExamScheduleDto
+  ) {
+    const rows = await this.db
+      .insert(examSchedules)
+      .values({
+        tenantId,
+        examCycleId: dto.examCycleId,
+        classroomId: dto.classroomId,
+        subjectId: dto.subjectId,
+        examDate: dto.examDate,
+        startsAt: dto.startTime,
+        endsAt: dto.endTime,
+        fullMarks: String(dto.maxMarks),
+        createdBy: actorUserId,
+        updatedBy: actorUserId
+      })
+      .returning();
+    const row = rows[0]!;
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "exam.schedule.create",
+      recordType: "ExamSchedule",
+      recordId: row.id,
+      after: row as Record<string, unknown>
+    });
+
+    return row;
+  }
+
+  async bulkEnterResults(
+    tenantId: string,
+    scheduleId: string,
+    actorUserId: string | undefined,
+    dto: BulkResultsDto
+  ) {
+    const scheduleRows = await this.db
+      .select()
+      .from(examSchedules)
+      .where(and(eq(examSchedules.tenantId, tenantId), eq(examSchedules.id, scheduleId)));
+
+    if (!scheduleRows[0]) {
+      throw new NotFoundException("Exam schedule not found.");
+    }
+
+    const inserted = await Promise.all(
+      dto.results.map(async (r) => {
+        const rows = await this.db
+          .insert(assessmentResults)
+          .values({
+            tenantId,
+            examScheduleId: scheduleId,
+            studentId: r.studentId,
+            marks: r.marksObtained !== undefined ? String(r.marksObtained) : undefined,
+            teacherRemarks: r.remarks,
+            createdBy: actorUserId,
+            updatedBy: actorUserId
+          })
+          .returning();
+        return rows[0]!;
+      })
+    );
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "exam.results.bulk_enter",
+      recordType: "ExamSchedule",
+      recordId: scheduleId,
+      after: { count: inserted.length } as Record<string, unknown>
+    });
+
+    return inserted;
+  }
+
+  async lockSchedule(
+    tenantId: string,
+    scheduleId: string,
+    actorUserId: string | undefined
+  ) {
+    const scheduleRows = await this.db
+      .select()
+      .from(examSchedules)
+      .where(and(eq(examSchedules.tenantId, tenantId), eq(examSchedules.id, scheduleId)));
+
+    if (!scheduleRows[0]) {
+      throw new NotFoundException("Exam schedule not found.");
+    }
+
+    // Lock all results for this schedule
+    const rows = await this.db
+      .update(assessmentResults)
+      .set({ status: "approved", updatedBy: actorUserId, updatedAt: new Date() })
+      .where(
+        and(
+          eq(assessmentResults.tenantId, tenantId),
+          eq(assessmentResults.examScheduleId, scheduleId)
+        )
+      )
+      .returning();
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "exam.results.lock",
+      recordType: "ExamSchedule",
+      recordId: scheduleId,
+      after: { locked: true } as Record<string, unknown>
+    });
+
+    return { locked: true, updatedCount: rows.length };
+  }
+}
