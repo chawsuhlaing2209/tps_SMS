@@ -13,6 +13,20 @@ const apiProxyTarget =
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   transpilePackages: ["@sms/shared"],
+  async redirects() {
+    return [
+      {
+        source: "/login",
+        destination: "/",
+        permanent: false
+      },
+      {
+        source: "/favicon.ico",
+        destination: "/favicon.svg",
+        permanent: false
+      }
+    ];
+  },
   async rewrites() {
     return [
       {

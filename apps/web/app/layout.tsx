@@ -25,7 +25,10 @@ const body = Hanken_Grotesk({
 
 export const metadata: Metadata = {
   title: "SMS Platform",
-  description: "Multi-tenant school management system for Myanmar schools"
+  description: "Multi-tenant school management system for Myanmar schools",
+  icons: {
+    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }]
+  }
 };
 
 export default async function RootLayout({
