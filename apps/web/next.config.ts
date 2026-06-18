@@ -16,6 +16,11 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       {
+        source: "/dashboard/settings/discounts",
+        destination: "/dashboard/finance/discounts",
+        permanent: false
+      },
+      {
         source: "/login",
         destination: "/",
         permanent: false
