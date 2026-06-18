@@ -170,34 +170,29 @@ export const enrollmentFeeLineSchema = z.object({
 
 export type EnrollmentFeeLine = z.infer<typeof enrollmentFeeLineSchema>;
 
-export const siblingDiscountCriteriaSchema = z.object({
-  type: z.literal("sibling"),
-  minEnrolledSiblings: z.number().int().min(0).optional(),
-  siblingOrdinal: z.number().int().min(2).optional(),
-  appliesToFeeTypes: z.array(z.string()).optional()
-});
-
-export const discountCriteriaSchema = z.union([
-  siblingDiscountCriteriaSchema,
-  z.object({ type: z.string() })
-]);
+export const discountCriteriaSchema = z.object({ type: z.string() });
 
 export const enrollmentPreviewInputSchema = z.object({
   studentId: z.string().uuid(),
   academicYearId: z.string().uuid(),
   gradeId: z.string().uuid(),
   classroomId: z.string().uuid().optional(),
-  optionalFeeItemIds: z.array(z.string().uuid()).default([])
+  optionalFeeItemIds: z.array(z.string().uuid()).default([]),
+  collectPayment: z.boolean().optional(),
+  paymentMethod: z.string().optional()
 });
 
 export type EnrollmentPreviewInput = z.infer<typeof enrollmentPreviewInputSchema>;
 
 export const enrollmentPreviewDiscountSchema = z.object({
   id: z.string(),
+  ruleId: z.string().optional(),
   name: z.string(),
   discountType: z.string(),
   amount: z.number(),
   source: z.enum(["student_discount", "rule"]),
+  stackable: z.boolean().optional(),
+  eligibilityReason: z.string().optional(),
   status: z.string().optional(),
   requiresApproval: z.boolean().optional()
 });
@@ -226,6 +221,7 @@ export const enrollmentPreviewResultSchema = z.object({
   siblingSummary: z.object({
     eligible: z.boolean(),
     enrolledSiblingCount: z.number().int(),
+    studentPosition: z.number().int().optional(),
     message: z.string()
   }),
   subtotal: z.number(),
