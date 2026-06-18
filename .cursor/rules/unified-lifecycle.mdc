@@ -1,0 +1,38 @@
+---
+description: Anti-pattern guard for enrollment, admissions, and finance — one ceremony, not three chores
+globs: apps/api/src/{enrollments,finance,discounts,admissions}/**,apps/web/app/dashboard/{enrollments,finance,admissions,students}/**
+alwaysApply: false
+---
+
+# Unified enrollment & billing lifecycle
+
+## Anti-pattern (never add or preserve)
+
+Do **not** build or extend flows where staff must:
+
+1. Enroll a student in one screen
+2. Manually generate an invoice in Finance
+3. Separately record payment on another screen
+
+This is redundant. Enrollment fees, optional services, discounts, invoice creation, and optional payment belong in **one enrollment ceremony** with preview → confirm.
+
+Finance screens are for **AR operations** (collections, verification, recurring billing, reports) — not re-entering enrollment fee lines.
+
+## Required pattern
+
+- **Preview before commit:** fee lines from `enrollment_fee_plans` + optional services + discount engine (including sibling rules via `family_group_id`)
+- **Confirm atomically:** placement (`classroom_students`), enrollment status, `student_services`, invoice, optional payment — one transaction
+- **Single entry points:** Enrollments, student profile, admissions convert — all use the same wizard/API
+- **Traceability:** `enrollments.invoiceId` / `invoices.enrollmentId` link billing to enrollment
+- **Shared validation:** Zod schemas in `@sms/shared`, not duplicated inline-only rules
+
+## When extending finance or enrollments
+
+Before adding a new endpoint or form, ask:
+
+- Does this duplicate something the enrollment ceremony should do? → Extend the ceremony instead.
+- Is this ad-hoc billing (damage fee, adjustment)? → Label clearly as `ad_hoc`; do not use for standard enrollment.
+
+## Sibling discounts
+
+Evaluate at preview time from `family_group_id` + enrolled siblings in the same academic year. Do not require staff to manually cross-check family membership.

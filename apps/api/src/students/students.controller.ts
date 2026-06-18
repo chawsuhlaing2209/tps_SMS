@@ -14,10 +14,14 @@ import { PermissionsGuard } from "../identity/permissions.guard.js";
 import {
   CreateGuardianDto,
   CreateStudentDto,
+  CreateStudentFamilyGroupDto,
   EnrollStudentDto,
   LinkGuardianDto,
   ListStudentsQueryDto,
+  ListGuardiansQueryDto,
+  SetStudentFamilyGroupDto,
   TransferStudentDto,
+  UpdateGuardianDto,
   UpdateStudentDto,
   WithdrawStudentDto
 } from "./dto.js";
@@ -39,8 +43,20 @@ export class StudentsController {
 
   @Get("guardians")
   @RequireAnyPermissions("student.manage", "student.view")
-  listGuardians(@Param("tenantId") tenantId: string) {
-    return this.studentsService.listGuardians(tenantId);
+  listGuardians(
+    @Param("tenantId") tenantId: string,
+    @Query() query: ListGuardiansQueryDto
+  ) {
+    return this.studentsService.listGuardians(tenantId, query);
+  }
+
+  @Get("guardians/:guardianId")
+  @RequireAnyPermissions("student.manage", "student.view")
+  getGuardian(
+    @Param("tenantId") tenantId: string,
+    @Param("guardianId") guardianId: string
+  ) {
+    return this.studentsService.getGuardian(tenantId, guardianId);
   }
 
   @Get(":studentId")
@@ -50,6 +66,15 @@ export class StudentsController {
     @Param("studentId") studentId: string
   ) {
     return this.studentsService.getById(tenantId, studentId);
+  }
+
+  @Get(":studentId/profile")
+  @RequireAnyPermissions("student.manage", "student.view")
+  getProfile(
+    @Param("tenantId") tenantId: string,
+    @Param("studentId") studentId: string
+  ) {
+    return this.studentsService.getProfile(tenantId, studentId);
   }
 
   @Get(":studentId/timeline")
@@ -92,6 +117,17 @@ export class StudentsController {
     return this.studentsService.linkGuardian(tenantId, studentId, actorUserId, dto);
   }
 
+  @Patch("guardians/:guardianId")
+  @RequirePermissions("student.manage")
+  updateGuardian(
+    @Param("tenantId") tenantId: string,
+    @Param("guardianId") guardianId: string,
+    @Body() dto: UpdateGuardianDto,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.studentsService.updateGuardian(tenantId, guardianId, actorUserId, dto);
+  }
+
   @Patch(":studentId")
   @RequirePermissions("student.manage")
   update(
@@ -103,6 +139,29 @@ export class StudentsController {
     return this.studentsService.update(tenantId, studentId, actorUserId, dto);
   }
 
+  @Patch(":studentId/family-group")
+  @RequirePermissions("student.manage")
+  setFamilyGroup(
+    @Param("tenantId") tenantId: string,
+    @Param("studentId") studentId: string,
+    @Body() dto: SetStudentFamilyGroupDto,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.studentsService.setStudentFamilyGroup(tenantId, studentId, actorUserId, dto);
+  }
+
+  @Post(":studentId/family-group")
+  @RequirePermissions("student.manage")
+  createFamilyGroup(
+    @Param("tenantId") tenantId: string,
+    @Param("studentId") studentId: string,
+    @Body() dto: CreateStudentFamilyGroupDto,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.studentsService.createFamilyGroupForStudent(tenantId, studentId, actorUserId, dto);
+  }
+
+  /** @deprecated Prefer POST /enrollments with the enrollment ceremony wizard. */
   @Post(":studentId/enroll")
   @RequirePermissions("student.manage")
   enroll(

@@ -1,5 +1,17 @@
-import { IsDateString, IsEnum, IsOptional, IsString, ValidateNested, IsArray } from "class-validator";
-import { Type } from "class-transformer";
+import {
+  IsDateString,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  ValidateNested,
+  IsArray
+} from "class-validator";
+import { Type, Transform } from "class-transformer";
+
+function trimString({ value }: { value: unknown }) {
+  return typeof value === "string" ? value.trim() : value;
+}
 
 export const ATTENDANCE_STATUS_VALUES = ["present", "absent", "late", "excused", "sick", "leave", "half_day"] as const;
 export type AttendanceStatus = typeof ATTENDANCE_STATUS_VALUES[number];
@@ -37,6 +49,8 @@ export class CorrectAttendanceRecordDto {
   declare status: AttendanceStatus;
 
   @IsString()
+  @Transform(trimString)
+  @IsNotEmpty()
   declare correctionReason: string;
 }
 

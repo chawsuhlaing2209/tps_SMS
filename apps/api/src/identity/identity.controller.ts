@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Headers, Param, Post, UseGuards } from "@nestjs/common";
-import { AssignRoleDto, CreateSessionDto, InviteUserDto } from "./dto.js";
+import { Body, Controller, Get, Headers, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { AssignRoleDto, CreateSessionDto, CreateTenantRoleDto, InviteUserDto, UpdateTenantRoleDto } from "./dto.js";
 import { IdentityManageGuard } from "./identity-manage.guard.js";
 import { IdentityService } from "./identity.service.js";
 
@@ -16,6 +16,30 @@ export class IdentityController {
   @Get("roles")
   listRoles(@Param("tenantId") tenantId: string) {
     return this.identityService.listTenantRoles(tenantId);
+  }
+
+  @Get("roles/:roleId")
+  getRole(@Param("tenantId") tenantId: string, @Param("roleId") roleId: string) {
+    return this.identityService.getTenantRole(tenantId, roleId);
+  }
+
+  @Post("roles")
+  createRole(
+    @Param("tenantId") tenantId: string,
+    @Body() dto: CreateTenantRoleDto,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.identityService.createTenantRole(tenantId, dto, actorUserId);
+  }
+
+  @Patch("roles/:roleId")
+  updateRole(
+    @Param("tenantId") tenantId: string,
+    @Param("roleId") roleId: string,
+    @Body() dto: UpdateTenantRoleDto,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.identityService.updateTenantRole(tenantId, roleId, dto, actorUserId);
   }
 
   @Get("users")

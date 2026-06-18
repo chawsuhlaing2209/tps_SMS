@@ -4,11 +4,13 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type QueryClient,
   type UseMutationResult,
   type UseQueryResult
 } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { getSession, isPlatformSession } from "./session";
+import { toastError, toastSuccess } from "./toast";
 
 // All requests go to the Next.js origin under /api and are proxied to the API
 // (see next.config.ts), so there is never a cross-origin/CORS request.
@@ -45,8 +47,14 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   });
 
   if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { message?: string } | null;
-    throw new ApiError(body?.message ?? `Request failed (${response.status})`, response.status);
+    const body = (await response.json().catch(() => null)) as {
+      message?: string | string[];
+    } | null;
+    const rawMessage = body?.message;
+    const message = Array.isArray(rawMessage)
+      ? rawMessage.join(" ")
+      : rawMessage ?? `Request failed (${response.status})`;
+    throw new ApiError(message, response.status);
   }
 
   if (response.status === 204) {
@@ -57,11 +65,45 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 }
 
 /**
- * Stable, tenant-scoped query key. Keeping tenant id at the front makes it easy
- * to invalidate everything for the current tenant in one call.
+ * Stable, tenant-scoped query key. Pathname segments are separate from query
+ * params so prefix invalidation (e.g. all `/finance/invoices` reads) works even
+ * when list queries append `?limit=` filters.
  */
 export function tenantQueryKey(tenantId: string, path: string): unknown[] {
-  return ["tenant", tenantId, ...path.split("/").filter(Boolean)];
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  const question = normalized.indexOf("?");
+  const pathname = question >= 0 ? normalized.slice(0, question) : normalized;
+  const search = question >= 0 ? normalized.slice(question + 1) : "";
+  const segments = pathname.split("/").filter(Boolean);
+  const key: unknown[] = ["tenant", tenantId, ...segments];
+
+  if (search) {
+    const params = new URLSearchParams(search);
+    const stable: Record<string, string> = {};
+    for (const [name, value] of [...params.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+      stable[name] = value;
+    }
+    key.push(stable);
+  }
+
+  return key;
+}
+
+/** Invalidate every cached read whose path starts with one of the given prefixes. */
+export async function invalidateTenantPaths(
+  queryClient: QueryClient,
+  tenantId: string,
+  paths: string[]
+) {
+  await Promise.all(
+    paths.map((path) => {
+      const pathname = path.split("?")[0] ?? path;
+      return queryClient.invalidateQueries({
+        queryKey: tenantQueryKey(tenantId, pathname),
+        refetchType: "active"
+      });
+    })
+  );
 }
 
 /**
@@ -93,9 +135,19 @@ export function useApiMutation<TVariables, TResult = unknown>(
     variables: TVariables,
     tenantId: string
   ) => { path: string; init?: RequestInit },
-  options: { invalidatePaths?: (variables: TVariables, tenantId: string) => string[] } = {}
+  options: {
+    invalidatePaths?: (variables: TVariables, tenantId: string) => string[];
+    successMessage?: string;
+    showSuccessToast?: boolean;
+    showErrorToast?: boolean;
+  } = {}
 ): UseMutationResult<TResult, Error, TVariables> {
   const queryClient = useQueryClient();
+  const {
+    successMessage = "Saved successfully.",
+    showSuccessToast = true,
+    showErrorToast = true
+  } = options;
 
   return useMutation<TResult, Error, TVariables>({
     mutationFn: async (variables: TVariables) => {
@@ -104,18 +156,21 @@ export function useApiMutation<TVariables, TResult = unknown>(
         throw new ApiError("Not signed in.", 401);
       }
       const { path, init } = buildRequest(variables, session.tenantId);
-      return apiFetch<TResult>(path, init);
-    },
-    onSuccess: (_result, variables) => {
-      const session = getSession();
-      if (!session?.tenantId) {
-        return;
+      const result = await apiFetch<TResult>(path, init);
+      const invalidate = options.invalidatePaths?.(variables, session.tenantId) ?? [];
+      if (invalidate.length) {
+        await invalidateTenantPaths(queryClient, session.tenantId, invalidate);
       }
-      const paths = options.invalidatePaths?.(variables, session.tenantId) ?? [];
-      for (const path of paths) {
-        void queryClient.invalidateQueries({
-          queryKey: tenantQueryKey(session.tenantId, path)
-        });
+      return result;
+    },
+    onSuccess: () => {
+      if (showSuccessToast) {
+        toastSuccess(successMessage);
+      }
+    },
+    onError: (error) => {
+      if (showErrorToast) {
+        toastError(error);
       }
     }
   });
@@ -138,9 +193,19 @@ export function usePlatformQuery<T>(path: string): UseQueryResult<T> {
 /** Platform-scoped write for the super-admin console. */
 export function usePlatformMutation<TVariables, TResult = unknown>(
   buildRequest: (variables: TVariables) => { path: string; init?: RequestInit },
-  options: { invalidatePaths?: string[] } = {}
+  options: {
+    invalidatePaths?: string[];
+    successMessage?: string;
+    showSuccessToast?: boolean;
+    showErrorToast?: boolean;
+  } = {}
 ): UseMutationResult<TResult, Error, TVariables> {
   const queryClient = useQueryClient();
+  const {
+    successMessage = "Saved successfully.",
+    showSuccessToast = true,
+    showErrorToast = true
+  } = options;
 
   return useMutation<TResult, Error, TVariables>({
     mutationFn: async (variables: TVariables) => {
@@ -151,8 +216,16 @@ export function usePlatformMutation<TVariables, TResult = unknown>(
       return apiFetch<TResult>(path, init);
     },
     onSuccess: () => {
+      if (showSuccessToast) {
+        toastSuccess(successMessage);
+      }
       for (const path of options.invalidatePaths ?? []) {
         void queryClient.invalidateQueries({ queryKey: [...PLATFORM_QUERY_KEY, path] });
+      }
+    },
+    onError: (error) => {
+      if (showErrorToast) {
+        toastError(error);
       }
     }
   });

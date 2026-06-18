@@ -1,5 +1,6 @@
 import { Worker } from "bullmq";
 import { mvpBacklog, queueNames } from "@sms/shared";
+import { handleGenerateMonthlyInvoices } from "./generate-monthly-invoices.js";
 
 const redisUrl = new URL(process.env.REDIS_URL ?? "redis://localhost:6379");
 const connection = {
@@ -14,9 +15,11 @@ for (const queueName of Object.values(queueNames)) {
     queueName,
     async (job) => {
       switch (job.name) {
-        case "generate-monthly-invoices":
-          console.log("Generating monthly invoices", job.data);
+        case "generate-monthly-invoices": {
+          const result = await handleGenerateMonthlyInvoices(job.data);
+          console.log("Monthly invoices generated", result);
           break;
+        }
         case "send-email-notification":
           console.log("Sending email notification", job.data);
           break;

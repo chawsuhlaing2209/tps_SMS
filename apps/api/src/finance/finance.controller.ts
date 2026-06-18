@@ -1,15 +1,27 @@
 import {
-  Controller, Get, Post, Patch, Body, Param, Query, Headers, UseGuards,
+  Controller, Get, Post, Patch, Put, Delete, Body, Param, Query, Headers, UseGuards,
 } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { PermissionsGuard } from '../identity/permissions.guard.js'
 import { RequirePermissions } from '../identity/permissions.decorator.js'
 import { FinanceService } from './finance.service.js'
-import type {
-  CreateFeeItemDto, CreateEnrollmentFeePlanDto, CreateInvoiceDto,
-  GenerateMonthlyInvoicesDto, CancelInvoiceDto, RecordPaymentDto,
-  VerifyPaymentDto, ListInvoicesQueryDto, ListPaymentsQueryDto,
-  MonthlyReportQueryDto, ReceivablesQueryDto,
+import {
+  CreateEnrollmentFeePlanDto,
+  CreateFeeItemDto,
+  CreateInvoiceDto,
+  CreatePaymentPlanDto,
+  GenerateMonthlyInvoicesDto,
+  ListInvoicesQueryDto,
+  ListPaymentsQueryDto,
+  MonthlyReportQueryDto,
+  ReceivablesQueryDto,
+  RecordPaymentDto,
+  RefundPaymentDto,
+  UpdateEnrollmentFeePlanDto,
+  UpdateFeeItemDto,
+  UpdatePaymentPlanDto,
+  UpdatePaymentPlanInstallmentsDto,
+  VerifyPaymentDto,
 } from './dto.js'
 
 @ApiTags('finance')
@@ -30,10 +42,41 @@ export class FinanceController {
   @RequirePermissions('finance.manage')
   createFeeItem(
     @Param('tenantId') tenantId: string,
-    @Headers('x-user-id') actorUserId: string,
     @Body() dto: CreateFeeItemDto,
+    @Headers('x-user-id') actorUserId: string,
   ) {
     return this.financeService.createFeeItem(tenantId, actorUserId, dto)
+  }
+
+  @Patch('fee-items/:feeItemId')
+  @RequirePermissions('finance.manage')
+  updateFeeItem(
+    @Param('tenantId') tenantId: string,
+    @Param('feeItemId') feeItemId: string,
+    @Body() dto: UpdateFeeItemDto,
+    @Headers('x-user-id') actorUserId: string,
+  ) {
+    return this.financeService.updateFeeItem(tenantId, feeItemId, actorUserId, dto)
+  }
+
+  @Post('fee-items/:feeItemId/archive')
+  @RequirePermissions('finance.manage')
+  archiveFeeItem(
+    @Param('tenantId') tenantId: string,
+    @Param('feeItemId') feeItemId: string,
+    @Headers('x-user-id') actorUserId: string,
+  ) {
+    return this.financeService.archiveFeeItem(tenantId, feeItemId, actorUserId)
+  }
+
+  @Post('fee-items/:feeItemId/reactivate')
+  @RequirePermissions('finance.manage')
+  reactivateFeeItem(
+    @Param('tenantId') tenantId: string,
+    @Param('feeItemId') feeItemId: string,
+    @Headers('x-user-id') actorUserId: string,
+  ) {
+    return this.financeService.reactivateFeeItem(tenantId, feeItemId, actorUserId)
   }
 
   // ── Enrollment Fee Plans ───────────────────────────────────────────────────
@@ -54,7 +97,106 @@ export class FinanceController {
     return this.financeService.createEnrollmentFeePlan(tenantId, actorUserId, dto)
   }
 
+  @Patch('enrollment-fee-plans/:planId')
+  @RequirePermissions('finance.manage')
+  updateEnrollmentFeePlan(
+    @Param('tenantId') tenantId: string,
+    @Param('planId') planId: string,
+    @Headers('x-user-id') actorUserId: string,
+    @Body() dto: UpdateEnrollmentFeePlanDto,
+  ) {
+    return this.financeService.updateEnrollmentFeePlan(tenantId, planId, actorUserId, dto)
+  }
+
+  @Delete('enrollment-fee-plans/:planId')
+  @RequirePermissions('finance.manage')
+  deleteEnrollmentFeePlan(
+    @Param('tenantId') tenantId: string,
+    @Param('planId') planId: string,
+    @Headers('x-user-id') actorUserId: string,
+  ) {
+    return this.financeService.deleteEnrollmentFeePlan(tenantId, planId, actorUserId)
+  }
+
+  @Get('fee-structures/summary')
+  @RequirePermissions('finance.manage')
+  getFeeStructureSummary(
+    @Param('tenantId') tenantId: string,
+    @Query('academicYearId') academicYearId: string,
+  ) {
+    return this.financeService.getFeeStructureSummary(tenantId, academicYearId)
+  }
+
+  // ── Payment Plans ──────────────────────────────────────────────────────────
+
+  @Get('payment-plans')
+  @RequirePermissions('finance.manage')
+  listPaymentPlans(@Param('tenantId') tenantId: string) {
+    return this.financeService.listPaymentPlans(tenantId)
+  }
+
+  @Post('payment-plans')
+  @RequirePermissions('finance.manage')
+  createPaymentPlan(
+    @Param('tenantId') tenantId: string,
+    @Headers('x-user-id') actorUserId: string,
+    @Body() dto: CreatePaymentPlanDto,
+  ) {
+    return this.financeService.createPaymentPlan(tenantId, actorUserId, dto)
+  }
+
+  @Patch('payment-plans/:planId')
+  @RequirePermissions('finance.manage')
+  updatePaymentPlan(
+    @Param('tenantId') tenantId: string,
+    @Param('planId') planId: string,
+    @Headers('x-user-id') actorUserId: string,
+    @Body() dto: UpdatePaymentPlanDto,
+  ) {
+    return this.financeService.updatePaymentPlan(tenantId, planId, actorUserId, dto)
+  }
+
+  @Post('payment-plans/:planId/toggle-status')
+  @RequirePermissions('finance.manage')
+  togglePaymentPlanStatus(
+    @Param('tenantId') tenantId: string,
+    @Param('planId') planId: string,
+    @Headers('x-user-id') actorUserId: string,
+  ) {
+    return this.financeService.togglePaymentPlanStatus(tenantId, planId, actorUserId)
+  }
+
+  @Put('payment-plans/:planId/installments')
+  @RequirePermissions('finance.manage')
+  updatePaymentPlanInstallments(
+    @Param('tenantId') tenantId: string,
+    @Param('planId') planId: string,
+    @Headers('x-user-id') actorUserId: string,
+    @Body() dto: UpdatePaymentPlanInstallmentsDto,
+  ) {
+    return this.financeService.updatePaymentPlanInstallments(tenantId, planId, actorUserId, dto)
+  }
+
+  @Delete('payment-plans/:planId')
+  @RequirePermissions('finance.manage')
+  deletePaymentPlan(
+    @Param('tenantId') tenantId: string,
+    @Param('planId') planId: string,
+    @Headers('x-user-id') actorUserId: string,
+  ) {
+    return this.financeService.deletePaymentPlan(tenantId, planId, actorUserId)
+  }
+
   // ── Invoices ───────────────────────────────────────────────────────────────
+
+  @Get('students/:studentId/summary')
+  @RequirePermissions('finance.manage')
+  getStudentBillingSummary(
+    @Param('tenantId') tenantId: string,
+    @Param('studentId') studentId: string,
+  ) {
+    return this.financeService.getStudentBillingSummary(tenantId, studentId)
+  }
 
   @Get('invoices')
   @RequirePermissions('finance.manage')
@@ -94,17 +236,6 @@ export class FinanceController {
     return this.financeService.generateMonthlyInvoices(tenantId, actorUserId, dto)
   }
 
-  @Post('invoices/:invoiceId/cancel')
-  @RequirePermissions('finance.manage')
-  cancelInvoice(
-    @Param('tenantId') tenantId: string,
-    @Param('invoiceId') invoiceId: string,
-    @Headers('x-user-id') actorUserId: string,
-    @Body() dto: CancelInvoiceDto,
-  ) {
-    return this.financeService.cancelInvoice(tenantId, invoiceId, actorUserId, dto)
-  }
-
   // ── Payments ───────────────────────────────────────────────────────────────
 
   @Get('payments')
@@ -136,6 +267,17 @@ export class FinanceController {
     @Body() dto: VerifyPaymentDto,
   ) {
     return this.financeService.verifyPayment(tenantId, paymentId, actorUserId, dto)
+  }
+
+  @Post('payments/:paymentId/refund')
+  @RequirePermissions('finance.manage')
+  refundPayment(
+    @Param('tenantId') tenantId: string,
+    @Param('paymentId') paymentId: string,
+    @Headers('x-user-id') actorUserId: string,
+    @Body() dto: RefundPaymentDto,
+  ) {
+    return this.financeService.refundPayment(tenantId, paymentId, actorUserId, dto)
   }
 
   // ── Receipts ───────────────────────────────────────────────────────────────

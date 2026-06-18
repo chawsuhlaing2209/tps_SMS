@@ -1,0 +1,191 @@
+"use client";
+
+import { useTranslations } from "next-intl";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { useMemo } from "react";
+import { useApiQuery } from "../../../../../../lib/api";
+import { RecordList, RecordListItem, RecordListPanel } from "../../../../../../lib/record-list";
+import { PanelHead } from "../../../../../../lib/panel";
+import { useCurrentAcademicYear } from "../../../../../../lib/use-current-academic-year";
+import { PageHeader } from "../../../../../page-header-context";
+import { subjectColor } from "../../../../subject-colors";
+
+type Classroom = {
+  id: string;
+  name: string;
+  gradeId: string;
+  academicYearId: string;
+};
+
+type Grade = { id: string; name: string };
+
+type ClassroomSubject = {
+  subjectId: string;
+  subjectName: string;
+  subjectCode: string | null;
+  teacherStaffId: string | null;
+};
+
+type LearningMaterial = {
+  id: string;
+  title: string;
+  description: string | null;
+  subjectId: string;
+};
+
+type Assignment = {
+  id: string;
+  title: string;
+  subjectId: string;
+  instructions: string | null;
+  dueAt: string | null;
+};
+
+type StaffMember = { id: string; fullName: string };
+
+export default function StructureSubjectClassroomPage() {
+  const params = useParams<{ classroomId: string; subjectId: string }>();
+  const { classroomId, subjectId } = params;
+  const t = useTranslations("academics");
+  const c = useTranslations("common");
+  const nav = useTranslations("nav");
+  const currentYear = useCurrentAcademicYear();
+
+  const classroom = useApiQuery<Classroom>((tenant) => `/tenants/${tenant}/classrooms/${classroomId}`);
+  const grades = useApiQuery<Grade[]>((tenant) => `/tenants/${tenant}/academics/grades`);
+  const subjects = useApiQuery<ClassroomSubject[]>((tenant) =>
+    `/tenants/${tenant}/classrooms/${classroomId}/subjects`
+  );
+  const staff = useApiQuery<StaffMember[]>((tenant) => `/tenants/${tenant}/hr/staff?employmentRole=teacher`);
+  const materials = useApiQuery<LearningMaterial[]>((tenant) =>
+    `/tenants/${tenant}/lms/classrooms/${classroomId}/materials`
+  );
+  const assignments = useApiQuery<Assignment[]>((tenant) =>
+    `/tenants/${tenant}/lms/classrooms/${classroomId}/assignments`
+  );
+
+  const subjectRow = subjects.data?.find((row) => row.subjectId === subjectId);
+  const grade = grades.data?.find((row) => row.id === classroom.data?.gradeId);
+  const teacherName = subjectRow?.teacherStaffId
+    ? (staff.data?.find((member) => member.id === subjectRow.teacherStaffId)?.fullName ?? "—")
+    : "—";
+
+  const subjectMaterials = useMemo(
+    () => (materials.data ?? []).filter((row) => row.subjectId === subjectId),
+    [materials.data, subjectId]
+  );
+
+  const subjectAssignments = useMemo(
+    () => (assignments.data ?? []).filter((row) => row.subjectId === subjectId),
+    [assignments.data, subjectId]
+  );
+
+  if (classroom.isLoading || subjects.isLoading) {
+    return <p className="muted">{c("loading")}</p>;
+  }
+
+  if (classroom.isError || !classroom.data || !subjectRow) {
+    return (
+      <div className="structure-empty">
+        <p className="error-text">{t("subjectNotFound")}</p>
+        <Link href={`/dashboard/structure/rooms/${classroomId}`}>{t("backToRoom")}</Link>
+      </div>
+    );
+  }
+
+  const colors = subjectColor(subjectRow.subjectName);
+
+  return (
+    <div className="structure-page">
+      <PageHeader
+        title={subjectRow.subjectName}
+        breadcrumbs={[
+          { label: nav("group_academics") },
+          { label: classroom.data.name, href: `/dashboard/structure/rooms/${classroomId}` }
+        ]}
+        backHref={`/dashboard/structure/rooms/${classroomId}`}
+        backLabel={t("backToRoom")}
+      />
+
+      <section className="structure-room-hero">
+        <span
+          className="structure-subject-tag structure-subject-tag--icon structure-room-card__mark--lg"
+          style={{ background: colors.bg, color: colors.text }}
+        >
+          {subjectRow.subjectName.charAt(0)}
+        </span>
+        <div>
+          <p className="structure-eyebrow">
+            {currentYear.data?.name ?? "—"} · {grade?.name ?? "—"} · {classroom.data.name}
+          </p>
+          <h2 className="structure-page-title">{subjectRow.subjectName}</h2>
+          <p className="muted">
+            {t("subjectClassroomMeta", {
+              teacher: teacherName,
+              code: subjectRow.subjectCode ?? "—"
+            })}
+          </p>
+        </div>
+      </section>
+
+      <div className="structure-room-layout">
+        <RecordListPanel
+          title={t("materialsTitle")}
+          empty={!subjectMaterials.length ? t("noMaterialsYet") : undefined}
+        >
+          {subjectMaterials.length ? (
+            <RecordList>
+              {subjectMaterials.map((material) => (
+                <RecordListItem
+                  key={material.id}
+                  icon="description"
+                  nameForColor={subjectRow.subjectName}
+                  title={material.title}
+                  meta={material.description ?? undefined}
+                />
+              ))}
+            </RecordList>
+          ) : null}
+        </RecordListPanel>
+
+        <aside className="structure-side-stack">
+          <section className="panel structure-panel--accent">
+            <p className="structure-stat-card__label">{t("assignmentsTitle")}</p>
+            <strong className="structure-stat-card__value">{subjectAssignments.length}</strong>
+            <span className="muted">{t("assignmentsHelp")}</span>
+          </section>
+          <section className="panel">
+            <PanelHead title={t("examsTitle")} />
+            <div className="panel-body">
+              <p className="muted">{t("examsHelp")}</p>
+              <Link href="/dashboard/exams" className="structure-room-card__link">
+                {t("openExams")}
+              </Link>
+            </div>
+          </section>
+        </aside>
+      </div>
+
+      {subjectAssignments.length ? (
+        <RecordListPanel title={t("assignmentsTitle")}>
+          <RecordList>
+            {subjectAssignments.map((assignment) => (
+              <RecordListItem
+                key={assignment.id}
+                icon="assignment"
+                nameForColor={subjectRow.subjectName}
+                title={assignment.title}
+                meta={
+                  assignment.dueAt
+                    ? t("dueOn", { date: new Date(assignment.dueAt).toLocaleDateString() })
+                    : t("noDueDate")
+                }
+              />
+            ))}
+          </RecordList>
+        </RecordListPanel>
+      ) : null}
+    </div>
+  );
+}

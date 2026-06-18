@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Param, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Headers, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { RequireAnyPermissions, RequirePermissions } from "../identity/permissions.decorator.js";
 import { PermissionsGuard } from "../identity/permissions.guard.js";
 import { DiscountsService } from "./discounts.service.js";
@@ -7,7 +7,8 @@ import {
   CreateDiscountRuleDto,
   ListStudentDiscountsQueryDto,
   RejectDiscountDto,
-  RequestStudentDiscountDto
+  RequestStudentDiscountDto,
+  UpdateDiscountRuleDto
 } from "./dto.js";
 
 @Controller("tenants/:tenantId/discounts")
@@ -29,6 +30,37 @@ export class DiscountsController {
     @Headers("x-user-id") actorUserId: string
   ) {
     return this.discountsService.createDiscountRule(tenantId, actorUserId, dto);
+  }
+
+  @Patch("rules/:ruleId")
+  @RequirePermissions("discount.approve")
+  updateDiscountRule(
+    @Param("tenantId") tenantId: string,
+    @Param("ruleId") ruleId: string,
+    @Body() dto: UpdateDiscountRuleDto,
+    @Headers("x-user-id") actorUserId: string
+  ) {
+    return this.discountsService.updateDiscountRule(tenantId, ruleId, actorUserId, dto);
+  }
+
+  @Post("rules/:ruleId/archive")
+  @RequirePermissions("discount.approve")
+  archiveDiscountRule(
+    @Param("tenantId") tenantId: string,
+    @Param("ruleId") ruleId: string,
+    @Headers("x-user-id") actorUserId: string
+  ) {
+    return this.discountsService.archiveDiscountRule(tenantId, ruleId, actorUserId);
+  }
+
+  @Post("rules/:ruleId/reactivate")
+  @RequirePermissions("discount.approve")
+  reactivateDiscountRule(
+    @Param("tenantId") tenantId: string,
+    @Param("ruleId") ruleId: string,
+    @Headers("x-user-id") actorUserId: string
+  ) {
+    return this.discountsService.reactivateDiscountRule(tenantId, ruleId, actorUserId);
   }
 
   @Get("student-discounts")

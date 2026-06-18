@@ -5,7 +5,8 @@ import {
   IsNotEmpty,
   IsNumber,
   IsOptional,
-  IsString
+  IsString,
+  IsUUID
 } from "class-validator";
 
 export class CreateEnquiryDto {
@@ -134,6 +135,16 @@ export class ConvertEnquiryDto {
   @IsDateString()
   @IsOptional()
   enrollmentDate?: string;
+}
+
+export class StartEnrollmentDto {
+  @IsOptional()
+  @IsUUID()
+  gradeId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  classroomId?: string;
 }
 
 export class ListEnquiriesQueryDto {

@@ -1,13 +1,30 @@
-import { Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { and, count, desc, eq, ilike, sql } from "drizzle-orm";
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException
+} from "@nestjs/common";
+import { and, count, desc, eq, ilike, isNull, isNotNull } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
-import { enquiries, leadActivities } from "../db/schema.js";
+import {
+  academicYears,
+  enquiries,
+  enrollments,
+  grades,
+  leadActivities,
+  students
+} from "../db/schema.js";
+import { EnrollmentsService } from "../enrollments/enrollments.service.js";
+import { EnrollmentBillingService } from "../enrollments/enrollment-billing.service.js";
+import { StudentsService } from "../students/students.service.js";
 import type {
   ConvertEnquiryDto,
   CreateEnquiryDto,
   CreateLeadActivityDto,
   ListEnquiriesQueryDto,
+  StartEnrollmentDto,
   UpdateEnquiryDto
 } from "./dto.js";
 
@@ -15,7 +32,10 @@ import type {
 export class AdmissionsService {
   constructor(
     @Inject(DB) private readonly db: Database,
-    private readonly auditService: AuditService
+    private readonly auditService: AuditService,
+    private readonly enrollmentsService: EnrollmentsService,
+    private readonly enrollmentBillingService: EnrollmentBillingService,
+    private readonly studentsService: StudentsService
   ) {}
 
   async listEnquiries(tenantId: string, query: ListEnquiriesQueryDto) {
@@ -181,34 +201,211 @@ export class AdmissionsService {
     return activity;
   }
 
-  async convertEnquiry(
+  async startEnrollment(
     tenantId: string,
     enquiryId: string,
     actorUserId: string,
-    _dto: ConvertEnquiryDto
+    dto: StartEnrollmentDto
   ) {
-    const existing = await this.getEnquiry(tenantId, enquiryId);
+    const enquiry = await this.getEnquiry(tenantId, enquiryId);
 
-    await this.db
-      .update(enquiries)
-      .set({ status: "enrolled", updatedBy: actorUserId, updatedAt: new Date() })
-      .where(and(eq(enquiries.tenantId, tenantId), eq(enquiries.id, enquiryId)));
+    if (enquiry.status === "lost") {
+      throw new BadRequestException("Cannot start enrollment for a lost enquiry.");
+    }
+
+    const [completedEnrollment] = await this.db
+      .select({ id: enrollments.id })
+      .from(enrollments)
+      .where(
+        and(
+          eq(enrollments.tenantId, tenantId),
+          eq(enrollments.enquiryId, enquiryId),
+          isNotNull(enrollments.confirmedAt)
+        )
+      )
+      .limit(1);
+
+    if (completedEnrollment || enquiry.status === "enrolled") {
+      throw new ConflictException("This enquiry is already enrolled.");
+    }
+
+    const [draftEnrollment] = await this.db
+      .select({ id: enrollments.id })
+      .from(enrollments)
+      .where(
+        and(
+          eq(enrollments.tenantId, tenantId),
+          eq(enrollments.enquiryId, enquiryId),
+          isNull(enrollments.confirmedAt)
+        )
+      )
+      .limit(1);
+
+    if (draftEnrollment) {
+      const [existing] = await this.db
+        .select({
+          id: enrollments.id,
+          studentId: enrollments.studentId,
+          academicYearId: enrollments.academicYearId,
+          gradeId: enrollments.gradeId,
+          classroomId: enrollments.classroomId,
+          status: enrollments.status,
+          studentFullName: students.fullName
+        })
+        .from(enrollments)
+        .innerJoin(students, eq(enrollments.studentId, students.id))
+        .where(
+          and(eq(enrollments.tenantId, tenantId), eq(enrollments.id, draftEnrollment.id))
+        );
+
+      return {
+        enrollmentId: existing!.id,
+        studentId: existing!.studentId,
+        studentName: existing!.studentFullName,
+        academicYearId: existing!.academicYearId,
+        gradeId: existing!.gradeId,
+        classroomId: existing!.classroomId,
+        enquiryId,
+        status: existing!.status
+      };
+    }
+
+    const [activeYear] = await this.db
+      .select({ id: academicYears.id })
+      .from(academicYears)
+      .where(and(eq(academicYears.tenantId, tenantId), eq(academicYears.status, "active")))
+      .limit(1);
+
+    if (!activeYear) {
+      throw new BadRequestException("No active academic year — set one in Academic Setup first.");
+    }
+
+    const gradeId = await this.resolveGradeId(tenantId, dto.gradeId, enquiry.targetGrade);
+    if (!gradeId) {
+      throw new BadRequestException(
+        "Could not resolve target grade. Pass gradeId or set a matching target grade on the enquiry."
+      );
+    }
+
+    if (dto.classroomId) {
+      await this.enrollmentBillingService.assertClassroomPlacement(
+        tenantId,
+        dto.classroomId,
+        activeYear.id,
+        gradeId
+      );
+    }
+
+    const nameParts = enquiry.prospectiveStudentName.trim().split(/\s+/);
+    const firstName = nameParts[0] ?? enquiry.prospectiveStudentName;
+    const lastName = nameParts.slice(1).join(" ") || "-";
+
+    const student = await this.studentsService.create(tenantId, actorUserId, {
+      firstName,
+      lastName,
+      dateOfBirth: "2010-01-01",
+      gender: "other"
+    });
+
+    if (enquiry.guardianName && enquiry.guardianPhone) {
+      const guardianParts = enquiry.guardianName.trim().split(/\s+/);
+      const guardian = await this.studentsService.createGuardian(tenantId, actorUserId, {
+        firstName: guardianParts[0] ?? enquiry.guardianName,
+        lastName: guardianParts.slice(1).join(" ") || "-",
+        phone: enquiry.guardianPhone,
+        relationship: "guardian"
+      });
+      await this.studentsService.linkGuardian(tenantId, student.id, actorUserId, {
+        guardianId: guardian.id,
+        relationship: "guardian"
+      });
+      await this.studentsService.ensureFamilyGroupForStudent(tenantId, student.id, actorUserId, {
+        guardianId: guardian.id,
+        familyName: `${enquiry.guardianName.trim()} family`
+      });
+    }
+
+    const enrollment = await this.enrollmentsService.createEnrollment(tenantId, actorUserId, {
+      studentId: student.id,
+      enquiryId,
+      academicYearId: activeYear.id,
+      gradeId,
+      classroomId: dto.classroomId
+    });
+
+    if (enquiry.status !== "offered" && enquiry.status !== "assessment_scheduled") {
+      await this.db
+        .update(enquiries)
+        .set({ status: "offered", updatedBy: actorUserId, updatedAt: new Date() })
+        .where(and(eq(enquiries.tenantId, tenantId), eq(enquiries.id, enquiryId)));
+    }
 
     await this.auditService.recordEvent({
       tenantId,
       actorUserId: actorUserId ?? null,
-      action: "enquiry.convert",
+      action: "enquiry.start_enrollment",
       recordType: "Enquiry",
       recordId: enquiryId,
-      before: { status: existing.status },
-      after: { status: "enrolled" }
+      after: { enrollmentId: enrollment.id, studentId: student.id }
     });
 
     return {
+      enrollmentId: enrollment.id,
+      studentId: student.id,
+      studentName: student.fullName,
+      academicYearId: activeYear.id,
+      gradeId,
+      classroomId: dto.classroomId ?? null,
       enquiryId,
-      status: "enrolled",
-      message: "Enquiry converted to enrolled status. Create student record separately."
+      status: enrollment.status
     };
+  }
+
+  async convertEnquiry(
+    tenantId: string,
+    enquiryId: string,
+    actorUserId: string,
+    dto: ConvertEnquiryDto
+  ) {
+    void dto;
+    return this.startEnrollment(tenantId, enquiryId, actorUserId, {});
+  }
+
+  private async resolveGradeId(
+    tenantId: string,
+    gradeId: string | undefined,
+    targetGrade: string | null
+  ): Promise<string | null> {
+    if (gradeId) {
+      const [grade] = await this.db
+        .select({ id: grades.id })
+        .from(grades)
+        .where(and(eq(grades.tenantId, tenantId), eq(grades.id, gradeId)));
+      return grade?.id ?? null;
+    }
+
+    if (!targetGrade?.trim()) {
+      return null;
+    }
+
+    const trimmed = targetGrade.trim();
+    const [exact] = await this.db
+      .select({ id: grades.id })
+      .from(grades)
+      .where(and(eq(grades.tenantId, tenantId), ilike(grades.name, trimmed)))
+      .limit(1);
+
+    if (exact) {
+      return exact.id;
+    }
+
+    const [partial] = await this.db
+      .select({ id: grades.id })
+      .from(grades)
+      .where(and(eq(grades.tenantId, tenantId), ilike(grades.name, `%${trimmed}%`)))
+      .limit(1);
+
+    return partial?.id ?? null;
   }
 
   async getDashboard(tenantId: string) {

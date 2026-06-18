@@ -1,10 +1,11 @@
-import { Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { and, eq } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
 import { assessmentResults, examCycles, examSchedules } from "../db/schema.js";
 import type {
   BulkResultsDto,
+  CorrectAssessmentResultDto,
   CreateExamCycleDto,
   CreateExamScheduleDto,
   ListExamSchedulesQueryDto
@@ -183,5 +184,69 @@ export class ExamsService {
     });
 
     return { locked: true, updatedCount: rows.length };
+  }
+
+  async correctAssessmentResult(
+    tenantId: string,
+    scheduleId: string,
+    resultId: string,
+    actorUserId: string | undefined,
+    dto: CorrectAssessmentResultDto
+  ) {
+    if (!actorUserId) {
+      throw new NotFoundException("Actor user id is required.");
+    }
+
+    const [existing] = await this.db
+      .select()
+      .from(assessmentResults)
+      .where(
+        and(
+          eq(assessmentResults.tenantId, tenantId),
+          eq(assessmentResults.examScheduleId, scheduleId),
+          eq(assessmentResults.id, resultId)
+        )
+      );
+
+    if (!existing) {
+      throw new NotFoundException("Assessment result not found.");
+    }
+
+    if (existing.status === "approved") {
+      throw new BadRequestException("Locked assessment results cannot be corrected.");
+    }
+
+    const before = {
+      marks: existing.marks,
+      teacherRemarks: existing.teacherRemarks
+    };
+
+    const [updated] = await this.db
+      .update(assessmentResults)
+      .set({
+        ...(dto.marksObtained !== undefined ? { marks: String(dto.marksObtained) } : {}),
+        ...(dto.grade !== undefined ? { resultStatus: dto.grade } : {}),
+        updatedBy: actorUserId,
+        updatedAt: new Date()
+      })
+      .where(and(eq(assessmentResults.tenantId, tenantId), eq(assessmentResults.id, resultId)))
+      .returning();
+
+    await this.auditService.recordSensitiveCorrection({
+      tenantId,
+      actorUserId,
+      action: "assessment.correct",
+      recordType: "AssessmentResult",
+      recordId: resultId,
+      reason: dto.correctionReason,
+      before,
+      after: {
+        marks: updated!.marks,
+        teacherRemarks: updated!.teacherRemarks,
+        resultStatus: updated!.resultStatus
+      }
+    });
+
+    return updated;
   }
 }

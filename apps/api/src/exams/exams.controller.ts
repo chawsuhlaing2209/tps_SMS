@@ -1,8 +1,9 @@
-import { Body, Controller, Get, Headers, Param, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Headers, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { RequirePermissions } from "../identity/permissions.decorator.js";
 import { PermissionsGuard } from "../identity/permissions.guard.js";
 import {
   BulkResultsDto,
+  CorrectAssessmentResultDto,
   CreateExamCycleDto,
   CreateExamScheduleDto,
   ListExamSchedulesQueryDto
@@ -68,5 +69,23 @@ export class ExamsController {
     @Headers("x-user-id") actorUserId?: string
   ) {
     return this.examsService.lockSchedule(tenantId, scheduleId, actorUserId);
+  }
+
+  @Patch("exam-schedules/:scheduleId/results/:resultId")
+  @RequirePermissions("exam.manage")
+  correctAssessmentResult(
+    @Param("tenantId") tenantId: string,
+    @Param("scheduleId") scheduleId: string,
+    @Param("resultId") resultId: string,
+    @Body() dto: CorrectAssessmentResultDto,
+    @Headers("x-user-id") actorUserId: string
+  ) {
+    return this.examsService.correctAssessmentResult(
+      tenantId,
+      scheduleId,
+      resultId,
+      actorUserId,
+      dto
+    );
   }
 }

@@ -5,10 +5,14 @@ export class CreateMaterialDto {
   declare title: string;
 
   @IsUUID()
+  declare subjectId: string;
+
+  @IsUUID()
   declare fileId: string;
 
   @IsUUID()
-  declare uploadedByStaffId: string;
+  @IsOptional()
+  uploadedByStaffId?: string;
 
   @IsOptional()
   @IsString()

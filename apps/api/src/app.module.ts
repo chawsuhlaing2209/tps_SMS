@@ -7,7 +7,9 @@ import { AttendanceModule } from "./attendance/attendance.module.js";
 import { AuditModule } from "./audit/audit.module.js";
 import { CalendarModule } from "./calendar/calendar.module.js";
 import { ClassroomsModule } from "./classrooms/classrooms.module.js";
+import { DashboardModule } from "./dashboard/dashboard.module.js";
 import { DbModule } from "./db/db.module.js";
+import { DepartmentsModule } from "./departments/departments.module.js";
 import { DiscountsModule } from "./discounts/discounts.module.js";
 import { EnrollmentsModule } from "./enrollments/enrollments.module.js";
 import { ExamsModule } from "./exams/exams.module.js";
@@ -31,6 +33,7 @@ import { TimetableModule } from "./timetable/timetable.module.js";
       envFilePath: [".env", "../../.env"]
     }),
     DbModule,
+    DashboardModule,
     TenancyModule,
     IdentityModule,
     AcademicsModule,
@@ -41,6 +44,7 @@ import { TimetableModule } from "./timetable/timetable.module.js";
     StudentsModule,
     FinanceModule,
     HrModule,
+    DepartmentsModule,
     SalaryModule,
     DiscountsModule,
     CalendarModule,

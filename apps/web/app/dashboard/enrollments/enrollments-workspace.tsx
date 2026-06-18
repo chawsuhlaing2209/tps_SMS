@@ -1,0 +1,210 @@
+"use client";
+
+import { type ColumnDef } from "@tanstack/react-table";
+import Link from "next/link";
+import { useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useApiQuery } from "../../lib/api";
+import { useCurrentAcademicYear } from "../../lib/use-current-academic-year";
+import { DataTable } from "../../lib/data-table";
+import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
+import { EnrollmentWizard } from "./enrollment-wizard";
+
+type Grade = { id: string; name: string };
+type Classroom = { id: string; name: string; gradeId: string; academicYearId: string };
+
+export type EnrollmentRow = {
+  id: string;
+  studentId: string;
+  studentFullName: string | null;
+  classroomId: string | null;
+  academicYearId: string;
+  gradeId: string;
+  invoiceId: string | null;
+  status: string;
+  billingSnapshot?: { optionalFeeItemIds?: string[] } | null;
+  updatedAt?: string;
+};
+
+const ENROLLMENTS_PATH = (tenant: string) => `/tenants/${tenant}/enrollments`;
+
+export function EnrollmentsWorkspace({
+  showStatusFilter = true,
+  compactTitle
+}: {
+  showStatusFilter?: boolean;
+  compactTitle?: boolean;
+}) {
+  const t = useTranslations("enrollments");
+  const c = useTranslations("common");
+  const searchParams = useSearchParams();
+
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [resumeDraft, setResumeDraft] = useState<EnrollmentRow | null>(null);
+  const [resumeEnrollmentId, setResumeEnrollmentId] = useState<string | null>(null);
+  const [prefillStudentId, setPrefillStudentId] = useState<string | null>(null);
+  const [prefillClassroomId, setPrefillClassroomId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState("");
+
+  const currentYear = useCurrentAcademicYear();
+  const workingYearId = currentYear.data?.id ?? "";
+
+  useEffect(() => {
+    const studentId = searchParams.get("studentId");
+    const classroomId = searchParams.get("classroomId");
+    const enrollmentId = searchParams.get("enrollmentId");
+    if (studentId || classroomId) {
+      setPrefillStudentId(studentId);
+      setPrefillClassroomId(classroomId);
+      setResumeDraft(null);
+      setWizardOpen(true);
+    } else if (enrollmentId) {
+      setPrefillStudentId(null);
+      setPrefillClassroomId(null);
+      setResumeDraft(null);
+      setResumeEnrollmentId(enrollmentId);
+      setWizardOpen(true);
+    }
+  }, [searchParams]);
+
+  const resumeEnrollment = useApiQuery<EnrollmentRow>((tenant) =>
+    resumeEnrollmentId ? `/tenants/${tenant}/enrollments/${resumeEnrollmentId}` : null
+  );
+
+  useEffect(() => {
+    if (!resumeEnrollmentId || !resumeEnrollment.data) return;
+    setResumeDraft(resumeEnrollment.data);
+  }, [resumeEnrollmentId, resumeEnrollment.data]);
+
+  const grades = useApiQuery<Grade[]>((tn) => `/tenants/${tn}/academics/grades`);
+  const classrooms = useApiQuery<Classroom[]>((tn) => `/tenants/${tn}/classrooms`);
+
+  const enrollmentsQuery = useMemo(() => {
+    const params = new URLSearchParams();
+    if (workingYearId) params.set("academicYearId", workingYearId);
+    if (statusFilter) params.set("status", statusFilter);
+    const qs = params.toString();
+    return qs ? `?${qs}` : "";
+  }, [workingYearId, statusFilter]);
+
+  const enrollments = useApiQuery<EnrollmentRow[]>(
+    (tn) => `${ENROLLMENTS_PATH(tn)}${enrollmentsQuery}`
+  );
+
+  const studentName = (row: { studentId: string; studentFullName?: string | null }) =>
+    row.studentFullName ?? row.studentId;
+  const classroomName = (id: string | null) =>
+    id ? (classrooms.data?.find((cl) => cl.id === id)?.name ?? id) : "—";
+  const yearName = (id: string) =>
+    id === workingYearId ? (currentYear.data?.name ?? id) : id;
+  const gradeName = (id: string) => grades.data?.find((g) => g.id === id)?.name ?? id;
+
+  const openWizard = (draft: EnrollmentRow | null = null) => {
+    setResumeDraft(draft);
+    setWizardOpen(true);
+  };
+
+  const enrollmentColumns: ColumnDef<EnrollmentRow, unknown>[] = [
+    { id: "student", header: t("student"), accessorFn: (row) => studentName(row) },
+    { id: "classroom", header: t("classroom"), accessorFn: (row) => classroomName(row.classroomId) },
+    { id: "grade", header: t("grade"), accessorFn: (row) => gradeName(row.gradeId) },
+    { id: "year", header: t("academicYear"), accessorFn: (row) => yearName(row.academicYearId) },
+    {
+      id: "status",
+      header: t("status"),
+      accessorKey: "status",
+      cell: ({ row }) => (
+        <span className={`badge badge--${row.original.status}`}>{row.original.status}</span>
+      )
+    },
+    {
+      id: "invoice",
+      header: t("invoice"),
+      cell: ({ row }) =>
+        row.original.invoiceId ? (
+          <Link className="row-action" href={`/dashboard/finance/invoices/${row.original.invoiceId}`}>
+            {t("viewInvoice")}
+          </Link>
+        ) : (
+          "—"
+        )
+    },
+    {
+      id: "actions",
+      header: t("actions"),
+      enableSorting: false,
+      cell: ({ row }) => {
+        if (row.original.status === "draft" && !row.original.invoiceId) {
+          return (
+            <button type="button" className="row-action" onClick={() => openWizard(row.original)}>
+              {t("continueEnrollment")}
+            </button>
+          );
+        }
+        if (row.original.status === "approved" && !row.original.invoiceId) {
+          return (
+            <button type="button" className="row-action" onClick={() => openWizard(row.original)}>
+              {t("continueEnrollment")}
+            </button>
+          );
+        }
+        return null;
+      }
+    }
+  ];
+
+  return (
+    <>
+      <section className="panel">
+        <TablePanelHead
+          title={compactTitle ? t("listTitle") : t("title")}
+          help={t("help")}
+          extra={
+            showStatusFilter ? (
+              <label className="form-inline">
+                <span className="muted">{t("filterStatus")}</span>
+                <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                  <option value="">{t("allStatuses")}</option>
+                  <option value="draft">{t("status_draft")}</option>
+                  <option value="approved">{t("status_approved")}</option>
+                  <option value="archived">{t("status_archived")}</option>
+                </select>
+              </label>
+            ) : null
+          }
+          onRefresh={() => void enrollments.refetch()}
+          onAdd={() => openWizard(null)}
+          addLabel={t("addEnrollment")}
+        />
+        <TablePanelBody
+          loading={enrollments.isLoading}
+          error={enrollments.isError ? c("somethingWrong") : null}
+          empty={!enrollments.data?.length}
+        >
+          <DataTable columns={enrollmentColumns} data={enrollments.data ?? []} />
+        </TablePanelBody>
+      </section>
+
+      <EnrollmentWizard
+        open={wizardOpen}
+        onOpenChange={(open) => {
+          setWizardOpen(open);
+          if (!open) {
+            setResumeDraft(null);
+            setResumeEnrollmentId(null);
+            setPrefillStudentId(null);
+            setPrefillClassroomId(null);
+          }
+        }}
+        classrooms={classrooms.data}
+        grades={grades.data}
+        academicYears={currentYear.data ? [currentYear.data] : undefined}
+        initialDraft={resumeDraft}
+        initialStudentId={prefillStudentId}
+        initialClassroomId={prefillClassroomId}
+        onSaved={() => void enrollments.refetch()}
+      />
+    </>
+  );
+}

@@ -39,6 +39,11 @@ export class UpdateAcademicYearDto {
   endsOn?: string;
 }
 
+export class SetAcademicYearActiveDto {
+  @IsBoolean()
+  active!: boolean;
+}
+
 export class CreateTermDto {
   @IsUUID()
   academicYearId!: string;

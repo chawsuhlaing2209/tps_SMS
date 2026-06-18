@@ -25,6 +25,17 @@ export class CreateSalaryComponentDto {
   isActive?: boolean;
 }
 
+export class UpdateSalaryComponentDto {
+  @IsString()
+  @IsNotEmpty()
+  @IsOptional()
+  name?: string;
+
+  @IsString()
+  @IsOptional()
+  componentType?: string;
+}
+
 export class ListSalaryRecordsQueryDto {
   @IsString()
   @IsOptional()

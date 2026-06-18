@@ -29,6 +29,83 @@
       "when": 1781600000000,
       "tag": "0003_grade_age_range",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1781700000000,
+      "tag": "0004_grade_subjects_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1781800000000,
+      "tag": "0005_unified_enrollment_billing",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781900000000,
+      "tag": "0006_enrollment_fee_plans_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1782000000000,
+      "tag": "0007_payment_refunds",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1782100000000,
+      "tag": "0008_one_active_academic_year",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1782200000000,
+      "tag": "0009_enrollment_fee_plan_grades",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1782300000000,
+      "tag": "0010_invoice_source",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1782400000000,
+      "tag": "0011_role_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1782500000000,
+      "tag": "0012_departments",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1782600000000,
+      "tag": "0013_teacher_teaching_setup",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1782700000000,
+      "tag": "0014_payment_plans",
+      "breakpoints": true
     }
   ]
 }

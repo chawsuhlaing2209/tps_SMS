@@ -1,4 +1,4 @@
-import { IsDateString, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID } from "class-validator";
+import { IsDateString, IsNotEmpty, IsNumber, IsObject, IsOptional, IsString, IsUUID } from "class-validator";
 import { Type } from "class-transformer";
 
 export class CreateDiscountRuleDto {
@@ -20,6 +20,39 @@ export class CreateDiscountRuleDto {
   @IsOptional()
   @Type(() => Number)
   approvalThreshold?: number;
+
+  @IsObject()
+  @IsOptional()
+  criteria?: Record<string, unknown>;
+}
+
+export class UpdateDiscountRuleDto {
+  @IsString()
+  @IsNotEmpty()
+  @IsOptional()
+  name?: string;
+
+  @IsString()
+  @IsOptional()
+  discountType?: string;
+
+  @IsString()
+  @IsOptional()
+  valueType?: string;
+
+  @IsNumber()
+  @IsOptional()
+  @Type(() => Number)
+  value?: number;
+
+  @IsNumber()
+  @IsOptional()
+  @Type(() => Number)
+  approvalThreshold?: number | null;
+
+  @IsObject()
+  @IsOptional()
+  criteria?: Record<string, unknown>;
 }
 
 export class RequestStudentDiscountDto {

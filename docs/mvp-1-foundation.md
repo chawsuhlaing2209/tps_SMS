@@ -57,7 +57,7 @@ Prove tenant isolation, authentication, school master data setup, and auditabili
 4. Audit logging
    - Audit events are persisted to `audit_logs` for tenant, identity, auth, and academic workflows.
    - An audit viewer endpoint is available to users with `audit.view`.
-   - Next hardening: extend persistence to finance, attendance, and grading workflows and require reasons for sensitive corrections.
+   - Sensitive corrections (attendance, finance verify/refund, assessment marks) require a non-empty reason via `AuditService.recordSensitiveCorrection`.
 
 5. Academic master data
    - Create/list endpoints for academic years, terms, grades, sections, subjects, and grade-subject mappings are implemented.
@@ -67,7 +67,7 @@ Prove tenant isolation, authentication, school master data setup, and auditabili
 6. Operational readiness
    - PostgreSQL migrations are generated via `npm run db:generate`.
    - Two-tenant isolation seed script runs via `npm run db:seed`.
-   - Next hardening: staging/production environment configuration, database backups, and CI running migrations.
+   - Staging template (`.env.staging.example`), backup scripts (`npm run db:backup`), and ops guide (`docs/operations.md`).
 
 ## Remaining MVP 1 Work
 
@@ -84,12 +84,12 @@ Verified against the codebase. Grouped by whether the item blocks MVP 1 go-live.
 
 - [x] Reset-token email delivery. `requestPasswordReset` no longer returns the token; it delivers a reset link through the shared notifications channel (`NotificationsService`: console provider logs locally, BullMQ `notifications` queue otherwise) and always returns `{ requested: true }` to avoid account enumeration. The queue contract now lives in `@sms/shared` (`apps/api/src/notifications/`, `apps/api/src/identity/auth.service.ts`, `packages/shared/src/jobs.ts`).
 - [x] Session sliding-timeout policy. Sessions enforce a 12h idle timeout that slides forward on each authenticated request (throttled to one write per minute) and a hard 30-day absolute lifetime from creation. The cookie carries the absolute lifetime while the server enforces both windows in `actorFromSessionToken` (`apps/api/src/identity/session-cookie.ts`, `request-context.service.ts`, `auth.service.ts`).
-- [ ] Require reasons for sensitive corrections. `recordEvent` treats `reason` as optional; only the unused attendance-correction helper enforces it. Enforce reasons when finance, attendance, and grading workflows arrive (`apps/api/src/audit/audit.service.ts`).
-- [ ] Staging/production environment configuration and database backups.
+- [x] Require reasons for sensitive corrections. `recordSensitiveCorrection` enforces non-empty reasons via `@sms/shared` `correctionReasonSchema`. Attendance, finance (verify/refund), and grading (`PATCH .../results/:id`) require reasons; see `apps/api/src/audit/audit.service.ts`.
+- [x] Staging/production environment configuration and database backups. Template: `.env.staging.example`; backup/restore scripts: `scripts/db-backup.sh`, `scripts/db-restore.sh`; guide: `docs/operations.md`.
 
 ### Exit-criteria sign-off
 
-- [ ] Demonstrate the full super-admin to school-admin flow end to end: create tenant, configure modules, configure school profile and academic structure, invite/activate/assign a user, and confirm audit entries.
+- [x] Demonstrate the full super-admin to school-admin flow end to end: create tenant, configure modules, configure school profile and academic structure, invite/activate/assign a user, and confirm audit entries. Step-by-step script: `docs/mvp-1-demo-runbook.md`.
 
 ## Exit Criteria
 

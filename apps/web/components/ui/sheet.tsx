@@ -29,7 +29,7 @@ const SheetContent = React.forwardRef<
     <SheetPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed inset-y-0 right-0 z-50 flex flex-col w-full max-w-[480px] bg-surface-raised border-l border-border shadow-lg',
+        'fixed inset-y-0 right-0 z-50 flex h-svh max-h-svh flex-col overflow-hidden w-full max-w-[480px] bg-surface-raised border-l border-border shadow-lg',
         'duration-300 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right',
         className
       )}
@@ -46,7 +46,7 @@ const SheetContent = React.forwardRef<
 SheetContent.displayName = 'SheetContent'
 
 const SheetHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn('flex flex-col gap-1 px-6 py-4 border-b border-border', className)} {...props} />
+  <div className={cn('flex shrink-0 flex-col gap-1 px-6 py-4 border-b border-border', className)} {...props} />
 )
 const SheetTitle = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Title>,
@@ -57,11 +57,11 @@ const SheetTitle = React.forwardRef<
 SheetTitle.displayName = 'SheetTitle'
 
 const SheetFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn('flex justify-end gap-2 px-6 py-4 border-t border-border mt-auto', className)} {...props} />
+  <div className={cn('flex shrink-0 justify-end gap-2 px-6 py-4 border-t border-border', className)} {...props} />
 )
 
 const SheetBody = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn('flex-1 overflow-y-auto px-6 py-4', className)} {...props} />
+  <div className={cn('min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4', className)} {...props} />
 )
 
 export { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetFooter, SheetBody, SheetClose }

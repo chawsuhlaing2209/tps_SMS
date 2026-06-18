@@ -1,0 +1,19 @@
+---
+description: Ship UI whenever new API endpoints are added
+alwaysApply: true
+---
+
+# API changes include UI
+
+When adding or extending backend API endpoints, also implement the corresponding web UI in the same change unless the user explicitly scopes the work to API-only.
+
+Minimum UI deliverable per feature:
+
+- Dashboard route(s) under `apps/web/app/dashboard/` (or `platform/` for super-admin APIs)
+- TanStack Query reads/writes via `useApiQuery` / `useApiMutation`
+- EN + MY strings in `messages/en.json` and `messages/my.json`
+- Nav link when the feature is a top-level area
+- Loading, empty, and error states
+- Seed or demo data when the feature needs setup to be exercised locally
+
+Do not leave read-only API endpoints with no way to verify them in the browser.

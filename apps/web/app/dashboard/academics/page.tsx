@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function AcademicsIndexPage() {
-  redirect("/dashboard/academics/years");
+export default function AcademicsPage() {
+  redirect("/dashboard/structure");
 }

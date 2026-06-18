@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   date,
@@ -10,7 +11,8 @@ import {
   text,
   timestamp,
   uniqueIndex,
-  uuid
+  uuid,
+  type AnyPgColumn
 } from "drizzle-orm/pg-core";
 
 export const languageEnum = pgEnum("language", ["my", "en"]);
@@ -76,6 +78,12 @@ export const paymentMethodEnum = pgEnum("payment_method", [
   "aya_pay",
   "cb_pay",
   "other"
+]);
+export const paymentKindEnum = pgEnum("payment_kind", ["payment", "refund"]);
+export const invoiceSourceEnum = pgEnum("invoice_source", [
+  "enrollment",
+  "recurring",
+  "ad_hoc"
 ]);
 
 const timestamps = {
@@ -193,6 +201,7 @@ export const roles = pgTable(
     key: text("key").notNull(),
     name: text("name").notNull(),
     permissions: jsonb("permissions").$type<string[]>().default([]).notNull(),
+    status: text("status").$type<"active" | "inactive">().default("active").notNull(),
     ...timestamps
   },
   (table) => ({
@@ -270,15 +279,23 @@ export const supportAccessGrants = pgTable("support_access_grants", {
   ...timestamps
 });
 
-export const academicYears = pgTable("academic_years", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  ...tenantFields,
-  name: text("name").notNull(),
-  startsOn: date("starts_on").notNull(),
-  endsOn: date("ends_on").notNull(),
-  status: recordStatusEnum("status").default("draft").notNull(),
-  promotionRules: jsonb("promotion_rules").$type<Record<string, unknown>>().default({}).notNull()
-});
+export const academicYears = pgTable(
+  "academic_years",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...tenantFields,
+    name: text("name").notNull(),
+    startsOn: date("starts_on").notNull(),
+    endsOn: date("ends_on").notNull(),
+    status: recordStatusEnum("status").default("draft").notNull(),
+    promotionRules: jsonb("promotion_rules").$type<Record<string, unknown>>().default({}).notNull()
+  },
+  (table) => ({
+    oneActivePerTenant: uniqueIndex("academic_years_one_active_per_tenant")
+      .on(table.tenantId)
+      .where(sql`${table.status} = 'active'`)
+  })
+);
 
 export const terms = pgTable("terms", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -299,6 +316,27 @@ export const grades = pgTable("grades", {
   status: recordStatusEnum("status").default("active").notNull()
 });
 
+export const teachingSectorGrades = pgTable(
+  "teaching_sector_grades",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...tenantFields,
+    sectorId: uuid("sector_id")
+      .references(() => teachingSectors.id, { onDelete: "cascade" })
+      .notNull(),
+    gradeId: uuid("grade_id")
+      .references(() => grades.id)
+      .notNull()
+  },
+  (table) => ({
+    sectorGradeUnique: uniqueIndex("teaching_sector_grades_sector_grade_unique").on(
+      table.tenantId,
+      table.sectorId,
+      table.gradeId
+    )
+  })
+);
+
 export const sections = pgTable("sections", {
   id: uuid("id").primaryKey().defaultRandom(),
   ...tenantFields,
@@ -315,15 +353,26 @@ export const subjects = pgTable("subjects", {
   status: recordStatusEnum("status").default("active").notNull()
 });
 
-export const gradeSubjects = pgTable("grade_subjects", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  ...tenantFields,
-  academicYearId: uuid("academic_year_id").references(() => academicYears.id).notNull(),
-  gradeId: uuid("grade_id").references(() => grades.id).notNull(),
-  subjectId: uuid("subject_id").references(() => subjects.id).notNull(),
-  weight: numeric("weight", { precision: 8, scale: 2 }).default("1").notNull(),
-  isRequired: boolean("is_required").default(true).notNull()
-});
+export const gradeSubjects = pgTable(
+  "grade_subjects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...tenantFields,
+    academicYearId: uuid("academic_year_id").references(() => academicYears.id).notNull(),
+    gradeId: uuid("grade_id").references(() => grades.id).notNull(),
+    subjectId: uuid("subject_id").references(() => subjects.id).notNull(),
+    weight: numeric("weight", { precision: 8, scale: 2 }).default("1").notNull(),
+    isRequired: boolean("is_required").default(true).notNull()
+  },
+  (table) => ({
+    yearGradeSubjectUnique: uniqueIndex("grade_subjects_year_grade_subject_unique").on(
+      table.tenantId,
+      table.academicYearId,
+      table.gradeId,
+      table.subjectId
+    )
+  })
+);
 
 export const guardians = pgTable("guardians", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -369,12 +418,49 @@ export const studentGuardians = pgTable("student_guardians", {
   emergencyContact: boolean("emergency_contact").default(false).notNull()
 });
 
+export const departments = pgTable(
+  "departments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...tenantFields,
+    name: text("name").notNull(),
+    description: text("description"),
+    status: text("status").$type<"active" | "inactive">().default("active").notNull()
+  },
+  (table) => ({
+    tenantNameUnique: uniqueIndex("departments_tenant_name_unique").on(table.tenantId, table.name)
+  })
+);
+
+/** School division for teacher placement (Primary / Middle / High, etc.). */
+export const teachingSectors = pgTable(
+  "teaching_sectors",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...tenantFields,
+    name: text("name").notNull(),
+    sortOrder: integer("sort_order").default(0).notNull(),
+    status: recordStatusEnum("status").default("active").notNull()
+  },
+  (table) => ({
+    tenantNameUnique: uniqueIndex("teaching_sectors_tenant_name_unique").on(table.tenantId, table.name),
+    tenantIdx: index("teaching_sectors_tenant_idx").on(table.tenantId)
+  })
+);
+
+export type TeacherProfileCapability = {
+  sectorIds?: string[];
+  competentSubjectIds?: string[];
+  eligibleGradeIds?: string[];
+};
+
 export const staff = pgTable("staff", {
   id: uuid("id").primaryKey().defaultRandom(),
   ...tenantFields,
   userId: uuid("user_id").references(() => users.id),
   employeeNumber: text("employee_number"),
   fullName: text("full_name").notNull(),
+  departmentId: uuid("department_id").references(() => departments.id),
   department: text("department"),
   employmentRole: text("employment_role").notNull(),
   phone: text("phone"),
@@ -382,8 +468,12 @@ export const staff = pgTable("staff", {
   address: text("address"),
   joinDate: date("join_date"),
   salaryBasis: text("salary_basis"),
+  promotionTitle: text("promotion_title"),
   qualifications: jsonb("qualifications").$type<Record<string, unknown>[]>().default([]).notNull(),
-  teacherProfile: jsonb("teacher_profile").$type<Record<string, unknown>>().default({}).notNull(),
+  teacherProfile: jsonb("teacher_profile")
+    .$type<TeacherProfileCapability>()
+    .default({})
+    .notNull(),
   status: staffStatusEnum("status").default("active").notNull()
 });
 
@@ -473,6 +563,13 @@ export const leadActivities = pgTable("lead_activities", {
   completedAt: timestamp("completed_at", { withTimezone: true })
 });
 
+/** Draft enrollment billing choices and cached preview metadata. */
+export type EnrollmentBillingSnapshot = {
+  optionalFeeItemIds?: string[];
+  lastPreviewAt?: string;
+  preview?: Record<string, unknown>;
+};
+
 export const enrollments = pgTable("enrollments", {
   id: uuid("id").primaryKey().defaultRandom(),
   ...tenantFields,
@@ -481,6 +578,9 @@ export const enrollments = pgTable("enrollments", {
   academicYearId: uuid("academic_year_id").references(() => academicYears.id).notNull(),
   gradeId: uuid("grade_id").references(() => grades.id).notNull(),
   classroomId: uuid("classroom_id").references(() => classrooms.id),
+  invoiceId: uuid("invoice_id"),
+  confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+  billingSnapshot: jsonb("billing_snapshot").$type<EnrollmentBillingSnapshot>(),
   status: approvalStatusEnum("status").default("draft").notNull()
 });
 
@@ -647,10 +747,27 @@ export const enrollmentFeePlans = pgTable("enrollment_fee_plans", {
   id: uuid("id").primaryKey().defaultRandom(),
   ...tenantFields,
   academicYearId: uuid("academic_year_id").references(() => academicYears.id).notNull(),
-  gradeId: uuid("grade_id").references(() => grades.id).notNull(),
   feeItemId: uuid("fee_item_id").references(() => feeItems.id).notNull(),
   amount: numeric("amount", { precision: 14, scale: 2 }).notNull()
 });
+
+export const enrollmentFeePlanGrades = pgTable(
+  "enrollment_fee_plan_grades",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...tenantFields,
+    planId: uuid("plan_id")
+      .references(() => enrollmentFeePlans.id, { onDelete: "cascade" })
+      .notNull(),
+    gradeId: uuid("grade_id").references(() => grades.id).notNull()
+  },
+  (table) => ({
+    planGradeUnique: uniqueIndex("enrollment_fee_plan_grades_plan_grade_unique").on(
+      table.planId,
+      table.gradeId
+    )
+  })
+);
 
 export const studentServices = pgTable("student_services", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -661,10 +778,42 @@ export const studentServices = pgTable("student_services", {
   effectiveTo: date("effective_to")
 });
 
+export const paymentPlans = pgTable("payment_plans", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  name: text("name").notNull(),
+  description: text("description"),
+  frequency: text("frequency").notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  status: recordStatusEnum("status").default("active").notNull()
+});
+
+export const paymentPlanInstallments = pgTable(
+  "payment_plan_installments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...tenantFields,
+    planId: uuid("plan_id")
+      .references(() => paymentPlans.id, { onDelete: "cascade" })
+      .notNull(),
+    label: text("label").notNull(),
+    dueDate: text("due_date").notNull(),
+    installmentCount: integer("installment_count"),
+    sortOrder: integer("sort_order").default(0).notNull()
+  },
+  (table) => ({
+    planSortUnique: uniqueIndex("payment_plan_installments_plan_sort_unique").on(
+      table.planId,
+      table.sortOrder
+    )
+  })
+);
+
 export const invoices = pgTable("invoices", {
   id: uuid("id").primaryKey().defaultRandom(),
   ...tenantFields,
   studentId: uuid("student_id").references(() => students.id).notNull(),
+  enrollmentId: uuid("enrollment_id").references(() => enrollments.id),
   familyGroupId: uuid("family_group_id").references(() => familyGroups.id),
   invoiceNumber: text("invoice_number").notNull(),
   issueDate: date("issue_date").notNull(),
@@ -672,7 +821,8 @@ export const invoices = pgTable("invoices", {
   subtotal: numeric("subtotal", { precision: 14, scale: 2 }).notNull(),
   discountTotal: numeric("discount_total", { precision: 14, scale: 2 }).default("0").notNull(),
   total: numeric("total", { precision: 14, scale: 2 }).notNull(),
-  status: paymentStatusEnum("status").default("unpaid").notNull()
+  status: paymentStatusEnum("status").default("unpaid").notNull(),
+  source: invoiceSourceEnum("source").default("ad_hoc").notNull()
 });
 
 export const invoiceItems = pgTable("invoice_items", {
@@ -694,6 +844,7 @@ export const discountRules = pgTable("discount_rules", {
   valueType: text("value_type").notNull(),
   value: numeric("value", { precision: 14, scale: 2 }).notNull(),
   approvalThreshold: numeric("approval_threshold", { precision: 14, scale: 2 }),
+  criteria: jsonb("criteria").$type<Record<string, unknown>>().default({}).notNull(),
   status: recordStatusEnum("status").default("active").notNull()
 });
 
@@ -713,9 +864,12 @@ export const payments = pgTable("payments", {
   id: uuid("id").primaryKey().defaultRandom(),
   ...tenantFields,
   invoiceId: uuid("invoice_id").references(() => invoices.id).notNull(),
+  kind: paymentKindEnum("kind").default("payment").notNull(),
+  refundedPaymentId: uuid("refunded_payment_id").references((): AnyPgColumn => payments.id),
   amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
   method: paymentMethodEnum("method").notNull(),
   referenceNumber: text("reference_number"),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
   proofFileId: uuid("proof_file_id"),
   verifiedByUserId: uuid("verified_by_user_id").references(() => users.id),
   verifiedAt: timestamp("verified_at", { withTimezone: true }),

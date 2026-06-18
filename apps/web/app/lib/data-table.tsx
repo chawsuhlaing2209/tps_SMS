@@ -6,15 +6,53 @@ import {
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
+  type Row,
   type SortingState
 } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useMemo, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "../../components/ui/table";
 
 type TimestampRow = {
   updatedAt?: string | null;
   createdAt?: string | null;
 };
+
+const STATUS_RANK: Record<string, number> = {
+  active: 0,
+  enrolled: 0,
+  draft: 1,
+  invited: 1,
+  probation: 1,
+  inactive: 2,
+  suspended: 2,
+  transferred: 2,
+  withdrawn: 2,
+  archived: 99,
+  graduated: 99,
+  closed: 99
+};
+
+function statusRank(value: unknown): number {
+  if (typeof value !== "string") {
+    return 50;
+  }
+  return STATUS_RANK[value] ?? 50;
+}
+
+const statusSortingFn = <TData,>(
+  rowA: Row<TData>,
+  rowB: Row<TData>,
+  columnId: string
+) => statusRank(rowA.getValue(columnId)) - statusRank(rowB.getValue(columnId));
 
 export function getRowTimestamp(row: unknown): number {
   if (!row || typeof row !== "object") {
@@ -45,6 +83,29 @@ export function formatRowTimestamp(row: unknown): string {
   return new Date(value).toLocaleString();
 }
 
+function columnHasStatus<TData>(column: ColumnDef<TData, unknown>): boolean {
+  return column.id === "status" || ("accessorKey" in column && column.accessorKey === "status");
+}
+
+export function computeDefaultSorting<TData>(
+  columns: ColumnDef<TData, unknown>[],
+  showUpdatedAt: boolean
+): SortingState {
+  if (
+    showUpdatedAt &&
+    (columns.some((column) => column.id === "updatedAt") || showUpdatedAt)
+  ) {
+    return [{ id: "updatedAt", desc: true }];
+  }
+
+  const hasStatus = columns.some(columnHasStatus);
+  if (hasStatus) {
+    return [{ id: "status", desc: false }];
+  }
+
+  return [];
+}
+
 export const DEFAULT_TABLE_SORT: SortingState = [{ id: "updatedAt", desc: true }];
 
 function columnIsSortable<TData>(column: ColumnDef<TData, unknown>): boolean {
@@ -62,10 +123,20 @@ function prepareColumns<TData>(
   updatedAtLabel: string,
   showUpdatedAt: boolean
 ): ColumnDef<TData, unknown>[] {
-  const enhanced = columns.map((column) => ({
-    ...column,
-    enableSorting: columnIsSortable(column)
-  }));
+  const enhanced = columns.map((column) => {
+    const next: ColumnDef<TData, unknown> = {
+      ...column,
+      enableSorting: columnIsSortable(column)
+    };
+
+    if (columnHasStatus(column)) {
+      next.id = column.id ?? "status";
+      next.sortingFn = statusSortingFn;
+      next.enableSorting = true;
+    }
+
+    return next;
+  });
 
   if (!showUpdatedAt || enhanced.some((column) => column.id === "updatedAt")) {
     return enhanced;
@@ -93,26 +164,58 @@ function sortIndicator(isSorted: false | "asc" | "desc"): string {
   return "";
 }
 
+function isInteractiveTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  return Boolean(target.closest("button, a, input, select, textarea, label, [data-row-stop]"));
+}
+
+/** Name cell styling when the row itself navigates via `getRowHref` / `onRowClick`. */
+export function DirectoryNameCell({
+  name,
+  avatar
+}: {
+  name: string;
+  avatar?: ReactNode;
+}) {
+  return (
+    <span className="directory-link">
+      {avatar}
+      {name}
+    </span>
+  );
+}
+
 /**
  * Sortable table wrapper. Appends a "Last updated" column by default and sorts
- * newest-first unless another initial sort is provided.
+ * active records first, then newest by last updated unless overridden.
  */
 export function DataTable<TData>({
   columns,
   data,
   showUpdatedAt = true,
   updatedAtLabel,
-  initialSorting = DEFAULT_TABLE_SORT
+  initialSorting,
+  getRowHref,
+  onRowClick
 }: {
   columns: ColumnDef<TData, unknown>[];
   data: TData[];
   showUpdatedAt?: boolean;
   updatedAtLabel?: string;
   initialSorting?: SortingState;
+  getRowHref?: (row: TData) => string | null | undefined;
+  onRowClick?: (row: TData) => void;
 }) {
   const c = useTranslations("common");
-  const [sorting, setSorting] = useState<SortingState>(initialSorting);
+  const router = useRouter();
   const resolvedUpdatedAtLabel = updatedAtLabel ?? c("lastUpdated");
+  const resolvedInitialSorting =
+    initialSorting ?? computeDefaultSorting(columns, showUpdatedAt);
+  const [sorting, setSorting] = useState<SortingState>(resolvedInitialSorting);
+  const rowIsInteractive = Boolean(getRowHref || onRowClick);
 
   const tableColumns = useMemo(
     () => prepareColumns(columns, resolvedUpdatedAtLabel, showUpdatedAt),
@@ -128,15 +231,44 @@ export function DataTable<TData>({
     getSortedRowModel: getSortedRowModel()
   });
 
+  const activateRow = (row: TData) => {
+    if (getRowHref) {
+      const href = getRowHref(row);
+      if (href) {
+        router.push(href);
+      }
+      return;
+    }
+
+    onRowClick?.(row);
+  };
+
+  const handleRowClick = (row: TData, event: MouseEvent<HTMLTableRowElement>) => {
+    if (isInteractiveTarget(event.target)) {
+      return;
+    }
+
+    activateRow(row);
+  };
+
+  const handleRowKeyDown = (row: TData, event: KeyboardEvent<HTMLTableRowElement>) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    activateRow(row);
+  };
+
   return (
-    <table className="table">
-      <thead>
+    <Table>
+      <TableHeader>
         {table.getHeaderGroups().map((headerGroup) => (
-          <tr key={headerGroup.id}>
+          <TableRow key={headerGroup.id}>
             {headerGroup.headers.map((header) => {
               const canSort = header.column.getCanSort();
               return (
-                <th key={header.id}>
+                <TableHead key={header.id}>
                   {header.isPlaceholder ? null : canSort ? (
                     <button
                       type="button"
@@ -149,23 +281,38 @@ export function DataTable<TData>({
                   ) : (
                     flexRender(header.column.columnDef.header, header.getContext())
                   )}
-                </th>
+                </TableHead>
               );
             })}
-          </tr>
+          </TableRow>
         ))}
-      </thead>
-      <tbody>
-        {table.getRowModel().rows.map((row) => (
-          <tr key={row.id}>
-            {row.getVisibleCells().map((cell) => (
-              <td key={cell.id}>
-                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-              </td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
+      </TableHeader>
+      <TableBody>
+        {table.getRowModel().rows.map((row: Row<TData>) => {
+          const href = getRowHref?.(row.original);
+          const clickable = rowIsInteractive && (onRowClick || href);
+
+          return (
+            <TableRow
+              key={row.id}
+              className={clickable ? "table-row--clickable" : undefined}
+              tabIndex={clickable ? 0 : undefined}
+              role={clickable ? "link" : undefined}
+              aria-label={clickable && href ? c("openRecord") : undefined}
+              onClick={clickable ? (event) => handleRowClick(row.original, event) : undefined}
+              onKeyDown={
+                clickable ? (event) => handleRowKeyDown(row.original, event) : undefined
+              }
+            >
+              {row.getVisibleCells().map((cell) => (
+                <TableCell key={cell.id}>
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </TableCell>
+              ))}
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
   );
 }

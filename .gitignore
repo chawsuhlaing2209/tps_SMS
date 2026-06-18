@@ -8,4 +8,5 @@ coverage
 .env.*.local
 *.log
 uploads
+backups/
 .claude/worktrees/
