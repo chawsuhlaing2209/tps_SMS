@@ -6,25 +6,25 @@
 
 .teacherProfileBackLink {
   align-items: center;
-  color: var(--foreground-pds-contrast-low, #9fb3a6);
+  color: var(--pds-foreground-contrast-low, #9fb3a6);
   display: inline-flex;
-  font-family: var(--font-family-font-2, var(--font-body));
-  font-size: var(--font-size-12, 12px);
+  font-family: var(--pds-font-family-body-stack);
+  font-size: var(--pds-type-body-s-regular-font-size, 12px);
   font-weight: var(--font-weight-700, 700);
   gap: 4px;
   text-decoration: none;
 }
 
 .teacherProfileBackLink:hover {
-  color: var(--text-text-primary, var(--foreground));
+  color: var(--pds-text-primary, var(--pds-text-primary));
 }
 
 .teacherProfileHero {
   align-items: center;
   background: linear-gradient(
     170.47469812015544deg,
-    var(--color-spring-green-950, #0f2f1f) 0%,
-    var(--color-spring-green-800, #1b3a2b) 100%
+    var(--pds-color-spring-green-950, #0f2f1f) 0%,
+    var(--pds-color-spring-green-800, #1b3a2b) 100%
   );
   border-radius: var(--radius-24, 24px);
   display: flex;
@@ -43,13 +43,13 @@
 
 .teacherProfileAvatar {
   align-items: center;
-  background: var(--color-blue-700, #2563eb);
-  border-radius: var(--radius-base, 20px);
-  color: var(--text-text-invert-primary, #fff);
+  background: var(--pds-color-blue-700, #2563eb);
+  border-radius: var(--pds-radius-base, 20px);
+  color: var(--pds-text-invert-primary, #fff);
   display: inline-flex;
   flex-shrink: 0;
-  font-family: var(--font-family-font-2, var(--font-body));
-  font-size: 28px;
+  font-family: var(--pds-font-family-body-stack);
+  font-size: var(--pds-type-display-m-font-size);
   font-weight: var(--font-weight-700, 700);
   height: 72px;
   justify-content: center;
@@ -64,28 +64,28 @@
 }
 
 .teacherProfileTitleRow h1 {
-  color: var(--text-text-invert-primary, #fff);
-  font-family: var(--font-family-font-1, var(--font-display));
-  font-size: var(--font-size-26, 26px);
+  color: var(--pds-text-invert-primary, #fff);
+  font-family: var(--pds-font-family-display-stack);
+  font-size: var(--pds-type-title-xl-extrabold-font-size, 26px);
   font-weight: var(--font-weight-800, 800);
   line-height: 1;
   margin: 0;
 }
 
 .teacherProfileStatusBadge {
-  background: var(--color-green-150, #e7f6d8);
+  background: var(--pds-color-green-150, #e7f6d8);
   border-radius: var(--radius-pill, 999px);
-  color: var(--color-green-700, #3a7d24);
-  font-family: var(--font-family-font-2, var(--font-body));
-  font-size: var(--font-size-12, 12px);
+  color: var(--pds-color-green-700, #3a7d24);
+  font-family: var(--pds-font-family-body-stack);
+  font-size: var(--pds-type-body-s-regular-font-size, 12px);
   font-weight: var(--font-weight-600, 600);
   padding: 3px 9px;
 }
 
 .teacherProfileMeta {
-  color: var(--text-text-secondary, var(--foreground-pds-contrast-low));
-  font-family: var(--font-family-font-2, var(--font-body));
-  font-size: var(--font-size-13, 13px);
+  color: var(--pds-text-secondary, var(--pds-foreground-contrast-low));
+  font-family: var(--pds-font-family-body-stack);
+  font-size: var(--pds-type-body-m-medium-font-size, 13px);
   font-weight: var(--font-weight-400, 400);
   margin: var(--item-spacing-xs, 8px) 0 0;
 }
@@ -101,40 +101,40 @@
 
 .teacherProfileDegree {
   align-items: center;
-  background: var(--pds-primary, var(--color-spring-green-1000));
-  border: var(--stroke-weight-1, 1px) solid var(--border-color-pds-border-active, #11392a);
+  background: var(--pds-primary, var(--pds-color-spring-green-1000));
+  border: var(--pds-border-weight-1) solid var(--pds-border-color-active);
   border-radius: var(--radius-pill, 999px);
-  color: var(--border-color-pds-border, #e6ede3);
+  color: var(--pds-border-color-primary);
   display: inline-flex;
-  font-family: var(--font-family-font-2, var(--font-body));
-  font-size: var(--font-size-12, 12px);
+  font-family: var(--pds-font-family-body-stack);
+  font-size: var(--pds-type-body-s-regular-font-size, 12px);
   font-weight: var(--font-weight-600, 600);
   gap: var(--item-spacing-6, 6px);
   padding: 7px 13px;
 }
 
 .teacherProfileDegreeIcon {
-  color: var(--pds-compliment-brand, var(--color-chartreuse-green-400));
-  font-size: var(--font-size-15, 15px);
+  color: var(--pds-compliment-brand, var(--pds-color-chartreuse-green-400));
+  font-size: var(--pds-type-body-l-medium-font-size, 15px);
 }
 
 .teacherProfileHeroActions {
   align-items: center;
   display: flex;
   flex-shrink: 0;
-  gap: var(--spacing-12, 12px);
+  gap: var(--pds-gap-medium, 12px);
 }
 
 .teacherProfileGhostBtn {
   align-items: center;
   background: transparent;
-  border: var(--stroke-weight-1, 1px) solid var(--border-color-pds-border-frosted, rgba(255, 255, 255, 0.5));
+  border: var(--pds-border-weight-1) solid var(--pds-border-color-frosted);
   border-radius: var(--radius-pill, 999px);
-  color: var(--text-text-invert-primary, #fff);
+  color: var(--pds-text-invert-primary, #fff);
   cursor: pointer;
   display: inline-flex;
-  font-family: var(--font-family-font-2, var(--font-body));
-  font-size: var(--font-size-14, 14px);
+  font-family: var(--pds-font-family-body-stack);
+  font-size: var(--pds-type-body-m-medium-font-size, 14px);
   font-weight: var(--font-weight-700, 700);
   gap: 6px;
   padding: 11px 17px;
@@ -142,14 +142,14 @@
 
 .teacherProfilePrimaryBtn {
   align-items: center;
-  background: var(--pds-compliment-brand, var(--color-chartreuse-green-400));
+  background: var(--pds-compliment-brand, var(--pds-color-chartreuse-green-400));
   border: 0;
   border-radius: var(--radius-pill, 999px);
-  color: var(--text-text-primary, var(--foreground));
+  color: var(--pds-text-primary, var(--pds-text-primary));
   cursor: pointer;
   display: inline-flex;
-  font-family: var(--font-family-font-2, var(--font-body));
-  font-size: var(--font-size-14, 14px);
+  font-family: var(--pds-font-family-body-stack);
+  font-size: var(--pds-type-body-m-medium-font-size, 14px);
   font-weight: var(--font-weight-700, 700);
   gap: 6px;
   padding: 10px 18px;
@@ -162,56 +162,56 @@
 }
 
 .teacherProfileStatCard {
-  background: var(--background-pds-card, #fff);
-  border: var(--stroke-weight-1, 1px) solid var(--border-color-pds-border-soft, #eef2ea);
+  background: var(--pds-background-card);
+  border: var(--pds-border-weight-1) solid var(--pds-border-color-primary);
   border-radius: var(--radius-16, 16px);
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: var(--spacing-4, 16px) var(--spacing-5, 20px);
+  padding: var(--pds-gap-large, 16px) var(--pds-padding-large, 20px);
 }
 
 .teacherProfileStatIcon {
   align-items: center;
   border-radius: var(--radius-8, 8px);
-  color: var(--background-pds-canvas, #fff);
+  color: var(--pds-background-canvas);
   display: inline-flex;
-  font-size: var(--font-size-19, 19px);
+  font-size: var(--pds-type-title-s-extrabold-font-size, 19px);
   height: 34px;
   justify-content: center;
   width: 34px;
 }
 
 .teacherProfileStatIconBlue {
-  background: var(--color-blue-700, #2563eb);
+  background: var(--pds-color-blue-700, #2563eb);
 }
 
 .teacherProfileStatIconPurple {
-  background: var(--color-accent-purple, #8b6cf0);
+  background: var(--pds-color-accent-purple, #8b6cf0);
 }
 
 .teacherProfileStatIconOrange {
-  background: var(--color-accent-pomegrate, #ff6b57);
+  background: var(--pds-color-accent-pomegrate, #ff6b57);
 }
 
 .teacherProfileStatIconGreen {
-  background: var(--color-green-500, #33b06a);
+  background: var(--pds-color-green-500, #33b06a);
   border-radius: 10px;
 }
 
 .teacherProfileStatValue {
-  color: var(--text-text-primary, var(--foreground));
-  font-family: var(--font-family-font-1, var(--font-display));
-  font-size: var(--font-size-28, 28px);
+  color: var(--pds-text-primary, var(--pds-text-primary));
+  font-family: var(--pds-font-family-display-stack);
+  font-size: var(--pds-size-x-large, 28px);
   font-weight: var(--font-weight-800, 800);
   line-height: 1;
   padding-top: 7px;
 }
 
 .teacherProfileStatLabel {
-  color: var(--text-text-secondary, var(--foreground-pds-contrast-low));
-  font-family: var(--font-family-font-2, var(--font-body));
-  font-size: var(--font-size-12, 12px);
+  color: var(--pds-text-secondary, var(--pds-foreground-contrast-low));
+  font-family: var(--pds-font-family-body-stack);
+  font-size: var(--pds-type-body-s-regular-font-size, 12px);
   font-weight: var(--font-weight-600, 600);
 }
 
@@ -223,14 +223,14 @@
 }
 
 .teacherProfileCard {
-  background: var(--background-pds-card, #fff);
-  border: var(--stroke-weight-1, 1px) solid var(--border-color-pds-border, #e6ede3);
+  background: var(--pds-background-card);
+  border: var(--pds-border-weight-1) solid var(--pds-border-color-primary);
   border-radius: var(--radius-24, 24px);
   display: flex;
   flex-direction: column;
   gap: var(--item-spacing-14, 14px);
   min-height: 240px;
-  padding: var(--comfort-padding-padding-large, 21px);
+  padding: var(--pds-padding-large, 21px);
 }
 
 .teacherProfileCardHead {
@@ -242,17 +242,17 @@
 }
 
 .teacherProfileCardTitle {
-  color: var(--text-text-primary, var(--foreground));
-  font-family: var(--font-family-font-1, var(--font-display));
-  font-size: var(--font-size-16, 16px);
+  color: var(--pds-text-primary, var(--pds-text-primary));
+  font-family: var(--pds-font-family-display-stack);
+  font-size: var(--pds-type-body-l-medium-font-size, 16px);
   font-weight: var(--font-weight-700, 700);
   margin: 0;
 }
 
 .teacherProfileCardSubtitle {
-  color: var(--text-text-secondary, var(--foreground-pds-contrast-low));
-  font-family: var(--font-family-font-2, var(--font-body));
-  font-size: var(--font-size-12, 12px);
+  color: var(--pds-text-secondary, var(--pds-foreground-contrast-low));
+  font-family: var(--pds-font-family-body-stack);
+  font-size: var(--pds-type-body-s-regular-font-size, 12px);
   font-weight: var(--font-weight-400, 400);
   margin: 2px 0 0;
 }
@@ -260,13 +260,13 @@
 .teacherProfileManageBtn {
   align-items: center;
   background: transparent;
-  border: var(--stroke-weight-1, 1px) solid var(--border-color-pds-border-default, #5f7a6b);
+  border: var(--pds-border-weight-1) solid var(--pds-border-color-secondary);
   border-radius: var(--radius-pill, 999px);
-  color: var(--text-text-primary, var(--foreground));
+  color: var(--pds-text-primary, var(--pds-text-primary));
   cursor: pointer;
   display: inline-flex;
-  font-family: var(--font-family-font-2, var(--font-body));
-  font-size: var(--font-size-14, 14px);
+  font-family: var(--pds-font-family-body-stack);
+  font-size: var(--pds-type-body-m-medium-font-size, 14px);
   font-weight: var(--font-weight-700, 700);
   gap: 6px;
   padding: 11px 17px;
@@ -274,11 +274,11 @@
 }
 
 .teacherProfileActionBadge {
-  background: var(--color-red-status-draft-bg, #fff8e6);
+  background: var(--pds-color-red-status-draft-bg, #fff8e6);
   border-radius: var(--radius-pill, 999px);
-  color: var(--color-red-status-draft-fg, #92400e);
-  font-family: var(--font-family-font-2, var(--font-body));
-  font-size: var(--font-size-11, 11px);
+  color: var(--pds-color-red-status-draft-fg, #92400e);
+  font-family: var(--pds-font-family-body-stack);
+  font-size: var(--pds-type-label-s-medium-font-size, 11px);
   font-weight: var(--font-weight-700, 700);
   padding: 4px 10px;
   white-space: nowrap;
@@ -301,31 +301,31 @@
 
 .teacherProfileRow {
   align-items: center;
-  background: var(--background-pds-layout-primary, #f7faf4);
-  border: var(--stroke-weight-1, 1px) solid var(--border-color-pds-border-soft, #eef2ea);
+  background: var(--pds-background-layout-primary);
+  border: var(--pds-border-weight-1) solid var(--pds-border-color-primary);
   border-radius: 15px;
   display: flex;
-  gap: var(--comfort-gap-gap-medium, 12px);
+  gap: var(--pds-gap-medium, 12px);
   min-height: 56px;
-  padding: var(--comfort-padding-padding-small, 13px) var(--comfort-padding-padding-medium, 17px);
+  padding: var(--pds-padding-small, 13px) var(--pds-padding-medium, 17px);
 }
 
 .teacherProfileSubjectTag {
   border-radius: var(--radius-8, 8px);
-  color: var(--background-pds-card, #fff);
-  font-family: var(--font-family-font-2, var(--font-body));
-  font-size: var(--font-size-10, 10px);
+  color: var(--pds-background-card);
+  font-family: var(--pds-font-family-body-stack);
+  font-size: var(--pds-type-label-s-medium-font-size, 10px);
   font-weight: var(--font-weight-700, 700);
   padding: 5px 11px;
   white-space: nowrap;
 }
 
 .teacherProfileSubjectPurple {
-  background: var(--color-accent-purple, #8b6cf0);
+  background: var(--pds-color-accent-purple, #8b6cf0);
 }
 
 .teacherProfileSubjectPink {
-  background: var(--color-accent-pink, #f56fa1);
+  background: var(--pds-color-accent-pink, #f56fa1);
 }
 
 .teacherProfileRowBody {
@@ -337,23 +337,23 @@
 }
 
 .teacherProfileRowTitle {
-  color: var(--text-text-primary, var(--foreground));
-  font-family: var(--font-family-font-2, var(--font-body));
-  font-size: var(--font-size-14, 14px);
+  color: var(--pds-text-primary, var(--pds-text-primary));
+  font-family: var(--pds-font-family-body-stack);
+  font-size: var(--pds-type-body-m-medium-font-size, 14px);
   font-weight: var(--font-weight-700, 700);
 }
 
 .teacherProfileRowMeta {
-  color: var(--text-text-secondary, var(--foreground-pds-contrast-low));
-  font-family: var(--font-family-font-2, var(--font-body));
-  font-size: var(--font-size-12, 12px);
+  color: var(--pds-text-secondary, var(--pds-foreground-contrast-low));
+  font-family: var(--pds-font-family-body-stack);
+  font-size: var(--pds-type-body-s-regular-font-size, 12px);
   font-weight: var(--font-weight-400, 400);
 }
 
 .teacherProfileRowAction {
-  color: var(--foreground-pds-link, var(--color-spring-green-700));
-  font-family: var(--font-family-font-2, var(--font-body));
-  font-size: var(--font-size-12, 12px);
+  color: var(--pds-foreground-link, var(--pds-color-spring-green-700));
+  font-family: var(--pds-font-family-body-stack);
+  font-size: var(--pds-type-body-s-regular-font-size, 12px);
   font-weight: var(--font-weight-700, 700);
   text-decoration: none;
   white-space: nowrap;
@@ -361,12 +361,12 @@
 
 .teacherProfileGradeCount {
   align-items: center;
-  background: var(--pds-compliment-brand, var(--color-chartreuse-green-400));
+  background: var(--pds-compliment-brand, var(--pds-color-chartreuse-green-400));
   border-radius: var(--radius-pill, 999px);
-  color: var(--text-text-primary, var(--foreground));
+  color: var(--pds-text-primary, var(--pds-text-primary));
   display: inline-flex;
-  font-family: var(--font-family-font-2, var(--font-body));
-  font-size: var(--font-size-12, 12px);
+  font-family: var(--pds-font-family-body-stack);
+  font-size: var(--pds-type-body-s-regular-font-size, 12px);
   font-weight: var(--font-weight-800, 800);
   justify-content: center;
   min-width: 28px;
@@ -375,12 +375,12 @@
 
 .teacherProfileGradeIcon {
   align-items: center;
-  background: var(--color-accent-purple, #8b6cf0);
+  background: var(--pds-color-accent-purple, #8b6cf0);
   border-radius: var(--radius-8, 8px);
-  color: var(--background-pds-card, #fff);
+  color: var(--pds-background-card);
   display: inline-flex;
   flex-shrink: 0;
-  font-size: var(--font-size-18, 18px);
+  font-size: var(--pds-type-title-s-extrabold-font-size, 18px);
   height: 34px;
   justify-content: center;
   width: 34px;
@@ -389,15 +389,15 @@
 .teacherProfileScheduleRow {
   align-items: flex-start;
   display: flex;
-  gap: var(--comfort-gap-gap-medium, 12px);
-  padding: var(--comfort-padding-padding-xx-small, 4px) 0;
+  gap: var(--pds-gap-medium, 12px);
+  padding: var(--pds-padding-xx-small, 4px) 0;
 }
 
 .teacherProfileScheduleTime {
-  color: var(--text-text-primary, var(--foreground));
+  color: var(--pds-text-primary, var(--pds-text-primary));
   flex-shrink: 0;
-  font-family: var(--font-family-font-2, var(--font-body));
-  font-size: var(--font-size-12, 12px);
+  font-family: var(--pds-font-family-body-stack);
+  font-size: var(--pds-type-body-s-regular-font-size, 12px);
   font-weight: var(--font-weight-700, 700);
   width: 48px;
 }
@@ -410,7 +410,7 @@
 }
 
 .teacherProfileScheduleMarkPurple {
-  background: var(--color-accent-purple, #8b6cf0);
+  background: var(--pds-color-accent-purple, #8b6cf0);
 }
 
 .teacherProfileScheduleMarkMustard {
@@ -419,20 +419,20 @@
 
 .teacherProfileGradeRow {
   align-items: center;
-  background: var(--background-pds-layout-primary, #f7faf4);
-  border: var(--stroke-weight-1, 1px) solid var(--border-color-pds-border-soft, #eef2ea);
+  background: var(--pds-background-layout-primary);
+  border: var(--pds-border-weight-1) solid var(--pds-border-color-primary);
   border-radius: 14px;
   display: flex;
-  gap: var(--comfort-gap-gap-medium, 12px);
+  gap: var(--pds-gap-medium, 12px);
   min-height: 56px;
-  padding: var(--comfort-padding-padding-small, 13px) var(--comfort-padding-padding-medium, 17px);
+  padding: var(--pds-padding-small, 13px) var(--pds-padding-medium, 17px);
 }
 
 .teacherProfileDarkCard {
   background: var(--pds-primary, #0a2a1d);
   border: 0;
   border-radius: var(--radius-24, 24px);
-  color: var(--text-text-invert-primary, #fff);
+  color: var(--pds-text-invert-primary, #fff);
   display: flex;
   gap: var(--line-height-20, 20px);
   min-height: auto;
@@ -455,28 +455,28 @@
 }
 
 .teacherProfileDarkStatValueAccent {
-  color: var(--pds-compliment-brand, var(--color-chartreuse-green-400));
+  color: var(--pds-compliment-brand, var(--pds-color-chartreuse-green-400));
   display: block;
-  font-family: var(--font-family-font-1, var(--font-display));
-  font-size: var(--font-size-26, 26px);
+  font-family: var(--pds-font-family-display-stack);
+  font-size: var(--pds-type-title-xl-extrabold-font-size, 26px);
   font-weight: var(--font-weight-800, 800);
   line-height: 1;
 }
 
 .teacherProfileDarkStatValue {
-  color: var(--text-text-invert-primary, #fff);
+  color: var(--pds-text-invert-primary, #fff);
   display: block;
-  font-family: var(--font-family-font-1, var(--font-display));
-  font-size: var(--font-size-26, 26px);
+  font-family: var(--pds-font-family-display-stack);
+  font-size: var(--pds-type-title-xl-extrabold-font-size, 26px);
   font-weight: var(--font-weight-800, 800);
   line-height: 1;
 }
 
 .teacherProfileDarkStatLabel {
-  color: var(--text-text-secondary, #9fb3a6);
+  color: var(--pds-text-secondary, #9fb3a6);
   display: block;
-  font-family: var(--font-family-font-2, var(--font-body));
-  font-size: var(--font-size-12, 12px);
+  font-family: var(--pds-font-family-body-stack);
+  font-size: var(--pds-type-body-s-regular-font-size, 12px);
   font-weight: var(--font-weight-600, 600);
 }
 
@@ -485,9 +485,9 @@
 }
 
 .teacherProfileEmpty {
-  color: var(--text-text-secondary, var(--foreground-pds-contrast-low));
-  font-family: var(--font-family-font-2, var(--font-body));
-  font-size: var(--font-size-12, 12px);
+  color: var(--pds-text-secondary, var(--pds-foreground-contrast-low));
+  font-family: var(--pds-font-family-body-stack);
+  font-size: var(--pds-type-body-s-regular-font-size, 12px);
   margin: 0;
 }
 

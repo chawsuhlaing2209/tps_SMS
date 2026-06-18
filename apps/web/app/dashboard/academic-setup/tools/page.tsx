@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { apiFetch, useApiMutation } from "../../../lib/api";
-import { Icon } from "../../../lib/icon";
+import { Icon } from "../../../lib/material-icon";
 import { getSession } from "../../../lib/session";
 
 type MasterData = {

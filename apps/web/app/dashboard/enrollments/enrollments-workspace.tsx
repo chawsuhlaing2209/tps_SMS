@@ -10,6 +10,7 @@ import { useCurrentAcademicYear } from "../../lib/use-current-academic-year";
 import { DataTable } from "../../lib/data-table";
 import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
 import { EnrollmentWizard } from "./enrollment-wizard";
+import { StatusBadge } from "../../../components/shared/badge";
 
 type Grade = { id: string; name: string };
 type Classroom = { id: string; name: string; gradeId: string; academicYearId: string };
@@ -115,7 +116,7 @@ export function EnrollmentsWorkspace({
       header: t("status"),
       accessorKey: "status",
       cell: ({ row }) => (
-        <span className={`badge badge--${row.original.status}`}>{row.original.status}</span>
+        <StatusBadge status={row.original.status} />
       )
     },
     {
@@ -156,8 +157,7 @@ export function EnrollmentsWorkspace({
 
   return (
     <>
-      <section className="panel">
-        <TablePanelHead
+      <TablePanelHead
           title={compactTitle ? t("listTitle") : t("title")}
           help={t("help")}
           extra={
@@ -177,14 +177,13 @@ export function EnrollmentsWorkspace({
           onAdd={() => openWizard(null)}
           addLabel={t("addEnrollment")}
         />
-        <TablePanelBody
+      <TablePanelBody
           loading={enrollments.isLoading}
           error={enrollments.isError ? c("somethingWrong") : null}
           empty={!enrollments.data?.length}
         >
           <DataTable columns={enrollmentColumns} data={enrollments.data ?? []} />
         </TablePanelBody>
-      </section>
 
       <EnrollmentWizard
         open={wizardOpen}

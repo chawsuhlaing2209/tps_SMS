@@ -12,6 +12,7 @@ import { usePlatformMutation, usePlatformQuery } from "../../../lib/api";
 import { DataTable } from "../../../lib/data-table";
 import { Field } from "../../../lib/form";
 import { zodResolver } from "../../../lib/zod-resolver";
+import { StatusBadge } from "../../../../components/shared/badge";
 
 type Tenant = {
   id: string;
@@ -152,7 +153,7 @@ export default function TenantDetailPage() {
       cell: ({ row }) => (
         <button
           type="button"
-          className={row.original.enabled ? "badge badge--active" : "badge"}
+          className={row.original.enabled ? "badge badge--tone-success" : "badge badge--tone-neutral"}
           disabled={toggleFlag.isPending}
           onClick={() =>
             void toggleFlag.mutateAsync({ key: row.original.key, enabled: !row.original.enabled })
@@ -190,7 +191,7 @@ export default function TenantDetailPage() {
         </Link>
         <h1>
           {tenant.name}{" "}
-          <span className={`badge badge--${tenant.status}`}>{t(`status_${tenant.status}`)}</span>
+          <StatusBadge status={tenant.status} label={t(`status_${tenant.status}`)} />
         </h1>
         <p>
           <code>{tenant.slug}</code> · {tenant.timezone} · {tenant.currency}

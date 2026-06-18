@@ -7,11 +7,12 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
-import { Switch } from "../../../../components/ui/switch";
+import { Toggle } from "../../../../components/shared/toggle";
+import { StatusBadge } from "../../../../components/shared/badge";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { DataTable } from "../../../lib/data-table";
 import { Field } from "../../../lib/form";
-import { Icon } from "../../../lib/icon";
+import { Icon } from "../../../lib/material-icon";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { TablePanelBody, TablePanelHead } from "../../../lib/table-panel";
 import { zodResolver } from "../../../lib/zod-resolver";
@@ -132,13 +133,13 @@ export default function AcademicYearsPage() {
 
         return (
           <div className="year-active-toggle">
-            <Switch
+            <Toggle
               checked={isActive}
               disabled={setActive.isPending}
               aria-label={t("toggleYearActive", { name: year.name })}
               onCheckedChange={(checked) => requestToggle(year, checked)}
             />
-            <span className={`badge badge--${year.status}`}>{year.status}</span>
+            <StatusBadge status={year.status} />
           </div>
         );
       }
@@ -178,31 +179,34 @@ export default function AcademicYearsPage() {
     : t("deactivateYearBody", { year: toggleConfirm?.year.name ?? "" });
 
   return (
-    <section className="panel">
-      {activeYear ? (
-        <p className="panel-banner">
-          {t("workingYear")}: <strong>{activeYear.name}</strong>
-        </p>
-      ) : (
-        <p className="panel-banner panel-banner--warning">{t("noWorkingYear")}</p>
-      )}
+    <>
       <TablePanelHead
+        banner={
+          activeYear ? (
+            <>
+              {t("workingYear")}: <strong>{activeYear.name}</strong>
+            </>
+          ) : (
+            t("noWorkingYear")
+          )
+        }
+        bannerVariant={activeYear ? "default" : "warning"}
         title={t("years")}
         onRefresh={() => void years.refetch()}
         onAdd={openCreate}
         addLabel={t("addYear")}
       />
       <TablePanelBody
-        loading={years.isLoading}
-        error={years.isError ? c("somethingWrong") : null}
-        empty={!years.data?.length}
-      >
-        <DataTable
-          columns={columns}
-          data={years.data ?? []}
-          getRowHref={(year) => `/dashboard/academic-setup/years/${year.id}`}
-        />
-      </TablePanelBody>
+          loading={years.isLoading}
+          error={years.isError ? c("somethingWrong") : null}
+          empty={!years.data?.length}
+        >
+          <DataTable
+            columns={columns}
+            data={years.data ?? []}
+            getRowHref={(year) => `/dashboard/academic-setup/years/${year.id}`}
+          />
+        </TablePanelBody>
 
       <RecordFormSheet
         open={formMode !== null}
@@ -268,6 +272,6 @@ export default function AcademicYearsPage() {
             .then(() => setToggleConfirm(null));
         }}
       />
-    </section>
+    </>
   );
 }

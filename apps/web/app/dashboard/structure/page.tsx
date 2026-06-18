@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "../../../components/shared/confirm-dialog";
 import { useApiMutation, useApiQuery } from "../../lib/api";
-import { Icon } from "../../lib/icon";
+import { Icon } from "../../lib/material-icon";
 import { hasAnyPermission } from "../../lib/permissions";
 import { getSession } from "../../lib/session";
 import { useCurrentAcademicYear } from "../../lib/use-current-academic-year";

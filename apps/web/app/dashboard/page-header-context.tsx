@@ -1,7 +1,6 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   createContext,
@@ -11,6 +10,12 @@ import {
   useState,
   type ReactNode
 } from "react";
+import {
+  registerNavigationSegment,
+  resetNavigationTrail,
+  readNavigationTrail,
+  type NavigationSegment
+} from "../lib/navigation-trail";
 import { DASHBOARD_NAV_GROUPS, type DashboardNavGroupKey } from "../lib/permissions";
 
 export type PageBreadcrumb = { label: string; href?: string };
@@ -18,7 +23,6 @@ export type PageBreadcrumb = { label: string; href?: string };
 export type PageHeaderValue = {
   title: string;
   breadcrumbs: PageBreadcrumb[];
-  backHref?: string;
   description?: string;
 };
 
@@ -46,83 +50,56 @@ function usePageHeaderContext(): PageHeaderContextType {
 }
 
 /**
- * Rendered by individual pages to publish their title/breadcrumbs to the top
- * bar. Renders nothing in the body unless `backHref` is provided, in which case
- * it renders the "← Back to …" link directly under the top bar.
+ * Publishes title and breadcrumbs to the sticky top bar. Navigation is via
+ * breadcrumbs only — no in-page back links.
  */
 export function PageHeader({
   title,
   breadcrumbs = [],
-  backHref,
-  backLabel,
-  description
+  description,
+  segment,
+  resetTrail
 }: {
   title: string;
   breadcrumbs?: PageBreadcrumb[];
-  backHref?: string;
-  backLabel?: string;
-  /** Optional muted line rendered directly under the title in the top bar. */
   description?: string;
+  segment?: NavigationSegment;
+  resetTrail?: NavigationSegment[];
 }) {
   const { setHeader } = usePageHeaderContext();
   const pathname = usePathname();
+  const resolvedSegment = segment ?? { label: title, href: pathname };
+  const resetTrailKey = resetTrail?.map((item) => `${item.label}:${item.href}`).join("|") ?? "";
   const crumbKey = breadcrumbs.map((c) => `${c.label}:${c.href ?? ""}`).join("|");
 
   useEffect(() => {
-    setHeader({ pathname, title, breadcrumbs, backHref, description });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname, title, crumbKey, backHref, description]);
+    if (resetTrail?.length) {
+      resetNavigationTrail(resetTrail);
+    }
 
-  if (backHref) {
-    return (
-      <Link href={backHref} className="page-back-link">
-        <span aria-hidden>←</span>
-        {backLabel ?? title}
-      </Link>
-    );
-  }
+    registerNavigationSegment(resolvedSegment);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, resolvedSegment.label, resolvedSegment.href, resetTrailKey]);
+
+  useEffect(() => {
+    setHeader({
+      pathname,
+      title,
+      breadcrumbs,
+      description
+    });
+  }, [pathname, title, crumbKey, description, setHeader]);
+
   return null;
 }
-
-/**
- * Derives a sensible top-bar title + breadcrumb from the current pathname using
- * the dashboard nav config, so unmigrated pages still get a correct header.
- */
-/**
- * Maps a dashboard nav key to its authored page-description message key, so the
- * top bar can render a muted description line stacked under the title even on
- * pages that rely on the route-based header fallback.
- */
-const NAV_DESCRIPTION_KEY: Record<string, string> = {
-  overview: "overview.description",
-  people: "people.description",
-  structure: "academics.description",
-  academicSetup: "academicSetup.description",
-  admissions: "admissions.description",
-  enrollments: "enrollments.description",
-  calendar: "calendar.description",
-  timetable: "timetable.description",
-  exams: "exams.description",
-  finance: "finance.description",
-  salary: "salary.description",
-  communication: "communication.description",
-    audit: "audit.description",
-    settings: "settings.description"
-  };
 
 function useRouteHeaderFallback(): PageHeaderValue {
   const pathname = usePathname();
   const t = useTranslations("nav");
-  const tRoot = useTranslations();
 
   return useMemo(() => {
-    const describe = (navKey: string): string | undefined => {
-      const key = NAV_DESCRIPTION_KEY[navKey];
-      return key ? tRoot(key as "overview.description") : undefined;
-    };
-
     if (pathname === "/dashboard" || pathname === "/dashboard/") {
-      return { title: t("overview"), breadcrumbs: [], description: describe("overview") };
+      return { title: t("overview"), breadcrumbs: [] };
     }
 
     let best: { groupKey: DashboardNavGroupKey; navKey: string; href: string } | null = null;
@@ -140,34 +117,49 @@ function useRouteHeaderFallback(): PageHeaderValue {
     }
 
     if (!best) {
-      return { title: t("overview"), breadcrumbs: [], description: describe("overview") };
+      return { title: t("overview"), breadcrumbs: [] };
     }
 
     return {
       title: t(best.navKey as "overview"),
-      breadcrumbs: [{ label: t(`group_${best.groupKey}` as "group_school") }],
-      description: describe(best.navKey)
+      breadcrumbs: [{ label: t(`group_${best.groupKey}` as "group_school") }]
     };
-  }, [pathname, t, tRoot]);
+  }, [pathname, t]);
 }
 
-/**
- * Read the resolved header for the current route: the explicit value published
- * by the active page if it matches the current pathname, otherwise the
- * route-based fallback. Consumed by the top bar.
- */
 export function useResolvedPageHeader(): PageHeaderValue {
   const { header } = usePageHeaderContext();
   const pathname = usePathname();
   const fallback = useRouteHeaderFallback();
+  const trail = useNavigationTrailForHeader();
 
   if (header && header.pathname === pathname) {
+    const breadcrumbs =
+      header.breadcrumbs.length > 0
+        ? header.breadcrumbs
+        : trail.length > 0
+          ? trail.map((item) => ({ label: item.label, href: item.href }))
+          : header.breadcrumbs;
+
     return {
       title: header.title,
-      breadcrumbs: header.breadcrumbs,
-      backHref: header.backHref,
+      breadcrumbs,
       description: header.description
     };
   }
   return fallback;
+}
+
+function useNavigationTrailForHeader(): NavigationSegment[] {
+  const pathname = usePathname();
+  const [trail, setTrail] = useState<NavigationSegment[]>([]);
+
+  useEffect(() => {
+    const sync = () => setTrail(readNavigationTrail());
+    sync();
+    window.addEventListener("sms-navigation-trail-change", sync);
+    return () => window.removeEventListener("sms-navigation-trail-change", sync);
+  }, [pathname]);
+
+  return trail;
 }

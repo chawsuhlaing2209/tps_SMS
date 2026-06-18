@@ -49,7 +49,6 @@ export default function StructureSubjectClassroomPage() {
   const { classroomId, subjectId } = params;
   const t = useTranslations("academics");
   const c = useTranslations("common");
-  const nav = useTranslations("nav");
   const currentYear = useCurrentAcademicYear();
 
   const classroom = useApiQuery<Classroom>((tenant) => `/tenants/${tenant}/classrooms/${classroomId}`);
@@ -89,7 +88,6 @@ export default function StructureSubjectClassroomPage() {
     return (
       <div className="structure-empty">
         <p className="error-text">{t("subjectNotFound")}</p>
-        <Link href={`/dashboard/structure/rooms/${classroomId}`}>{t("backToRoom")}</Link>
       </div>
     );
   }
@@ -100,12 +98,18 @@ export default function StructureSubjectClassroomPage() {
     <div className="structure-page">
       <PageHeader
         title={subjectRow.subjectName}
+        segment={{
+          label: subjectRow.subjectName,
+          href: `/dashboard/structure/rooms/${classroomId}/subjects/${subjectId}`
+        }}
         breadcrumbs={[
-          { label: nav("group_academics") },
-          { label: classroom.data.name, href: `/dashboard/structure/rooms/${classroomId}` }
+          { label: t("structureTitle"), href: "/dashboard/structure" },
+          {
+            label: classroom.data.name,
+            href: `/dashboard/structure/rooms/${classroomId}`
+          },
+          { label: subjectRow.subjectName }
         ]}
-        backHref={`/dashboard/structure/rooms/${classroomId}`}
-        backLabel={t("backToRoom")}
       />
 
       <section className="structure-room-hero">

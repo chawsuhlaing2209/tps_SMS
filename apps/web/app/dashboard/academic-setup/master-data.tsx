@@ -9,7 +9,7 @@ import { type UseQueryResult } from "@tanstack/react-query";
 import { useApiMutation, useApiQuery } from "../../lib/api";
 import { DataTable } from "../../lib/data-table";
 import { Field } from "../../lib/form";
-import { Icon } from "../../lib/icon";
+import { Icon } from "../../lib/material-icon";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
 import { zodResolver } from "../../lib/zod-resolver";
@@ -193,7 +193,7 @@ export function MasterDataPanel<T extends StatusRecord>({
     : null;
 
   return (
-    <section className="panel">
+    <>
       <TablePanelHead
         title={title}
         onRefresh={() => void query.refetch()}
@@ -275,6 +275,6 @@ export function MasterDataPanel<T extends StatusRecord>({
           </Field>
         ))}
       </RecordFormSheet>
-    </section>
+    </>
   );
 }

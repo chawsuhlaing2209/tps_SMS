@@ -8,17 +8,17 @@ import { z } from "zod";
 import { CheckboxList } from "../../../../components/shared/checkbox-list";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { Field } from "../../../lib/form";
-import { Icon } from "../../../lib/icon";
+import { Icon } from "../../../lib/material-icon";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { zodResolver } from "../../../lib/zod-resolver";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
 import { PageHeader } from "../../page-header-context";
-import { gradeBadgeLabel, gradeStreamLabel } from "../grade-label";
+import { gradeStreamLabel } from "../grade-label";
 import {
   ClassroomFormSheet,
   type ClassroomFormValues
 } from "../../structure/classroom-form-sheet";
-import { roomAccentColor, roomLetter, subjectColor, subjectIcon } from "../../structure/subject-colors";
+import { roomLetter, subjectColor, subjectIcon } from "../../structure/subject-colors";
 import { useAcademicYearContext } from "../use-academic-year-context";
 
 type Subject = { id: string; name: string; status: string };
@@ -32,6 +32,7 @@ type GradeOverview = {
   subjects: { id: string; name: string; code: string | null }[];
   classroomCount: number;
   studentCount: number;
+  gradeChiefName: string | null;
 };
 type ClassroomOverview = {
   id: string;
@@ -313,55 +314,58 @@ export default function GradesClassroomsPage() {
     : null;
 
   return (
-    <div className="setup-grades-page">
+    <>
       <PageHeader
         title={setup("gradesClassrooms")}
-        description={setup("gradesClassroomsHelp")}
         breadcrumbs={[
           { label: nav("academicSetup") },
           { label: setup("gradesClassrooms") }
         ]}
       />
 
-      <p className="setup-section-label">{setup("selectGradeLevel")}</p>
-      <div className="structure-grade-scroll">
-        <div className="structure-grade-rail setup-grade-rail" aria-label={setup("selectGradeLevel")}>
+      <section className="module-strip module-strip--stack setup-grade-selector">
+        <p className="module-strip__label">{setup("selectGradeLevel")}</p>
+        <div className="setup-grade-rail" aria-label={setup("selectGradeLevel")}>
           {activeGrades.map((grade) => {
             const active = grade.id === selectedGradeId;
             return (
               <button
                 key={grade.id}
                 type="button"
-                className={
-                  active ? "structure-grade-chip structure-grade-chip--active" : "structure-grade-chip"
-                }
+                className={active ? "pds-type-body-s-semibold setup-grade-chip setup-grade-chip--active" : "pds-type-body-s-semibold setup-grade-chip"}
                 onClick={() => selectGrade(grade.id)}
               >
-                <span className="structure-grade-chip__name">{grade.name}</span>
+                {grade.name}
               </button>
             );
           })}
-          <button type="button" className="setup-grade-add" onClick={openCreateGrade}>
+          <button type="button" className="pds-type-body-s-semibold setup-grade-add" onClick={openCreateGrade}>
             <Icon name="add" />
-            {t("addGrade")}
+            {setup("newGrade")}
           </button>
         </div>
-      </div>
+      </section>
 
       {!selectedGrade ? (
         <div className="setup-empty setup-empty--compact">
           <p className="muted">{t("structureNoGrades")}</p>
-          <button type="button" className="btn-primary" onClick={openCreateGrade}>
+          {/* <button type="button" className="btn-primary" onClick={openCreateGrade}>
             <Icon name="add" />
             {t("addGrade")}
-          </button>
+          </button> */}
         </div>
       ) : (
         <div className="setup-grade-layout">
           <aside className="setup-grade-sidebar">
             <div className="setup-grade-summary">
               <h3>{selectedGrade.name}</h3>
-              {stream ? <p className="setup-grade-summary__stream">{stream}</p> : null}
+              {/* {stream ? <p className="setup-grade-summary__stream">{stream}</p> : null} */}
+              <div className="setup-grade-summary__chief">
+                <span className="setup-grade-summary__chief-label">{t("gradeChiefTitle")}</span>
+                <strong className="setup-grade-summary__chief-name">
+                  {selectedGrade.gradeChiefName ?? t("gradeChiefUnassigned")}
+                </strong>
+              </div>
               <div className="setup-grade-summary__stats">
                 <div>
                   <span className="setup-grade-summary__stat-label">{setup("roomsStat")}</span>
@@ -383,9 +387,9 @@ export default function GradesClassroomsPage() {
 
             <div className="setup-subjects-offered">
               <p className="setup-subjects-offered__label">{setup("subjectsOffered")}</p>
-              <ul className="setup-subjects-offered__list">
-                {selectedGrade.subjects.length ? (
-                  selectedGrade.subjects.map((subject) => {
+              {selectedGrade.subjects.length ? (
+                <ul className="setup-subjects-offered__list">
+                  {selectedGrade.subjects.map((subject) => {
                     const colors = subjectColor(subject.name);
                     return (
                       <li key={subject.id} className="setup-subjects-offered__item">
@@ -397,18 +401,18 @@ export default function GradesClassroomsPage() {
                         <Icon name={subjectIcon(subject.name)} className="setup-subjects-offered__icon" />
                       </li>
                     );
-                  })
-                ) : (
-                  <li className="muted">{t("noSubjectsYet")}</li>
-                )}
-              </ul>
+                  })}
+                </ul>
+              ) : (
+                <p className="setup-subjects-offered__empty muted">{t("noSubjectsYet")}</p>
+              )}
             </div>
           </aside>
 
-          <section className="setup-classrooms-panel">
+          <section className="setup-classrooms-main">
             <div className="setup-classrooms-panel__head">
               <h3>{setup("classroomsInGrade", { grade: selectedGrade.name })}</h3>
-              <button type="button" className="btn-primary setup-add-room" onClick={openCreateRoom}>
+              <button type="button" className="btn-hero-primary" onClick={openCreateRoom}>
                 <Icon name="add" />
                 {setup("addRoom")}
               </button>
@@ -419,35 +423,28 @@ export default function GradesClassroomsPage() {
             ) : !activeRooms.length ? (
               <div className="setup-empty setup-empty--compact">
                 <p className="muted">{t("structureNoRooms")}</p>
-                <button type="button" className="btn-primary" onClick={openCreateRoom}>
+                {/* <button type="button" className="btn-hero-primary" onClick={openCreateRoom}>
                   <Icon name="add" />
                   {setup("addRoom")}
-                </button>
+                </button> */}
               </div>
             ) : (
               <ul className="setup-classroom-list">
                 {activeRooms.map((room) => {
-                  const accent = roomAccentColor(room.name);
                   const capacityLabel =
                     room.capacity != null
-                      ? t("roomCapacityStudents", {
-                          capacity: room.capacity,
-                          count: room.studentCount
-                        })
+                      ? t("roomCapacityStudents", { capacity: room.capacity })
                       : t("roomStudentCount", { count: room.studentCount });
                   return (
                     <li key={room.id} className="setup-classroom-card">
                       <div className="setup-classroom-card__top">
                         <div className="setup-classroom-card__identity">
-                          <span
-                            className="structure-room-card__mark"
-                            style={{ background: accent }}
-                          >
+                          <span className="setup-classroom-card__mark" aria-hidden>
                             {roomLetter(room.name)}
                           </span>
                           <div>
                             <h4>{room.name}</h4>
-                            <p className="muted">{capacityLabel}</p>
+                            <p className="setup-classroom-card__meta">{capacityLabel}</p>
                           </div>
                         </div>
                         <button
@@ -461,19 +458,20 @@ export default function GradesClassroomsPage() {
                       <div className="setup-classroom-card__homeroom">
                         <Icon name="person" />
                         <div className="setup-classroom-card__homeroom-text">
-                          <span className="setup-classroom-card__homeroom-label">
+                          <p className="setup-classroom-card__homeroom-label">
                             {t("homeroomTeacher")}
-                          </span>
-                          <strong>
+                          </p>
+                          <p>
                             {room.classTeacherName ?? t("homeroomUnassigned")}
-                          </strong>
+                          </p>
                         </div>
                         <button
                           type="button"
-                          className="setup-classroom-card__change"
+                          className="btn-ghost"
                           onClick={() => openEditRoom(room)}
                         >
                           {setup("changeHomeroom")}
+                          <Icon name="chevron_right" className="ms" />
                         </button>
                       </div>
                     </li>
@@ -576,6 +574,6 @@ export default function GradesClassroomsPage() {
         }
         onSubmit={submitRoom}
       />
-    </div>
+    </>
   );
 }

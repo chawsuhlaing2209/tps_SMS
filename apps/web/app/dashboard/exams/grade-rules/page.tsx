@@ -8,7 +8,7 @@ import { z } from "zod";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { DataTable } from "../../../lib/data-table";
 import { Field } from "../../../lib/form";
-import { Icon } from "../../../lib/icon";
+import { Icon } from "../../../lib/material-icon";
 import { hasAnyPermission } from "../../../lib/permissions";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { getSession } from "../../../lib/session";
@@ -78,7 +78,7 @@ export default function GradeRulesPage() {
   }
 
   return (
-    <section className="panel">
+    <>
       <TablePanelHead
         title={t("gradeRulesTitle")}
         onRefresh={() => void rules.refetch()}
@@ -131,6 +131,6 @@ export default function GradeRulesPage() {
           <input readOnly value={currentYear.data?.name ?? ""} />
         </Field>
       </RecordFormSheet>
-    </section>
+    </>
   );
 }

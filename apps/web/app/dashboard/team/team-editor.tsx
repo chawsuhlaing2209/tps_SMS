@@ -7,13 +7,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useApiMutation, useApiQuery } from "../../lib/api";
-import { DataTable } from "../../lib/data-table";
+import { DataTable, DirectoryMemberCell } from "../../lib/data-table";
 import { Field } from "../../lib/form";
-import { Icon } from "../../lib/icon";
+import { Icon } from "../../lib/material-icon";
 import { hasAnyPermission } from "../../lib/permissions";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { getSession } from "../../lib/session";
-import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
+import { TablePanelBody, TablePanelHead, DataTableSection } from "../../lib/table-panel";
+import { StatusBadge, Badge } from "../../../components/shared/badge";
 import { TableSearchInput } from "../../lib/table-search";
 import { zodResolver } from "../../lib/zod-resolver";
 
@@ -168,32 +169,34 @@ export function TeamEditor() {
   };
 
   const columns: ColumnDef<StaffOverview, unknown>[] = [
-    { id: "name", header: c("name"), accessorKey: "fullName" },
+    {
+      id: "name",
+      header: c("staffMember"),
+      cell: ({ row }) => (
+        <DirectoryMemberCell name={row.original.fullName} email={row.original.email ?? row.original.loginEmail} />
+      )
+    },
     {
       id: "role",
       header: t("role"),
-      accessorFn: (row) =>
-        roleDisplayFor(row.rbacRoleKey ?? "", roles.data?.find((r) => r.key === row.rbacRoleKey)?.name)
-          .label
+      cell: ({ row }) => {
+        const label = roleDisplayFor(
+          row.original.rbacRoleKey ?? "",
+          roles.data?.find((r) => r.key === row.original.rbacRoleKey)?.name
+        ).label;
+        return <Badge tone="neutral">{label}</Badge>;
+      }
     },
-    { id: "department", header: t("department"), accessorFn: (row) => row.department ?? "—" },
     {
-      id: "login",
-      header: t("loginStatus"),
-      accessorFn: (row) =>
-        row.userId
-          ? row.loginStatus
-            ? t(`loginStatus_${row.loginStatus}`)
-            : t("loginActive")
-          : t("loginNone")
+      id: "department",
+      header: c("subjectGrade"),
+      accessorFn: (row) => row.department ?? "—"
     },
     {
       id: "status",
       header: c("status"),
       accessorKey: "status",
-      cell: ({ row }) => (
-        <span className={`badge badge--${row.original.status}`}>{row.original.status}</span>
-      )
+      cell: ({ row }) => <StatusBadge status={row.original.status} />
     }
   ];
 
@@ -234,33 +237,35 @@ export function TeamEditor() {
   }
 
   return (
-    <section className="panel">
-      <TablePanelHead
-        title={t("listTitle")}
-        help={t("listHelp")}
-        onRefresh={() => void staff.refetch()}
-        onAdd={canManageHr ? openCreate : undefined}
-        addLabel={t("addMember")}
-        extra={
-          <TableSearchInput
-            placeholder={t("search")}
-            value={search}
-            aria-label={t("search")}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        }
-      />
-      <TablePanelBody
-        loading={staff.isLoading}
-        error={staff.isError ? c("somethingWrong") : null}
-        empty={!staff.data?.length}
-      >
-        <DataTable
-          columns={columns}
-          data={staff.data ?? []}
-          onRowClick={canManageHr ? (member) => openEdit(member) : undefined}
+    <>
+      <DataTableSection>
+        <TablePanelHead
+          title={t("listTitle")}
+          help={t("listHelp")}
+          onRefresh={() => void staff.refetch()}
+          onAdd={canManageHr ? openCreate : undefined}
+          addLabel={t("addMember")}
+          extra={
+            <TableSearchInput
+              placeholder={t("search")}
+              value={search}
+              aria-label={t("search")}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          }
         />
-      </TablePanelBody>
+        <TablePanelBody
+          loading={staff.isLoading}
+          error={staff.isError ? c("somethingWrong") : null}
+          empty={!staff.data?.length}
+        >
+          <DataTable
+            columns={columns}
+            data={staff.data ?? []}
+            onRowClick={canManageHr ? (member) => openEdit(member) : undefined}
+          />
+        </TablePanelBody>
+      </DataTableSection>
 
       {canManageHr ? (
         <RecordFormSheet
@@ -344,6 +349,6 @@ export function TeamEditor() {
           {saved}
         </p>
       ) : null}
-    </section>
+    </>
   );
 }

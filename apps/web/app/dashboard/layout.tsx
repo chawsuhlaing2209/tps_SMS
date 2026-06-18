@@ -4,7 +4,8 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
-import { Icon } from "../lib/icon";
+import { Icon } from "../lib/material-icon";
+import { resetNavigationTrail } from "../lib/navigation-trail";
 import { type DashboardNavKey, visibleDashboardNavGroups } from "../lib/permissions";
 import { clearSession } from "../lib/session";
 import { useWorkspace } from "../lib/use-workspace";
@@ -104,6 +105,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                       key={item.href}
                       href={item.href}
                       className={active ? "dash-nav-link dash-nav-link--active" : "dash-nav-link"}
+                      onClick={() =>
+                        resetNavigationTrail([{ label: t(item.key), href: item.href }])
+                      }
                     >
                       <Icon
                         name={NAV_ICONS[item.key]}

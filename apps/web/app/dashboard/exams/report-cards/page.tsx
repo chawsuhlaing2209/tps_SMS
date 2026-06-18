@@ -3,17 +3,20 @@
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { DataTable } from "../../../lib/data-table";
 import { Field } from "../../../lib/form";
-import { Icon } from "../../../lib/icon";
+import { Icon } from "../../../lib/material-icon";
 import { hasAnyPermission } from "../../../lib/permissions";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { getSession } from "../../../lib/session";
 import { TablePanelBody, TablePanelHead } from "../../../lib/table-panel";
+import { StatusBadge } from "../../../../components/shared/badge";
 import { zodResolver } from "../../../lib/zod-resolver";
+import { PageHeader } from "../../page-header-context";
 
 type Classroom = { id: string; name: string; academicYearId: string };
 type Student = { id: string; fullName: string };
@@ -37,6 +40,11 @@ const REPORT_CARDS_PATH = (tenant: string) => `/tenants/${tenant}/report-cards`;
 export default function ReportCardsPage() {
   const t = useTranslations("exams");
   const c = useTranslations("common");
+  const searchParams = useSearchParams();
+  const studentId = searchParams.get("studentId");
+  const reportCardsHref = studentId
+    ? `/dashboard/exams/report-cards?studentId=${studentId}`
+    : "/dashboard/exams/report-cards";
   const requiredMessage = c("required");
   const permissions = getSession()?.permissions;
   const canGenerate = hasAnyPermission(permissions, ["report_card.generate"]);
@@ -111,7 +119,7 @@ export default function ReportCardsPage() {
       header: t("status"),
       accessorKey: "status",
       cell: ({ row }) => (
-        <span className={`badge badge--${row.original.status}`}>{row.original.status}</span>
+        <StatusBadge status={row.original.status} />
       )
     },
     {
@@ -151,7 +159,11 @@ export default function ReportCardsPage() {
   }
 
   return (
-    <section className="panel">
+    <>
+      <PageHeader
+        title={t("reportCardsTitle")}
+        segment={{ label: t("reportCardsTitle"), href: reportCardsHref }}
+      />
       <TablePanelHead
         title={t("reportCardsTitle")}
         extra={
@@ -233,6 +245,6 @@ export default function ReportCardsPage() {
           </select>
         </Field>
       </RecordFormSheet>
-    </section>
+    </>
   );
 }
