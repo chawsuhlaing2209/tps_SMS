@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
+import { appendNavigationTrail, type NavigationSegment } from "./navigation-trail";
 import { subjectColor, subjectIcon } from "../dashboard/structure/subject-colors";
-import { Icon } from "./icon";
+import { Icon } from "./material-icon";
 import { Panel, PanelHead } from "./panel";
 
 export type RecordListItemProps = {
@@ -23,6 +24,8 @@ export type RecordListItemProps = {
   actionLabel?: string;
   /** Replaces the default "Open ›" action (e.g. status badge). */
   trailing?: ReactNode;
+  /** Current page appended to the trail before following `href`. */
+  navigationFrom?: NavigationSegment;
 };
 
 function swatchFor(name: string, color?: string) {
@@ -68,12 +71,20 @@ function RecordListItemContent({
 
 /** Single Padauk list row: squircle icon, stacked title + meta, optional Open action. */
 export function RecordListItem(props: RecordListItemProps) {
-  const { href, onClick } = props;
+  const { href, onClick, navigationFrom } = props;
   const className = "record-list-item";
 
   if (href) {
     return (
-      <Link href={href} className={className}>
+      <Link
+        href={href}
+        className={className}
+        onClick={() => {
+          if (navigationFrom) {
+            appendNavigationTrail(navigationFrom);
+          }
+        }}
+      >
         <RecordListItemContent {...props} />
       </Link>
     );

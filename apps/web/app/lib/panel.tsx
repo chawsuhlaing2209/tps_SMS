@@ -7,21 +7,22 @@ import type { ReactNode } from "react";
  * under it) on the left and an actions slot on the right.
  */
 export function PanelHead({
-  title,
-  help,
+  title: _title,
+  help: _help,
   actions
 }: {
-  title: ReactNode;
+  /** @deprecated Section titles are not rendered; page context lives in the top bar. */
+  title?: ReactNode;
   help?: ReactNode;
   actions?: ReactNode;
 }) {
+  if (!actions) {
+    return null;
+  }
+
   return (
     <div className="panel-head">
-      <div className="panel-head__titles">
-        <h2>{title}</h2>
-        {help ? <p className="panel-head__help">{help}</p> : null}
-      </div>
-      {actions ? <div className="panel-actions">{actions}</div> : null}
+      <div className="panel-actions">{actions}</div>
     </div>
   );
 }

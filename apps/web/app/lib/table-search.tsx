@@ -1,7 +1,7 @@
 "use client";
 
 import type { InputHTMLAttributes } from "react";
-import { Icon } from "./icon";
+import { Icon } from "./material-icon";
 
 /** Rounded search field — matches `.dash-search` (single border, no nested input chrome). */
 export function TableSearchInput({
