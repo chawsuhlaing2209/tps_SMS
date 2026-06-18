@@ -1,19 +1,19 @@
 .page {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--pds-gap-large);
 }
 
 .intro {
   align-items: flex-start;
   display: flex;
-  gap: var(--space-4);
+  gap: var(--pds-gap-large);
   justify-content: space-between;
 }
 
 .introText {
-  color: var(--muted);
-  font-size: 14px;
+  color: var(--pds-muted);
+  font-size: var(--pds-type-body-m-medium-font-size);
   line-height: 1.5;
   margin: 0;
   max-width: 720px;
@@ -22,78 +22,78 @@
 .planList {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--pds-gap-large);
 }
 
 .planCard {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--structure-card-radius);
+  background: var(--pds-background-card);
+  border: 1px solid var(--pds-border-color-primary);
+  border-radius: var(--pds-radius-base);
   overflow: hidden;
 }
 
 .planCardInactive .planHead {
-  background: var(--subtle);
-  color: var(--muted);
+  background: var(--pds-background-layout-secondary);
+  color: var(--pds-muted);
 }
 
 .planHead {
   align-items: center;
-  background: var(--shell);
+  background: var(--pds-shell);
   color: #fff;
   display: flex;
-  gap: var(--space-4);
+  gap: var(--pds-gap-large);
   justify-content: space-between;
-  padding: var(--space-5);
+  padding: var(--pds-padding-large);
 }
 
 .planHeadLeft {
   align-items: flex-start;
   display: flex;
-  gap: var(--space-3);
+  gap: var(--pds-gap-medium);
   min-width: 0;
 }
 
 .planIcon {
   align-items: center;
-  background: var(--brand);
+  background: var(--pds-compliment-brand);
   border-radius: 12px;
-  color: var(--foreground);
+  color: var(--pds-text-primary);
   display: inline-flex;
   flex-shrink: 0;
-  font-size: 20px;
+  font-size: var(--pds-type-title-xs-bold-font-size);
   height: 42px;
   justify-content: center;
   width: 42px;
 }
 
 .planCardInactive .planIcon {
-  background: var(--border);
-  color: var(--muted);
+  background: var(--pds-border-color-primary);
+  color: var(--pds-muted);
 }
 
 .planTitle {
-  font-family: var(--font-heading);
-  font-size: 22px;
+  font-family: var(--pds-font-family-display-stack);
+  font-size: var(--pds-type-title-m-extrabold-font-size);
   font-weight: 800;
   margin: 0;
 }
 
 .planDescription {
-  color: var(--muted-on-dark);
-  font-size: 13px;
-  margin: var(--space-1) 0 0;
+  color: var(--pds-muted-on-dark);
+  font-size: var(--pds-type-body-m-medium-font-size);
+  margin: var(--pds-gap-x-small) 0 0;
 }
 
 .planCardInactive .planDescription {
-  color: var(--muted);
+  color: var(--pds-muted);
 }
 
 .planActions {
   align-items: center;
   display: flex;
   flex-shrink: 0;
-  gap: var(--space-3);
+  gap: var(--pds-gap-medium);
 }
 
 .editBtn {
@@ -101,68 +101,70 @@
   background: #fff;
   border: 0;
   border-radius: 999px;
-  color: var(--foreground);
+  color: var(--pds-text-primary);
   cursor: pointer;
   display: inline-flex;
-  font-size: 14px;
+  font-size: var(--pds-type-body-m-medium-font-size);
   font-weight: 700;
   gap: 6px;
   padding: 10px 16px;
 }
 
 .planCardInactive .editBtn {
-  background: var(--card);
-  border: 1px solid var(--border);
+  background: var(--pds-background-card);
+  border: 1px solid var(--pds-border-color-primary);
 }
 
 .toggle {
   appearance: none;
-  background: var(--shell-line-soft);
+  background: var(--pds-border-color-secondary);
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--pds-radius-pill);
   cursor: pointer;
-  height: 28px;
+  height: 24px;
   position: relative;
-  width: 48px;
+  width: 44px;
 }
 
 .toggle::after {
-  background: #fff;
+  background: var(--pds-color-neutral-0);
   border-radius: 50%;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
   content: "";
-  height: 22px;
-  left: 3px;
+  height: 20px;
+  left: 2px;
   position: absolute;
-  top: 3px;
+  top: 2px;
   transition: transform 0.15s ease;
-  width: 22px;
+  width: 20px;
 }
 
 .toggleOn {
-  background: var(--brand);
+  background: var(--pds-compliment-brand);
 }
 
 .toggleOn::after {
+  background: var(--pds-primary);
   transform: translateX(20px);
 }
 
 .schedule {
-  padding: var(--space-5);
+  padding: var(--pds-padding-large);
 }
 
 .scheduleLabel {
-  color: var(--muted);
-  font-size: 11px;
+  color: var(--pds-muted);
+  font-size: var(--pds-type-label-s-medium-font-size);
   font-weight: 700;
   letter-spacing: 0.06em;
-  margin: 0 0 var(--space-3);
+  margin: 0 0 var(--pds-gap-medium);
   text-transform: uppercase;
 }
 
 .scheduleList {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--pds-gap-small);
   list-style: none;
   margin: 0;
   padding: 0;
@@ -170,33 +172,33 @@
 
 .scheduleRow {
   align-items: center;
-  background: var(--subtle);
+  background: var(--pds-background-layout-secondary);
   border-radius: 12px;
   display: flex;
   justify-content: space-between;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--pds-gap-medium) var(--pds-gap-large);
 }
 
 .scheduleLabelText {
-  font-size: 14px;
+  font-size: var(--pds-type-body-m-medium-font-size);
   font-weight: 600;
 }
 
 .scheduleDue {
-  color: var(--muted);
-  font-size: 13px;
+  color: var(--pds-muted);
+  font-size: var(--pds-type-body-m-medium-font-size);
   font-weight: 600;
 }
 
 .installmentEditor {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--pds-gap-medium);
 }
 
 .installmentRow {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--pds-gap-small);
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 80px auto;
 }
 

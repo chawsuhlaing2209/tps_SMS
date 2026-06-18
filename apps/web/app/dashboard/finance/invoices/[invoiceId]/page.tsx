@@ -2,22 +2,59 @@
 
 import { paymentMethods } from "@sms/shared";
 import { useTranslations } from "next-intl";
-import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useApiMutation, useApiQuery } from "../../../../lib/api";
 import { Field } from "../../../../lib/form";
-import { Icon } from "../../../../lib/icon";
-import { RecordFormSheet } from "../../../../lib/record-sheet";
+import { Icon } from "../../../../lib/material-icon";
+import { toastSuccess } from "../../../../lib/toast";
+import { hasAnyPermission } from "../../../../lib/permissions";
+import { getSession } from "../../../../lib/session";
 import { PageHeader } from "../../../page-header-context";
+import { StatusBadge } from "../../../../../components/shared/badge";
+import {
+  InvoiceDocumentBody,
+  mapInvoiceDetailToDocument,
+  printInvoiceDocument
+} from "../../invoice-document";
+import {
+  PaymentReceiptDocument,
+  printPaymentReceipt,
+  formatReceiptAmount,
+  type PaymentReceiptPayload
+} from "../../receipt-document";
 
 type InvoiceDetail = {
   id: string;
   invoiceNumber: string;
   studentId: string;
+  subtotal: string;
+  discountTotal: string;
   total: string;
   status: string;
-  items: Array<{ id: string; description: string; unitAmount: string; quantity: number }>;
+  issueDate: string;
+  dueDate: string | null;
+  studentFullName: string;
+  gradeName: string | null;
+  classroomName: string | null;
+  room: string | null;
+  guardianName: string | null;
+  guardianPhone: string | null;
+  guardianEmail: string | null;
+  schoolName: string;
+  schoolAddress: string | null;
+  schoolContactPhone: string | null;
+  academicYearName: string;
+  termName: string | null;
+  items: Array<{ id: string; description: string; unitAmount: string; quantity: string; total?: string }>;
+  discountLines: Array<{
+    id: string;
+    name: string;
+    amount: string;
+    source: string;
+    stackable: boolean;
+    eligibilityReason: string | null;
+  }>;
   payments: Array<{
     id: string;
     kind: "payment" | "refund";
@@ -27,6 +64,11 @@ type InvoiceDetail = {
     paidAt: string | null;
     verifiedAt: string | null;
   }>;
+};
+
+type RecordPaymentResult = {
+  payment: { id: string };
+  receipt: PaymentReceiptPayload;
 };
 
 const CLOSED_STATUSES = new Set(["paid", "cancelled", "waived", "refunded"]);
@@ -46,6 +88,8 @@ export default function InvoiceDetailPage() {
   const params = useParams<{ invoiceId: string }>();
   const invoiceId = params.invoiceId;
   const t = useTranslations("finance");
+  const tDoc = useTranslations("finance.invoiceDocument");
+  const tReceipt = useTranslations("finance.receipt");
   const tPay = useTranslations("enrollments");
   const c = useTranslations("common");
   const nav = useTranslations("nav");
@@ -53,19 +97,18 @@ export default function InvoiceDetailPage() {
   const [method, setMethod] = useState<string>("cash");
   const [transactionId, setTransactionId] = useState("");
   const [paidAt, setPaidAt] = useState(defaultPaidAtLocal);
-  const [verifyTargetId, setVerifyTargetId] = useState<string | null>(null);
-  const [verifyReason, setVerifyReason] = useState("");
+  const [paymentReceipt, setPaymentReceipt] = useState<PaymentReceiptPayload | null>(null);
+
+  const canVerifyPayments = hasAnyPermission(getSession()?.permissions, ["finance.manage"]);
 
   const invoice = useApiQuery<InvoiceDetail>(
     (tenant) => `/tenants/${tenant}/finance/invoices/${invoiceId}`
   );
 
-  const pay = useApiMutation<{
-    amount: number;
-    method: string;
-    referenceNumber?: string;
-    paidAt?: string;
-  }>(
+  const pay = useApiMutation<
+    { amount: number; method: string; referenceNumber?: string; paidAt?: string },
+    RecordPaymentResult
+  >(
     (body, tenant) => ({
       path: `/tenants/${tenant}/finance/invoices/${invoiceId}/payments`,
       init: { method: "POST", body: JSON.stringify(body) }
@@ -76,277 +119,240 @@ export default function InvoiceDetailPage() {
         `/tenants/${tenant}/finance/invoices`,
         `/tenants/${tenant}/finance/payments`
       ],
-      successMessage: t("paymentRecorded")
+      showSuccessToast: false
     }
   );
 
-  const verify = useApiMutation<
-    { paymentId: string; body: { reason: string } },
-    unknown
-  >(
-    ({ paymentId, body }, tenant) => ({
-      path: `/tenants/${tenant}/finance/payments/${paymentId}/verify`,
-      init: { method: "PATCH", body: JSON.stringify(body) }
+  const send = useApiMutation<undefined, { sent: boolean }>(
+    (_body, tenant) => ({
+      path: `/tenants/${tenant}/finance/invoices/${invoiceId}/send-guardian`,
+      init: { method: "POST", body: JSON.stringify({}) }
     }),
-    {
-      invalidatePaths: (_id, tenant) => [
-        `/tenants/${tenant}/finance/invoices/${invoiceId}`,
-        `/tenants/${tenant}/finance/invoices`,
-        `/tenants/${tenant}/finance/payments`
-      ],
-      successMessage: t("paymentVerified")
-    }
+    { showSuccessToast: false }
   );
+
+  const data = invoice.data;
+  const document = useMemo(() => (data ? mapInvoiceDetailToDocument(data) : null), [data]);
+
+  const verifiedTotal = document?.paidToDate ?? 0;
+  const remaining = document?.balanceDue ?? 0;
+  const canRecordPayment = data ? !CLOSED_STATUSES.has(data.status) : false;
+  const needsTxnId = method !== "cash";
+
+  const printLabels = {
+    billedTo: tDoc("billedTo"),
+    title: tDoc("title"),
+    subtotalBilled: tDoc("subtotalBilled"),
+    paidToDate: tDoc("paidToDate"),
+    balanceDue: tDoc("balanceDue"),
+    dueOn: (date: string) => tDoc("dueOn", { date })
+  };
+
+  const handlePrint = () => {
+    if (!document) return;
+    printInvoiceDocument(document, printLabels);
+  };
+
+  const handleSend = async () => {
+    await send.mutateAsync(undefined);
+    toastSuccess(tDoc("sentToGuardian"));
+  };
+
+  const printReceipt = () => {
+    if (!paymentReceipt) return;
+    printPaymentReceipt(paymentReceipt, {
+      header: tReceipt("officialHeader"),
+      receiptLabel: tReceipt("numberLabel"),
+      student: tReceipt("student"),
+      gradeRoom: tReceipt("gradeRoom"),
+      guardian: tReceipt("guardian"),
+      contact: tReceipt("contact"),
+      methodLabel: tReceipt("method"),
+      appliedTo: tReceipt("appliedTo"),
+      reference: tReceipt("reference"),
+      cashier: tReceipt("cashier"),
+      amountPaid: tReceipt("amountPaid"),
+      remaining: tReceipt("remainingBalance"),
+      methodName: tPay(`paymentMethods.${paymentReceipt.method}`)
+    });
+  };
 
   if (invoice.isLoading) {
     return <p className="muted">{c("loading")}</p>;
   }
 
-  if (invoice.isError || !invoice.data) {
+  if (invoice.isError || !data || !document) {
     return (
       <div className="page-stack">
         <p className="error-text">{t("notFound")}</p>
-        <Link href="/dashboard/finance/invoices">{t("backToInvoices")}</Link>
       </div>
     );
   }
 
-  const data = invoice.data;
-  const canRecordPayment = !CLOSED_STATUSES.has(data.status);
-  const verifiedTotal = data.payments.reduce((sum, payment) => {
-    if (!payment.verifiedAt) return sum;
-    const value = Number(payment.amount);
-    return payment.kind === "refund" ? sum - value : sum + value;
-  }, 0);
-  const remaining = Math.max(0, Number(data.total) - verifiedTotal);
-  const unverifiedPayments = data.payments.filter(
-    (payment) => payment.kind === "payment" && !payment.verifiedAt
-  );
-  const needsTxnId = method !== "cash";
-
   return (
-    <div className="page-stack">
+    <div className="page-stack invoice-page">
       <PageHeader
         title={data.invoiceNumber}
         breadcrumbs={[
-          { label: nav("group_business") },
-          { label: t("invoices"), href: "/dashboard/finance/invoices" }
+          { label: nav("finance"), href: "/dashboard/finance/billing" },
+          { label: t("invoices"), href: "/dashboard/finance/invoices" },
+          { label: data.invoiceNumber }
         ]}
-        backHref="/dashboard/finance/invoices"
-        backLabel={t("backToInvoices")}
       />
-      <section className="panel">
-        <div className="panel-head">
-          <h2>{data.invoiceNumber}</h2>
-        </div>
-        <p>
-          {c("status")}:{" "}
-          <span className={`badge badge--${data.status}`}>{data.status}</span> · {t("total")}:{" "}
-          {data.total}
+
+      {paymentReceipt ? (
+        <section className="invoice-receipt-confirmation">
+          <PaymentReceiptDocument
+            receipt={paymentReceipt}
+            methodName={tPay(`paymentMethods.${paymentReceipt.method}`)}
+            onPrint={printReceipt}
+            title={tReceipt("title")}
+            subtitle={`${tReceipt("numberLabel")} #${paymentReceipt.receiptNumber} · ${paymentReceipt.issuedAt.slice(0, 10)}`}
+            documentLabel={tReceipt("officialHeader")}
+            footer={
+              <footer className="invoice-receipt-confirmation__actions">
+                <button type="button" className="btn-ghost" onClick={() => setPaymentReceipt(null)}>
+                  {tReceipt("backToInvoice")}
+                </button>
+                <button type="button" className="btn-primary" onClick={printReceipt}>
+                  <Icon name="print" size={18} />
+                  {tReceipt("print")}
+                </button>
+              </footer>
+            }
+          />
+        </section>
+      ) : (
+        <>
+          <article className="invoice-doc invoice-doc--page">
+            <InvoiceDocumentBody
+              data={document}
+              onPrint={handlePrint}
+              onSend={handleSend}
+              sendPending={send.isPending}
+              canVerifyPayments={canVerifyPayments}
+            />
+          </article>
+
+          <section className="panel invoice-document__payments">
+            <h3>{t("payments")}</h3>
+            {!data.payments.length ? (
+              <p className="muted">{t("noPayments")}</p>
+            ) : (
+              <ul className="payment-list">
+                {data.payments.map((payment) => (
+                  <li
+                    key={payment.id}
+                    className={
+                      payment.kind === "refund"
+                        ? "payment-row payment-row--refund"
+                        : payment.verifiedAt
+                          ? "payment-row payment-row--verified"
+                          : "payment-row payment-row--pending"
+                    }
+                  >
+                    <div className="payment-row__main">
+                      <span>
+                        {payment.kind === "refund" ? "−" : ""}
+                        {formatReceiptAmount(Number(payment.amount))} ({tPay(`paymentMethods.${payment.method}`)})
+                      </span>
+                      {payment.kind === "refund" ? (
+                        <StatusBadge status="refund" label={t("kindRefund")} />
+                      ) : payment.verifiedAt ? (
+                        <StatusBadge status="verified" label={t("verified")} />
+                      ) : (
+                        <StatusBadge status="pending" label={t("pendingVerification")} />
+                      )}
+                    </div>
+                    <p className="muted payment-row__meta">
+                      {t("paidAt")}: {formatDateTime(payment.paidAt)}
+                      {payment.referenceNumber ? (
+                        <>
+                          {" "}
+                          · {t("transactionId")}: {payment.referenceNumber}
+                        </>
+                      ) : null}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
           {canRecordPayment ? (
-            <>
-              {" "}
-              · {t("remainingBalance")}: {remaining}
-            </>
-          ) : null}
-        </p>
-
-        {unverifiedPayments.length ? (
-          <div className="verify-banner" role="status">
-            <strong>{t("verifyPendingTitle")}</strong>
-            <p className="muted">{t("verifyPendingHelp")}</p>
-          </div>
-        ) : null}
-
-        <h3>{t("lineItems")}</h3>
-        <ul>
-          {data.items.map((item) => (
-            <li key={item.id}>
-              {item.description} — {item.unitAmount} × {item.quantity}
-            </li>
-          ))}
-        </ul>
-
-        <h3>{t("payments")}</h3>
-        {!data.payments.length ? (
-          <p className="muted">{t("noPayments")}</p>
-        ) : (
-          <ul className="payment-list">
-            {data.payments.map((payment) => (
-              <li
-                key={payment.id}
-                className={
-                  payment.kind === "refund"
-                    ? "payment-row payment-row--refund"
-                    : payment.verifiedAt
-                      ? "payment-row payment-row--verified"
-                      : "payment-row payment-row--pending"
-                }
-              >
-                <div className="payment-row__main">
-                  <span>
-                    {payment.kind === "refund" ? "−" : ""}
-                    {payment.amount} ({tPay(`paymentMethods.${payment.method}`)})
-                  </span>
-                  {payment.kind === "refund" ? (
-                    <span className="badge badge--archived">{t("kindRefund")}</span>
-                  ) : payment.verifiedAt ? (
-                    <span className="badge badge--active">{t("verified")}</span>
-                  ) : (
-                    <span className="badge badge--pending">{t("pendingVerification")}</span>
-                  )}
-                </div>
-                <p className="muted payment-row__meta">
-                  {t("paidAt")}: {formatDateTime(payment.paidAt)}
-                  {payment.referenceNumber ? (
-                    <>
-                      {" "}
-                      · {t("transactionId")}: {payment.referenceNumber}
-                    </>
-                  ) : null}
-                </p>
-                {payment.kind === "payment" && !payment.verifiedAt ? (
+            <section className="panel invoice-record-form">
+              <h3>{t("recordPayment")}</h3>
+              <div className="entity-form">
+                <Field label={t("amount")}>
+                  <input
+                    type="number"
+                    step="0.01"
+                    max={remaining}
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                  />
+                </Field>
+                <Field label={t("method")}>
+                  <select value={method} onChange={(e) => setMethod(e.target.value)}>
+                    {paymentMethods.map((option) => (
+                      <option key={option} value={option}>
+                        {tPay(`paymentMethods.${option}`)}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label={t("paidAt")}>
+                  <input
+                    type="datetime-local"
+                    value={paidAt}
+                    onChange={(e) => setPaidAt(e.target.value)}
+                  />
+                </Field>
+                {needsTxnId ? (
+                  <Field label={t("transactionId")}>
+                    <input
+                      value={transactionId}
+                      onChange={(e) => setTransactionId(e.target.value)}
+                      placeholder={t("transactionIdPlaceholder")}
+                    />
+                  </Field>
+                ) : null}
+                <div className="form-actions">
                   <button
                     type="button"
-                    className="btn-primary btn-verify"
-                    disabled={verify.isPending}
-                    onClick={() => {
-                      setVerifyTargetId(payment.id);
-                      setVerifyReason("");
+                    className="btn-primary"
+                    disabled={
+                      !amount ||
+                      pay.isPending ||
+                      Number(amount) <= 0 ||
+                      Number(amount) > remaining ||
+                      (needsTxnId && !transactionId.trim())
+                    }
+                    onClick={async () => {
+                      const result = await pay.mutateAsync({
+                        amount: Number(amount),
+                        method,
+                        referenceNumber: needsTxnId ? transactionId.trim() : undefined,
+                        paidAt: new Date(paidAt).toISOString()
+                      });
+                      setPaymentReceipt(result.receipt);
+                      setAmount("");
+                      setTransactionId("");
+                      setPaidAt(defaultPaidAtLocal());
                     }}
                   >
-                    <Icon name="check_circle" />
-                    {t("verifyPaymentNow")}
+                    <Icon name="payments" />
+                    {pay.isPending ? c("loading") : t("recordPayment")}
                   </button>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {canRecordPayment ? (
-          <div className="entity-form">
-            <h3>{t("recordPayment")}</h3>
-            <Field label={t("amount")}>
-              <input
-                type="number"
-                step="0.01"
-                max={remaining}
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
-            </Field>
-            <Field label={t("method")}>
-              <select value={method} onChange={(e) => setMethod(e.target.value)}>
-                {paymentMethods.map((option) => (
-                  <option key={option} value={option}>
-                    {tPay(`paymentMethods.${option}`)}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label={t("paidAt")}>
-              <input
-                type="datetime-local"
-                value={paidAt}
-                onChange={(e) => setPaidAt(e.target.value)}
-              />
-            </Field>
-            {needsTxnId ? (
-              <Field label={t("transactionId")}>
-                <input
-                  value={transactionId}
-                  onChange={(e) => setTransactionId(e.target.value)}
-                  placeholder={t("transactionIdPlaceholder")}
-                />
-              </Field>
-            ) : null}
-            <div className="form-actions">
-              <button
-                type="button"
-                className="btn-primary"
-                disabled={
-                  !amount ||
-                  pay.isPending ||
-                  Number(amount) <= 0 ||
-                  Number(amount) > remaining ||
-                  (needsTxnId && !transactionId.trim())
-                }
-                onClick={async () => {
-                  await pay.mutateAsync({
-                    amount: Number(amount),
-                    method,
-                    referenceNumber: needsTxnId ? transactionId.trim() : undefined,
-                    paidAt: new Date(paidAt).toISOString()
-                  });
-                  setAmount("");
-                  setTransactionId("");
-                  setPaidAt(defaultPaidAtLocal());
-                }}
-              >
-                <Icon name="payments" />
-                {pay.isPending ? c("loading") : t("recordPayment")}
-              </button>
-            </div>
-            <p className="muted">{t("refundOnPaymentsTab")}</p>
-          </div>
-        ) : (
-          <p className="muted">{t("invoiceClosedNoPayment")}</p>
-        )}
-      </section>
-
-      {verifyTargetId ? (
-        <RecordFormSheet
-          open={Boolean(verifyTargetId)}
-          onOpenChange={(open) => {
-            if (!open) {
-              setVerifyTargetId(null);
-              setVerifyReason("");
-            }
-          }}
-          title={t("verifyPaymentNow")}
-          footer={
-            <>
-              <button
-                type="button"
-                className="btn-ghost"
-                onClick={() => {
-                  setVerifyTargetId(null);
-                  setVerifyReason("");
-                }}
-              >
-                {c("cancel")}
-              </button>
-              <button
-                type="button"
-                className="btn-primary"
-                disabled={verify.isPending || !verifyReason.trim()}
-                onClick={async () => {
-                  if (!verifyTargetId) return;
-                  await verify.mutateAsync({
-                    paymentId: verifyTargetId,
-                    body: { reason: verifyReason.trim() }
-                  });
-                  setVerifyTargetId(null);
-                  setVerifyReason("");
-                }}
-              >
-                <Icon name="check_circle" />
-                {verify.isPending ? c("loading") : t("verifyPaymentNow")}
-              </button>
-            </>
-          }
-        >
-          <Field label={t("verifyReason")}>
-            <textarea
-              rows={3}
-              value={verifyReason}
-              placeholder={t("verifyReasonPlaceholder")}
-              onChange={(e) => setVerifyReason(e.target.value)}
-            />
-          </Field>
-        </RecordFormSheet>
-      ) : null}
+                </div>
+                <p className="muted">{t("refundOnPaymentsTab")}</p>
+              </div>
+            </section>
+          ) : (
+            <p className="muted">{t("invoiceClosedNoPayment")}</p>
+          )}
+        </>
+      )}
     </div>
   );
 }
