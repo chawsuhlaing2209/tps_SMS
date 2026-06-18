@@ -4,8 +4,11 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useApiQuery } from "../../../../lib/api";
-import { Icon } from "../../../../lib/icon";
+import { Icon } from "../../../../lib/material-icon";
 import { PageHeader } from "../../../page-header-context";
+import { StatusBadge } from "../../../../../components/shared/badge";
+import { EmptyState } from "../../../../../components/shared/empty-state";
+import { StatCard, StatGrid } from "../../../../../components/shared/stat-card";
 
 type AcademicYearOverview = {
   id: string;
@@ -44,24 +47,42 @@ export default function AcademicYearDetailPage() {
           { label: nav("academicSetup") },
           { label: setup("years"), href: "/dashboard/academic-setup/years" }
         ]}
-        backHref="/dashboard/academic-setup/years"
-        backLabel={setup("years")}
       />
 
       {years.isLoading ? (
         <p className="muted">{c("loading")}</p>
       ) : !year ? (
-        <p className="muted">{c("empty")}</p>
+        <section className="panel">
+          <EmptyState icon="event_busy" title={c("empty")} />
+        </section>
       ) : (
         <section className="panel setup-year-detail">
-          <div className="setup-year-detail__main">
+          <div className="setup-year-detail__head">
             <p className="setup-year-detail__dates">
               {formatDateRange(year.startsOn, year.endsOn)}
             </p>
-            <p className="muted">
-              {t("gradeCount")}: {year.gradeCount} · {t("classroomCount")}: {year.classroomCount} ·{" "}
-              {t("studentCount")}: {year.studentCount}
-            </p>
+            <StatusBadge status={year.status} />
+          </div>
+
+          <StatGrid>
+            <StatCard
+              icon={<Icon name="school" size={18} />}
+              label={t("gradeCount")}
+              value={year.gradeCount}
+            />
+            <StatCard
+              icon={<Icon name="meeting_room" size={18} />}
+              label={t("classroomCount")}
+              value={year.classroomCount}
+            />
+            <StatCard
+              icon={<Icon name="groups" size={18} />}
+              label={t("studentCount")}
+              value={year.studentCount}
+            />
+          </StatGrid>
+
+          <div className="setup-year-detail__footer">
             <p className="setup-year-detail__hint">{setup("yearGradesMovedHelp")}</p>
             <Link href="/dashboard/academic-setup/grades-classrooms" className="btn-primary">
               <Icon name="meeting_room" />

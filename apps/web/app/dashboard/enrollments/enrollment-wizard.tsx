@@ -8,11 +8,12 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ApiError, useApiMutation } from "../../lib/api";
 import { Field } from "../../lib/form";
-import { Icon } from "../../lib/icon";
+import { Icon } from "../../lib/material-icon";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { StudentCombobox } from "../../lib/student-combobox";
 import { zodResolver } from "../../lib/zod-resolver";
 import { CheckboxList } from "../../../components/shared/checkbox-list";
+import { Stepper } from "../../../components/shared/stepper";
 
 type Classroom = { id: string; name: string; gradeId: string; academicYearId: string };
 
@@ -85,6 +86,7 @@ export function EnrollmentWizard({
   const [optionalFeeItemIds, setOptionalFeeItemIds] = useState<string[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<string>("cash");
   const [paymentReference, setPaymentReference] = useState("");
+  const [collectPaymentAtConfirm, setCollectPaymentAtConfirm] = useState(false);
   const [dueDate, setDueDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -106,6 +108,8 @@ export function EnrollmentWizard({
       gradeId: string;
       classroomId: string;
       optionalFeeItemIds: string[];
+      collectPayment?: boolean;
+      paymentMethod?: string;
     },
     EnrollmentPreviewResult
   >((body, tenant) => ({
@@ -180,6 +184,7 @@ export function EnrollmentWizard({
     setOptionalFeeItemIds([]);
     setPaymentMethod("cash");
     setPaymentReference("");
+    setCollectPaymentAtConfirm(false);
     setDueDate(new Date().toISOString().slice(0, 10));
     setFormError(null);
     form.reset({ studentId: "", gradeId: "", classroomId: "" });
@@ -291,7 +296,10 @@ export function EnrollmentWizard({
 
   const classroom = scopedClassrooms.find((cl) => cl.id === form.watch("classroomId"));
 
-  const runPreview = async (optionalIds: string[]) => {
+  const runPreview = async (
+    optionalIds: string[],
+    options?: { collectPayment?: boolean; paymentMethod?: string }
+  ) => {
     const values = form.getValues();
     if (!classroom) {
       throw new ApiError(t("selectClassroom"), 400);
@@ -301,7 +309,9 @@ export function EnrollmentWizard({
       academicYearId: classroom.academicYearId,
       gradeId: classroom.gradeId,
       classroomId: classroom.id,
-      optionalFeeItemIds: optionalIds
+      optionalFeeItemIds: optionalIds,
+      collectPayment: options?.collectPayment,
+      paymentMethod: options?.paymentMethod
     });
     setPreview(result);
     setOptionalFeeItemIds(
@@ -378,6 +388,14 @@ export function EnrollmentWizard({
     }
 
     if (step < STEPS.length - 1) {
+      if (step === 1) {
+        try {
+          await runPreview(optionalFeeItemIds);
+        } catch (error) {
+          setFormError(error instanceof ApiError ? error.message : c("somethingWrong"));
+          return;
+        }
+      }
       setStep(step + 1);
     }
   };
@@ -479,7 +497,7 @@ export function EnrollmentWizard({
               <button
                 type="button"
                 className="btn-primary"
-                disabled={busy || preview?.canConfirm === false}
+                disabled={busy || preview?.canConfirm === false || !collectPaymentAtConfirm}
                 onClick={() => void handleConfirm(true)}
               >
                 <Icon name="payments" />
@@ -495,16 +513,12 @@ export function EnrollmentWizard({
         </>
       }
     >
-      <div className="wizard-steps" aria-label={t("wizardProgress")}>
-        {STEPS.map((key, index) => (
-          <span
-            key={key}
-            className={`wizard-step${index === step ? " wizard-step--active" : index < step ? " wizard-step--done" : ""}`}
-          >
-            {index + 1}. {t(`wizardStepLabel_${key}`)}
-          </span>
-        ))}
-      </div>
+      <Stepper
+        className="stepper--sheet"
+        steps={STEPS.map((key) => ({ id: key, label: t(`wizardStepLabel_${key}`) }))}
+        currentStep={step}
+        ariaLabel={t("wizardProgress")}
+      />
 
       {step === 0 ? (
         <>
@@ -603,6 +617,9 @@ export function EnrollmentWizard({
           <div className={`callout${preview.siblingSummary.eligible ? " callout--success" : ""}`}>
             <strong>{t("siblingDiscount")}</strong>
             <p>{preview.siblingSummary.message}</p>
+            {preview.siblingSummary.studentPosition ? (
+              <p className="muted">{t("siblingPosition", { position: preview.siblingSummary.studentPosition })}</p>
+            ) : null}
           </div>
           {preview.pendingDiscounts.length > 0 ? (
             <div className="callout">
@@ -620,14 +637,31 @@ export function EnrollmentWizard({
             <p className="muted">{t("discountApprovalRequired")}</p>
           ) : null}
           {preview.discounts.length > 0 ? (
-            <ul className="preview-line-list">
+            <ul className="discount-preview-list">
               {preview.discounts.map((discount) => (
-                <li key={`${discount.source}-${discount.id}`}>
-                  <span>
-                    {discount.name}
-                    {discount.requiresApproval ? ` (${t("requiresApproval")})` : ""}
-                  </span>
-                  <span>-{formatAmount(discount.amount)} MMK</span>
+                <li key={`${discount.source}-${discount.id}`} className="discount-preview-card panel">
+                  <div className="discount-preview-card__header">
+                    <strong>{discount.name}</strong>
+                    <span className="discount-preview-card__amount">-{formatAmount(discount.amount)} MMK</span>
+                  </div>
+                  <div className="discount-preview-card__meta">
+                    <span className="discount-preview-card__tag">
+                      {discount.source === "rule" ? t("discountSourceRule") : t("discountSourceApproved")}
+                    </span>
+                    {discount.stackable ? (
+                      <span className="discount-preview-card__tag">{t("discountStackable")}</span>
+                    ) : (
+                      <span className="discount-preview-card__tag">{t("discountBestWins")}</span>
+                    )}
+                    {discount.requiresApproval ? (
+                      <span className="discount-preview-card__tag discount-preview-card__tag--warn">
+                        {t("requiresApproval")}
+                      </span>
+                    ) : null}
+                  </div>
+                  {discount.eligibilityReason ? (
+                    <p className="muted discount-preview-card__reason">{discount.eligibilityReason}</p>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -657,6 +691,16 @@ export function EnrollmentWizard({
               </li>
             ))}
           </ul>
+          {preview.discounts.length > 0 ? (
+            <ul className="discount-preview-list discount-preview-list--compact">
+              {preview.discounts.map((discount) => (
+                <li key={`${discount.source}-${discount.id}-preview`}>
+                  <span>{discount.name}</span>
+                  <span>-{formatAmount(discount.amount)} MMK</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
           <div className="invoice-preview__totals">
             <div>
               <span>{t("subtotal")}</span>
@@ -678,22 +722,58 @@ export function EnrollmentWizard({
               onChange={(event) => setDueDate(event.target.value)}
             />
           </Field>
-          <Field label={t("paymentMethod")}>
-            <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
-              {enrollmentPaymentMethods.map((method) => (
-                <option key={method} value={method}>
-                  {t(`paymentMethods.${method}`)}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label={t("paymentReference")}>
+          <div className="form-inline-toggle">
             <input
-              value={paymentReference}
-              onChange={(e) => setPaymentReference(e.target.value)}
-              placeholder={t("paymentReferencePlaceholder")}
+              id="collect-payment-at-confirm"
+              type="checkbox"
+              checked={collectPaymentAtConfirm}
+              onChange={(event) => {
+                const checked = event.target.checked;
+                setCollectPaymentAtConfirm(checked);
+                void runPreview(optionalFeeItemIds, {
+                  collectPayment: checked,
+                  paymentMethod: checked ? paymentMethod : undefined
+                }).catch((error) => {
+                  setFormError(error instanceof ApiError ? error.message : c("somethingWrong"));
+                });
+              }}
             />
-          </Field>
+            <label htmlFor="collect-payment-at-confirm">{t("collectPaymentAtConfirm")}</label>
+          </div>
+          {collectPaymentAtConfirm ? (
+            <>
+              <Field label={t("paymentMethod")}>
+                <select
+                  value={paymentMethod}
+                  onChange={(event) => {
+                    const nextMethod = event.target.value;
+                    setPaymentMethod(nextMethod);
+                    void runPreview(optionalFeeItemIds, {
+                      collectPayment: true,
+                      paymentMethod: nextMethod
+                    }).catch((error) => {
+                      setFormError(error instanceof ApiError ? error.message : c("somethingWrong"));
+                    });
+                  }}
+                >
+                  {enrollmentPaymentMethods.map((method) => (
+                    <option key={method} value={method}>
+                      {t(`paymentMethods.${method}`)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label={t("paymentReference")}>
+                <input
+                  value={paymentReference}
+                  onChange={(e) => setPaymentReference(e.target.value)}
+                  placeholder={t("paymentReferencePlaceholder")}
+                />
+              </Field>
+            </>
+          ) : (
+            <p className="muted">{t("earlyPaymentPreviewHint")}</p>
+          )}
           <p className="muted">{t("confirmHelp")}</p>
         </div>
       ) : step > 0 && !preview ? (

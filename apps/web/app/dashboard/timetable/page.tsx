@@ -8,7 +8,7 @@ import { z } from "zod";
 import { useApiMutation, useApiQuery } from "../../lib/api";
 import { DataTable } from "../../lib/data-table";
 import { Field } from "../../lib/form";
-import { Icon } from "../../lib/icon";
+import { Icon } from "../../lib/material-icon";
 import { hasAnyPermission } from "../../lib/permissions";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { getSession } from "../../lib/session";
@@ -268,24 +268,21 @@ export default function TimetablePage() {
         </section>
       ) : null}
 
-      <section className="panel">
-        <TablePanelHead
-          title={t("periodsTitle")}
-          onRefresh={() => void periods.refetch()}
-          onAdd={canManage ? () => setPeriodOpen(true) : undefined}
-          addLabel={t("addPeriod")}
-        />
-        <TablePanelBody
-          loading={periods.isLoading}
-          error={periods.isError ? c("somethingWrong") : null}
-          empty={!periods.data?.length}
-        >
-          <DataTable columns={periodColumns} data={periods.data ?? []} />
-        </TablePanelBody>
-      </section>
+      <TablePanelHead
+        title={t("periodsTitle")}
+        onRefresh={() => void periods.refetch()}
+        onAdd={canManage ? () => setPeriodOpen(true) : undefined}
+        addLabel={t("addPeriod")}
+      />
+      <TablePanelBody
+        loading={periods.isLoading}
+        error={periods.isError ? c("somethingWrong") : null}
+        empty={!periods.data?.length}
+      >
+        <DataTable columns={periodColumns} data={periods.data ?? []} />
+      </TablePanelBody>
 
-      <section className="panel">
-        <TablePanelHead
+      <TablePanelHead
           title={t("slotsTitle")}
           help={t("help")}
           extra={
@@ -332,7 +329,6 @@ export default function TimetablePage() {
         >
           <DataTable columns={slotColumns} data={slots.data ?? []} />
         </TablePanelBody>
-      </section>
 
       <RecordFormSheet
         open={periodOpen}

@@ -7,7 +7,7 @@ import { useMemo, useState } from "react";
 import { ConfirmDialog } from "../../../../../components/shared/confirm-dialog";
 import { useApiMutation, useApiQuery } from "../../../../lib/api";
 import { DetailHero } from "../../../../lib/detail-hero";
-import { Icon } from "../../../../lib/icon";
+import { Icon } from "../../../../lib/material-icon";
 import { RecordList, RecordListItem, RecordListPanel } from "../../../../lib/record-list";
 import { hasAnyPermission } from "../../../../lib/permissions";
 import { getSession } from "../../../../lib/session";
@@ -125,7 +125,6 @@ export default function StructureRoomPage() {
     return (
       <div className="structure-empty">
         <p className="error-text">{t("classroomNotFound")}</p>
-        <Link href="/dashboard/structure">{t("backToStructure")}</Link>
       </div>
     );
   }
@@ -136,7 +135,6 @@ export default function StructureRoomPage() {
     return (
       <div className="structure-empty">
         <p className="muted">{t("classroomWrongYear")}</p>
-        <Link href="/dashboard/structure">{t("backToStructure")}</Link>
       </div>
     );
   }
@@ -157,12 +155,12 @@ export default function StructureRoomPage() {
     <div className="structure-page">
       <PageHeader
         title={data.name}
+        segment={{ label: data.name, href: `/dashboard/structure/rooms/${classroomId}` }}
         breadcrumbs={[
-          { label: nav("group_academics") },
-          { label: t("structureTitle"), href: structureBackHref }
+          { label: t("structureTitle"), href: structureBackHref },
+          { label: data.gradeName ?? t("structureTitle"), href: structureBackHref },
+          { label: data.name }
         ]}
-        backHref={structureBackHref}
-        backLabel={t("backToGrade", { grade: data.gradeName ?? t("structureTitle") })}
       />
 
       <DetailHero
@@ -236,6 +234,10 @@ export default function StructureRoomPage() {
                   }
                   href={`/dashboard/structure/rooms/${classroomId}/subjects/${row.subjectId}`}
                   actionLabel={t("openSubjectShort")}
+                  navigationFrom={{
+                    label: data.name,
+                    href: `/dashboard/structure/rooms/${classroomId}`
+                  }}
                 />
               ))}
             </RecordList>

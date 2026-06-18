@@ -8,11 +8,12 @@ import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
+import { StatusBadge } from "../../../../components/shared/badge";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { DataTable } from "../../../lib/data-table";
 import { Field } from "../../../lib/form";
 import { HeroMoreActionsMenu, HeroOutlineAction, HeroPrimaryAction } from "../../../lib/hero-more-actions";
-import { Icon } from "../../../lib/icon";
+import { Icon } from "../../../lib/material-icon";
 import { hasAnyPermission } from "../../../lib/permissions";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { RecordList, RecordListItem, RecordListPanel } from "../../../lib/record-list";
@@ -20,6 +21,7 @@ import { getSession } from "../../../lib/session";
 import { TablePanelBody, TablePanelHead } from "../../../lib/table-panel";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
 import { zodResolver } from "../../../lib/zod-resolver";
+import { navigateWithTrail } from "../../../lib/navigation-trail";
 import { EnrollmentWizard } from "../../enrollments/enrollment-wizard";
 import { PageHeader } from "../../page-header-context";
 import { StudentFamilyPanel } from "../student-family-panel";
@@ -122,6 +124,7 @@ export default function StudentDetailPage() {
   const params = useParams<{ studentId: string }>();
   const studentId = params.studentId;
   const router = useRouter();
+  const studentHref = `/dashboard/students/${studentId}`;
   const t = useTranslations("students");
   const e = useTranslations("enrollments");
   const p = useTranslations("people");
@@ -278,7 +281,7 @@ export default function StudentDetailPage() {
       header: e("status"),
       accessorKey: "status",
       cell: ({ row }) => (
-        <span className={`badge badge--${row.original.status}`}>{row.original.status}</span>
+        <StatusBadge status={row.original.status} />
       )
     },
     {
@@ -335,21 +338,8 @@ export default function StudentDetailPage() {
     return bits.join(" · ");
   }, [student.data, t]);
 
-  if (student.isLoading) {
-    return <p className="muted">{c("loading")}</p>;
-  }
-
-  if (student.isError || !student.data) {
-    return (
-      <div className="page-stack">
-        <p className="error-text">{t("notFound")}</p>
-        <Link href="/dashboard/people?tab=students">{t("backToPeople")}</Link>
-      </div>
-    );
-  }
-
   const data = student.data;
-  const profile = data.profile;
+  const profile = data?.profile;
 
   async function handleStatusToggle(nextChecked: boolean) {
     if (!canManage) {
@@ -377,15 +367,24 @@ export default function StudentDetailPage() {
   return (
     <div className="student-profile-page">
       <PageHeader
-        title={data.fullName}
+        title={data?.fullName ?? t("profileTitle")}
+        segment={{ label: data?.fullName ?? t("profileTitle"), href: studentHref }}
         breadcrumbs={[
-          { label: nav("group_school") },
-          { label: p("directoryTitle"), href: "/dashboard/people?tab=students" }
+          { label: nav("students"), href: "/dashboard/people?tab=students" },
+          { label: data?.fullName ?? t("profileTitle") }
         ]}
-        backHref="/dashboard/people?tab=students"
-        backLabel={t("backToPeople")}
       />
 
+      {student.isLoading ? <p className="muted">{c("loading")}</p> : null}
+
+      {!student.isLoading && (student.isError || !data) ? (
+        <div className="page-stack">
+          <p className="error-text">{t("notFound")}</p>
+        </div>
+      ) : null}
+
+      {data && profile ? (
+        <>
       <section className="structure-room-banner student-profile-banner">
         <div className="structure-room-banner__main student-profile-banner__main">
           <span className="student-profile-avatar">{studentInitials(data.fullName)}</span>
@@ -437,7 +436,15 @@ export default function StudentDetailPage() {
               {t("messageGuardian")}
             </HeroPrimaryAction>
           )}
-          <HeroOutlineAction href="/dashboard/exams">
+          <HeroOutlineAction
+            onClick={() =>
+              navigateWithTrail(
+                router,
+                `/dashboard/exams/report-cards?studentId=${studentId}`,
+                { label: data.fullName, href: studentHref }
+              )
+            }
+          >
             <Icon name="grading" />
             {t("reportCard")}
           </HeroOutlineAction>
@@ -494,15 +501,17 @@ export default function StudentDetailPage() {
         onUpdated={() => void student.refetch()}
       />
 
-      <section className="panel student-profile-enrollments">
-        <TablePanelHead
-          title={t("enrollmentsTitle")}
-          onRefresh={refreshEnrollmentData}
-          onAdd={canManage ? () => openEnrollmentWizard(null) : undefined}
-          addLabel={t("enrollInClassroom")}
-        />
-        <p className="muted panel-help">{t("enrollmentsHelp")}</p>
+      <TablePanelHead
+        title={t("enrollmentsTitle")}
+        onRefresh={refreshEnrollmentData}
+        onAdd={canManage ? () => openEnrollmentWizard(null) : undefined}
+        addLabel={t("enrollInClassroom")}
+      />
 
+      <TablePanelBody
+        loading={enrollments.isLoading}
+        error={enrollments.isError ? c("somethingWrong") : null}
+      >
         {data.classrooms.length > 0 ? (
           <div className="student-profile-placements">
             <h4>{t("classroomPlacementsTitle")}</h4>
@@ -514,17 +523,19 @@ export default function StudentDetailPage() {
                     <Link href={`/dashboard/structure/rooms/${row.classrooms.id}`}>
                       {row.classrooms.name}
                     </Link>
-                    <span className={active ? "badge badge--active" : "muted"}>
-                      {active
-                        ? t("placementActive")
-                        : t("placementEnded", {
-                            date: new Intl.DateTimeFormat(undefined, {
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric"
-                            }).format(new Date(row.classroom_students.effectiveTo!))
-                          })}
-                    </span>
+                    {active ? (
+                      <StatusBadge status="active" label={t("placementActive")} />
+                    ) : (
+                      <span className="muted">
+                        {t("placementEnded", {
+                          date: new Intl.DateTimeFormat(undefined, {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric"
+                          }).format(new Date(row.classroom_students.effectiveTo!))
+                        })}
+                      </span>
+                    )}
                   </li>
                 );
               })}
@@ -532,28 +543,23 @@ export default function StudentDetailPage() {
           </div>
         ) : null}
 
-        <TablePanelBody
-          loading={enrollments.isLoading}
-          error={enrollments.isError ? c("somethingWrong") : null}
-        >
-          {!enrollments.data?.length ? (
-            <p className="muted">{t("noEnrollmentsYet")}</p>
-          ) : (
-            <DataTable columns={enrollmentColumns} data={enrollments.data} />
-          )}
-        </TablePanelBody>
-      </section>
+        {!enrollments.data?.length ? (
+          <p className="muted">{t("noEnrollmentsYet")}</p>
+        ) : (
+          <DataTable columns={enrollmentColumns} data={enrollments.data} />
+        )}
+      </TablePanelBody>
 
       {canViewFinance ? (
-        <section className="panel student-profile-billing">
-          <TablePanelHead
-            title={f("studentBilling")}
-            onRefresh={() => void billing.refetch()}
-          />
-          <TablePanelBody
-            loading={billing.isLoading}
-            error={billing.isError ? c("somethingWrong") : null}
-          >
+        <>
+        <TablePanelHead
+          title={f("studentBilling")}
+          onRefresh={() => void billing.refetch()}
+        />
+        <TablePanelBody
+          loading={billing.isLoading}
+          error={billing.isError ? c("somethingWrong") : null}
+        >
             {billing.data ? (
               <>
                 <div className="student-profile-stats">
@@ -620,8 +626,8 @@ export default function StudentDetailPage() {
                 )}
               </>
             ) : null}
-          </TablePanelBody>
-        </section>
+        </TablePanelBody>
+        </>
       ) : null}
 
       <RecordListPanel
@@ -786,6 +792,8 @@ export default function StudentDetailPage() {
           ]}
           onSaved={refreshEnrollmentData}
         />
+      ) : null}
+        </>
       ) : null}
     </div>
   );

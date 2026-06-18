@@ -5,10 +5,11 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useApiQuery } from "../lib/api";
 import { DataTable } from "../lib/data-table";
-import { Icon } from "../lib/icon";
+import { Icon } from "../lib/material-icon";
 import { hasAnyPermission } from "../lib/permissions";
 import { getSession } from "../lib/session";
 import { PageHeader } from "./page-header-context";
+import { StatCard, StatGrid } from "../../components/shared/stat-card";
 
 type DashboardSummary = {
   activeAcademicYear: boolean;
@@ -151,16 +152,15 @@ export default function OverviewPage() {
           )}
         </section>
       ) : (
-        <div className="stat-grid">
+        <StatGrid>
           {teacherStats.map((stat) => (
-            <div className="stat-card" key={stat.label}>
-              <span className="stat-label">{stat.label}</span>
-              <span className="stat-value">
-                {classrooms.isLoading || students.isLoading ? "…" : stat.value}
-              </span>
-            </div>
+            <StatCard
+              key={stat.label}
+              label={stat.label}
+              value={classrooms.isLoading || students.isLoading ? "…" : stat.value}
+            />
           ))}
-        </div>
+        </StatGrid>
       )}
 
       {canViewAudit ? (

@@ -9,7 +9,7 @@ import { ApiError, useApiMutation, useApiQuery } from "../../../lib/api";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
 import { DataTable } from "../../../lib/data-table";
 import { Field } from "../../../lib/form";
-import { Icon } from "../../../lib/icon";
+import { Icon } from "../../../lib/material-icon";
 import { EnrollmentWizard } from "../../enrollments/enrollment-wizard";
 import { PageHeader } from "../../page-header-context";
 
@@ -137,7 +137,6 @@ export default function EnquiryDetailPage() {
     return (
       <div className="page-stack">
         <p className="error-text">{t("notFound")}</p>
-        <Link href="/dashboard/admissions">{t("backToList")}</Link>
       </div>
     );
   }
@@ -153,8 +152,6 @@ export default function EnquiryDetailPage() {
           { label: nav("group_business") },
           { label: nav("admissions"), href: "/dashboard/admissions" }
         ]}
-        backHref="/dashboard/admissions"
-        backLabel={t("backToList")}
       />
       <p className="muted">
         {t("grade")}: {data.targetGrade ?? "—"} · {c("status")}: {data.status}

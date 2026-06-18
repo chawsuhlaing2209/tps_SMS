@@ -2,7 +2,7 @@
 
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useTranslations } from "next-intl";
-import { Icon } from "../lib/icon";
+import { Icon } from "../lib/material-icon";
 import { LanguageSwitcher } from "../lib/language-switcher";
 
 function initialsFrom(name: string): string {

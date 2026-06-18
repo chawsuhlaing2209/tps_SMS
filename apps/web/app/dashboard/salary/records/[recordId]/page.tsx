@@ -7,7 +7,7 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 import { useApiMutation, useApiQuery } from "../../../../lib/api";
 import { Field } from "../../../../lib/form";
-import { Icon } from "../../../../lib/icon";
+import { Icon } from "../../../../lib/material-icon";
 import { PageHeader } from "../../../page-header-context";
 
 type SalaryRecordDetail = {
@@ -66,7 +66,6 @@ export default function SalaryRecordDetailPage() {
     return (
       <div className="page-stack">
         <p className="error-text">{t("notFound")}</p>
-        <Link href="/dashboard/salary/records">{t("backToRecords")}</Link>
       </div>
     );
   }
@@ -81,8 +80,6 @@ export default function SalaryRecordDetailPage() {
           { label: nav("group_business") },
           { label: t("records"), href: "/dashboard/salary/records" }
         ]}
-        backHref="/dashboard/salary/records"
-        backLabel={t("backToRecords")}
       />
       <section className="panel">
       <div className="panel-head">

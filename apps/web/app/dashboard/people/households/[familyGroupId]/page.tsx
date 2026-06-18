@@ -10,7 +10,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ApiError, useApiMutation, useApiQuery } from "../../../../lib/api";
 import { Field } from "../../../../lib/form";
-import { Icon } from "../../../../lib/icon";
+import { Icon } from "../../../../lib/material-icon";
 import { hasAnyPermission } from "../../../../lib/permissions";
 import { RecordFormSheet } from "../../../../lib/record-sheet";
 import { getSession } from "../../../../lib/session";
@@ -103,7 +103,6 @@ export default function HouseholdDetailPage() {
     return (
       <div className="page-stack">
         <p className="error-text">{t("notFound")}</p>
-        <Link href="/dashboard/people?tab=households">{t("backToList")}</Link>
       </div>
     );
   }
@@ -121,31 +120,28 @@ export default function HouseholdDetailPage() {
           { label: p("directoryTitle"), href: "/dashboard/people" },
           { label: t("directoryTitle"), href: "/dashboard/people?tab=households" }
         ]}
-        backHref="/dashboard/people?tab=households"
-        backLabel={t("backToList")}
       />
 
-      <section className="panel">
-        <TablePanelHead
-          title={t("treeTitle")}
-          help={t("treeHelp")}
-          onRefresh={() => void household.refetch()}
-          extra={
-            canManage ? (
-              <div className="form-actions form-actions--inline">
-                <button type="button" className="btn-ghost" onClick={() => setEditOpen(true)}>
-                  <Icon name="edit" />
-                  {t("editHousehold")}
-                </button>
-                <button type="button" className="btn-ghost" onClick={() => setAddStudentOpen(true)}>
-                  <Icon name="person_add" />
-                  {t("addStudent")}
-                </button>
-              </div>
-            ) : null
-          }
-        />
-        <TablePanelBody loading={false} error={null}>
+      <TablePanelHead
+        title={t("treeTitle")}
+        help={t("treeHelp")}
+        onRefresh={() => void household.refetch()}
+        extra={
+          canManage ? (
+            <div className="form-actions form-actions--inline">
+              <button type="button" className="btn-ghost" onClick={() => setEditOpen(true)}>
+                <Icon name="edit" />
+                {t("editHousehold")}
+              </button>
+              <button type="button" className="btn-ghost" onClick={() => setAddStudentOpen(true)}>
+                <Icon name="person_add" />
+                {t("addStudent")}
+              </button>
+            </div>
+          ) : null
+        }
+      />
+      <TablePanelBody loading={false} error={null}>
           {data.primaryGuardian ? (
             <p className="muted panel-help">
               {t("primaryGuardianLine", { name: data.primaryGuardian.fullName })}
@@ -153,8 +149,7 @@ export default function HouseholdDetailPage() {
           ) : null}
           <FamilyTree guardians={data.guardians} students={data.students} />
           <p className="muted panel-help">{t("siblingHint")}</p>
-        </TablePanelBody>
-      </section>
+      </TablePanelBody>
 
       <RecordFormSheet
         open={editOpen}

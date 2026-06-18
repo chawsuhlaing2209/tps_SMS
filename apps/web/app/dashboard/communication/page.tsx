@@ -8,10 +8,11 @@ import { z } from "zod";
 import { useApiMutation, useApiQuery } from "../../lib/api";
 import { DataTable } from "../../lib/data-table";
 import { Field } from "../../lib/form";
-import { Icon } from "../../lib/icon";
+import { Icon } from "../../lib/material-icon";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
 import { zodResolver } from "../../lib/zod-resolver";
+import { StatusBadge } from "../../../components/shared/badge";
 
 type EmailTemplate = {
   id: string;
@@ -135,7 +136,7 @@ export default function CommunicationPage() {
       header: t("status"),
       accessorKey: "status",
       cell: ({ row }) => (
-        <span className={`badge badge--${row.original.status}`}>{row.original.status}</span>
+        <StatusBadge status={row.original.status} />
       )
     },
     {
@@ -158,7 +159,7 @@ export default function CommunicationPage() {
       header: t("status"),
       accessorKey: "status",
       cell: ({ row }) => (
-        <span className={`badge badge--${row.original.status}`}>{row.original.status}</span>
+        <StatusBadge status={row.original.status} />
       )
     },
     { id: "error", header: t("error"), accessorFn: (row) => row.error ?? "—" },
@@ -181,25 +182,22 @@ export default function CommunicationPage() {
 
   return (
     <div className="page-stack">
-      <section className="panel">
-        <TablePanelHead
-          title={t("templatesTitle")}
-          help={t("help")}
-          onRefresh={() => void templates.refetch()}
-          onAdd={openCreate}
-          addLabel={t("addTemplate")}
-        />
-        <TablePanelBody
-          loading={templates.isLoading}
-          error={templates.isError ? c("somethingWrong") : null}
-          empty={!templates.data?.length}
-        >
-          <DataTable columns={templateColumns} data={templates.data ?? []} />
-        </TablePanelBody>
-      </section>
+      <TablePanelHead
+        title={t("templatesTitle")}
+        help={t("help")}
+        onRefresh={() => void templates.refetch()}
+        onAdd={openCreate}
+        addLabel={t("addTemplate")}
+      />
+      <TablePanelBody
+        loading={templates.isLoading}
+        error={templates.isError ? c("somethingWrong") : null}
+        empty={!templates.data?.length}
+      >
+        <DataTable columns={templateColumns} data={templates.data ?? []} />
+      </TablePanelBody>
 
-      <section className="panel">
-        <TablePanelHead
+      <TablePanelHead
           title={t("logsTitle")}
           extra={
             <label className="form-inline">
@@ -221,7 +219,6 @@ export default function CommunicationPage() {
         >
           <DataTable columns={logColumns} data={logs.data ?? []} />
         </TablePanelBody>
-      </section>
 
       <RecordFormSheet
         open={formMode !== null}

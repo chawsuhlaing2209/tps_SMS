@@ -8,7 +8,7 @@ import { z } from "zod";
 import { ApiError, useApiMutation, useApiQuery } from "../../lib/api";
 import { Field } from "../../lib/form";
 import { GuardianCombobox } from "../../lib/guardian-combobox";
-import { Icon } from "../../lib/icon";
+import { Icon } from "../../lib/material-icon";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { TableSearchInput } from "../../lib/table-search";
 import { zodResolver } from "../../lib/zod-resolver";

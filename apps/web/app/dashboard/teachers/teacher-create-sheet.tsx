@@ -7,7 +7,7 @@ import { useFieldArray, useForm } from "react-hook-form";
 import { z } from "zod";
 import { useApiMutation, useApiQuery } from "../../lib/api";
 import { Field } from "../../lib/form";
-import { Icon } from "../../lib/icon";
+import { Icon } from "../../lib/material-icon";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { zodResolver } from "../../lib/zod-resolver";
 

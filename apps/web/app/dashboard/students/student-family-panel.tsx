@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ApiError, useApiMutation, useApiQuery } from "../../lib/api";
 import { Field } from "../../lib/form";
-import { Icon } from "../../lib/icon";
+import { Icon } from "../../lib/material-icon";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
 import { TableSearchInput } from "../../lib/table-search";
@@ -138,12 +138,11 @@ export function StudentFamilyPanel({
 
   return (
     <>
-      <section className="panel student-profile-family">
-        <TablePanelHead
-          title={t("familyTitle")}
-          help={t("familyHelp")}
-          onRefresh={() => void family.refetch()}
-          extra={
+      <TablePanelHead
+        title={t("familyTitle")}
+        help={t("familyHelp")}
+        onRefresh={() => void family.refetch()}
+        extra={
             canManage ? (
               <div className="form-actions form-actions--inline">
                 {!familyGroupId ? (
@@ -249,7 +248,6 @@ export function StudentFamilyPanel({
             </p>
           ) : null}
         </TablePanelBody>
-      </section>
 
       <RecordFormSheet
         open={joinOpen}

@@ -13,7 +13,8 @@ export default function TeachersPage() {
       <PageHeader
         title={t("title")}
         description={t("description")}
-        breadcrumbs={[{ label: nav("group_school") }, { label: nav("teachers") }]}
+        resetTrail={[{ label: nav("teachers"), href: "/dashboard/teachers" }]}
+        segment={{ label: nav("teachers"), href: "/dashboard/teachers" }}
       />
       <TeachersDirectory />
     </div>

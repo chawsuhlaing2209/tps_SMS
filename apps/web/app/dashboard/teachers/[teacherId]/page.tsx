@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { HeroMoreActionsMenu } from "../../../lib/hero-more-actions";
-import { Icon } from "../../../lib/icon";
+import { Icon } from "../../../lib/material-icon";
 import { hasAnyPermission } from "../../../lib/permissions";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { getSession } from "../../../lib/session";
@@ -266,11 +266,6 @@ export default function TeacherProfilePage() {
           { label: teacher.fullName }
         ]}
       />
-
-      <Link href="/dashboard/teachers" className={styles.teacherProfileBackLink}>
-        <Icon name="arrow_back" size={13} />
-        {t("backToTeachers")}
-      </Link>
 
       <section className={styles.teacherProfileHero}>
         <div className={styles.teacherProfileHeroTop}>

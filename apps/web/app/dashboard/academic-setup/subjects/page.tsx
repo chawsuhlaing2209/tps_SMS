@@ -6,13 +6,15 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { Field } from "../../../lib/form";
-import { Icon } from "../../../lib/icon";
+import { Icon } from "../../../lib/material-icon";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { zodResolver } from "../../../lib/zod-resolver";
 import { CheckboxList } from "../../../../components/shared/checkbox-list";
+import { Chip, ChipGroup } from "../../../../components/shared/chip";
 import { useAcademicYearContext } from "../use-academic-year-context";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
 import { PageHeader } from "../../page-header-context";
+import { TablePanelBody, TablePanelHead } from "../../../lib/table-panel";
 import { gradeBadgeLabel } from "../grade-label";
 import { subjectColor, subjectIcon } from "../../structure/subject-colors";
 
@@ -153,96 +155,88 @@ export default function SubjectsPage() {
     : null;
 
   return (
-    <div className="setup-subjects-page">
+    <>
       <PageHeader
         title={setup("subjects")}
         description={setup("subjectsPageHelp")}
-        breadcrumbs={[{ label: nav("academicSetup") }, { label: setup("subjects") }]}
+        breadcrumbs={[
+          { label: nav("settings"), href: "/dashboard/settings/user-roles" },
+          { label: setup("subjects") }
+        ]}
+        resetTrail={[
+          { label: nav("settings"), href: "/dashboard/settings/user-roles" },
+          { label: setup("subjects"), href: "/dashboard/academic-setup/subjects" }
+        ]}
+        segment={{ label: setup("subjects"), href: "/dashboard/academic-setup/subjects" }}
       />
 
-      <div className="setup-toolbar">
-        <p className="setup-toolbar__help">{setup("subjectsToolbarHelp")}</p>
-        <button type="button" className="btn-primary" onClick={openCreate}>
-          <Icon name="add" />
-          {t("addSubject")}
-        </button>
-      </div>
+      <TablePanelHead
+        help={setup("subjectsToolbarHelp")}
+        onAdd={openCreate}
+        addLabel={t("addSubject")}
+      />
 
-      <section className="panel setup-subjects-panel">
-        {subjects.isLoading || currentYear.isLoading ? (
-          <div className="panel-body">
-            <p className="muted">{c("loading")}</p>
-          </div>
-        ) : error ? (
-          <div className="panel-body">
-            <p className="error-text">{error}</p>
-          </div>
-        ) : !activeSubjects.length ? (
-          <div className="panel-body">
-            <p className="muted">{c("empty")}</p>
-          </div>
-        ) : (
-          <div className="setup-subjects-table-wrap panel-body">
-            <table className="setup-subjects-table">
-              <thead>
-                <tr>
-                  <th scope="col">{setup("subjectNameColumn")}</th>
-                  <th scope="col">{setup("subjectIconColumn")}</th>
-                  <th scope="col">{setup("applicableGradesColumn")}</th>
-                  <th scope="col" className="setup-subjects-table__actions-col">
-                    <span className="sr-only">{t("actions")}</span>
-                  </th>
+      <TablePanelBody
+        loading={subjects.isLoading || currentYear.isLoading}
+        error={error}
+        empty={!activeSubjects.length}
+      >
+        <table className="setup-subjects-table">
+          <thead>
+            <tr>
+              <th scope="col">{setup("subjectNameColumn")}</th>
+              <th scope="col">{setup("subjectIconColumn")}</th>
+              <th scope="col">{setup("applicableGradesColumn")}</th>
+              <th scope="col" className="setup-subjects-table__actions-col">
+                <span className="sr-only">{t("actions")}</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {activeSubjects.map((subject) => {
+              const colors = subjectColor(subject.name);
+              return (
+                <tr key={subject.id}>
+                  <td>
+                    <div className="setup-subjects-table__name">
+                      <span
+                        className="setup-subjects-table__dot"
+                        style={{ background: colors.bg }}
+                      />
+                      <span className="setup-subjects-table__title">{subject.name}</span>
+                    </div>
+                  </td>
+                  <td className="setup-subjects-table__icon-cell">
+                    <span className="setup-subjects-table__icon" aria-hidden>
+                      <Icon name={subjectIcon(subject.name)} />
+                    </span>
+                  </td>
+                  <td>
+                    <ChipGroup>
+                      {subject.grades.length ? (
+                        subject.grades.map((grade) => (
+                          <Chip key={grade.id}>{gradeBadgeLabel(grade.name)}</Chip>
+                        ))
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </ChipGroup>
+                  </td>
+                  <td className="setup-subjects-table__actions-col">
+                    <button
+                      type="button"
+                      className="btn-outline setup-subjects-table__edit"
+                      onClick={() => openEdit(subject)}
+                    >
+                      {t("edit")}
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {activeSubjects.map((subject) => {
-                  const colors = subjectColor(subject.name);
-                  return (
-                    <tr key={subject.id}>
-                      <td>
-                        <div className="setup-subjects-table__name">
-                          <span
-                            className="setup-subjects-table__dot"
-                            style={{ background: colors.bg }}
-                          />
-                          <span className="setup-subjects-table__title">{subject.name}</span>
-                        </div>
-                      </td>
-                      <td className="setup-subjects-table__icon-cell">
-                        <span className="setup-subjects-table__icon" aria-hidden>
-                          <Icon name={subjectIcon(subject.name)} />
-                        </span>
-                      </td>
-                      <td>
-                        <div className="setup-grade-badges">
-                          {subject.grades.length ? (
-                            subject.grades.map((grade) => (
-                              <span key={grade.id} className="setup-grade-badge">
-                                {gradeBadgeLabel(grade.name)}
-                              </span>
-                            ))
-                          ) : (
-                            <span className="muted">—</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="setup-subjects-table__actions-col">
-                        <button
-                          type="button"
-                          className="btn-outline setup-subjects-table__edit"
-                          onClick={() => openEdit(subject)}
-                        >
-                          {t("edit")}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+              );
+            })}
+          </tbody>
+        </table>
+      </TablePanelBody>
 
       <RecordFormSheet
         open={formMode !== null}
@@ -304,6 +298,6 @@ export default function SubjectsPage() {
           />
         </Field>
       </RecordFormSheet>
-    </div>
+    </>
   );
 }

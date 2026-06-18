@@ -5,14 +5,15 @@ import Link from "next/link";
 import { useState } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
 import { useApiQuery } from "../../lib/api";
-import { DataTable, DirectoryNameCell } from "../../lib/data-table";
-import { Icon } from "../../lib/icon";
+import { DataTable, DirectoryMemberCell } from "../../lib/data-table";
+import { Icon } from "../../lib/material-icon";
 import { PaginationControls } from "../../lib/pagination-controls";
 import { hasAnyPermission } from "../../lib/permissions";
 import { getSession } from "../../lib/session";
-import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
+import { TablePanelBody, TablePanelHead, DataTableSection } from "../../lib/table-panel";
 import { TableSearchInput } from "../../lib/table-search";
 import { StudentRegistrationWizard } from "./student-registration-wizard";
+import { StatusBadge } from "../../../components/shared/badge";
 
 type Student = {
   id: string;
@@ -34,6 +35,7 @@ const PAGE_SIZE = 50;
 export function StudentsDirectory() {
   const t = useTranslations("students");
   const p = useTranslations("people");
+  const nav = useTranslations("nav");
   const c = useTranslations("common");
   const permissions = getSession()?.permissions;
   const canManage = hasAnyPermission(permissions, ["student.manage"]);
@@ -64,18 +66,9 @@ export function StudentsDirectory() {
       header: c("name"),
       accessorKey: "fullName",
       cell: ({ row }) => (
-        <DirectoryNameCell
+        <DirectoryMemberCell
           name={row.original.fullName}
-          avatar={
-            <span className="directory-avatar">
-              {row.original.fullName
-                .split(" ")
-                .slice(0, 2)
-                .map((part) => part[0])
-                .join("")
-                .toUpperCase()}
-            </span>
-          }
+          subtitle={row.original.admissionNumber}
         />
       )
     },
@@ -102,16 +95,17 @@ export function StudentsDirectory() {
       header: c("status"),
       accessorKey: "status",
       cell: ({ row }) => (
-        <span className={`badge badge--${row.original.status}`}>
-          {t(`status_${row.original.status}` as "status_draft")}
-        </span>
+        <StatusBadge
+          status={row.original.status}
+          label={t(`status_${row.original.status}` as "status_draft")}
+        />
       )
     },
     { id: "dateOfBirth", header: t("dateOfBirth"), accessorFn: (row) => row.dateOfBirth ?? "—" }
   ];
 
   return (
-    <section className="panel">
+    <DataTableSection>
       <TablePanelHead
         title={p("studentsTab")}
         help={p("studentsTabHelp")}
@@ -158,6 +152,7 @@ export function StudentsDirectory() {
           columns={columns}
           data={students.data?.data ?? []}
           getRowHref={(student) => `/dashboard/students/${student.id}`}
+          navigationFrom={{ label: nav("students"), href: "/dashboard/people?tab=students" }}
         />
       </TablePanelBody>
 
@@ -175,6 +170,6 @@ export function StudentsDirectory() {
           onSaved={() => void students.refetch()}
         />
       ) : null}
-    </section>
+    </DataTableSection>
   );
 }

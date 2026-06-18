@@ -8,11 +8,11 @@ import { z } from "zod";
 import { useApiMutation, useApiQuery } from "../../lib/api";
 import { DataTable, DirectoryNameCell } from "../../lib/data-table";
 import { Field } from "../../lib/form";
-import { Icon } from "../../lib/icon";
+import { Icon } from "../../lib/material-icon";
 import { hasAnyPermission } from "../../lib/permissions";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { getSession } from "../../lib/session";
-import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
+import { TablePanelBody, TablePanelHead, DataTableSection } from "../../lib/table-panel";
 import { TableSearchInput } from "../../lib/table-search";
 import { zodResolver } from "../../lib/zod-resolver";
 
@@ -95,7 +95,7 @@ export function GuardiansDirectory() {
 
   return (
     <>
-      <section className="panel">
+      <DataTableSection>
         <TablePanelHead
           title={t("directoryTitle")}
           help={t("directoryHelp")}
@@ -122,7 +122,7 @@ export function GuardiansDirectory() {
             getRowHref={(guardian) => `/dashboard/people/guardians/${guardian.id}`}
           />
         </TablePanelBody>
-      </section>
+      </DataTableSection>
 
       <RecordFormSheet
         open={createOpen}

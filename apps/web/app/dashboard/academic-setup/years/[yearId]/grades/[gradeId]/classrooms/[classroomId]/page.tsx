@@ -11,7 +11,7 @@ import { useApiQuery } from "../../../../../../../../lib/api";
 import { StudentCombobox } from "../../../../../../../../lib/student-combobox";
 import { DataTable } from "../../../../../../../../lib/data-table";
 import { Field } from "../../../../../../../../lib/form";
-import { Icon } from "../../../../../../../../lib/icon";
+import { Icon } from "../../../../../../../../lib/material-icon";
 import { RecordFormSheet } from "../../../../../../../../lib/record-sheet";
 import { TablePanelBody, TablePanelHead } from "../../../../../../../../lib/table-panel";
 import { zodResolver } from "../../../../../../../../lib/zod-resolver";
@@ -87,10 +87,9 @@ export default function ClassroomStudentsPage() {
           {
             label: gradeRecord?.name ?? t("grade"),
             href: `/dashboard/academic-setup/grades-classrooms?grade=${gradeId}`
-          }
+          },
+          { label: classroom.data?.name ?? t("classroom") }
         ]}
-        backHref={`/dashboard/academic-setup/grades-classrooms?grade=${gradeId}`}
-        backLabel={gradeRecord?.name ?? t("grade")}
       />
 
       <section className="panel">
