@@ -1,164 +1,188 @@
-# tps_SMS Design System
+# Padauk School OS — Design Language
 
-Visual language for the multi-tenant school management platform
+A school-administration product for Myanmar schools (fees in MMK, grades KG–G12). The
+aesthetic is **calm, dense, and editorial**: a deep-forest brand, one electric lime accent,
+generous white cards on a pale-sage canvas, and a confident display typeface for anything
+that carries a number or a title. It should feel like a serious operations tool — closer to
+a well-run ledger than a consumer app — never playful, never gradient-heavy.
 
-## Design Philosophy
-
-**Two reference products, one unified system:**
-
-**Wise (transferwise.com)** — Trustworthy, institutional, precise. Clean surfaces, 1px borders, restrained color. Typography does the heavy lifting. Users trust this product with money — so should ours (school finance, student records).
-
-**Adaline.ai** — Dense, keyboard-first, power-user optimized. Compact sidebar with icon+label nav, tight data tables, collapsible panels, inline edits. Built for people who live in the tool all day.
-
-**Myanmar context** — Support Burmese alongside Latin. All layouts must accommodate 30–50% longer Burmese strings without breaking. Use Gregorian dates with Burmese/English labels per product decision.
-
-**Padauk identity** — Ink-green shell (`--shell`) + spring-lime CTAs (`--brand`). Rounded frames (18–22px), squircle marks, Material Symbols icons. Hero banners use dark green or gradient shells; everyday content stays white-bordered on paper background.
+This document is the source of truth for every screen in this project. Match it exactly;
+don't invent new colors, fonts, radii, or component patterns.
 
 ---
 
-## Design Tokens
+## 1. Color
 
-### Source of truth
+### Core palette
+| Token | Hex | Use |
+|---|---|---|
+| **Forest (brand)** | `#0a2a1d` | Sidebar, dark hero cards, primary buttons, headings, body text, active chips |
+| **Lime (accent)** | `#c6f24e` | THE primary CTA, active nav item, highlight numbers on dark, toggle "on" track |
+| **Canvas** | `#f4f7f1` | App background behind all content (pale sage) |
+| **Surface** | `#ffffff` | Cards, inputs, panels, default chips |
+| **Forest-700** | `#11392a` | Raised blocks *inside* the dark sidebar / dark cards (badge, profile, nested panels) |
+| **Forest-600** | `#1c4a36` | Radial-glow accent inside dark hero cards only |
 
-| Layer | Location | Who edits |
-|-------|----------|-----------|
-| Figma export | `tokens.json` (repo root) | Design |
-| App extensions | `tokens/extensions.json` | Engineering |
-| Semantic roles | `tokens/semantic.json` | Engineering + design |
-| **Generated CSS** | `apps/web/app/design-tokens.css` | **Auto** — `npm run tokens:build` |
-| Component classes | `apps/web/app/globals.css` | Engineering |
-| Tailwind utilities | `apps/web/tailwind.config.ts` | Engineering (mirrors CSS vars) |
+### Borders & dividers (warm sage greys, never pure grey)
+- `#e3ebdf` — default control & card border (the workhorse)
+- `#e6ede3` — softer card border
+- `#eef3ea` / `#f0f4ed` — hairline dividers inside cards
+- `#1a3a2b` / `#25503c` — borders on dark (sidebar edge, dark-card inner)
 
-Workflow: edit `tokens/semantic.json` (or extensions) → `npm run tokens:build` → restart web dev server. See `tokens/README.md`.
+### Text greys (all sage-tinted)
+- `#0a2a1d` — primary text / headings
+- `#41594b` — strong body / control labels
+- `#7c917f` — secondary text, descriptions, breadcrumbs ("sage")
+- `#9fb3a6` — muted / placeholder / captions / muted-on-dark
+- `#5f7a6b` — uppercase eyebrow labels
+- `#7f9a8b`, `#6f8a7b` — muted text on dark backgrounds
 
-**Rule:** Never hardcode hex in components. Use CSS variables or Tailwind tokens that map to them.
+### Semantic / status (always a tinted bg + a saturated text color)
+| Meaning | Background | Text |
+|---|---|---|
+| Success / Paid / Present | `#e7f6d8` (or `#eef7e4`) | `#3a7d24` |
+| Warning / Partial / Late | `#fdeccf` | `#a9711a` |
+| Danger / Overdue / Absent | `#fde0db` | `#c0392b` |
+| Info | `#e7eefe` | `#2f6cad` |
+| Special / Scholarship | `#f3eafe` | `#7a4fd0` |
+| Action link (inline) | — | `#2f7d4e` |
 
-### Colors (semantic)
+### Categorical (subjects & data viz)
+Maths `#3b6ff5` · English `#ff6b57` · Physics `#8b6cf0` · Chemistry `#f56fa1` ·
+Biology/Science `#33b06a` · Myanmar `#2bc4b0` · Social Science `#f5b73d` · Sky `#5b8def`.
+Grade chips: A→success, B→info, C→warning, D→danger.
 
-Core UI roles (all resolve through `design-tokens.css`):
+Use these **only** for categorical encoding (a subject, a chart series). Never as decoration.
 
-| Token | Role |
-|-------|------|
-| `--background` | Page paper (`#f4f7f1`) |
-| `--foreground` | Ink green — primary text (`#0a2a1d`) |
-| `--muted` | Secondary text |
-| `--card` | Panels, inputs, table surfaces |
-| `--surface` | Raised neutral (table headers, person cards) |
-| `--subtle` | Hover / zebra / soft fills |
-| `--border` / `--border-soft` | 1px dividers |
-| `--accent` / `--link` | Links, open actions |
-| `--brand` | Spring lime — primary CTAs |
-| `--brand-ink` / `--brand-dark` | Text on lime buttons |
-| `--shell` / `--shell-raise` / `--shell-line` | Sidebar, detail hero, dark banners |
-| `--danger` / `--info` | Semantic feedback |
+---
 
-**Status palette** — use `--status-*-bg`, `--status-*-border`, `--status-*-fg` (and `-muted-*` variants) for badges, banners, and callouts. Do not invent one-off reds/greens.
+## 2. Typography
 
-**Category palette** — subject/room squircles: `--cat-blue`, `--cat-coral`, `--cat-teal`, `--cat-lilac`, `--cat-mustard`, `--cat-pink`, `--cat-green`, `--cat-sky`. Hashed via `subjectColor()` in `apps/web/app/dashboard/structure/subject-colors.ts`.
+Two families, loaded from Google Fonts. No others.
 
-**On-shell text** — `--on-shell-faint`, `--on-shell-soft`, `--on-shell-light`, `--on-shell-error`, plus alpha white tokens for ghost buttons on dark heroes.
+- **Bricolage Grotesque** (`800`, `letter-spacing:-0.02em`) — display face. Page titles (`h1`,
+  ~25px), card headings, **every prominent number** (stats, prices, percentages, totals,
+  grades), brand wordmark. This is what gives the product its character — reach for it whenever
+  a value should feel typeset.
+- **Hanken Grotesk** (`400`–`800`) — all UI text: labels, body, descriptions, buttons, inputs,
+  table cells.
+- **Material Symbols Rounded** — every icon, via `.ms` (outline) / `.ms.fill` (filled).
+  Weight 500, optical size 24. **Icons only — never emoji.**
 
-### Typography
+### Type roles
+- **Eyebrow label**: 10–11px, weight 700, `letter-spacing:0.04–0.13em`, UPPERCASE, color
+  `#5f7a6b`/`#7c917f`. Used above sections and on stat cards.
+- **Page title**: Bricolage 800, ~25px, `#0a2a1d`, `letter-spacing:-0.02em`, `line-height:1`.
+- **Card title**: Bricolage 800, 17–20px.
+- **Body**: Hanken, 13–14px, `line-height:1.45–1.5`, `#41594b`/`#7c917f`.
+- **Big number**: Bricolage 800, 19–30px, `line-height:1`.
 
-**Font stacks:**
-- Headings / display: **Bricolage Grotesque** (`--font-heading`)
-- Body: **Hanken Grotesk** (`--font-sans`)
-- Icons: **Material Symbols Rounded** via `<Icon name="…" />` (`apps/web/app/lib/icon.tsx`)
-- Burmese: must not break layout at 30–50% longer strings than English
+Minimum readable size is 10px and it is reserved for uppercase eyebrows only; default UI text
+is 12–14px.
 
-**Composite presets** (from `design-tokens.css` → `--type-*`):
+---
 
-| Preset | Use |
-|--------|-----|
-| `--type-eyebrow-*` | Section labels (12px uppercase, 700) |
-| `--type-display-lg-*` / `--type-display-md-*` | Hero titles |
-| `--type-heading-sm-*` | Panel titles |
-| `--type-body-md-*` / `--type-body-sm-*` | Default copy (13px / 12px) |
-| `--type-label-sm-*` | Form labels, stat labels |
-| `--type-stat-value-*` / `--type-stat-label-*` | Metric cards |
+## 3. Shape, depth & spacing
 
-Heading elements and `.section-title` use `--font-heading` with `-0.02em` letter-spacing.
+- **Radii** (rounded but not bubbly): icon tiles `10–12px` · inputs / small chips `9–13px` ·
+  cards `14–18px` · hero & feature cards `20–24px` · status pills & toggles `999px`.
+- **Borders over shadows.** Structure comes from `1px`/`1.5px` sage borders, not drop shadows.
+  Shadows appear only on: hover lift (`0 6px 22px rgba(10,42,29,0.07)`), floating toast
+  (`0 8px 32px rgba(10,42,29,0.35)`), and the mobile drawer. The forest tint inside every
+  shadow matters — never `rgba(0,0,0,…)`.
+- **Inputs**: white, `1.5px solid #e3ebdf`, radius 12px, `11px 14px` padding; focus →
+  `border-color:#0a2a1d` (no glow, no ring).
+- **Icon tile**: square, rounded, a tinted bg (`#e7eefe`, `#fdeccf`, etc.) + matching filled
+  icon — the standard way to give a list row or card identity.
+- **Spacing**: card padding 14–20px; grid/flex `gap` 8–16px; section rhythm ~22px. Always lay
+  rows out with flex/grid + `gap`, never margins between inline siblings.
 
-### Spatial scale
+---
 
-4px base grid with fine steps for dense UI. **Always use tokens — never magic numbers in new code.**
+## 4. Components (the established vocabulary)
 
-| Token | Value | Use |
-|-------|-------|-----|
-| `--space-1` | 4px | Tight inline gaps, badge padding-y |
-| `--space-1_5` | 6px | Label → input gap |
-| `--space-2` | 8px | Button groups, panel actions |
-| `--space-2_5` | 10px | Record list row gap, nav item gap |
-| `--space-3` | 12px | **Panel header → body**, side label → card |
-| `--space-3_5` | 14px | Form stack row gap |
-| `--space-4` | 16px | Page block gap, column gap, topbar gap |
-| `--space-5` | 20px | **Frame outer padding** (panels) |
-| `--space-6` | 24px | Auth / hero inner padding |
-| `--space-7` | 30px | Content horizontal gutter |
-| `--space-8` | 40px | Record list icon size |
-| `--space-9` | 48px | Mobile bottom padding |
-| `--space-10` | 60px | Content bottom gutter |
+- **Sidebar**: 236px, forest bg, `MANAGE` / `SYSTEM` label groups, `.pk-nav` items (muted →
+  hover `#11392a` → active = lime bg + forest text + bold). Profile chip pinned to bottom on a
+  `#11392a` block. On mobile it collapses to a forest top bar + slide-out drawer.
+- **Header**: breadcrumb (sage, `chevron_right` separators) above an `h1`; primary action on the
+  right.
+- **Buttons**: primary = forest bg / white text **or** lime bg / forest text; secondary = white /
+  `#e3ebdf` border / `#41594b`. Radius 12–13px, weight 700, often with a leading `.ms` icon.
+- **Toggle**: 42–44×24–26px track, lime when on / `#e3ebdf` when off, white knob.
+- **Tabs / segmented / day-pickers / chips**: white + border at rest; selected = forest fill +
+  white text (or lime fill for emphasis filters). Counts ride along in a small pill that flips
+  to lime-on-forest when active.
+- **Selectable chip**: shows a `check_circle` (filled, success) when on and tints its bg/border
+  green; an empty `circle` (`#c3d0c9`) when off.
+- **Stat card**: white, eyebrow + filled icon, big Bricolage number, sage sub-line.
+- **Dark feature card**: forest bg, lime eyebrow pill, white heading, sage body, optional
+  radial `#1c4a36` glow top-right. Used for hero greetings and "global rules" callouts.
+- **Stepper** (wizards): numbered dots — current = forest dot/lime numeral, done = lime dot +
+  `check`, future = white/`#e3ebdf`; lime connector lines once passed.
+- **Toast**: fixed bottom-right, forest bg, white text, lime `check_circle`.
 
-Fine steps (`--space-0_5`, `--space-3_25`, `--space-6_5`) exist only where the design requires sub-grid alignment.
+---
 
-### Layout tokens
+## 5. Motion
 
-| Token | Value | Use |
-|-------|-------|-----|
-| `--layout-sidebar-width` | 236px | Shell grid column |
-| `--layout-content-max` | **1180px** | Page content max width |
-| `--layout-gutter-x` | 30px | `.dash-content` horizontal padding |
-| `--layout-gutter-x-compact` | 18px | Mobile content padding |
-| `--layout-gutter-y` | 26px | `.dash-content` top padding |
-| `--layout-gutter-bottom` | 60px | `.dash-content` bottom padding |
-| `--layout-section-gap` | 20px | `.page-stack` between sections |
-| `--layout-page-gap` | 16px | Stat grids, inline page blocks |
-| `--layout-column-gap` | 16px | Two-column layouts (room detail) |
-| `--side-stack-gap` | 16px | Sidebar stacks (homeroom + stats) |
+One signature entrance: `@keyframes pkUp` — `translateY(8px) → 0` over `.28–.4s
+cubic-bezier(.2,.7,.3,1)`, applied via `.pk-anim` on view/step change. Transitions on
+interactive states are short (`.12–.18s`) and limited to `border-color`, `background`,
+`box-shadow`, `filter`. Nothing bounces, spins, or pulses.
 
-Breakpoints (reference): `--breakpoint-sm` 640px, `--breakpoint-md` 720px, `--breakpoint-lg` 960px.
+---
 
-### Frame tokens (panels & cards)
+## 6. Voice & content
 
-Every white bordered section uses the **frame** pattern:
+- Concrete and operational: "3 approvals waiting", "Net payable", "first match wins".
+- Myanmar context is real: MMK currency (format numbers with thousands separators, set in
+  Bricolage), names like *U Kyaw Min*, *Ma Hnin Ei*, grades KG–G12, terms.
+- Sentence case for body and buttons; UPPERCASE only for eyebrow labels.
+- No filler — every stat, chip, and row earns its place. Don't pad screens to look busy.
 
-| Token | Value | Rule |
-|-------|-------|------|
-| `--frame-padding` | 20px | Outer inset on `.panel` |
-| `--frame-header-body-gap` | 12px | Gap between `PanelHead` and body |
-| `--frame-body-gap` | 16px | Gap between items inside `.panel-body` |
-| `--frame-label-gap` | 12px | Eyebrow label → card below (e.g. HOMEROOM TEACHER) |
-| `--frame-radius` | 22px | Panel corner radius |
+---
 
-**Implementation:** `.panel` / `.structure-panel` = `display: grid; align-content: start; gap: var(--frame-header-body-gap); padding: var(--frame-padding)`.
+## 7. Anti-patterns — do NOT
 
-**Critical:** Panels in multi-column grids must use `align-self: start` (or parent `align-items: start`) so grid row stretch does not inflate header–body gap.
+**General slop**
+- ❌ Gradient backgrounds/buttons. The only gradient allowed is the faint radial forest glow
+  inside a dark hero card. Everything else is flat.
+- ❌ Emoji as icons. Use Material Symbols Rounded.
+- ❌ Inter, Roboto, Arial, system-ui, or any font outside Bricolage + Hanken.
+- ❌ The "rounded box with a colored left-border accent stripe" cliché.
+- ❌ Heavy/black drop shadows, neumorphism, glassmorphism, glow rings on focus.
+- ❌ Decorative stat/number/icon clutter ("data slop"). Less, but real.
 
-### Border radius
+**Project-specific**
+- ❌ Pure greys (`#888`, `#ccc`, `#000`). Greys here are sage-tinted (`#e3ebdf`, `#7c917f`…),
+  and shadows are forest-tinted `rgba(10,42,29,…)`.
+- ❌ **Lime text on white/light.** `#c6f24e` fails contrast on light surfaces — use it as a
+  *fill* behind forest text, or as text only on the forest background. For green text on light,
+  use `#2f7d4e`/`#3a7d24`.
+- ❌ More than **one** lime primary action per view. Lime is the loudest thing on screen; two
+  of them cancel out. Secondary actions are white-with-border or forest.
+- ❌ New accent hues. Stay within the core + semantic + categorical palettes above; if you need
+  a related shade, derive it in `oklch` from an existing token rather than inventing a hex.
+- ❌ Using semantic colors decoratively (a green pill that doesn't mean success, a red that
+  isn't danger). Status color = status meaning.
+- ❌ Using subject/categorical colors for anything that isn't categorical encoding.
+- ❌ Body text below 12px, or display numbers set in Hanken instead of Bricolage.
+- ❌ Spacing rows with source-whitespace inline siblings or per-element margins — use flex/grid
+  `gap`.
 
-| Token | Value | Use |
-|-------|-------|-----|
-| `--radius-input` | 10px | Auth inputs, small controls |
-| `--radius-sm` | 12px | Form inputs, list item icons |
-| `--radius-md` | 15px | Record list rows |
-| `--radius-base` / `--radius` | 18px | Tables, stat cards |
-| `--radius-card` | 20px | Standalone stat cards |
-| `--radius-lg` / `--frame-radius` | 22px | Panels (frames), banners |
-| `--radius-pill` | 999px | Buttons, badges, search pills |
+---
 
-### Shadows
+## 8. Quick reference
 
-Minimal on everyday surfaces — borders define space. Allowed on overlays only:
-
-| Token | Use |
-|-------|-----|
-| `--shadow-popover` | User menu, hero action menu |
-| `--shadow-panel` | Dropdown panels |
-| `--shadow-auth` | Login card |
-| `--shadow-inset-brand` | Dividers inside brand stat cards |
-
-Modals/sheets: shadcn `shadow-lg` on overlay content.
-
+```
+brand   #0a2a1d   accent #c6f24e   canvas #f4f7f1   surface #fff
+raised  #11392a   border #e3ebdf   divider #eef3ea
+text    #0a2a1d / #41594b / #7c917f / #9fb3a6   eyebrow #5f7a6b
+ok #3a7d24 on #e7f6d8 · warn #a9711a on #fdeccf · danger #c0392b on #fde0db
+info #2f6cad on #e7eefe · link #2f7d4e
+display: Bricolage Grotesque 800 (-0.02em)   ui: Hanken Grotesk 400–800   icons: Material Symbols Rounded
+radii 10/12/16/24/999 · borders not shadows · entrance pkUp .3s
+```
 ---
 
 ## Layout
