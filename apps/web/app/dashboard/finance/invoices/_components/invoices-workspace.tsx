@@ -11,12 +11,13 @@ import { toastSuccess } from "../../../../lib/toast";
 import { useCurrentAcademicYear } from "../../../../lib/use-current-academic-year";
 import { DataTable } from "../../../../lib/data-table";
 import { Field } from "../../../../lib/form";
-import { Icon } from "../../../../lib/icon";
+import { Icon } from "../../../../lib/material-icon";
 import { PaginationControls } from "../../../../lib/pagination-controls";
 import { StudentCombobox } from "../../../../lib/student-combobox";
 import { RecordFormSheet } from "../../../../lib/record-sheet";
 import { TablePanelBody } from "../../../../lib/table-panel";
 import { zodResolver } from "../../../../lib/zod-resolver";
+import { StatusBadge } from "../../../../../components/shared/badge";
 
 type InvoiceSource = "enrollment" | "recurring" | "ad_hoc";
 
@@ -85,7 +86,10 @@ export function InvoicesToolbar({ gradeId, gradeName, onCreated }: InvoicesToolb
       init: { method: "POST", body: JSON.stringify(body) }
     }),
     {
-      invalidatePaths: (_b, tenant) => [INVOICES_PATH(tenant)],
+      invalidatePaths: (_b, tenant) => [
+        INVOICES_PATH(tenant),
+        `${INVOICES_PATH(tenant)}/metrics`
+      ],
       successMessage: t("createInvoiceSuccess")
     }
   );
@@ -99,7 +103,10 @@ export function InvoicesToolbar({ gradeId, gradeName, onCreated }: InvoicesToolb
       init: { method: "POST", body: JSON.stringify(body) }
     }),
     {
-      invalidatePaths: (_b, tenant) => [INVOICES_PATH(tenant)],
+      invalidatePaths: (_b, tenant) => [
+        INVOICES_PATH(tenant),
+        `${INVOICES_PATH(tenant)}/metrics`
+      ],
       showSuccessToast: false
     }
   );
@@ -297,7 +304,7 @@ export function InvoicesTable({ gradeId, academicYearId }: InvoicesTableProps) {
       header: c("status"),
       accessorKey: "status",
       cell: ({ row }) => (
-        <span className={`badge badge--${row.original.status}`}>{row.original.status}</span>
+        <StatusBadge status={row.original.status} />
       )
     },
     { id: "due", header: t("dueDate"), accessorFn: (i) => i.dueDate ?? "—" }

@@ -39,8 +39,6 @@ export default function GradeInvoicesPage() {
           { label: nav("group_business") },
           { label: t("invoices"), href: "/dashboard/finance/invoices" }
         ]}
-        backHref="/dashboard/finance/invoices"
-        backLabel={t("invoices")}
       />
       <section className="panel">
         <TablePanelHead

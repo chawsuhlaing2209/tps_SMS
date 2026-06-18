@@ -1,41 +1,47 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-
-const SUBMODULES = [
-  { href: "/dashboard/finance/billing", key: "billing" },
-  { href: "/dashboard/finance/fee-structures", key: "feeStructures" },
-  { href: "/dashboard/finance/payment-plans", key: "paymentPlans" },
-  { href: "/dashboard/finance/invoices", key: "invoices" },
-  { href: "/dashboard/finance/payments", key: "payments" },
-  { href: "/dashboard/finance/discounts", key: "discounts" },
-  { href: "/dashboard/finance/reports", key: "reports" }
-] as const;
+import { ModuleShell, SecondarySideNav } from "../../lib/secondary-side-nav";
 
 export default function FinanceLayout({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
   const t = useTranslations("finance");
 
   return (
-    <div className="page-stack">
-      <nav className="subnav">
-        {SUBMODULES.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={active ? "subnav-link subnav-link--active" : "subnav-link"}
-            >
-              {t(item.key)}
-            </Link>
-          );
-        })}
-      </nav>
-      <div>{children}</div>
-    </div>
+    <ModuleShell
+      nav={
+        <SecondarySideNav
+          groups={[
+            {
+              label: t("navFinance"),
+              items: [
+                { href: "/dashboard/finance/billing", label: t("billing"), icon: "receipt_long" },
+                {
+                  href: "/dashboard/finance/fee-structures",
+                  label: t("feeStructures"),
+                  icon: "sell"
+                },
+                {
+                  href: "/dashboard/finance/payment-plans",
+                  label: t("paymentPlans"),
+                  icon: "payments"
+                },
+                { href: "/dashboard/finance/discounts", label: t("discounts"), icon: "percent" }
+              ]
+            },
+            {
+              label: t("navReceivables"),
+              items: [
+                { href: "/dashboard/finance/invoices", label: t("invoices"), icon: "description" },
+                { href: "/dashboard/finance/payments", label: t("payments"), icon: "account_balance" },
+                { href: "/dashboard/finance/reports", label: t("reports"), icon: "bar_chart" }
+              ]
+            }
+          ]}
+        />
+      }
+    >
+      {children}
+    </ModuleShell>
   );
 }
