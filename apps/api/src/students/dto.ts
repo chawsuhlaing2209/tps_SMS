@@ -7,9 +7,49 @@ import {
   IsOptional,
   IsString,
   IsUUID,
-  Min
+  Min,
+  ValidateIf,
+  ValidateNested
 } from "class-validator";
 import { Type } from "class-transformer";
+
+export class RegisterStudentGuardianDto {
+  @IsOptional()
+  @IsUUID()
+  guardianId?: string;
+
+  @ValidateIf((dto: RegisterStudentGuardianDto) => !dto.guardianId)
+  @IsString()
+  firstName?: string;
+
+  @ValidateIf((dto: RegisterStudentGuardianDto) => !dto.guardianId)
+  @IsString()
+  lastName?: string;
+
+  @ValidateIf((dto: RegisterStudentGuardianDto) => !dto.guardianId)
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  email?: string;
+
+  @IsIn(["father", "mother", "guardian", "other"])
+  relationship!: "father" | "mother" | "guardian" | "other";
+}
+
+export class RegisterStudentHouseholdDto {
+  @IsIn(["none", "existing", "new", "guardian_default"])
+  mode!: "none" | "existing" | "new" | "guardian_default";
+
+  @ValidateIf((dto: RegisterStudentHouseholdDto) => dto.mode === "existing")
+  @IsUUID()
+  familyGroupId?: string;
+
+  @ValidateIf((dto: RegisterStudentHouseholdDto) => dto.mode === "new")
+  @IsString()
+  name?: string;
+}
 
 export class CreateStudentDto {
   @IsString()
@@ -43,6 +83,16 @@ export class CreateStudentDto {
   @IsOptional()
   @IsString()
   medicalNotes?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => RegisterStudentGuardianDto)
+  guardian?: RegisterStudentGuardianDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => RegisterStudentHouseholdDto)
+  household?: RegisterStudentHouseholdDto;
 }
 
 export class UpdateStudentDto {
@@ -81,6 +131,34 @@ export class UpdateStudentDto {
   @IsOptional()
   @IsString()
   medicalNotes?: string;
+
+  @IsOptional()
+  @IsEnum(["draft", "enrolled", "transferred", "withdrawn", "graduated", "archived"])
+  status?:
+    | "draft"
+    | "enrolled"
+    | "transferred"
+    | "withdrawn"
+    | "graduated"
+    | "archived";
+}
+
+export class UpdateGuardianDto {
+  @IsOptional()
+  @IsString()
+  firstName?: string;
+
+  @IsOptional()
+  @IsString()
+  lastName?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  email?: string;
 }
 
 export class CreateGuardianDto {
@@ -178,4 +256,74 @@ export class ListStudentsQueryDto {
   @IsNumber()
   @Min(0)
   offset?: number = 0;
+}
+
+export class SearchFamilyGroupsQueryDto {
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  limit?: number = 20;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  offset?: number = 0;
+}
+
+export class CreateFamilyGroupDto {
+  @IsString()
+  name!: string;
+
+  @IsUUID()
+  primaryGuardianId!: string;
+}
+
+export class UpdateFamilyGroupDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsUUID()
+  primaryGuardianId?: string;
+}
+
+export class ListGuardiansQueryDto {
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  limit?: number = 50;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  offset?: number = 0;
+}
+
+export class SetStudentFamilyGroupDto {
+  @ValidateIf((dto: SetStudentFamilyGroupDto) => dto.familyGroupId !== null)
+  @IsUUID()
+  familyGroupId!: string | null;
+}
+
+export class CreateStudentFamilyGroupDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsUUID()
+  primaryGuardianId?: string;
 }

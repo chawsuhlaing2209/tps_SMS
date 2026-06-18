@@ -1,119 +1,163 @@
 # tps_SMS Design System
 
-Visual language for the multi-tenant school management platform.
+Visual language for the multi-tenant school management platform
 
 ## Design Philosophy
 
 **Two reference products, one unified system:**
 
-**Wise (transferwise.com)** — Trustworthy, institutional, precise. Clean white surfaces, 1px borders, no decorative color. Typography does the heavy lifting. Every pixel earns its place. Users trust this product with money — so should ours (school finance, student records).
+**Wise (transferwise.com)** — Trustworthy, institutional, precise. Clean surfaces, 1px borders, restrained color. Typography does the heavy lifting. Users trust this product with money — so should ours (school finance, student records).
 
-**Adaline.ai** — Dense, keyboard-first, power-user optimized. Compact sidebar with icon+label nav, tight data tables (36px row height), collapsible panels, command palette, inline edits. Built for people who live in the tool all day.
+**Adaline.ai** — Dense, keyboard-first, power-user optimized. Compact sidebar with icon+label nav, tight data tables, collapsible panels, inline edits. Built for people who live in the tool all day.
 
-**Myanmar context** — Support Burmese (Padauk / Noto Sans Myanmar) alongside Latin. All layouts must accommodate 30–50% longer Burmese strings without breaking. Use Gregorian dates with Burmese/English labels per product decision.
+**Myanmar context** — Support Burmese alongside Latin. All layouts must accommodate 30–50% longer Burmese strings without breaking. Use Gregorian dates with Burmese/English labels per product decision.
+
+**Padauk identity** — Ink-green shell (`--shell`) + spring-lime CTAs (`--brand`). Rounded frames (18–22px), squircle marks, Material Symbols icons. Hero banners use dark green or gradient shells; everyday content stays white-bordered on paper background.
 
 ---
 
 ## Design Tokens
 
-Defined in `apps/web/tailwind.config.ts` and available as CSS variables.
+### Source of truth
 
-### Colors
+| Layer | Location | Who edits |
+|-------|----------|-----------|
+| Figma export | `tokens.json` (repo root) | Design |
+| App extensions | `tokens/extensions.json` | Engineering |
+| Semantic roles | `tokens/semantic.json` | Engineering + design |
+| **Generated CSS** | `apps/web/app/design-tokens.css` | **Auto** — `npm run tokens:build` |
+| Component classes | `apps/web/app/globals.css` | Engineering |
+| Tailwind utilities | `apps/web/tailwind.config.ts` | Engineering (mirrors CSS vars) |
 
-```css
-/* Brand */
---color-brand:        #254f1a   /* Forest green — primary actions, sidebar active */
---color-brand-light:  #d2e823   /* Yellow-green — accent, highlights, badges */
---color-brand-muted:  #e8f5e9   /* Soft green — hover states, subtle backgrounds */
+Workflow: edit `tokens/semantic.json` (or extensions) → `npm run tokens:build` → restart web dev server. See `tokens/README.md`.
 
-/* Surfaces */
---color-surface:      #fafafa   /* Page background */
---color-surface-2:    #f4f4f5   /* Sidebar, secondary areas */
---color-raised:       #ffffff   /* Cards, panels, inputs */
+**Rule:** Never hardcode hex in components. Use CSS variables or Tailwind tokens that map to them.
 
-/* Borders */
---color-border:       #e4e4e7   /* Default border (1px) */
---color-border-focus: #254f1a   /* Focus ring */
+### Colors (semantic)
 
-/* Text */
---color-text:         #18181b   /* Primary text */
---color-text-muted:   #71717a   /* Secondary/muted text */
---color-text-subtle:  #a1a1aa   /* Placeholder, disabled */
+Core UI roles (all resolve through `design-tokens.css`):
 
-/* Semantic */
---color-danger:       #dc2626   /* Errors, destructive actions */
---color-danger-bg:    #fef2f2   /* Danger background */
---color-success:      #16a34a   /* Paid, enrolled, active */
---color-success-bg:   #f0fdf4   /* Success background */
---color-warning:      #d97706   /* Overdue, pending, partial */
---color-warning-bg:   #fffbeb   /* Warning background */
---color-info:         #2563eb   /* Info, links */
---color-info-bg:      #eff6ff   /* Info background */
-```
+| Token | Role |
+|-------|------|
+| `--background` | Page paper (`#f4f7f1`) |
+| `--foreground` | Ink green — primary text (`#0a2a1d`) |
+| `--muted` | Secondary text |
+| `--card` | Panels, inputs, table surfaces |
+| `--surface` | Raised neutral (table headers, person cards) |
+| `--subtle` | Hover / zebra / soft fills |
+| `--border` / `--border-soft` | 1px dividers |
+| `--accent` / `--link` | Links, open actions |
+| `--brand` | Spring lime — primary CTAs |
+| `--brand-ink` / `--brand-dark` | Text on lime buttons |
+| `--shell` / `--shell-raise` / `--shell-line` | Sidebar, detail hero, dark banners |
+| `--danger` / `--info` | Semantic feedback |
+
+**Status palette** — use `--status-*-bg`, `--status-*-border`, `--status-*-fg` (and `-muted-*` variants) for badges, banners, and callouts. Do not invent one-off reds/greens.
+
+**Category palette** — subject/room squircles: `--cat-blue`, `--cat-coral`, `--cat-teal`, `--cat-lilac`, `--cat-mustard`, `--cat-pink`, `--cat-green`, `--cat-sky`. Hashed via `subjectColor()` in `apps/web/app/dashboard/structure/subject-colors.ts`.
+
+**On-shell text** — `--on-shell-faint`, `--on-shell-soft`, `--on-shell-light`, `--on-shell-error`, plus alpha white tokens for ghost buttons on dark heroes.
 
 ### Typography
 
-**Fonts:**
-- Latin: `Plus Jakarta Sans` (400, 500, 600, 700) — loaded from Google Fonts
-- Burmese: `Padauk` (400, 700) — fallback to `Noto Sans Myanmar`
-- Monospace: `JetBrains Mono` — for IDs, codes, invoice numbers
+**Font stacks:**
+- Headings / display: **Bricolage Grotesque** (`--font-heading`)
+- Body: **Hanken Grotesk** (`--font-sans`)
+- Icons: **Material Symbols Rounded** via `<Icon name="…" />` (`apps/web/app/lib/icon.tsx`)
+- Burmese: must not break layout at 30–50% longer strings than English
 
-**Scale (px):**
-```
-text-2xs   10px  — audit timestamps, footer notes
-text-xs    11px  — table cell secondary info
-text-sm    12px  — table cells (primary), form labels, badges
-text-base  13px  — body, form inputs, sidebar nav
-text-md    14px  — card descriptions, secondary headings
-text-lg    16px  — page section headings
-text-xl    18px  — page titles
-text-2xl   20px  — section stat values
-text-3xl   24px  — dashboard KPI numbers
-text-4xl   28px  — hero / large stat
-```
+**Composite presets** (from `design-tokens.css` → `--type-*`):
 
-**Weights:**
-- 400 — body text
-- 500 — labels, table headers, nav items
-- 600 — headings, button text, stat values
-- 700 — page titles, emphasized values
+| Preset | Use |
+|--------|-----|
+| `--type-eyebrow-*` | Section labels (12px uppercase, 700) |
+| `--type-display-lg-*` / `--type-display-md-*` | Hero titles |
+| `--type-heading-sm-*` | Panel titles |
+| `--type-body-md-*` / `--type-body-sm-*` | Default copy (13px / 12px) |
+| `--type-label-sm-*` | Form labels, stat labels |
+| `--type-stat-value-*` / `--type-stat-label-*` | Metric cards |
 
-### Spacing
+Heading elements and `.section-title` use `--font-heading` with `-0.02em` letter-spacing.
 
-4px base grid.
-```
-1 = 4px
-2 = 8px
-3 = 12px
-4 = 16px
-5 = 20px
-6 = 24px
-8 = 32px
-10 = 40px
-12 = 48px
-```
+### Spatial scale
 
-### Border Radius
+4px base grid with fine steps for dense UI. **Always use tokens — never magic numbers in new code.**
 
-```
-rounded-sm   2px  — badges, chips
-rounded      4px  — buttons, inputs, table rows
-rounded-md   6px  — cards, panels, dropdowns
-rounded-lg   8px  — modals, sheets, dialogs
-rounded-xl   12px — feature cards
-```
+| Token | Value | Use |
+|-------|-------|-----|
+| `--space-1` | 4px | Tight inline gaps, badge padding-y |
+| `--space-1_5` | 6px | Label → input gap |
+| `--space-2` | 8px | Button groups, panel actions |
+| `--space-2_5` | 10px | Record list row gap, nav item gap |
+| `--space-3` | 12px | **Panel header → body**, side label → card |
+| `--space-3_5` | 14px | Form stack row gap |
+| `--space-4` | 16px | Page block gap, column gap, topbar gap |
+| `--space-5` | 20px | **Frame outer padding** (panels) |
+| `--space-6` | 24px | Auth / hero inner padding |
+| `--space-7` | 30px | Content horizontal gutter |
+| `--space-8` | 40px | Record list icon size |
+| `--space-9` | 48px | Mobile bottom padding |
+| `--space-10` | 60px | Content bottom gutter |
+
+Fine steps (`--space-0_5`, `--space-3_25`, `--space-6_5`) exist only where the design requires sub-grid alignment.
+
+### Layout tokens
+
+| Token | Value | Use |
+|-------|-------|-----|
+| `--layout-sidebar-width` | 236px | Shell grid column |
+| `--layout-content-max` | **1180px** | Page content max width |
+| `--layout-gutter-x` | 30px | `.dash-content` horizontal padding |
+| `--layout-gutter-x-compact` | 18px | Mobile content padding |
+| `--layout-gutter-y` | 26px | `.dash-content` top padding |
+| `--layout-gutter-bottom` | 60px | `.dash-content` bottom padding |
+| `--layout-section-gap` | 20px | `.page-stack` between sections |
+| `--layout-page-gap` | 16px | Stat grids, inline page blocks |
+| `--layout-column-gap` | 16px | Two-column layouts (room detail) |
+| `--side-stack-gap` | 16px | Sidebar stacks (homeroom + stats) |
+
+Breakpoints (reference): `--breakpoint-sm` 640px, `--breakpoint-md` 720px, `--breakpoint-lg` 960px.
+
+### Frame tokens (panels & cards)
+
+Every white bordered section uses the **frame** pattern:
+
+| Token | Value | Rule |
+|-------|-------|------|
+| `--frame-padding` | 20px | Outer inset on `.panel` |
+| `--frame-header-body-gap` | 12px | Gap between `PanelHead` and body |
+| `--frame-body-gap` | 16px | Gap between items inside `.panel-body` |
+| `--frame-label-gap` | 12px | Eyebrow label → card below (e.g. HOMEROOM TEACHER) |
+| `--frame-radius` | 22px | Panel corner radius |
+
+**Implementation:** `.panel` / `.structure-panel` = `display: grid; align-content: start; gap: var(--frame-header-body-gap); padding: var(--frame-padding)`.
+
+**Critical:** Panels in multi-column grids must use `align-self: start` (or parent `align-items: start`) so grid row stretch does not inflate header–body gap.
+
+### Border radius
+
+| Token | Value | Use |
+|-------|-------|-----|
+| `--radius-input` | 10px | Auth inputs, small controls |
+| `--radius-sm` | 12px | Form inputs, list item icons |
+| `--radius-md` | 15px | Record list rows |
+| `--radius-base` / `--radius` | 18px | Tables, stat cards |
+| `--radius-card` | 20px | Standalone stat cards |
+| `--radius-lg` / `--frame-radius` | 22px | Panels (frames), banners |
+| `--radius-pill` | 999px | Buttons, badges, search pills |
 
 ### Shadows
 
-Minimal. Only for elements lifted above the page.
+Minimal on everyday surfaces — borders define space. Allowed on overlays only:
 
-```
-shadow-none  — default (borders only)
-shadow-xs    0 1px 2px rgba(0,0,0,.06)   — inputs, subtle cards
-shadow-sm    0 1px 3px rgba(0,0,0,.10)   — raised cards, panels
-shadow-md    0 4px 12px rgba(0,0,0,.12)  — dropdowns, floating elements
-shadow-lg    0 8px 24px rgba(0,0,0,.14)  — modals, command palette
-```
+| Token | Use |
+|-------|-----|
+| `--shadow-popover` | User menu, hero action menu |
+| `--shadow-panel` | Dropdown panels |
+| `--shadow-auth` | Login card |
+| `--shadow-inset-brand` | Dividers inside brand stat cards |
+
+Modals/sheets: shadcn `shadow-lg` on overlay content.
 
 ---
 
@@ -123,320 +167,323 @@ shadow-lg    0 8px 24px rgba(0,0,0,.14)  — modals, command palette
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ TopBar (48px)     tenant name   [bell] [lang] [user menu]   │
+│ TopBar (sticky)     breadcrumb + title    search · AY · bell│
 ├──────────┬──────────────────────────────────────────────────┤
-│          │                                                   │
-│ Sidebar  │  Page Content                                     │
-│ 220px    │  max-width: 1400px                                │
-│          │  padding: 24px                                    │
-│ (collapsi│                                                   │
-│ ble to   │                                                   │
-│ 56px)    │                                                   │
+│ Sidebar  │  Page Content (max 1180px, left-aligned)         │
+│ 236px    │  padding: 26px 30px 60px                          │
 └──────────┴──────────────────────────────────────────────────┘
 ```
 
-- Sidebar: 220px expanded, 56px collapsed (icons only)
-- TopBar: 48px height, sticky
-- Content: 24px padding, 1400px max-width, centered
-- Section gap: 16px between page sections
+- **Grid:** `.dash` — sidebar + main column
+- **Sidebar:** `.dash-sidebar` — `--shell` background, sticky full height, grouped nav, user card pinned bottom
+- **Top bar:** `.dash-topbar` — title/breadcrumbs from `PageHeader` context; global search (placeholder), working-year badge, notifications
+- **Content:** `.dash-content` — gutter tokens; direct children capped at `--layout-content-max`, **left-aligned** (not centered)
+- **Between page sections:** `--layout-section-gap` (20px) via `.page-stack`
 
-### Sidebar Navigation
-
-Groups with subtle dividers. Active state: brand green background, white text.
+### Page structure
 
 ```
-[Logo]
+DashboardTopbar (reads PageHeader context)
+.dash-content
+  .page-stack
+    PageHeader (optional — publishes title; may render back link)
+    DetailHero (optional — detail pages)
+    .subnav (optional — module tabs, e.g. Finance)
+    .panel (section 1)
+    .panel (section 2)
+    …
+```
 
+- Titles live in the **top bar**, not inside panels (unless `PanelHead` for a section title).
+- Empty/error/loading states belong in `.panel-body` or `TablePanelBody` — not floating between grid rows.
+- Module layouts (Finance, Salary, Exams) wrap children in `.page-stack` + `.subnav`.
+
+### Sidebar navigation
+
+Permission-filtered groups from `apps/web/app/lib/permissions.ts`. Active item: lime `--brand` background, ink text, filled Material icon.
+
+```
+[Logo — tenant slug]
+
+  SCHOOL
   ▸ Overview
-
-  OPERATIONS
-  ▸ Students
-  ▸ Admissions
-  ▸ Classrooms
-  ▸ Attendance
+  ▸ People
 
   ACADEMICS
-  ▸ Timetable
+  ▸ Structure
+  ▸ Academic Setup
   ▸ Calendar
-  ▸ LMS
+  ▸ Timetable
   ▸ Exams
-  ▸ Grades
-  ▸ Report Cards
 
-  FINANCE
-  ▸ Invoices
-  ▸ Payments
-  ▸ Fee Plans
-  ▸ Discounts
-  ▸ Reports
-
-  HR
-  ▸ Staff
+  BUSINESS
+  ▸ Admissions
+  ▸ Enrollments
+  ▸ Finance
   ▸ Salary
 
-  [Settings]
-  [Audit Log]
+  ADMIN
+  ▸ Communication
+  ▸ Audit Log
+
+  [User card — sign out menu]
 ```
+
+Finance sub-routes use horizontal `.subnav` (Billing, Fee Items, Enrollment Fee Plans, Invoices, Payments, Discounts, Reports) — not duplicated in the sidebar.
 
 ---
 
-## Components
+## Component Library
 
-### PageHeader
+Implementation split:
+
+| Kind | Location | When to use |
+|------|----------|-------------|
+| Padauk CSS classes | `globals.css` | Shell, panels, tables, buttons, structure pages |
+| App lib components | `apps/web/app/lib/` | Reusable React wrappers (`Panel`, `DataTable`, …) |
+| shadcn/ui | `apps/web/components/ui/` | Dialog, Sheet, Button (secondary to Padauk buttons) |
+| Shared | `apps/web/components/shared/` | `ConfirmDialog`, `AppToast`, `CheckboxList` |
+
+### Page header (`PageHeader` + top bar)
+
+Pages publish metadata via `PageHeader` from `apps/web/app/dashboard/page-header-context.tsx`. The sticky `DashboardTopbar` renders title (25px/800 heading), optional breadcrumb trail, and optional description line.
+
+```tsx
+<PageHeader title={t("title")} breadcrumbs={[{ label: t("group") }]} description={t("description")} />
+// Detail pages with back navigation:
+<PageHeader title={name} backHref="/dashboard/students" backLabel={t("back")} />
+```
+
+Unmigrated routes get a sensible fallback from the nav config.
+
+### Panels
+
+```tsx
+import { Panel, PanelHead } from "@/app/lib/panel";
+
+<Panel>
+  <PanelHead title="Students" help="Active enrollments this year" actions={<button className="btn-primary">…</button>} />
+  <div className="panel-body">…</div>
+</Panel>
+```
+
+For tables, prefer `TablePanelHead` + `TablePanelBody` (`apps/web/app/lib/table-panel.tsx`) — handles loading / error / empty with i18n defaults.
+
+### Detail hero
+
+Dark ink-green banner for record detail pages (`DetailHero` in `apps/web/app/lib/detail-hero.tsx`):
+
+- Colored squircle mark (initials or Material icon)
+- Title + meta line
+- Primary actions: `.btn-hero-primary` (lime) + `.btn-hero-outline` (ghost on dark)
+- Utility icon buttons: `.detail-hero__icon-btn`
+
+Structure/academic pages use related patterns: `.structure-year-banner`, `.structure-room-banner` (gradient shell).
+
+### Data tables
+
+`DataTable` (`apps/web/app/lib/data-table.tsx`) wraps TanStack Table + shadcn `Table`, which applies `.padauk-table-wrap` / `.padauk-table`.
 
 ```
-[title]                              [Primary Action Button]
-[description / breadcrumb]
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
-
-- Title: `text-xl font-600`
-- Description: `text-base text-muted`
-- Divider: 1px border-bottom
-- Primary button: right-aligned
-
-### DataTable
-
-Adaline.ai-inspired: dense, keyboard-navigable, sortable.
-
-```
-[Search input]  [Filter: Status ▾]  [Filter: Grade ▾]    [Export ▾]
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-☐  Name            Admission#   Grade   Balance    Status    •••
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-☐  Mg Aung Zaw     A-2024-001   G10A    15,000 ks  ● Paid
-☐  Ma Hnin Wai     A-2024-002   G10B    --         ● Active
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[TableSearchInput]  [filters in .table-toolbar]     [btn-primary Add]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Name            Admission#   Grade   Balance    Status
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Mg Aung Zaw     A-2024-001   G10A    15,000 ks  ● active
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Showing 1–50 of 342              [← Prev]  Page 1 of 7  [Next →]
 ```
 
-- Row height: 36px (compact)
-- Header: 12px uppercase, 500 weight, muted color
-- Cell text: 12px
-- Hover: `bg-surface-2` row highlight
-- Clickable rows navigate to detail page
-- Keyboard: Arrow keys navigate rows, Enter opens detail
+- Header: 11px uppercase, 800 weight, `--surface` background, muted color
+- Cells: 14px, padding 14×16px (`--space-3_5` × `--space-4`)
+- Hover: `--subtle` row highlight
+- Sortable columns: `.table-sort` button in header
+- Clickable rows: `getRowHref` or `onRowClick`; Enter/Space activates; skips nested buttons/links
+- Default sort: active statuses first, then `updatedAt` desc (when column present)
+- Toolbar search: `TableSearchInput` (rounded rect, matches `.dash-search` — single border, no pill wrapper)
+- Pagination: `PaginationControls` in `.pagination` footer
 
-### StatCard
+**Row navigation (required when a detail route exists):**
 
-```
-┌─────────────────────────┐
-│ Total Students          │
-│                         │
-│  1,247          ↑ +12   │
-│              vs last mo │
-└─────────────────────────┘
-```
+- Pass `getRowHref` or `onRowClick` on `DataTable` so the **entire row** opens the record (cursor pointer + hover on all cells).
+- Do **not** put the only navigation affordance in the first column via a nested `<Link>`. That trains users to click one cell and breaks row-wide interaction.
+- Use `DirectoryNameCell` for the name column when rows navigate — same avatar/title styling without a nested link.
+- Nested links/buttons inside a row (e.g. household link, invoice link, row actions) must use `data-row-stop` or native interactive elements so they do not trigger row navigation.
 
-- White background, 1px border, 8px radius
-- Label: 11px uppercase muted
-- Value: 28px bold
-- Delta: colored (green/red), 11px
+**View-only tables** (no detail page): omit `getRowHref` / `onRowClick`; rows still get default hover highlight via `.padauk-table tbody tr:hover`.
 
-### StatusBadge
+### Record list
 
-Compact dot + text. No pill background.
+Vertical list of squircle rows (`RecordList` / `RecordListItem` in `apps/web/app/lib/record-list.tsx`):
 
-```
-● Enrolled    (green)
-● Active      (green)
-● Paid        (green)
-● Pending     (yellow)
-● Overdue     (red)
-● Partial     (orange)
-● Withdrawn   (gray)
-● Archived    (gray)
-● Invited     (blue)
-● Suspended   (red)
-```
+- Row radius `--radius-md`, gap `--record-list-gap`, padding `--record-list-item-padding`
+- Icon 40×40 with category color; title 14px/700; meta 12px muted
+- Optional trailing action label or badge
 
-Usage: `<StatusBadge status="enrolled" />` renders `● Enrolled`.
+### Person / roster cards
 
-### FormSheet
+`.person-card` / `PersonCard` pattern — compact horizontal card with avatar squircle, name, meta. Used in roster grids (`.record-card-grid`).
 
-Right-side drawer (not full modal) for create/edit forms.
+### Stat cards
 
-```
-                              ┌─────────────────────┐
-                              │ Add Student      [×] │
-                              │─────────────────────│
-                              │ Full Name            │
-                              │ [________________]   │
-                              │                      │
-                              │ Date of Birth        │
-                              │ [________________]   │
-                              │                      │
-                              │ Grade                │
-                              │ [Select ▾_________]  │
-                              │                      │
-                              │─────────────────────│
-                              │ [Cancel] [Save]      │
-└─────────────────────────────┴──────────────────────┘
+`.stat-card` in a `.stat-grid` — white card, `--radius-card` (20px), label 13px muted, value 30px/700. Used on overview/dashboard summaries. Structure pages use `.structure-stat` (dark inset chips on year banner).
+
+### Status badges
+
+**In tables (primary pattern):** pill badges with muted semantic backgrounds:
+
+```html
+<span class="badge badge--active">active</span>
+<span class="badge badge--pending">pending</span>
 ```
 
-- Width: 480px (desktop), full-width on mobile
-- Slides in from right with 200ms ease
-- Footer: Cancel (ghost) + Save (primary) buttons
-- Validation errors appear inline below each field
+Variants in `globals.css`: `--active`, `--invited`, `--pending`, `--suspended`, `--archived`.
 
-### CommandPalette (Cmd+K)
+**Optional dot badge:** `StatusBadge` in `components/ui/badge.tsx` — compact `● Label` for inline prose (Tailwind color tokens).
 
-Global quick action + search overlay.
+Always capitalize/status-label via i18n in UI; never hardcode English status strings in JSX.
 
-```
-┌──────────────────────────────────────────────────┐
-│ ⌘  Search students, invoices, staff…             │
-├──────────────────────────────────────────────────┤
-│ QUICK ACTIONS                                    │
-│   + New Student                                  │
-│   + Record Payment                               │
-│   + New Enquiry                                  │
-├──────────────────────────────────────────────────┤
-│ NAVIGATE                                         │
-│   → Finance / Invoices                           │
-│   → Students                                     │
-│   → Attendance                                   │
-└──────────────────────────────────────────────────┘
-```
+### Buttons
 
-- Triggered by `Cmd+K` / `Ctrl+K`
-- Max-width: 560px, centered
-- Shadow-lg, rounded-lg
-- Fuzzy search with highlighted matches
+Prefer Padauk CSS buttons for dashboard consistency:
 
-### FilterBar
+| Class | Use |
+|-------|-----|
+| `.btn-primary` | Lime filled CTA |
+| `.btn-ghost` | White bordered pill (refresh, secondary) |
+| `.btn-outline` | Neutral outline |
+| `.btn-hero-primary` / `.btn-hero-outline` | Actions on dark heroes |
+| `.row-action` | Compact table row actions |
 
-Inline above every DataTable.
+shadcn `Button` is used inside `ConfirmDialog` and some newer primitives. Match Padauk sizing when mixing.
 
-```
-[🔍 Search by name or ID…]  [Status ▾]  [Grade ▾]  [Month ▾]   [Export CSV]
-```
+Auth pages: `.auth-button`, `.auth-button--ghost`.
 
-- Search input: 240px min
-- Each filter: compact Select (shadcn/ui)
-- Export button: right-aligned, ghost variant
+### Forms
 
-### EmptyState
+- **Field layout:** `.form-field` + `.form-stack` (14px gap)
+- **Entity create/edit (inline):** `.entity-form` — subtle background grid
+- **Sheet forms:** `RecordFormSheet` → shadcn `Sheet` (480px max-width, slides from right) + `.entity-form--sheet` + `.form-stack`
+- **Validation:** `.field-error` below inputs; `.form-feedback--ok` for success
+- **Focus:** `--focus-ring` box-shadow on inputs
 
-```
-      [Illustration or Icon]
+Use `react-hook-form` + shared Zod schemas; all labels/messages via `next-intl`.
 
-        No students yet
+### Confirm dialog
 
-   Enroll the first student to get
-   started with class assignments
-   and billing.
+`ConfirmDialog` (`components/shared/confirm-dialog.tsx`) — centered shadcn Dialog. Safe action left (outline), destructive confirm right (`variant="destructive"`). Title states the action; description states consequences.
 
-        [Enroll Student]
-```
+### Toasts
 
-- Centered in page content area
-- Icon: 48px, muted color
-- Message: clear, actionable
-- CTA button: primary variant
+Sonner with custom `AppToast` (`components/shared/app-toast.tsx`):
 
-### ConfirmDialog
+- Position: bottom
+- Pill shape, `--shell` background, white text
+- Success: lime icon squircle; error: coral icon squircle
+- Dismiss button on the right
 
-```
-┌──────────────────────────────────┐
-│ Cancel Invoice #INV-0042         │
-│                                  │
-│ This will cancel the invoice and │
-│ cannot be undone. Any recorded   │
-│ payments will not be affected.   │
-│                                  │
-│           [Keep]  [Cancel Invoice]│
-└──────────────────────────────────┘
-```
+Use `apps/web/app/lib/toast.ts` helpers — do not raw-call Sonner with default styling.
 
-- Title: action being confirmed
-- Body: consequence + irreversibility
-- Destructive button: red/danger variant
-- Safe option on left, destructive on right
+### Empty states
+
+No standalone `EmptyState` component. Patterns:
+
+- `TablePanelBody` with `empty` → muted paragraph in `.panel-body`
+- `.structure-empty` — dashed border panel with CTA
+- Domain-specific copy + primary button inside the owning panel
+
+### Structure / academic setup
+
+Structure pages (`/dashboard/structure`, academic setup) use additional tokens (`--structure-*`) and classes:
+
+- `.structure-grade-chip` — horizontal grade rail
+- `.structure-segment-tab` — pill tabs (Classrooms / Gradebook / …)
+- `.structure-room-card` — room grid cards with subject tags
+- `.setup-*` — academic setup subjects/grades/classrooms layouts
+
+Reuse these patterns when extending school-structure UI — do not introduce a third card style.
+
+### Working year badge
+
+`.working-year-badge` in top bar — links to academic year setup; warning variant when no active year.
 
 ---
 
 ## Interaction Patterns
 
-### Loading States
+### Loading states
 
-- Skeleton screens (not spinners) for data tables and cards
-- Inline spinner only for form submit buttons
-- Toast notification for background job progress
+- List/table panels: muted loading text via `TablePanelBody` (no skeleton library yet)
+- Buttons: disabled + label change (`Please wait…`) on submit
+- Full-page: `.dash-loading` centered muted text
+- Background jobs: toast with progress message when applicable
 
-### Error States
+### Error states
 
-- Inline field errors: red text below input, 11px
-- Form-level errors: red alert banner above submit
-- Page-level errors: centered error state with retry button
-- Network errors: toast notification
+- Field: `.field-error` (13px, `--status-danger-fg`)
+- Form: `.auth-error` banner or `.form-feedback`
+- Panel: `.error-text` in `.panel-body`
+- Network: toast error variant
 
-### Optimistic Updates
+### Optimistic updates
 
-Apply changes to UI immediately, revert on error.
-- Payment recorded → invoice status flips to Paid instantly
-- Attendance marked → row updates without page reload
-- Show subtle "Saving…" indicator, not full loading state
-
-### Toast Notifications
-
-```
-✓ Student enrolled successfully          [×]
-✗ Failed to record payment: network error [×]
-⟳ Generating invoices… (47/120)          [×]
-```
-
-- Position: bottom-right
-- Auto-dismiss: 4 seconds (success), persistent (error, progress)
-- Max 3 visible at once (stack)
+Apply changes to UI immediately, revert on error where safe (payments, attendance). Prefer subtle button loading over full-page spinners.
 
 ---
 
 ## Finance UI Conventions
 
 - All monetary values: `MMK {:,.0f}` format (e.g. `MMK 150,000`)
-- Overdue amounts: red text, `● Overdue` badge
-- Partial payments: orange `● Partial` badge with remaining balance
-- Payment proof uploads: show thumbnail + reference number inline
-- Invoice numbers: monospace font, uppercase (`INV-2024-0042`)
-- Receipt numbers: monospace font (`RCP-2024-0018`)
+- Overdue amounts: danger color + pending/overdue badge
+- Partial payments: warning badge with remaining balance
+- Invoice numbers: monospace, uppercase (`INV-2024-0042`)
+- Receipt numbers: monospace (`RCP-2024-0018`)
+- Enrollment fees: unified enrollment ceremony — Finance is for AR/recurring ops, not re-entering enrollment fees (see `docs/unified-enrollment-billing-plan.md`)
 
 ---
 
 ## Burmese (Myanmar) Language Support
 
-- Font: Padauk 400/700, fallback to Noto Sans Myanmar
 - All i18n strings via `next-intl` — never hardcode in JSX
-- Date format in Burmese: Gregorian dates with Burmese month names where appropriate
-- Number formatting: standard numerals (not Burmese numerals) for finance
+- Add keys to both `messages/en.json` and `messages/my.json`
+- Date format: Gregorian with locale-appropriate month names
+- Number formatting: standard numerals for finance (not Burmese numerals)
 - RTL: not required (Myanmar is LTR)
-- Test all layouts with Burmese strings (30–50% longer than English)
+- Test layouts with Burmese strings (30–50% longer than English)
 
 ---
 
 ## Accessibility
 
-- WCAG AA contrast minimum on all text
-- Focus rings: 2px solid brand color on all interactive elements
-- Screen reader labels on icon-only buttons
-- `role="status"` on loading states
-- `role="alert"` on errors
-- Keyboard navigation: all tables navigable with arrows, all modals trap focus
+- WCAG AA contrast on text (especially `--muted` on `--background`)
+- Focus: `--focus-ring` / `focus-visible:ring-2 focus-visible:ring-brand` on interactive elements
+- Icon-only buttons: `aria-label` via i18n
+- Tables: clickable rows use `role="link"` + keyboard Enter/Space
+- Toasts: `role="status"` + `aria-live="polite"`
+- Errors: `role="alert"` where appropriate
+- Modals/sheets: Radix focus trap (shadcn)
 
 ---
 
 ## Do / Don't
 
 **Do:**
-- Use 1px borders to define space (not shadows or background changes)
-- Use color purposefully — only for status, never decoration
-- Keep table rows compact — users scan, not read
-- Right-align numbers in tables
+- Use design tokens (`var(--*)`) or Tailwind classes mapped in `tailwind.config.ts`
+- Use 1px borders to define everyday surfaces
+- Use the frame pattern (`.panel` + `PanelHead` + `.panel-body`) for sections
+- Use color purposefully — status, categories, CTAs; not decoration on neutral cards
+- Keep table rows compact; right-align numeric columns
 - Use monospace for IDs, codes, invoice numbers
+- Put page titles in the top bar via `PageHeader`
+- Use `DetailHero` on record detail pages
+- Use `TableSearchInput` in panel toolbars instead of raw search inputs
 
 **Don't:**
-- Use gradients, drop shadows on cards, or rounded corners > 8px
-- Use more than 2 colors per component (text + accent)
-- Show spinners for data that can be skeleton-loaded
-- Use full-page modals for forms that fit in a sheet
-- Hardcode any color hex values in component files — use CSS variables
+- Hardcode hex/rgb in component files
+- Hand-roll panel markup when `Panel` / `TablePanelHead` exist
+- Center page content (`margin: 0 auto` on dashboard pages — content is left-aligned)
+- Use full-page modals for create/edit flows that fit in a sheet
+- Add floating `.panel-help` paragraphs — pass `help` to `PanelHead` / `TablePanelHead`
+- Stretch panels in multi-column grids without `align-self: start`
+- Introduce one-off typography sizes outside the `--type-*` / established class scale
+- Build separate enroll → invoice → pay flows (use unified enrollment)

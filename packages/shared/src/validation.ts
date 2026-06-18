@@ -33,6 +33,25 @@ export const auditEventSchema = z.object({
   reason: z.string().optional()
 });
 
+/** Non-empty reason required for attendance, finance, and grading corrections. */
+export const correctionReasonSchema = z
+  .string()
+  .trim()
+  .min(1, "A correction reason is required.");
+
+export const SENSITIVE_CORRECTION_ACTIONS = [
+  "attendance.correct",
+  "payment.refund",
+  "payment.verify",
+  "assessment.correct"
+] as const;
+
+export type SensitiveCorrectionAction = (typeof SENSITIVE_CORRECTION_ACTIONS)[number];
+
+export function parseCorrectionReason(reason: unknown): string {
+  return correctionReasonSchema.parse(reason);
+}
+
 export const gradeChiefAssignmentItemSchema = z.object({
   academicYearId: z.string().uuid(),
   gradeId: z.string().uuid()
@@ -54,3 +73,218 @@ export const updateTeacherAssignmentsSchema = z.object({
 });
 
 export type UpdateTeacherAssignmentsInput = z.infer<typeof updateTeacherAssignmentsSchema>;
+
+export const teacherProfileCapabilitySchema = z.object({
+  sectorIds: z.array(z.string().uuid()).default([]),
+  competentSubjectIds: z.array(z.string().uuid()).default([]),
+  eligibleGradeIds: z.array(z.string().uuid()).default([])
+});
+
+export type TeacherProfileCapabilityInput = z.infer<typeof teacherProfileCapabilitySchema>;
+
+export const updateTeacherTeachingSetupSchema = z.object({
+  capability: teacherProfileCapabilitySchema,
+  assignments: updateTeacherAssignmentsSchema
+});
+
+export type UpdateTeacherTeachingSetupInput = z.infer<typeof updateTeacherTeachingSetupSchema>;
+
+export const personTypes = ["teacher", "admin_staff", "accountant", "other"] as const;
+export type PersonType = (typeof personTypes)[number];
+
+export const personTypeToRoleKey: Record<PersonType, string> = {
+  teacher: "teacher",
+  admin_staff: "school_admin",
+  accountant: "accountant",
+  other: "hr_staff"
+};
+
+export const staffQualificationSchema = z.object({
+  title: z.string().trim().min(1),
+  institution: z.string().trim().optional(),
+  year: z.string().trim().optional()
+});
+
+export type StaffQualification = z.infer<typeof staffQualificationSchema>;
+
+export const provisionStaffSchema = z.object({
+  fullName: z.string().trim().min(1),
+  email: z.string().email(),
+  phone: myanmarPhoneSchema,
+  roleKey: z.string().trim().min(1),
+  /** @deprecated Use roleKey — kept for backward-compatible API clients. */
+  personType: z.enum(personTypes).optional(),
+  createLogin: z.boolean().default(true),
+  rbacRoleKey: z.string().optional(),
+  departmentId: z.string().uuid().optional(),
+  department: z.string().optional(),
+  joinDate: z.string().optional(),
+  promotionTitle: z.string().trim().optional(),
+  qualifications: z.array(staffQualificationSchema).optional(),
+  teacherAssignments: updateTeacherAssignmentsSchema.optional()
+});
+
+export type ProvisionStaffInput = z.infer<typeof provisionStaffSchema>;
+
+export const provisionTeacherSchema = provisionStaffSchema.extend({
+  roleKey: z.literal("teacher").default("teacher")
+});
+
+export type ProvisionTeacherInput = z.infer<typeof provisionTeacherSchema>;
+
+export const provisionStaffUpdateSchema = z.object({
+  fullName: z.string().trim().min(1).optional(),
+  email: z.string().email().optional(),
+  phone: myanmarPhoneSchema.optional(),
+  roleKey: z.string().trim().min(1).optional(),
+  /** @deprecated Use roleKey — kept for backward-compatible API clients. */
+  personType: z.enum(personTypes).optional(),
+  departmentId: z.string().uuid().optional(),
+  department: z.string().optional(),
+  joinDate: z.string().optional(),
+  employmentStatus: z.string().optional(),
+  rbacRoleKey: z.string().optional(),
+  promotionTitle: z.string().trim().optional(),
+  qualifications: z.array(staffQualificationSchema).optional(),
+  teacherAssignments: updateTeacherAssignmentsSchema.optional()
+});
+
+export type ProvisionStaffUpdateInput = z.infer<typeof provisionStaffUpdateSchema>;
+
+/** Fee types always included on enrollment preview (from fee plans). */
+export const mandatoryEnrollmentFeeTypes = ["tuition", "registration"] as const;
+
+export const enrollmentFeeLineSchema = z.object({
+  planId: z.string().uuid().optional(),
+  feeItemId: z.string().uuid(),
+  feeItemName: z.string(),
+  description: z.string(),
+  unitAmount: z.number(),
+  quantity: z.number().default(1),
+  lineTotal: z.number(),
+  source: z.enum(["fee_plan", "optional"]),
+  feeType: z.string(),
+  billingType: z.string(),
+  mandatory: z.boolean()
+});
+
+export type EnrollmentFeeLine = z.infer<typeof enrollmentFeeLineSchema>;
+
+export const siblingDiscountCriteriaSchema = z.object({
+  type: z.literal("sibling"),
+  minEnrolledSiblings: z.number().int().min(0).optional(),
+  siblingOrdinal: z.number().int().min(2).optional(),
+  appliesToFeeTypes: z.array(z.string()).optional()
+});
+
+export const discountCriteriaSchema = z.union([
+  siblingDiscountCriteriaSchema,
+  z.object({ type: z.string() })
+]);
+
+export const enrollmentPreviewInputSchema = z.object({
+  studentId: z.string().uuid(),
+  academicYearId: z.string().uuid(),
+  gradeId: z.string().uuid(),
+  classroomId: z.string().uuid().optional(),
+  optionalFeeItemIds: z.array(z.string().uuid()).default([])
+});
+
+export type EnrollmentPreviewInput = z.infer<typeof enrollmentPreviewInputSchema>;
+
+export const enrollmentPreviewDiscountSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  discountType: z.string(),
+  amount: z.number(),
+  source: z.enum(["student_discount", "rule"]),
+  status: z.string().optional(),
+  requiresApproval: z.boolean().optional()
+});
+
+export const enrollmentPreviewPendingDiscountSchema = z.object({
+  id: z.string().uuid(),
+  ruleName: z.string(),
+  status: z.string(),
+  reason: z.string()
+});
+
+export const enrollmentPreviewResultSchema = z.object({
+  feeLines: z.array(enrollmentFeeLineSchema),
+  availableOptionalFees: z.array(
+    z.object({
+      feeItemId: z.string().uuid(),
+      name: z.string(),
+      feeType: z.string(),
+      billingType: z.string(),
+      unitAmount: z.number(),
+      selected: z.boolean()
+    })
+  ),
+  discounts: z.array(enrollmentPreviewDiscountSchema),
+  pendingDiscounts: z.array(enrollmentPreviewPendingDiscountSchema).default([]),
+  siblingSummary: z.object({
+    eligible: z.boolean(),
+    enrolledSiblingCount: z.number().int(),
+    message: z.string()
+  }),
+  subtotal: z.number(),
+  discountTotal: z.number(),
+  total: z.number(),
+  warnings: z.array(z.string()),
+  discountApprovalRequired: z.boolean().default(false),
+  confirmBlockers: z.array(z.string()).default([]),
+  canConfirm: z.boolean().default(true)
+});
+
+export type EnrollmentPreviewResult = z.infer<typeof enrollmentPreviewResultSchema>;
+
+export const enrollmentBillingSnapshotSchema = z.object({
+  optionalFeeItemIds: z.array(z.string().uuid()).optional(),
+  lastPreviewAt: z.string().optional()
+});
+
+export type EnrollmentBillingSnapshot = z.infer<typeof enrollmentBillingSnapshotSchema>;
+
+export const createEnrollmentSchema = enrollmentPreviewInputSchema.extend({
+  classroomId: z.string().uuid()
+});
+
+export type CreateEnrollmentInput = z.infer<typeof createEnrollmentSchema>;
+
+/** Supported payment methods — must match Postgres `payment_method` enum. */
+export const paymentMethods = [
+  "cash",
+  "bank_transfer",
+  "kbzpay",
+  "wavepay",
+  "aya_pay",
+  "cb_pay",
+  "other"
+] as const;
+
+export type PaymentMethod = (typeof paymentMethods)[number];
+
+export const enrollmentPaymentMethods = paymentMethods;
+
+export const enrollmentConfirmSchema = z.object({
+  dueDate: z.string().optional(),
+  optionalFeeItemIds: z.array(z.string().uuid()).optional(),
+  collectPayment: z.boolean().default(false),
+  paymentMethod: z.enum(paymentMethods).optional(),
+  paymentAmount: z.number().positive().optional(),
+  paymentReference: z.string().optional(),
+  paymentNotes: z.string().optional()
+});
+
+export type EnrollmentConfirmInput = z.infer<typeof enrollmentConfirmSchema>;
+
+export const enrollmentConfirmResultSchema = z.object({
+  enrollmentId: z.string().uuid(),
+  invoiceId: z.string().uuid(),
+  invoiceNumber: z.string(),
+  paymentId: z.string().uuid().optional(),
+  preview: enrollmentPreviewResultSchema
+});
+
+export type EnrollmentConfirmResult = z.infer<typeof enrollmentConfirmResultSchema>;

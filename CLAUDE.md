@@ -11,6 +11,14 @@ apps/worker/    BullMQ background job worker
 packages/shared TypeScript-only: roles, permissions, Zod schemas, job types
 ```
 
+## Unified enrollment & billing (critical product rule)
+
+**Anti-pattern:** separate flows to enroll → manually create invoice → manually record payment. That is redundant; do not build or preserve it.
+
+**Required pattern:** one enrollment ceremony with fee preview, discount evaluation (including sibling rules via `family_group_id`), invoice preview, and atomic confirm (optional payment at confirm). Finance is for AR operations and recurring billing — not re-entering enrollment fees.
+
+See `docs/unified-enrollment-billing-plan.md` and `.cursor/rules/unified-lifecycle.mdc`.
+
 ## Key Conventions
 
 ### Backend (NestJS + Drizzle)
@@ -55,12 +63,16 @@ const mutation = useApiMutation<CreateStudentDto, Student>(
 
 **Component structure:**
 ```
-apps/web/components/ui/        shadcn/ui primitives
-apps/web/components/layout/    Sidebar, TopBar, PageHeader, CommandPalette
-apps/web/components/shared/    DataTable, StatCard, FilterBar, FormSheet, EmptyState
+apps/web/app/lib/              Padauk UI wrappers (Panel, DataTable, DetailHero, RecordList, …)
+apps/web/app/dashboard/        Shell layout, PageHeader context, top bar, sidebar
+apps/web/components/ui/        shadcn/ui primitives (Dialog, Sheet, Button, Table shell)
+apps/web/components/shared/    ConfirmDialog, AppToast, CheckboxList
+apps/web/app/globals.css       Padauk component classes (.panel, .padauk-table, .btn-primary, …)
 ```
 
-**Form pattern:** `react-hook-form` + Zod via `zodResolver` from `app/lib/zod-resolver.ts`. Validate with shared Zod schemas from `@sms/shared`.
+**Page layout:** Publish title/breadcrumbs with `PageHeader` from `app/dashboard/page-header-context.tsx`; the sticky `DashboardTopbar` renders them. Page body uses `.page-stack` → optional `DetailHero` → `.panel` sections.
+
+**Form pattern:** `react-hook-form` + Zod via `zodResolver` from `app/lib/zod-resolver.ts`. Validate with shared Zod schemas from `@sms/shared`. Create/edit flows use `RecordFormSheet` (shadcn Sheet, 480px).
 
 ### Shared Package (`@sms/shared`)
 
@@ -83,6 +95,7 @@ npm run db:generate  # drizzle-kit generate (after schema change)
 npm run db:migrate   # apply pending migrations
 npm run db:seed      # seed demo tenants
 npm run db:reset     # drop + recreate + migrate + seed
+npm run tokens:build # regenerate design-tokens.css after token changes
 npm run typecheck    # tsc --noEmit across all packages
 npm run test         # vitest across all packages
 npm run build        # production build all packages
@@ -107,11 +120,17 @@ Copy `.env.example` to `.env`. Required vars:
 
 ## Design System
 
-See `DESIGN.md` for full visual language specification. Key points:
-- Tailwind CSS + shadcn/ui (no raw CSS classes)
-- Wise-inspired: clean, 1px borders, high-contrast, functional color
-- Adaline.ai-inspired: dense tables (36px rows), compact sidebar, Cmd+K palette
-- Design tokens in `tailwind.config.ts` — use CSS variables, never hardcode hex
+See `DESIGN.md` for the full visual language (**Padauk School OS** — ink-green shell + spring-lime CTAs).
+
+**Token pipeline:** edit `tokens/semantic.json` (or `tokens/extensions.json`) → `npm run tokens:build` → `apps/web/app/design-tokens.css` (generated). Component classes live in `apps/web/app/globals.css`. `apps/web/tailwind.config.ts` mirrors the same CSS variables for utilities. Never hardcode hex in components.
+
+**UI conventions:**
+- Wise-inspired: 1px borders, restrained color, trustworthy finance UX
+- Adaline-inspired: dense `.padauk-table`, compact sidebar, keyboard-navigable rows
+- Reuse Padauk patterns: `.panel` + `PanelHead`, `TablePanelHead`/`TablePanelBody`, `TableSearchInput`, `.badge badge--*`, `.btn-primary` / `.btn-ghost`
+- shadcn/ui for overlays (Dialog, Sheet) — match Padauk sizing when mixing
+- Icons: `<Icon name="…" />` (Material Symbols Rounded)
+- Content max width 1180px, left-aligned under `.dash-content`
 
 ## Testing
 

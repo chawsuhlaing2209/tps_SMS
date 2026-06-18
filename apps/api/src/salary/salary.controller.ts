@@ -17,7 +17,8 @@ import {
   CreateSalaryComponentDto,
   GenerateSalaryRecordsDto,
   ListSalaryRecordsQueryDto,
-  MarkSalaryPaidDto
+  MarkSalaryPaidDto,
+  UpdateSalaryComponentDto
 } from "./dto.js";
 import { SalaryService } from "./salary.service.js";
 
@@ -39,6 +40,34 @@ export class SalaryController {
     @Headers("x-user-id") actorUserId?: string
   ) {
     return this.salaryService.createComponent(tenantId, actorUserId, dto);
+  }
+
+  @Patch("components/:componentId")
+  updateComponent(
+    @Param("tenantId") tenantId: string,
+    @Param("componentId") componentId: string,
+    @Body() dto: UpdateSalaryComponentDto,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.salaryService.updateComponent(tenantId, componentId, actorUserId, dto);
+  }
+
+  @Post("components/:componentId/archive")
+  archiveComponent(
+    @Param("tenantId") tenantId: string,
+    @Param("componentId") componentId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.salaryService.archiveComponent(tenantId, componentId, actorUserId);
+  }
+
+  @Post("components/:componentId/reactivate")
+  reactivateComponent(
+    @Param("tenantId") tenantId: string,
+    @Param("componentId") componentId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.salaryService.reactivateComponent(tenantId, componentId, actorUserId);
   }
 
   @Get("records")

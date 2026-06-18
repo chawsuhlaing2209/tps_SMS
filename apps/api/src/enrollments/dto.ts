@@ -1,4 +1,6 @@
-import { IsOptional, IsString, IsUUID } from "class-validator";
+import { IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, IsUUID } from "class-validator";
+import { Type } from "class-transformer";
+import { paymentMethods } from "@sms/shared";
 
 export class ListEnrollmentsQueryDto {
   @IsOptional()
@@ -14,24 +16,105 @@ export class ListEnrollmentsQueryDto {
   declare status?: string;
 }
 
-export class CreateEnrollmentDto {
+export class PreviewEnrollmentDto {
   @IsUUID()
   declare studentId: string;
-
-  @IsUUID()
-  declare classroomId: string;
 
   @IsUUID()
   declare academicYearId: string;
 
   @IsUUID()
   declare gradeId: string;
+
+  @IsOptional()
+  @IsUUID()
+  declare classroomId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID("4", { each: true })
+  optionalFeeItemIds?: string[];
+}
+
+export class CreateEnrollmentDto {
+  @IsUUID()
+  declare studentId: string;
+
+  @IsOptional()
+  @IsUUID()
+  declare classroomId?: string;
+
+  @IsUUID()
+  declare academicYearId: string;
+
+  @IsUUID()
+  declare gradeId: string;
+
+  @IsOptional()
+  @IsUUID()
+  declare enquiryId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID("4", { each: true })
+  optionalFeeItemIds?: string[];
 }
 
 export class UpdateEnrollmentDto {
   @IsOptional()
   @IsString()
   declare status?: string;
+
+  @IsOptional()
+  @IsUUID()
+  declare classroomId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  declare gradeId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  declare academicYearId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID("4", { each: true })
+  optionalFeeItemIds?: string[];
+}
+
+export class ConfirmEnrollmentDto {
+  @IsOptional()
+  @IsString()
+  dueDate?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID("4", { each: true })
+  optionalFeeItemIds?: string[];
+
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  collectPayment?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @IsIn([...paymentMethods])
+  paymentMethod?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  paymentAmount?: number;
+
+  @IsOptional()
+  @IsString()
+  paymentReference?: string;
+
+  @IsOptional()
+  @IsString()
+  paymentNotes?: string;
 }
 
 export class ListStudentServicesQueryDto {

@@ -1,17 +1,25 @@
 import type { Metadata } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
-import { Plus_Jakarta_Sans } from "next/font/google";
+import { Bricolage_Grotesque, Hanken_Grotesk } from "next/font/google";
 import type { ReactNode } from "react";
+import { AppToaster } from "./components/app-toaster";
 import { QueryProvider } from "./lib/query-provider";
 import "./globals.css";
 
-// Plus Jakarta Sans stands in for the design's proprietary "Linik Sans":
-// a bold, geometric grotesque with the same friendly, rounded character.
-const display = Plus_Jakarta_Sans({
+// Padauk School OS design language: Bricolage Grotesque for confident display
+// headings, Hanken Grotesk for clean body text.
+const display = Bricolage_Grotesque({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700", "800"],
   variable: "--font-display",
+  display: "swap"
+});
+
+const body = Hanken_Grotesk({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-body",
   display: "swap"
 });
 
@@ -29,10 +37,21 @@ export default async function RootLayout({
   const messages = await getMessages();
 
   return (
-    <html lang={locale} className={display.variable}>
-      <body>
+    <html lang={locale} className={`${display.variable} ${body.variable}`}>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400,0..1,0&display=block"
+          rel="stylesheet"
+        />
+      </head>
+      <body suppressHydrationWarning>
         <NextIntlClientProvider locale={locale} messages={messages}>
-          <QueryProvider>{children}</QueryProvider>
+          <QueryProvider>
+            {children}
+            <AppToaster />
+          </QueryProvider>
         </NextIntlClientProvider>
       </body>
     </html>

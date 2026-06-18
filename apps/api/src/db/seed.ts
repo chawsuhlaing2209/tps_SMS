@@ -8,13 +8,27 @@ import {
   academicYears,
   attendanceSessions,
   classroomSubjectTeachers,
+  classroomStudents,
   classrooms,
+  discountRules,
+  enrollmentFeePlans,
+  enrollmentFeePlanGrades,
+  enrollments,
+  familyGroups,
+  feeItems,
   gradeChiefAssignments,
   gradeSubjects,
   grades,
+  guardians,
+  paymentPlanInstallments,
+  paymentPlans,
   roles,
   staff,
+  studentServices,
+  students,
   subjects,
+  teachingSectorGrades,
+  teachingSectors,
   tenantSettings,
   tenants,
   userRoles,
@@ -61,6 +75,66 @@ async function seedPlatformAdmin(db: ReturnType<typeof drizzle>, passwordHash: s
     .returning({ id: users.id });
 
   return admin?.id;
+}
+
+async function seedTeachingSectors(db: ReturnType<typeof drizzle>, tenantId: string) {
+  const gradeRows = await db
+    .select({ id: grades.id, sortOrder: grades.sortOrder })
+    .from(grades)
+    .where(and(eq(grades.tenantId, tenantId), eq(grades.status, "active")))
+    .orderBy(grades.sortOrder);
+
+  if (!gradeRows.length) {
+    return;
+  }
+
+  const sectorDefs = [
+    { name: "Primary", sortOrder: 1, maxSortOrder: 5 },
+    { name: "Middle", sortOrder: 2, minSortOrder: 6, maxSortOrder: 9 },
+    { name: "High", sortOrder: 3, minSortOrder: 10, maxSortOrder: 99 }
+  ];
+
+  for (const def of sectorDefs) {
+    const [sector] = await db
+      .insert(teachingSectors)
+      .values({
+        tenantId,
+        name: def.name,
+        sortOrder: def.sortOrder,
+        status: "active"
+      })
+      .onConflictDoNothing()
+      .returning({ id: teachingSectors.id });
+
+    const sectorId =
+      sector?.id ??
+      (
+        await db
+          .select({ id: teachingSectors.id })
+          .from(teachingSectors)
+          .where(and(eq(teachingSectors.tenantId, tenantId), eq(teachingSectors.name, def.name)))
+      )[0]?.id;
+
+    if (!sectorId) {
+      continue;
+    }
+
+    const matchedGrades = gradeRows.filter((grade) => {
+      const order = grade.sortOrder ?? 0;
+      const min = def.minSortOrder ?? 0;
+      const max = def.maxSortOrder ?? 99;
+      return order >= min && order <= max;
+    });
+
+    const gradeIds = matchedGrades.length ? matchedGrades.map((row) => row.id) : [gradeRows[0]!.id];
+
+    for (const gradeId of gradeIds) {
+      await db
+        .insert(teachingSectorGrades)
+        .values({ tenantId, sectorId, gradeId })
+        .onConflictDoNothing();
+    }
+  }
 }
 
 async function seedDemoClassroomData(
@@ -169,6 +243,10 @@ async function seedDemoClassroomData(
       .where(and(eq(classrooms.tenantId, tenantId), eq(classrooms.name, name)));
 
     if (existing) {
+      await db
+        .update(classrooms)
+        .set({ academicYearId: year.id, gradeId: grade.id, status: "active" })
+        .where(and(eq(classrooms.tenantId, tenantId), eq(classrooms.id, existing.id)));
       return existing.id;
     }
 
@@ -258,6 +336,345 @@ async function seedDemoClassroomData(
         classroomId: classroomBId,
         subjectId: subject.id,
         sessionDate: "2026-06-16"
+      });
+    }
+  }
+
+  await seedDemoEnrollmentBilling(db, tenantId, year.id, grade.id, classroomAId);
+  await seedDemoPaymentPlans(db, tenantId);
+}
+
+async function seedDemoPaymentPlans(db: ReturnType<typeof drizzle>, tenantId: string) {
+  const ensurePlan = async (
+    name: string,
+    description: string,
+    frequency: string,
+    status: "active" | "inactive",
+    sortOrder: number,
+    installments: Array<{ label: string; dueDate: string; installmentCount?: number }>
+  ) => {
+    const [existing] = await db
+      .select({ id: paymentPlans.id })
+      .from(paymentPlans)
+      .where(and(eq(paymentPlans.tenantId, tenantId), eq(paymentPlans.name, name)));
+
+    if (existing) {
+      return existing.id;
+    }
+
+    const [created] = await db
+      .insert(paymentPlans)
+      .values({ tenantId, name, description, frequency, status, sortOrder })
+      .returning({ id: paymentPlans.id });
+
+    await db.insert(paymentPlanInstallments).values(
+      installments.map((item, index) => ({
+        tenantId,
+        planId: created!.id,
+        label: item.label,
+        dueDate: item.dueDate,
+        installmentCount: item.installmentCount ?? null,
+        sortOrder: index
+      }))
+    );
+
+    return created!.id;
+  };
+
+  await ensurePlan(
+    "Annual",
+    "One full payment at the start of the academic year.",
+    "annual",
+    "active",
+    0,
+    [{ label: "Full payment due", dueDate: "1 Jun 2026" }]
+  );
+
+  await ensurePlan(
+    "Term",
+    "Three equal installments, one per term.",
+    "term",
+    "active",
+    1,
+    [
+      { label: "Term 1", dueDate: "1 Jun 2026" },
+      { label: "Term 2", dueDate: "1 Oct 2026" },
+      { label: "Term 3", dueDate: "1 Feb 2027" }
+    ]
+  );
+
+  await ensurePlan(
+    "Monthly",
+    "Twelve monthly installments grouped by collection period.",
+    "monthly",
+    "inactive",
+    2,
+    [
+      { label: "Jun–Aug 2026 (3×)", dueDate: "1 Jun 2026", installmentCount: 3 },
+      { label: "Sep–Dec 2026 (4×)", dueDate: "1 Sep 2026", installmentCount: 4 },
+      { label: "Jan–Mar 2027 (3×)", dueDate: "1 Jan 2027", installmentCount: 3 }
+    ]
+  );
+}
+
+async function seedDemoEnrollmentBilling(
+  db: ReturnType<typeof drizzle>,
+  tenantId: string,
+  academicYearId: string,
+  gradeId: string,
+  classroomId: string | undefined
+) {
+  if (!classroomId) {
+    return;
+  }
+
+  const ensureFeeItem = async (name: string, feeType: string, billingType: string) => {
+    const [existing] = await db
+      .select({ id: feeItems.id })
+      .from(feeItems)
+      .where(and(eq(feeItems.tenantId, tenantId), eq(feeItems.name, name)));
+
+    if (existing) {
+      return existing.id;
+    }
+
+    const [created] = await db
+      .insert(feeItems)
+      .values({ tenantId, name, feeType, billingType, status: "active" })
+      .returning({ id: feeItems.id });
+
+    return created!.id;
+  };
+
+  const tuitionId = await ensureFeeItem("Grade 1 Tuition", "tuition", "one_time");
+  const registrationId = await ensureFeeItem("Registration Fee", "registration", "one_time");
+  const transportId = await ensureFeeItem("School Transport", "transport", "monthly");
+
+  const planRows = [
+    { feeItemId: tuitionId, amount: "500000" },
+    { feeItemId: registrationId, amount: "50000" },
+    { feeItemId: transportId, amount: "40000" }
+  ];
+
+  const ensurePlansForYear = async (yearId: string) => {
+    for (const plan of planRows) {
+      const [existingPlan] = await db
+        .select({ id: enrollmentFeePlans.id })
+        .from(enrollmentFeePlans)
+        .where(
+          and(
+            eq(enrollmentFeePlans.tenantId, tenantId),
+            eq(enrollmentFeePlans.academicYearId, yearId),
+            eq(enrollmentFeePlans.feeItemId, plan.feeItemId),
+            eq(enrollmentFeePlans.amount, plan.amount)
+          )
+        );
+
+      if (existingPlan) {
+        const [existingGrade] = await db
+          .select({ id: enrollmentFeePlanGrades.id })
+          .from(enrollmentFeePlanGrades)
+          .where(
+            and(
+              eq(enrollmentFeePlanGrades.tenantId, tenantId),
+              eq(enrollmentFeePlanGrades.planId, existingPlan.id),
+              eq(enrollmentFeePlanGrades.gradeId, gradeId)
+            )
+          );
+
+        if (!existingGrade) {
+          await db.insert(enrollmentFeePlanGrades).values({
+            tenantId,
+            planId: existingPlan.id,
+            gradeId
+          });
+        }
+        continue;
+      }
+
+      const [createdPlan] = await db
+        .insert(enrollmentFeePlans)
+        .values({
+          tenantId,
+          academicYearId: yearId,
+          feeItemId: plan.feeItemId,
+          amount: plan.amount
+        })
+        .returning({ id: enrollmentFeePlans.id });
+
+      await db.insert(enrollmentFeePlanGrades).values({
+        tenantId,
+        planId: createdPlan!.id,
+        gradeId
+      });
+    }
+  };
+
+  await ensurePlansForYear(academicYearId);
+
+  const [canonicalYear] = await db
+    .select({ name: academicYears.name })
+    .from(academicYears)
+    .where(and(eq(academicYears.tenantId, tenantId), eq(academicYears.id, academicYearId)));
+
+  if (canonicalYear) {
+    const normalized = canonicalYear.name.replace(/\s+/g, "");
+    const aliasYears = await db
+      .select({ id: academicYears.id, name: academicYears.name })
+      .from(academicYears)
+      .where(eq(academicYears.tenantId, tenantId));
+
+    for (const alias of aliasYears) {
+      if (alias.id === academicYearId) continue;
+      if (alias.name.replace(/\s+/g, "") === normalized) {
+        await ensurePlansForYear(alias.id);
+      }
+    }
+  }
+
+  const [existingSiblingRule] = await db
+    .select({ id: discountRules.id })
+    .from(discountRules)
+    .where(and(eq(discountRules.tenantId, tenantId), eq(discountRules.name, "Sibling 10%")));
+
+  if (!existingSiblingRule) {
+    await db.insert(discountRules).values({
+      tenantId,
+      name: "Sibling 10%",
+      discountType: "sibling",
+      valueType: "percentage",
+      value: "10",
+      criteria: {
+        type: "sibling",
+        minEnrolledSiblings: 1,
+        appliesToFeeTypes: ["tuition"]
+      },
+      status: "active"
+    });
+  }
+
+  const [existingFamily] = await db
+    .select({ id: familyGroups.id })
+    .from(familyGroups)
+    .where(and(eq(familyGroups.tenantId, tenantId), eq(familyGroups.name, "Demo Kyaw Family")));
+
+  let familyGroupId = existingFamily?.id;
+
+  if (!familyGroupId) {
+    const [guardian] = await db
+      .insert(guardians)
+      .values({
+        tenantId,
+        fullName: "U Kyaw Kyaw",
+        phone: "09123456789",
+        preferredChannel: "phone"
+      })
+      .returning({ id: guardians.id });
+
+    const [family] = await db
+      .insert(familyGroups)
+      .values({
+        tenantId,
+        name: "Demo Kyaw Family",
+        primaryGuardianId: guardian!.id
+      })
+      .returning({ id: familyGroups.id });
+
+    familyGroupId = family!.id;
+  }
+
+  const ensureStudent = async (admissionNumber: string, fullName: string, status: "draft" | "enrolled") => {
+    const [existing] = await db
+      .select({ id: students.id })
+      .from(students)
+      .where(and(eq(students.tenantId, tenantId), eq(students.admissionNumber, admissionNumber)));
+
+    if (existing) {
+      await db
+        .update(students)
+        .set({ familyGroupId, status, fullName })
+        .where(eq(students.id, existing.id));
+      return existing.id;
+    }
+
+    const [created] = await db
+      .insert(students)
+      .values({
+        tenantId,
+        familyGroupId,
+        admissionNumber,
+        fullName,
+        dateOfBirth: admissionNumber === "DEMO-001" ? "2018-03-15" : "2020-08-20",
+        status
+      })
+      .returning({ id: students.id });
+
+    return created!.id;
+  };
+
+  const olderStudentId = await ensureStudent("DEMO-001", "Maung Maung Kyaw", "enrolled");
+  await ensureStudent("DEMO-002", "Ma Hla Kyaw", "draft");
+
+  for (let i = 3; i <= 102; i++) {
+    const num = String(i).padStart(3, "0");
+    await ensureStudent(`DEMO-${num}`, `Demo Student ${num}`, i % 5 === 0 ? "enrolled" : "draft");
+  }
+
+  const [existingEnrollment] = await db
+    .select({ id: enrollments.id })
+    .from(enrollments)
+    .where(
+      and(
+        eq(enrollments.tenantId, tenantId),
+        eq(enrollments.studentId, olderStudentId),
+        eq(enrollments.academicYearId, academicYearId)
+      )
+    );
+
+  if (!existingEnrollment) {
+    await db.insert(enrollments).values({
+      tenantId,
+      studentId: olderStudentId,
+      academicYearId,
+      gradeId,
+      classroomId,
+      status: "approved",
+      billingSnapshot: { optionalFeeItemIds: [] }
+    });
+
+    await db.insert(classroomStudents).values({
+      tenantId,
+      classroomId,
+      studentId: olderStudentId,
+      effectiveFrom: "2026-06-01",
+      movementReason: "seed_enrollment"
+    });
+  }
+
+  const [transportFee] = await db
+    .select({ id: feeItems.id })
+    .from(feeItems)
+    .where(and(eq(feeItems.tenantId, tenantId), eq(feeItems.name, "School Transport")));
+
+  if (transportFee) {
+    const [existingService] = await db
+      .select({ id: studentServices.id })
+      .from(studentServices)
+      .where(
+        and(
+          eq(studentServices.tenantId, tenantId),
+          eq(studentServices.studentId, olderStudentId),
+          eq(studentServices.feeItemId, transportFee.id),
+          isNull(studentServices.effectiveTo)
+        )
+      );
+
+    if (!existingService) {
+      await db.insert(studentServices).values({
+        tenantId,
+        studentId: olderStudentId,
+        feeItemId: transportFee.id,
+        effectiveFrom: "2026-06-01"
       });
     }
   }
@@ -354,6 +771,7 @@ async function seedTenant(
   }
 
   if (input.slug === "demo-alpha") {
+    await seedTeachingSectors(db, tenant.id);
     await seedDemoClassroomData(db, tenant.id, input.slug, ownerPasswordHash);
   }
 

@@ -1,20 +1,66 @@
 import {
   IsString, IsNotEmpty, IsNumber, IsOptional, IsUUID,
-  IsBoolean, IsArray, ValidateNested, IsDateString,
+  IsBoolean, IsArray, ValidateNested, IsDateString, IsIn,
 } from 'class-validator'
 import { Type, Transform } from 'class-transformer'
+import { paymentMethods } from '@sms/shared'
+
+function trimString({ value }: { value: unknown }) {
+  return typeof value === 'string' ? value.trim() : value
+}
 
 export class CreateFeeItemDto {
-  @IsString() @IsNotEmpty() declare name: string
-  @IsString() @IsNotEmpty() declare feeType: string
-  @IsString() @IsNotEmpty() declare billingType: string
+  @IsString()
+  @Transform(trimString)
+  @IsNotEmpty()
+  declare name: string
+
+  @IsString()
+  @Transform(trimString)
+  @IsNotEmpty()
+  declare feeType: string
+
+  @IsString()
+  @Transform(trimString)
+  @IsNotEmpty()
+  declare billingType: string
+}
+
+export class UpdateFeeItemDto {
+  @IsString()
+  @Transform(trimString)
+  @IsNotEmpty()
+  @IsOptional()
+  name?: string
+
+  @IsString()
+  @Transform(trimString)
+  @IsNotEmpty()
+  @IsOptional()
+  feeType?: string
+
+  @IsString()
+  @Transform(trimString)
+  @IsNotEmpty()
+  @IsOptional()
+  billingType?: string
 }
 
 export class CreateEnrollmentFeePlanDto {
   @IsUUID() declare academicYearId: string
-  @IsUUID() declare gradeId: string
+  @IsArray()
+  @IsUUID('4', { each: true })
+  declare gradeIds: string[]
   @IsUUID() declare feeItemId: string
   @IsNumber() @Type(() => Number) declare amount: number
+}
+
+export class UpdateEnrollmentFeePlanDto {
+  @IsNumber() @Type(() => Number) @IsOptional() declare amount?: number
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @IsOptional()
+  declare gradeIds?: string[]
 }
 
 export class InvoiceItemDto {
@@ -28,35 +74,51 @@ export class CreateInvoiceDto {
   @IsUUID() declare studentId: string
   @IsDateString() @IsOptional() dueDate?: string
   @IsArray() @ValidateNested({ each: true }) @Type(() => InvoiceItemDto) declare items: InvoiceItemDto[]
+  @IsString()
+  @Transform(trimString)
+  @IsOptional()
+  reason?: string
 }
 
 export class GenerateMonthlyInvoicesDto {
   @IsUUID() declare academicYearId: string
   @IsString() @IsNotEmpty() declare billingMonth: string
-}
-
-export class CancelInvoiceDto {
-  @IsString() @IsNotEmpty() declare reason: string
+  @IsUUID() @IsOptional() gradeId?: string
 }
 
 export class RecordPaymentDto {
   @IsNumber() @Type(() => Number) declare amount: number
-  @IsString() @IsNotEmpty() declare method: string
+  @IsString() @IsNotEmpty() @IsIn([...paymentMethods]) declare method: string
   @IsString() @IsOptional() referenceNumber?: string
   @IsString() @IsOptional() notes?: string
   @IsDateString() @IsOptional() paidAt?: string
 }
 
+export class RefundPaymentDto {
+  @IsNumber() @IsOptional() @Type(() => Number) amount?: number
+  @IsString()
+  @Transform(trimString)
+  @IsNotEmpty()
+  declare reason: string
+  @IsString() @IsOptional() transactionId?: string
+  @IsDateString() @IsOptional() paidAt?: string
+}
+
 export class VerifyPaymentDto {
+  @IsString()
+  @Transform(trimString)
+  @IsNotEmpty()
+  declare reason: string
   @IsString() @IsOptional() referenceNumber?: string
   @IsString() @IsOptional() notes?: string
-  @IsString() @IsOptional() overrideReason?: string
 }
 
 export class ListInvoicesQueryDto {
   @IsString() @IsOptional() status?: string
   @IsUUID() @IsOptional() studentId?: string
+  @IsString() @IsOptional() @IsIn(['enrollment', 'recurring', 'ad_hoc']) source?: string
   @IsString() @IsOptional() month?: string
+  @IsUUID() @IsOptional() academicYearId?: string
   @IsUUID() @IsOptional() gradeId?: string
   @IsNumber() @IsOptional() @Type(() => Number) limit?: number
   @IsNumber() @IsOptional() @Type(() => Number) offset?: number
@@ -78,4 +140,34 @@ export class MonthlyReportQueryDto {
 export class ReceivablesQueryDto {
   @IsString() @IsOptional() gradeId?: string
   @IsString() @IsOptional() status?: string
+}
+
+export class PaymentPlanInstallmentDto {
+  @IsString() @Transform(trimString) @IsNotEmpty() declare label: string
+  @IsString() @Transform(trimString) @IsNotEmpty() declare dueDate: string
+  @IsNumber() @IsOptional() @Type(() => Number) installmentCount?: number
+  @IsNumber() @IsOptional() @Type(() => Number) sortOrder?: number
+}
+
+export class CreatePaymentPlanDto {
+  @IsString() @Transform(trimString) @IsNotEmpty() declare name: string
+  @IsString() @Transform(trimString) @IsOptional() description?: string
+  @IsString() @Transform(trimString) @IsNotEmpty() declare frequency: string
+  @IsNumber() @IsOptional() @Type(() => Number) sortOrder?: number
+  @IsIn(['active', 'inactive']) @IsOptional() status?: 'active' | 'inactive'
+  @IsArray() @ValidateNested({ each: true }) @Type(() => PaymentPlanInstallmentDto) @IsOptional()
+  installments?: PaymentPlanInstallmentDto[]
+}
+
+export class UpdatePaymentPlanDto {
+  @IsString() @Transform(trimString) @IsNotEmpty() @IsOptional() name?: string
+  @IsString() @Transform(trimString) @IsOptional() description?: string
+  @IsString() @Transform(trimString) @IsNotEmpty() @IsOptional() frequency?: string
+  @IsNumber() @IsOptional() @Type(() => Number) sortOrder?: number
+  @IsIn(['active', 'inactive']) @IsOptional() status?: 'active' | 'inactive'
+}
+
+export class UpdatePaymentPlanInstallmentsDto {
+  @IsArray() @ValidateNested({ each: true }) @Type(() => PaymentPlanInstallmentDto)
+  declare installments: PaymentPlanInstallmentDto[]
 }

@@ -1,5 +1,5 @@
-import { IsArray, IsNumber, IsOptional, IsString, IsUUID, ValidateNested } from "class-validator";
-import { Type } from "class-transformer";
+import { IsArray, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, ValidateNested } from "class-validator";
+import { Type, Transform } from "class-transformer";
 
 export class CreateExamCycleDto {
   @IsUUID()
@@ -69,4 +69,19 @@ export class BulkResultsDto {
   @ValidateNested({ each: true })
   @Type(() => ResultEntryDto)
   declare results: ResultEntryDto[];
+}
+
+export class CorrectAssessmentResultDto {
+  @IsOptional()
+  @IsNumber()
+  declare marksObtained?: number;
+
+  @IsOptional()
+  @IsString()
+  declare grade?: string;
+
+  @IsString()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsNotEmpty()
+  declare correctionReason: string;
 }

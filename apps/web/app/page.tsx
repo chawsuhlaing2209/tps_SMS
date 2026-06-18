@@ -134,6 +134,10 @@ export default function LoginPage() {
             </p>
           ) : null}
 
+          <p className="auth-footer">
+            <Link href="/forgot-password">{t("forgotPassword")}</Link>
+          </p>
+
           <button type="submit" className="auth-button" disabled={isSubmitting}>
             {isSubmitting ? t("signingIn") : t("signIn")}
           </button>

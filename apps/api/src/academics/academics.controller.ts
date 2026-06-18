@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Headers, Param, Patch, Post, UseGuards } from "@nestjs/common";
 import { RequirePermissions } from "../identity/permissions.decorator.js";
 import { PermissionsGuard } from "../identity/permissions.guard.js";
+import { ClassroomsService } from "../classrooms/classrooms.service.js";
 import { AcademicsService } from "./academics.service.js";
 import {
   AssignGradeSubjectDto,
@@ -15,14 +16,56 @@ import {
   UpdateGradeSubjectDto,
   UpdateSectionDto,
   UpdateSubjectDto,
-  UpdateTermDto
+  UpdateTermDto,
+  SetAcademicYearActiveDto
 } from "./dto.js";
 
 @Controller("tenants/:tenantId/academics")
 @UseGuards(PermissionsGuard)
 @RequirePermissions("academic_setup.manage")
 export class AcademicsController {
-  constructor(private readonly academicsService: AcademicsService) {}
+  constructor(
+    private readonly academicsService: AcademicsService,
+    private readonly classroomsService: ClassroomsService
+  ) {}
+
+  @Get("setup/academic-years")
+  listAcademicYearsOverview(@Param("tenantId") tenantId: string) {
+    return this.academicsService.listAcademicYearsOverview(tenantId);
+  }
+
+  @Get("setup/academic-years/:academicYearId/grades")
+  listGradesOverview(
+    @Param("tenantId") tenantId: string,
+    @Param("academicYearId") academicYearId: string
+  ) {
+    return this.academicsService.listGradesOverview(tenantId, academicYearId);
+  }
+
+  @Get("setup/academic-years/:academicYearId/subjects")
+  listSubjectsOverview(
+    @Param("tenantId") tenantId: string,
+    @Param("academicYearId") academicYearId: string
+  ) {
+    return this.academicsService.listSubjectsOverview(tenantId, academicYearId);
+  }
+
+  @Get("setup/academic-years/:academicYearId/classrooms")
+  listClassroomsForYear(
+    @Param("tenantId") tenantId: string,
+    @Param("academicYearId") academicYearId: string
+  ) {
+    return this.classroomsService.listClassroomsForYear(tenantId, academicYearId);
+  }
+
+  @Get("setup/academic-years/:academicYearId/grades/:gradeId/classrooms")
+  listClassroomsForGrade(
+    @Param("tenantId") tenantId: string,
+    @Param("academicYearId") academicYearId: string,
+    @Param("gradeId") gradeId: string
+  ) {
+    return this.classroomsService.listClassroomsForGrade(tenantId, academicYearId, gradeId);
+  }
 
   @Get("academic-years")
   listAcademicYears(@Param("tenantId") tenantId: string) {
@@ -46,6 +89,21 @@ export class AcademicsController {
     @Headers("x-user-id") actorUserId?: string
   ) {
     return this.academicsService.updateAcademicYear(tenantId, academicYearId, dto, actorUserId);
+  }
+
+  @Patch("academic-years/:academicYearId/active")
+  setAcademicYearActive(
+    @Param("tenantId") tenantId: string,
+    @Param("academicYearId") academicYearId: string,
+    @Body() dto: SetAcademicYearActiveDto,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.academicsService.setAcademicYearActive(
+      tenantId,
+      academicYearId,
+      dto.active,
+      actorUserId
+    );
   }
 
   @Post("academic-years/:academicYearId/close")

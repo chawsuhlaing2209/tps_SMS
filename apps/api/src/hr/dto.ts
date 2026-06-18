@@ -1,5 +1,6 @@
-import { IsArray, IsDateString, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, ValidateNested } from "class-validator";
+import { IsArray, IsBoolean, IsDateString, IsEmail, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, ValidateNested } from "class-validator";
 import { Type } from "class-transformer";
+import { personTypes } from "@sms/shared";
 
 export class CreateStaffDto {
   @IsString()
@@ -82,6 +83,20 @@ export class LinkStaffUserDto {
   declare userId: string;
 }
 
+export class StaffQualificationDto {
+  @IsString()
+  @IsNotEmpty()
+  declare title: string;
+
+  @IsString()
+  @IsOptional()
+  institution?: string;
+
+  @IsString()
+  @IsOptional()
+  year?: string;
+}
+
 export class ListStaffQueryDto {
   @IsString()
   @IsOptional()
@@ -94,6 +109,10 @@ export class ListStaffQueryDto {
   @IsString()
   @IsOptional()
   employmentRole?: string;
+
+  @IsString()
+  @IsOptional()
+  excludeEmploymentRole?: string;
 
   @IsString()
   @IsOptional()
@@ -146,4 +165,117 @@ export class UpdateTeacherAssignmentsDto {
   @ValidateNested({ each: true })
   @Type(() => SubjectAssignmentItemDto)
   subjectTeaching!: SubjectAssignmentItemDto[];
+}
+
+export class TeacherProfileCapabilityDto {
+  @IsArray()
+  @IsUUID(undefined, { each: true })
+  sectorIds!: string[];
+
+  @IsArray()
+  @IsUUID(undefined, { each: true })
+  competentSubjectIds!: string[];
+
+  @IsArray()
+  @IsUUID(undefined, { each: true })
+  eligibleGradeIds!: string[];
+}
+
+export class UpdateTeacherTeachingSetupDto {
+  @ValidateNested()
+  @Type(() => TeacherProfileCapabilityDto)
+  capability!: TeacherProfileCapabilityDto;
+
+  @ValidateNested()
+  @Type(() => UpdateTeacherAssignmentsDto)
+  assignments!: UpdateTeacherAssignmentsDto;
+}
+
+export class ProvisionStaffDto {
+  @IsString()
+  @IsNotEmpty()
+  declare fullName: string;
+
+  @IsEmail()
+  declare email: string;
+
+  @IsString()
+  @IsNotEmpty()
+  phone!: string;
+
+  @IsIn([...personTypes])
+  @IsOptional()
+  personType?: (typeof personTypes)[number];
+
+  @IsString()
+  @IsNotEmpty()
+  roleKey!: string;
+
+  @IsBoolean()
+  @IsOptional()
+  createLogin?: boolean;
+
+  @IsString()
+  @IsOptional()
+  rbacRoleKey?: string;
+
+  @IsUUID()
+  @IsOptional()
+  departmentId?: string;
+
+  @IsString()
+  @IsOptional()
+  department?: string;
+
+  @IsDateString()
+  @IsOptional()
+  joinDate?: string;
+
+  @IsString()
+  @IsOptional()
+  promotionTitle?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => StaffQualificationDto)
+  qualifications?: StaffQualificationDto[];
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdateTeacherAssignmentsDto)
+  teacherAssignments?: UpdateTeacherAssignmentsDto;
+}
+
+export class ProvisionStaffUpdateDto extends UpdateStaffDto {
+  @IsIn([...personTypes])
+  @IsOptional()
+  personType?: (typeof personTypes)[number];
+
+  @IsString()
+  @IsOptional()
+  roleKey?: string;
+
+  @IsString()
+  @IsOptional()
+  rbacRoleKey?: string;
+
+  @IsUUID()
+  @IsOptional()
+  departmentId?: string;
+
+  @IsString()
+  @IsOptional()
+  promotionTitle?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => StaffQualificationDto)
+  qualifications?: StaffQualificationDto[];
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdateTeacherAssignmentsDto)
+  teacherAssignments?: UpdateTeacherAssignmentsDto;
 }

@@ -93,6 +93,30 @@ export class ClassroomsController {
     );
   }
 
+  @Get(":classroomId/students")
+  @RequireAnyPermissions("student.view", "student.manage", "classroom.manage", "academic_setup.manage")
+  listClassroomStudents(
+    @Req() req: TenantRequest,
+    @Param("classroomId") classroomId: string
+  ) {
+    return this.classroomsService.listClassroomStudents(
+      req.tenantContext.tenantId,
+      classroomId
+    );
+  }
+
+  @Get(":classroomId/room-detail")
+  @RequireAnyPermissions("student.view", "student.manage", "classroom.manage", "academic_setup.manage")
+  getClassroomRoomDetail(
+    @Req() req: TenantRequest,
+    @Param("classroomId") classroomId: string
+  ) {
+    return this.classroomsService.getClassroomRoomDetail(
+      req.tenantContext.tenantId,
+      classroomId
+    );
+  }
+
   @Get(":classroomId/subjects")
   @RequireAnyPermissions("student.view", "student.manage", "classroom.manage", "academic_setup.manage")
   @TeacherScoped({ classroomIdParam: "classroomId" })

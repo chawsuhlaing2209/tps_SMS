@@ -7,6 +7,7 @@ import {
   CreateEnquiryDto,
   CreateLeadActivityDto,
   ListEnquiriesQueryDto,
+  StartEnrollmentDto,
   UpdateEnquiryDto
 } from "./dto.js";
 
@@ -63,6 +64,17 @@ export class AdmissionsController {
     @Headers("x-user-id") actorUserId: string
   ) {
     return this.admissionsService.addActivity(tenantId, enquiryId, actorUserId, dto);
+  }
+
+  @Post("enquiries/:enquiryId/start-enrollment")
+  @RequirePermissions("admissions.manage")
+  startEnrollment(
+    @Param("tenantId") tenantId: string,
+    @Param("enquiryId") enquiryId: string,
+    @Body() dto: StartEnrollmentDto,
+    @Headers("x-user-id") actorUserId: string
+  ) {
+    return this.admissionsService.startEnrollment(tenantId, enquiryId, actorUserId, dto);
   }
 
   @Post("enquiries/:enquiryId/convert")

@@ -4,10 +4,20 @@ import {
   Injectable,
   NotFoundException
 } from "@nestjs/common";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
-import { academicYears, gradeSubjects, grades, reportCards, sections, subjects, terms } from "../db/schema.js";
+import {
+  academicYears,
+  classroomStudents,
+  classrooms,
+  gradeSubjects,
+  grades,
+  reportCards,
+  sections,
+  subjects,
+  terms
+} from "../db/schema.js";
 import type {
   AssignGradeSubjectDto,
   CreateAcademicYearDto,
@@ -52,6 +62,22 @@ export class AcademicsService {
     }
 
     return academicYear;
+  }
+
+  private dedupeSubjectsByCode<T extends { id: string; code: string | null }>(rows: T[]): T[] {
+    const seen = new Set<string>();
+    const unique: T[] = [];
+
+    for (const row of rows) {
+      const key = row.code?.trim().toLowerCase() || row.id;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      unique.push(row);
+    }
+
+    return unique;
   }
 
   private async syncGradeSubjects(
@@ -142,11 +168,40 @@ export class AcademicsService {
     }
   }
 
+  private async getCurrentAcademicYearRecord(tenantId: string) {
+    const [academicYear] = await this.db
+      .select()
+      .from(academicYears)
+      .where(and(eq(academicYears.tenantId, tenantId), eq(academicYears.status, "active")))
+      .orderBy(desc(academicYears.startsOn))
+      .limit(1);
+
+    return academicYear ?? null;
+  }
+
+  async getCurrentAcademicYear(tenantId: string) {
+    return this.getCurrentAcademicYearRecord(tenantId);
+  }
+
+  async assertCurrentAcademicYear(tenantId: string, academicYearId: string) {
+    const current = await this.getCurrentAcademicYearRecord(tenantId);
+    if (!current) {
+      throw new ConflictException("No active academic year is configured.");
+    }
+    if (current.id !== academicYearId) {
+      throw new ConflictException("This action must use the current academic year.");
+    }
+    return current;
+  }
+
   listAcademicYears(tenantId: string) {
-    return this.db.select().from(academicYears).where(eq(academicYears.tenantId, tenantId));
+    return this.getCurrentAcademicYearRecord(tenantId).then((year) => (year ? [year] : []));
   }
 
   async createAcademicYear(tenantId: string, dto: CreateAcademicYearDto, actorUserId?: string) {
+    const current = await this.getCurrentAcademicYearRecord(tenantId);
+    const initialStatus = current ? ("draft" as const) : ("active" as const);
+
     const [academicYear] = await this.db
       .insert(academicYears)
       .values({
@@ -154,6 +209,7 @@ export class AcademicsService {
         name: dto.name,
         startsOn: dto.startsOn,
         endsOn: dto.endsOn,
+        status: initialStatus,
         createdBy: actorUserId,
         updatedBy: actorUserId
       })
@@ -185,11 +241,52 @@ export class AcademicsService {
     return academicYear;
   }
 
-  async closeAcademicYear(tenantId: string, academicYearId: string, actorUserId?: string) {
+  async setAcademicYearActive(
+    tenantId: string,
+    academicYearId: string,
+    active: boolean,
+    actorUserId?: string
+  ) {
     const previous = await this.getAcademicYearOrThrow(tenantId, academicYearId);
 
-    if (previous.status === "archived") {
+    if (active && previous.status === "active") {
       return previous;
+    }
+    if (!active && previous.status !== "active") {
+      return previous;
+    }
+
+    if (active) {
+      const [academicYear] = await this.db.transaction(async (tx) => {
+        await tx
+          .update(academicYears)
+          .set({ status: "archived", updatedBy: actorUserId, updatedAt: new Date() })
+          .where(and(eq(academicYears.tenantId, tenantId), eq(academicYears.status, "active")));
+
+        const [updated] = await tx
+          .update(academicYears)
+          .set({ status: "active", updatedBy: actorUserId, updatedAt: new Date() })
+          .where(and(eq(academicYears.tenantId, tenantId), eq(academicYears.id, academicYearId)))
+          .returning();
+
+        return updated ? [updated] : [];
+      });
+
+      if (!academicYear) {
+        throw new NotFoundException("Academic year not found");
+      }
+
+      await this.auditService.recordEvent({
+        tenantId,
+        actorUserId: actorUserId ?? null,
+        action: "academic_year.activate",
+        recordType: "AcademicYear",
+        recordId: academicYearId,
+        before: { status: previous.status },
+        after: { status: "active" }
+      });
+
+      return academicYear;
     }
 
     const [academicYear] = await this.db
@@ -201,7 +298,7 @@ export class AcademicsService {
     await this.auditService.recordEvent({
       tenantId,
       actorUserId: actorUserId ?? null,
-      action: "academic_year.archive",
+      action: "academic_year.deactivate",
       recordType: "AcademicYear",
       recordId: academicYearId,
       before: { status: previous.status },
@@ -211,30 +308,12 @@ export class AcademicsService {
     return academicYear;
   }
 
+  async closeAcademicYear(tenantId: string, academicYearId: string, actorUserId?: string) {
+    return this.setAcademicYearActive(tenantId, academicYearId, false, actorUserId);
+  }
+
   async reactivateAcademicYear(tenantId: string, academicYearId: string, actorUserId?: string) {
-    const previous = await this.getAcademicYearOrThrow(tenantId, academicYearId);
-
-    if (previous.status === "active") {
-      return previous;
-    }
-
-    const [academicYear] = await this.db
-      .update(academicYears)
-      .set({ status: "active", updatedBy: actorUserId, updatedAt: new Date() })
-      .where(and(eq(academicYears.tenantId, tenantId), eq(academicYears.id, academicYearId)))
-      .returning();
-
-    await this.auditService.recordEvent({
-      tenantId,
-      actorUserId: actorUserId ?? null,
-      action: "academic_year.reactivate",
-      recordType: "AcademicYear",
-      recordId: academicYearId,
-      before: { status: previous.status },
-      after: { status: "active" }
-    });
-
-    return academicYear;
+    return this.setAcademicYearActive(tenantId, academicYearId, true, actorUserId);
   }
 
   listTerms(tenantId: string) {
@@ -242,7 +321,7 @@ export class AcademicsService {
   }
 
   async createTerm(tenantId: string, dto: CreateTermDto, actorUserId?: string) {
-    await this.assertAcademicYearMutable(tenantId, dto.academicYearId);
+    await this.assertCurrentAcademicYear(tenantId, dto.academicYearId);
 
     const [term] = await this.db
       .insert(terms)
@@ -333,7 +412,7 @@ export class AcademicsService {
       throw new Error("Failed to create grade.");
     }
 
-    if (dto.academicYearId && dto.subjectIds?.length) {
+    if (dto.academicYearId && dto.subjectIds !== undefined) {
       await this.syncGradeSubjects(
         tenantId,
         dto.academicYearId,
@@ -568,7 +647,7 @@ export class AcademicsService {
       })
       .returning();
 
-    if (subject && dto.academicYearId && dto.gradeIds?.length) {
+    if (subject && dto.academicYearId && dto.gradeIds !== undefined) {
       await this.syncSubjectGrades(
         tenantId,
         dto.academicYearId,
@@ -711,6 +790,22 @@ export class AcademicsService {
   async assignGradeSubject(tenantId: string, dto: AssignGradeSubjectDto, actorUserId?: string) {
     await this.assertAcademicYearMutable(tenantId, dto.academicYearId);
 
+    const [existing] = await this.db
+      .select()
+      .from(gradeSubjects)
+      .where(
+        and(
+          eq(gradeSubjects.tenantId, tenantId),
+          eq(gradeSubjects.academicYearId, dto.academicYearId),
+          eq(gradeSubjects.gradeId, dto.gradeId),
+          eq(gradeSubjects.subjectId, dto.subjectId)
+        )
+      );
+
+    if (existing) {
+      return existing;
+    }
+
     const [assignment] = await this.db
       .insert(gradeSubjects)
       .values({
@@ -773,5 +868,174 @@ export class AcademicsService {
       .where(and(eq(gradeSubjects.tenantId, tenantId), eq(gradeSubjects.id, assignmentId)));
 
     return { deleted: true };
+  }
+
+  async listAcademicYearsOverview(tenantId: string) {
+    const years = await this.db
+      .select()
+      .from(academicYears)
+      .where(eq(academicYears.tenantId, tenantId))
+      .orderBy(academicYears.startsOn);
+
+    const results = [];
+
+    for (const year of years) {
+      const [gradeCountRow] = await this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(grades)
+        .where(
+          and(
+            eq(grades.tenantId, tenantId),
+            eq(grades.status, "active"),
+            sql`(
+              exists (
+                select 1 from ${classrooms} c
+                where c.grade_id = ${grades.id}
+                  and c.tenant_id = ${tenantId}
+                  and c.academic_year_id = ${year.id}
+              )
+              or exists (
+                select 1 from ${gradeSubjects} gs
+                where gs.grade_id = ${grades.id}
+                  and gs.tenant_id = ${tenantId}
+                  and gs.academic_year_id = ${year.id}
+              )
+            )`
+          )
+        );
+
+      const [classroomCountRow] = await this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(classrooms)
+        .where(
+          and(eq(classrooms.tenantId, tenantId), eq(classrooms.academicYearId, year.id))
+        );
+
+      const [studentCountRow] = await this.db
+        .select({ count: sql<number>`count(distinct ${classroomStudents.studentId})::int` })
+        .from(classroomStudents)
+        .innerJoin(classrooms, eq(classroomStudents.classroomId, classrooms.id))
+        .where(
+          and(
+            eq(classroomStudents.tenantId, tenantId),
+            eq(classrooms.academicYearId, year.id),
+            isNull(classroomStudents.effectiveTo)
+          )
+        );
+
+      results.push({
+        ...year,
+        gradeCount: gradeCountRow?.count ?? 0,
+        classroomCount: classroomCountRow?.count ?? 0,
+        studentCount: studentCountRow?.count ?? 0
+      });
+    }
+
+    return results;
+  }
+
+  async listGradesOverview(tenantId: string, academicYearId: string) {
+    await this.getAcademicYearOrThrow(tenantId, academicYearId);
+
+    const gradeRows = await this.db
+      .select()
+      .from(grades)
+      .where(eq(grades.tenantId, tenantId))
+      .orderBy(grades.sortOrder, grades.name);
+
+    const results = [];
+
+    for (const grade of gradeRows) {
+      const subjectRows = await this.db
+        .select({
+          id: subjects.id,
+          name: subjects.name,
+          code: subjects.code
+        })
+        .from(gradeSubjects)
+        .innerJoin(subjects, eq(gradeSubjects.subjectId, subjects.id))
+        .where(
+          and(
+            eq(gradeSubjects.tenantId, tenantId),
+            eq(gradeSubjects.academicYearId, academicYearId),
+            eq(gradeSubjects.gradeId, grade.id)
+          )
+        )
+        .orderBy(subjects.name);
+
+      const uniqueSubjects = this.dedupeSubjectsByCode(subjectRows);
+
+      const [classroomCountRow] = await this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(classrooms)
+        .where(
+          and(
+            eq(classrooms.tenantId, tenantId),
+            eq(classrooms.academicYearId, academicYearId),
+            eq(classrooms.gradeId, grade.id)
+          )
+        );
+
+      const [studentCountRow] = await this.db
+        .select({ count: sql<number>`count(distinct ${classroomStudents.studentId})::int` })
+        .from(classroomStudents)
+        .innerJoin(classrooms, eq(classroomStudents.classroomId, classrooms.id))
+        .where(
+          and(
+            eq(classroomStudents.tenantId, tenantId),
+            eq(classrooms.academicYearId, academicYearId),
+            eq(classrooms.gradeId, grade.id),
+            isNull(classroomStudents.effectiveTo)
+          )
+        );
+
+      results.push({
+        ...grade,
+        subjectCount: uniqueSubjects.length,
+        subjects: uniqueSubjects,
+        classroomCount: classroomCountRow?.count ?? 0,
+        studentCount: studentCountRow?.count ?? 0
+      });
+    }
+
+    return results;
+  }
+
+  async listSubjectsOverview(tenantId: string, academicYearId: string) {
+    await this.getAcademicYearOrThrow(tenantId, academicYearId);
+
+    const subjectRows = await this.db
+      .select()
+      .from(subjects)
+      .where(eq(subjects.tenantId, tenantId))
+      .orderBy(subjects.name);
+
+    const results = [];
+
+    for (const subject of subjectRows) {
+      const gradeRows = await this.db
+        .select({
+          id: grades.id,
+          name: grades.name
+        })
+        .from(gradeSubjects)
+        .innerJoin(grades, eq(gradeSubjects.gradeId, grades.id))
+        .where(
+          and(
+            eq(gradeSubjects.tenantId, tenantId),
+            eq(gradeSubjects.academicYearId, academicYearId),
+            eq(gradeSubjects.subjectId, subject.id)
+          )
+        )
+        .orderBy(grades.name);
+
+      results.push({
+        ...subject,
+        gradeCount: gradeRows.length,
+        grades: gradeRows
+      });
+    }
+
+    return results;
   }
 }

@@ -248,7 +248,11 @@ export default function PlatformTenantsPage() {
         ) : !tenants.data?.length ? (
           <p className="muted">{c("empty")}</p>
         ) : (
-          <DataTable columns={columns} data={tenants.data} />
+          <DataTable
+            columns={columns}
+            data={tenants.data}
+            getRowHref={(tenant) => `/platform/tenants/${tenant.id}`}
+          />
         )}
       </section>
     </div>

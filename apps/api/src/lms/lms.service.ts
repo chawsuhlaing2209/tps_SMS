@@ -1,8 +1,13 @@
-import { Inject, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException
+} from "@nestjs/common";
 import { and, eq } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
-import { assignments, learningMaterials } from "../db/schema.js";
+import { assignments, learningMaterials, staff } from "../db/schema.js";
 import type { CreateAssignmentDto, CreateMaterialDto, UpdateAssignmentDto } from "./dto.js";
 
 @Injectable()
@@ -11,6 +16,34 @@ export class LmsService {
     @Inject(DB) private readonly db: Database,
     private readonly auditService: AuditService
   ) {}
+
+  private async resolveTeacherStaffId(tenantId: string, actorUserId?: string, override?: string) {
+    if (override) {
+      const [member] = await this.db
+        .select({ id: staff.id })
+        .from(staff)
+        .where(and(eq(staff.tenantId, tenantId), eq(staff.id, override)));
+      if (!member) {
+        throw new NotFoundException("Staff member not found.");
+      }
+      return member.id;
+    }
+
+    if (!actorUserId) {
+      throw new BadRequestException("Teacher staff profile is required.");
+    }
+
+    const [member] = await this.db
+      .select({ id: staff.id })
+      .from(staff)
+      .where(and(eq(staff.tenantId, tenantId), eq(staff.userId, actorUserId)));
+
+    if (!member) {
+      throw new NotFoundException("No staff profile is linked to your account.");
+    }
+
+    return member.id;
+  }
 
   listMaterials(tenantId: string, classroomId: string) {
     return this.db
@@ -30,13 +63,19 @@ export class LmsService {
     actorUserId: string | undefined,
     dto: CreateMaterialDto
   ) {
+    const teacherStaffId = await this.resolveTeacherStaffId(
+      tenantId,
+      actorUserId,
+      dto.uploadedByStaffId
+    );
+
     const rows = await this.db
       .insert(learningMaterials)
       .values({
         tenantId,
         classroomId,
-        subjectId: dto.fileId, // fileId used as placeholder — subjectId required by schema
-        teacherStaffId: dto.uploadedByStaffId,
+        subjectId: dto.subjectId,
+        teacherStaffId,
         title: dto.title,
         fileId: dto.fileId,
         description: dto.topicTag,
@@ -76,16 +115,18 @@ export class LmsService {
     actorUserId: string | undefined,
     dto: CreateAssignmentDto
   ) {
+    const teacherStaffId = await this.resolveTeacherStaffId(tenantId, actorUserId);
+
     const rows = await this.db
       .insert(assignments)
       .values({
         tenantId,
         classroomId,
         subjectId: dto.subjectId,
-        teacherStaffId: actorUserId ?? "00000000-0000-0000-0000-000000000000",
+        teacherStaffId,
         title: dto.title,
         instructions: dto.instructions,
-        dueAt: dto.dueDate ? new Date(dto.dueDate) : undefined,
+        dueAt: dto.dueDate ? new Date(dto.dueDate) : null,
         createdBy: actorUserId,
         updatedBy: actorUserId
       })
@@ -110,27 +151,23 @@ export class LmsService {
     actorUserId: string | undefined,
     dto: UpdateAssignmentDto
   ) {
-    const existing = await this.db
-      .select()
-      .from(assignments)
-      .where(and(eq(assignments.tenantId, tenantId), eq(assignments.id, assignmentId)));
-
-    if (!existing[0]) {
-      throw new NotFoundException("Assignment not found.");
-    }
-
-    const rows = await this.db
+    const [row] = await this.db
       .update(assignments)
       .set({
-        ...(dto.title !== undefined ? { title: dto.title } : {}),
-        ...(dto.instructions !== undefined ? { instructions: dto.instructions } : {}),
-        ...(dto.dueDate !== undefined ? { dueAt: new Date(dto.dueDate) } : {}),
+        ...(dto.title !== undefined && { title: dto.title }),
+        ...(dto.instructions !== undefined && { instructions: dto.instructions }),
+        ...(dto.dueDate !== undefined && {
+          dueAt: dto.dueDate ? new Date(dto.dueDate) : null
+        }),
         updatedBy: actorUserId,
         updatedAt: new Date()
       })
       .where(and(eq(assignments.tenantId, tenantId), eq(assignments.id, assignmentId)))
       .returning();
-    const row = rows[0]!;
+
+    if (!row) {
+      throw new NotFoundException("Assignment not found.");
+    }
 
     await this.auditService.recordEvent({
       tenantId,
@@ -138,8 +175,7 @@ export class LmsService {
       action: "lms.assignment.update",
       recordType: "Assignment",
       recordId: assignmentId,
-      before: existing[0] as Record<string, unknown>,
-      after: row as Record<string, unknown>
+      after: dto as Record<string, unknown>
     });
 
     return row;

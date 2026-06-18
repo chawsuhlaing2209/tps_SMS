@@ -5,8 +5,9 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { useApiQuery } from "../../lib/api";
 import { DataTable } from "../../lib/data-table";
-import { Field } from "../../lib/form";
+import { PaginationControls } from "../../lib/pagination-controls";
 import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
+import { TableSearchInput } from "../../lib/table-search";
 
 type AuditLog = {
   id: string;
@@ -18,16 +19,26 @@ type AuditLog = {
   createdAt: string;
 };
 
+type AuditList = { data: AuditLog[]; total: number; limit: number; offset: number };
+
+const PAGE_SIZE = 50;
+
 export default function AuditPage() {
   const t = useTranslations("audit");
   const c = useTranslations("common");
   const [recordType, setRecordType] = useState("");
+  const [page, setPage] = useState(0);
 
-  const audit = useApiQuery<AuditLog[]>((tenant) =>
-    recordType
-      ? `/tenants/${tenant}/audit-logs?recordType=${encodeURIComponent(recordType)}`
-      : `/tenants/${tenant}/audit-logs`
-  );
+  const audit = useApiQuery<AuditList>((tenant) => {
+    const params = new URLSearchParams({
+      limit: String(PAGE_SIZE),
+      offset: String(page * PAGE_SIZE)
+    });
+    if (recordType.trim()) {
+      params.set("recordType", recordType.trim());
+    }
+    return `/tenants/${tenant}/audit-logs?${params.toString()}`;
+  });
 
   const columns: ColumnDef<AuditLog, unknown>[] = [
     {
@@ -55,34 +66,35 @@ export default function AuditPage() {
 
   return (
     <div className="page-stack">
-      <div className="page-head">
-        <h1>{t("title")}</h1>
-        <p>{t("description")}</p>
-      </div>
-
       <section className="panel">
         <TablePanelHead
           title={t("events")}
           onRefresh={() => void audit.refetch()}
           extra={
-            <div className="table-toolbar">
-              <Field label={t("filterRecordType")}>
-                <input
-                  value={recordType}
-                  onChange={(e) => setRecordType(e.target.value)}
-                  placeholder={t("filterPlaceholder")}
-                />
-              </Field>
-            </div>
+            <TableSearchInput
+              value={recordType}
+              placeholder={t("filterPlaceholder")}
+              aria-label={t("filterRecordType")}
+              onChange={(e) => {
+                setRecordType(e.target.value);
+                setPage(0);
+              }}
+            />
           }
         />
         <TablePanelBody
           loading={audit.isLoading}
           error={audit.isError ? c("somethingWrong") : null}
-          empty={!audit.data?.length}
+          empty={!audit.data?.data.length}
         >
-          <DataTable<AuditLog> columns={columns} data={audit.data ?? []} />
+          <DataTable<AuditLog> columns={columns} data={audit.data?.data ?? []} />
         </TablePanelBody>
+        <PaginationControls
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={audit.data?.total ?? 0}
+          onPageChange={setPage}
+        />
       </section>
     </div>
   );

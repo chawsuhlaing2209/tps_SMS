@@ -106,7 +106,13 @@ export class RequestContextService {
       .select({ key: roles.key, permissions: roles.permissions })
       .from(userRoles)
       .innerJoin(roles, eq(userRoles.roleId, roles.id))
-      .where(and(eq(userRoles.tenantId, tenantId), eq(userRoles.userId, actorUserId)));
+      .where(
+        and(
+          eq(userRoles.tenantId, tenantId),
+          eq(userRoles.userId, actorUserId),
+          eq(roles.status, "active")
+        )
+      );
 
     const permissionSet = new Set<string>();
     for (const role of assignedRoles) {

@@ -2,7 +2,7 @@ import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { and, eq } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
-import { classroomStudents, reportCards } from "../db/schema.js";
+import { classroomStudents, reportCards, students } from "../db/schema.js";
 import type { GenerateReportCardsDto, ListReportCardsQueryDto } from "./dto.js";
 
 @Injectable()
@@ -20,7 +20,24 @@ export class ReportCardsService {
     if (query.status) {
       filters.push(eq(reportCards.status, query.status as "draft" | "submitted" | "reviewed" | "approved" | "published" | "archived" | "rejected"));
     }
-    return this.db.select().from(reportCards).where(and(...filters));
+    return this.db
+      .select({
+        id: reportCards.id,
+        tenantId: reportCards.tenantId,
+        studentId: reportCards.studentId,
+        classroomId: reportCards.classroomId,
+        academicYearId: reportCards.academicYearId,
+        termId: reportCards.termId,
+        data: reportCards.data,
+        status: reportCards.status,
+        publishedAt: reportCards.publishedAt,
+        createdAt: reportCards.createdAt,
+        updatedAt: reportCards.updatedAt,
+        studentFullName: students.fullName
+      })
+      .from(reportCards)
+      .leftJoin(students, eq(reportCards.studentId, students.id))
+      .where(and(...filters));
   }
 
   async generate(

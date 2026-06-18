@@ -9,7 +9,8 @@ import type {
   CreateSalaryComponentDto,
   GenerateSalaryRecordsDto,
   ListSalaryRecordsQueryDto,
-  MarkSalaryPaidDto
+  MarkSalaryPaidDto,
+  UpdateSalaryComponentDto
 } from "./dto.js";
 
 @Injectable()
@@ -50,6 +51,109 @@ export class SalaryService {
       recordType: "SalaryComponent",
       recordId: component!.id,
       after: { name: component!.name, componentType: component!.componentType }
+    });
+
+    return component;
+  }
+
+  private async getComponentOrThrow(tenantId: string, componentId: string) {
+    const [component] = await this.db
+      .select()
+      .from(salaryComponents)
+      .where(and(eq(salaryComponents.id, componentId), eq(salaryComponents.tenantId, tenantId)));
+
+    if (!component) {
+      throw new NotFoundException("Salary component not found.");
+    }
+
+    return component;
+  }
+
+  async updateComponent(
+    tenantId: string,
+    componentId: string,
+    actorUserId: string | undefined,
+    dto: UpdateSalaryComponentDto
+  ) {
+    const previous = await this.getComponentOrThrow(tenantId, componentId);
+
+    const [component] = await this.db
+      .update(salaryComponents)
+      .set({
+        name: dto.name?.trim() ?? previous.name,
+        componentType: dto.componentType?.trim() ?? previous.componentType,
+        updatedBy: actorUserId,
+        updatedAt: new Date()
+      })
+      .where(and(eq(salaryComponents.id, componentId), eq(salaryComponents.tenantId, tenantId)))
+      .returning();
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "salary_component.update",
+      recordType: "SalaryComponent",
+      recordId: componentId,
+      before: { name: previous.name, componentType: previous.componentType },
+      after: { name: component!.name, componentType: component!.componentType }
+    });
+
+    return component;
+  }
+
+  async archiveComponent(
+    tenantId: string,
+    componentId: string,
+    actorUserId: string | undefined
+  ) {
+    const previous = await this.getComponentOrThrow(tenantId, componentId);
+    if (previous.status === "archived") {
+      return previous;
+    }
+
+    const [component] = await this.db
+      .update(salaryComponents)
+      .set({ status: "archived", updatedBy: actorUserId, updatedAt: new Date() })
+      .where(and(eq(salaryComponents.id, componentId), eq(salaryComponents.tenantId, tenantId)))
+      .returning();
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "salary_component.archive",
+      recordType: "SalaryComponent",
+      recordId: componentId,
+      before: { status: previous.status },
+      after: { status: "archived" }
+    });
+
+    return component;
+  }
+
+  async reactivateComponent(
+    tenantId: string,
+    componentId: string,
+    actorUserId: string | undefined
+  ) {
+    const previous = await this.getComponentOrThrow(tenantId, componentId);
+    if (previous.status === "active") {
+      return previous;
+    }
+
+    const [component] = await this.db
+      .update(salaryComponents)
+      .set({ status: "active", updatedBy: actorUserId, updatedAt: new Date() })
+      .where(and(eq(salaryComponents.id, componentId), eq(salaryComponents.tenantId, tenantId)))
+      .returning();
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "salary_component.reactivate",
+      recordType: "SalaryComponent",
+      recordId: componentId,
+      before: { status: previous.status },
+      after: { status: "active" }
     });
 
     return component;
