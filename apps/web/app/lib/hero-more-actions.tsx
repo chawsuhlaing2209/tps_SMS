@@ -2,7 +2,7 @@
 
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Fragment, type ReactNode } from "react";
-import { Icon } from "./icon";
+import { Icon } from "./material-icon";
 
 export type HeroMoreActionItem = {
   id: string;

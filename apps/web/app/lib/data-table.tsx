@@ -12,6 +12,8 @@ import {
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { appendNavigationTrail, type NavigationSegment } from "./navigation-trail";
+import { subjectColor } from "../dashboard/structure/subject-colors";
 import {
   Table,
   TableBody,
@@ -172,7 +174,47 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
   return Boolean(target.closest("button, a, input, select, textarea, label, [data-row-stop]"));
 }
 
-/** Name cell styling when the row itself navigates via `getRowHref` / `onRowClick`. */
+export function deriveInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const first = parts[0]?.[0] ?? "";
+  const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "";
+  return (first + last).toUpperCase() || "?";
+}
+
+/** Avatar + name + optional email/subtitle for directory tables. */
+export function DirectoryMemberCell({
+  name,
+  email,
+  subtitle,
+  colorKey
+}: {
+  name: string;
+  email?: string | null;
+  subtitle?: ReactNode;
+  /** Hash key for avatar tint; defaults to `name`. */
+  colorKey?: string;
+}) {
+  const swatch = subjectColor(colorKey ?? name);
+  const meta = email ?? subtitle;
+
+  return (
+    <span className="directory-member">
+      <span
+        className="directory-avatar"
+        style={{ background: swatch.bg, color: swatch.text }}
+        aria-hidden
+      >
+        {deriveInitials(name)}
+      </span>
+      <span className="directory-member__text">
+        <span className="directory-member__name">{name}</span>
+        {meta ? <span className="directory-member__meta">{meta}</span> : null}
+      </span>
+    </span>
+  );
+}
+
+/** @deprecated Prefer {@link DirectoryMemberCell} for new directory tables. */
 export function DirectoryNameCell({
   name,
   avatar
@@ -180,12 +222,18 @@ export function DirectoryNameCell({
   name: string;
   avatar?: ReactNode;
 }) {
-  return (
-    <span className="directory-link">
-      {avatar}
-      {name}
-    </span>
-  );
+  if (avatar) {
+    return (
+      <span className="directory-member">
+        {avatar}
+        <span className="directory-member__text">
+          <span className="directory-member__name">{name}</span>
+        </span>
+      </span>
+    );
+  }
+
+  return <DirectoryMemberCell name={name} />;
 }
 
 /**
@@ -199,7 +247,8 @@ export function DataTable<TData>({
   updatedAtLabel,
   initialSorting,
   getRowHref,
-  onRowClick
+  onRowClick,
+  navigationFrom
 }: {
   columns: ColumnDef<TData, unknown>[];
   data: TData[];
@@ -208,6 +257,8 @@ export function DataTable<TData>({
   initialSorting?: SortingState;
   getRowHref?: (row: TData) => string | null | undefined;
   onRowClick?: (row: TData) => void;
+  /** Current list page appended to the trail before row navigation. */
+  navigationFrom?: NavigationSegment;
 }) {
   const c = useTranslations("common");
   const router = useRouter();
@@ -235,6 +286,9 @@ export function DataTable<TData>({
     if (getRowHref) {
       const href = getRowHref(row);
       if (href) {
+        if (navigationFrom) {
+          appendNavigationTrail(navigationFrom);
+        }
         router.push(href);
       }
       return;

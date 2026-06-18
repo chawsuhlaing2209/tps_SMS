@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
-import { Icon } from "./icon";
+import { Icon } from "./material-icon";
 
 export type DetailHeroProps = {
   /** Title shown large in white on the ink-green banner. */

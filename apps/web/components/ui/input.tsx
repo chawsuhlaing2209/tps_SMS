@@ -1,23 +1,11 @@
-import * as React from 'react'
-import { cn } from '../../lib/utils'
+import * as React from "react";
+import { FormInput, type FormInputProps } from "../shared/form-input";
 
-export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {}
+export type InputProps = FormInputProps;
 
-const Input = React.forwardRef<HTMLInputElement, InputProps>(({ className, type, ...props }, ref) => {
-  return (
-    <input
-      type={type}
-      className={cn(
-        'flex h-8 w-full rounded border border-border bg-surface-raised px-3 py-1 text-base text-text placeholder:text-text-subtle',
-        'focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand',
-        'disabled:cursor-not-allowed disabled:opacity-50',
-        className
-      )}
-      ref={ref}
-      {...props}
-    />
-  )
-})
-Input.displayName = 'Input'
+const Input = React.forwardRef<HTMLInputElement, InputProps>((props, ref) => {
+  return <FormInput ref={ref} {...props} />;
+});
+Input.displayName = "Input";
 
-export { Input }
+export { Input };
