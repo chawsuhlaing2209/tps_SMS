@@ -6,14 +6,18 @@ import { PermissionsGuard } from '../identity/permissions.guard.js'
 import { RequirePermissions } from '../identity/permissions.decorator.js'
 import { FinanceService } from './finance.service.js'
 import {
+  BillingRosterQueryDto,
+  CollectPaymentDto,
   CreateEnrollmentFeePlanDto,
   CreateFeeItemDto,
   CreateInvoiceDto,
   CreatePaymentPlanDto,
   GenerateMonthlyInvoicesDto,
+  InvoiceMetricsQueryDto,
   ListInvoicesQueryDto,
   ListPaymentsQueryDto,
   MonthlyReportQueryDto,
+  PaymentMetricsQueryDto,
   ReceivablesQueryDto,
   RecordPaymentDto,
   RefundPaymentDto,
@@ -198,6 +202,15 @@ export class FinanceController {
     return this.financeService.getStudentBillingSummary(tenantId, studentId)
   }
 
+  @Get('invoices/metrics')
+  @RequirePermissions('finance.manage')
+  getInvoiceMetrics(
+    @Param('tenantId') tenantId: string,
+    @Query() query: InvoiceMetricsQueryDto,
+  ) {
+    return this.financeService.getInvoiceMetrics(tenantId, query)
+  }
+
   @Get('invoices')
   @RequirePermissions('finance.manage')
   listInvoices(
@@ -226,6 +239,16 @@ export class FinanceController {
     return this.financeService.getInvoice(tenantId, invoiceId)
   }
 
+  @Post('invoices/:invoiceId/send-guardian')
+  @RequirePermissions('finance.manage')
+  sendInvoiceToGuardian(
+    @Param('tenantId') tenantId: string,
+    @Param('invoiceId') invoiceId: string,
+    @Headers('x-user-id') actorUserId: string,
+  ) {
+    return this.financeService.sendInvoiceToGuardian(tenantId, invoiceId, actorUserId)
+  }
+
   @Post('invoices/generate-monthly')
   @RequirePermissions('finance.manage')
   generateMonthlyInvoices(
@@ -236,7 +259,37 @@ export class FinanceController {
     return this.financeService.generateMonthlyInvoices(tenantId, actorUserId, dto)
   }
 
+  // ── Billing roster & cashiering ──────────────────────────────────────────────
+
+  @Get('billing/roster')
+  @RequirePermissions('finance.manage')
+  getBillingRoster(
+    @Param('tenantId') tenantId: string,
+    @Query() query: BillingRosterQueryDto,
+  ) {
+    return this.financeService.getBillingRoster(tenantId, query)
+  }
+
+  @Post('billing/collect')
+  @RequirePermissions('finance.manage')
+  collectPayment(
+    @Param('tenantId') tenantId: string,
+    @Headers('x-user-id') actorUserId: string,
+    @Body() dto: CollectPaymentDto,
+  ) {
+    return this.financeService.collectPayment(tenantId, actorUserId, dto)
+  }
+
   // ── Payments ───────────────────────────────────────────────────────────────
+
+  @Get('payments/metrics')
+  @RequirePermissions('finance.manage')
+  getPaymentMetrics(
+    @Param('tenantId') tenantId: string,
+    @Query() query: PaymentMetricsQueryDto,
+  ) {
+    return this.financeService.getPaymentMetrics(tenantId, query)
+  }
 
   @Get('payments')
   @RequirePermissions('finance.manage')

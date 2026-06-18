@@ -79,7 +79,9 @@ export class EnrollmentsService {
       academicYearId: dto.academicYearId,
       gradeId: dto.gradeId,
       classroomId: dto.classroomId,
-      optionalFeeItemIds: dto.optionalFeeItemIds ?? []
+      optionalFeeItemIds: dto.optionalFeeItemIds ?? [],
+      collectPayment: dto.collectPayment,
+      paymentMethod: dto.paymentMethod
     });
   }
 

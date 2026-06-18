@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ApiError, useApiMutation, useApiQuery } from "../../../lib/api";
 import { Field } from "../../../lib/form";
-import { Icon } from "../../../lib/icon";
+import { Icon } from "../../../lib/material-icon";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { zodResolver } from "../../../lib/zod-resolver";
 import { PageHeader } from "../../page-header-context";
@@ -64,6 +64,10 @@ function formatMmk(value: number) {
   return `${Math.round(value).toLocaleString()} MMK`;
 }
 
+function formatAmount(value: number) {
+  return Math.round(value).toLocaleString();
+}
+
 function annualizeAmount(amount: string, billingType: string): number {
   const base = Number(amount);
   if (!Number.isFinite(base)) return 0;
@@ -80,26 +84,13 @@ function annualizeAmount(amount: string, billingType: string): number {
 function feeTypeColor(feeType: string): string {
   switch (feeType) {
     case "tuition":
-      return "var(--subject-blue, #2563eb)";
+      return "var(--pds-color-azure-60)";
     case "registration":
-      return "var(--color-green-500, #33b06a)";
+      return "var(--pds-color-red-67)";
     case "transport":
-      return "var(--subject-coral, #ff6b57)";
+      return "var(--pds-color-green-600)";
     default:
-      return "var(--color-accent-purple, #8b6cf0)";
-  }
-}
-
-function feeTypeIcon(feeType: string): string {
-  switch (feeType) {
-    case "tuition":
-      return "school";
-    case "registration":
-      return "badge";
-    case "transport":
-      return "directions_bus";
-    default:
-      return "receipt_long";
+      return "var(--pds-color-accent-purple)";
   }
 }
 
@@ -342,7 +333,9 @@ export default function FeeStructuresPage() {
                     <span className={styles.gradeNavName}>{grade.name}</span>
                     <span className={styles.gradeNavAmount}>{formatMmk(total)}</span>
                   </span>
-                  {active ? <Icon name="check_circle" size={18} /> : null}
+                  {active ? (
+                    <Icon name="check_circle" size={18} className={styles.gradeNavCheck} />
+                  ) : null}
                 </button>
               );
             })}
@@ -356,7 +349,7 @@ export default function FeeStructuresPage() {
                     <p className={styles.heroEyebrow}>
                       {t("annualLabel")} · {selectedGrade.name}
                     </p>
-                    <p className={styles.heroTotal}>{formatMmk(totalAnnual)}</p>
+                    <p className={styles.heroTotal}>{formatAmount(totalAnnual)}</p>
                     <p className={styles.heroSub}>{t("annualCurrencyHint")}</p>
                   </div>
                   <div className={styles.heroStats}>
@@ -384,39 +377,45 @@ export default function FeeStructuresPage() {
                 <section className={styles.componentsPanel}>
                   <div className={styles.componentsHead}>
                     <h2 className={styles.componentsTitle}>{t("feeComponents")}</h2>
-                    <button type="button" className="btn-primary" onClick={openCreate}>
+                    <button type="button" className={styles.componentsAdd} onClick={openCreate}>
                       <Icon name="add" />
                       {t("addComponent")}
                     </button>
                   </div>
 
                   {!gradeComponents.length ? (
-                    <p className="muted">{t("noFeeComponents")}</p>
+                    <p className={`muted ${styles.componentsEmpty}`}>{t("noFeeComponents")}</p>
                   ) : (
                     <div className={styles.componentTable}>
-                      {gradeComponents.map((row) => (
+                      <div className={styles.componentTableHead}>
+                        <span>{t("feeComponentColumn")}</span>
+                        <span className={styles.componentTableAnnualHead}>
+                          {t("feeAnnualColumn")}
+                        </span>
+                        <span>{t("feeShareColumn")}</span>
+                        <span className="sr-only">{a("actions")}</span>
+                      </div>
+                      {gradeComponents.map((row) => {
+                        const isRequired = (
+                          mandatoryEnrollmentFeeTypes as readonly string[]
+                        ).includes(row.feeType);
+                        return (
                         <div key={row.planId} className={styles.componentRow}>
                           <div className={styles.componentName}>
                             <span
-                              className={styles.componentIcon}
+                              className={styles.componentDot}
                               style={{ background: feeTypeColor(row.feeType) }}
-                            >
-                              <Icon name={feeTypeIcon(row.feeType)} size={18} />
-                            </span>
-                            <span>
+                              aria-hidden
+                            />
+                            <span className={styles.componentTitleRow}>
                               <span className={styles.componentTitle}>{row.name}</span>
-                              <span className={styles.componentMeta}>
-                                {t(`feeTypes.${row.feeType as (typeof FEE_TYPES)[number]}`)}
-                                {(mandatoryEnrollmentFeeTypes as readonly string[]).includes(
-                                  row.feeType
-                                ) ? (
-                                  <> · {t("requiredBadge")}</>
-                                ) : null}
-                              </span>
+                              {isRequired ? (
+                                <span className={styles.requiredBadge}>{t("requiredBadge")}</span>
+                              ) : null}
                             </span>
                           </div>
                           <span className={styles.componentAmount}>
-                            {formatMmk(row.annualAmount)}
+                            {formatAmount(row.annualAmount)}
                           </span>
                           <div className={styles.shareCell}>
                             <div className={styles.shareBar}>
@@ -432,13 +431,14 @@ export default function FeeStructuresPage() {
                           </div>
                           <button
                             type="button"
-                            className="row-action"
+                            className={`btn-outline ${styles.componentEdit}`}
                             onClick={() => openEdit(row.planId, row.feeItemId)}
                           >
                             {a("edit")}
                           </button>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </section>

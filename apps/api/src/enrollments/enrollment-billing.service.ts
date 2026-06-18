@@ -7,16 +7,21 @@ import {
   NotFoundException
 } from "@nestjs/common";
 import {
+  buildInvoiceNumber,
   mandatoryEnrollmentFeeTypes,
   type EnrollmentConfirmInput,
   type EnrollmentConfirmResult,
   type EnrollmentPreviewInput,
-  type EnrollmentPreviewResult,
-  siblingDiscountCriteriaSchema
+  type EnrollmentPreviewResult
 } from "@sms/shared";
-import { and, eq, inArray, isNull, ne, or, gte, lte } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
+import {
+  evaluateDiscountsFromDb,
+  persistInvoiceDiscountLines,
+  siblingSummaryMessage
+} from "../discounts/discount-evaluation.logic.js";
 import { previewRecurringBilling } from "./enrollment-billing.logic.js";
 import {
   classrooms,
@@ -140,8 +145,15 @@ export class EnrollmentBillingService {
     const { discounts, discountTotal, discountApprovalRequired } = await this.evaluateDiscounts(
       tenantId,
       student.id,
+      input.academicYearId,
+      input.gradeId,
       feeLines,
-      siblingSummary
+      siblingSummary,
+      {
+        billingContext: "enrollment",
+        collectPayment: input.collectPayment,
+        paymentMethod: input.paymentMethod
+      }
     );
     const pendingDiscounts = await this.loadPendingDiscounts(tenantId, student.id);
 
@@ -281,7 +293,9 @@ export class EnrollmentBillingService {
       academicYearId: placement.academicYearId,
       gradeId: placement.gradeId,
       classroomId,
-      optionalFeeItemIds
+      optionalFeeItemIds,
+      collectPayment: dto.collectPayment,
+      paymentMethod: dto.paymentMethod
     });
 
     if (!preview.canConfirm) {
@@ -314,7 +328,7 @@ export class EnrollmentBillingService {
       .where(and(eq(students.tenantId, tenantId), eq(students.id, enrollment.studentId)));
 
     const today = new Date().toISOString().slice(0, 10);
-    const invoiceNumber = `INV-${Date.now()}`;
+    const invoiceNumber = buildInvoiceNumber(new Date(today));
 
     const result = await this.db.transaction(async (tx) => {
       const [invoice] = await tx
@@ -349,6 +363,25 @@ export class EnrollmentBillingService {
           createdBy: actorUserId,
           updatedBy: actorUserId
         }))
+      );
+
+      await persistInvoiceDiscountLines(
+        tx,
+        tenantId,
+        invoice!.id,
+        preview.discounts.map((discount) => ({
+          id: discount.id,
+          ruleId: discount.ruleId ?? discount.id,
+          name: discount.name,
+          discountType: discount.discountType,
+          amount: discount.amount,
+          source: discount.source,
+          stackable: discount.stackable ?? false,
+          requiresApproval: discount.requiresApproval ?? false,
+          status: discount.status,
+          eligibilityReason: discount.eligibilityReason
+        })),
+        actorUserId
       );
 
       const recurringLines = preview.feeLines.filter((line) =>
@@ -587,7 +620,11 @@ export class EnrollmentBillingService {
       return {
         eligible: false,
         enrolledSiblingCount: 0,
-        message: "No family group linked — sibling discount not evaluated."
+        studentPosition: 1,
+        message: siblingSummaryMessage(
+          { eligible: false, enrolledSiblingCount: 0, studentPosition: 1 },
+          false
+        )
       };
     }
 
@@ -613,164 +650,69 @@ export class EnrollmentBillingService {
       );
 
     const count = siblingRows.length;
-    const eligible = count >= 1;
+    const summary = {
+      eligible: count >= 1,
+      enrolledSiblingCount: count,
+      studentPosition: count + 1
+    };
 
     return {
-      eligible,
-      enrolledSiblingCount: count,
-      message: eligible
-        ? `${count} enrolled sibling(s) in this family for the selected year.`
-        : "No enrolled siblings in this family for the selected year."
+      ...summary,
+      message: siblingSummaryMessage(summary, true)
     };
   }
 
   private async evaluateDiscounts(
     tenantId: string,
     studentId: string,
+    academicYearId: string,
+    gradeId: string,
     feeLines: EnrollmentPreviewResult["feeLines"],
-    siblingSummary: EnrollmentPreviewResult["siblingSummary"]
+    siblingSummary: EnrollmentPreviewResult["siblingSummary"],
+    options?: {
+      billingContext?: "enrollment" | "recurring";
+      collectPayment?: boolean;
+      paymentMethod?: string;
+    }
   ): Promise<{
     discounts: EnrollmentPreviewResult["discounts"];
     discountTotal: number;
     discountApprovalRequired: boolean;
   }> {
-    const today = new Date().toISOString().slice(0, 10);
-    const discounts: EnrollmentPreviewResult["discounts"] = [];
-    let discountTotal = 0;
-    let discountApprovalRequired = false;
-
-    const approvedStudentDiscounts = await this.db
-      .select({
-        id: studentDiscounts.id,
-        ruleName: discountRules.name,
-        discountType: discountRules.discountType,
-        valueType: discountRules.valueType,
-        value: discountRules.value,
-        approvalThreshold: discountRules.approvalThreshold,
-        criteria: discountRules.criteria
-      })
-      .from(studentDiscounts)
-      .innerJoin(discountRules, eq(studentDiscounts.discountRuleId, discountRules.id))
-      .where(
-        and(
-          eq(studentDiscounts.tenantId, tenantId),
-          eq(studentDiscounts.studentId, studentId),
-          eq(studentDiscounts.status, "approved"),
-          eq(discountRules.status, "active"),
-          lte(studentDiscounts.effectiveFrom, today),
-          or(isNull(studentDiscounts.effectiveTo), gte(studentDiscounts.effectiveTo, today))
-        )
-      );
-
-    for (const row of approvedStudentDiscounts) {
-      const amount = this.computeDiscountAmount(
+    const result = await evaluateDiscountsFromDb(this.db, {
+      tenantId,
+      studentId,
+      context: {
+        billingContext: options?.billingContext ?? "enrollment",
+        academicYearId,
+        gradeId,
         feeLines,
-        row.valueType,
-        Number(row.value),
-        row.discountType,
-        row.criteria
-      );
-      if (amount <= 0) continue;
-
-      const requiresApproval = this.exceedsThreshold(amount, row.approvalThreshold);
-      if (requiresApproval) discountApprovalRequired = true;
-
-      discounts.push({
-        id: row.id,
-        name: row.ruleName,
-        discountType: row.discountType,
-        amount,
-        source: "student_discount",
-        status: "approved",
-        requiresApproval
-      });
-      discountTotal += amount;
-    }
-
-    if (siblingSummary.eligible) {
-      const siblingRules = await this.db
-        .select()
-        .from(discountRules)
-        .where(
-          and(
-            eq(discountRules.tenantId, tenantId),
-            eq(discountRules.discountType, "sibling"),
-            eq(discountRules.status, "active")
-          )
-        );
-
-      for (const rule of siblingRules) {
-        if (discounts.some((d) => d.source === "rule" && d.discountType === "sibling")) {
-          continue;
-        }
-
-        const parsed = siblingDiscountCriteriaSchema.safeParse(rule.criteria);
-        const criteria = parsed.success ? parsed.data : { type: "sibling" as const };
-        const minSiblings = criteria.minEnrolledSiblings ?? 1;
-        if (siblingSummary.enrolledSiblingCount < minSiblings) {
-          continue;
-        }
-
-        const amount = this.computeDiscountAmount(
-          feeLines,
-          rule.valueType,
-          Number(rule.value),
-          rule.discountType,
-          rule.criteria
-        );
-        if (amount <= 0) continue;
-
-        const requiresApproval = this.exceedsThreshold(amount, rule.approvalThreshold);
-        if (requiresApproval) discountApprovalRequired = true;
-
-        discounts.push({
-          id: rule.id,
-          name: rule.name,
-          discountType: rule.discountType,
-          amount,
-          source: "rule",
-          requiresApproval
-        });
-        discountTotal += amount;
+        siblingSummary: {
+          eligible: siblingSummary.eligible,
+          enrolledSiblingCount: siblingSummary.enrolledSiblingCount,
+          studentPosition: siblingSummary.studentPosition ?? siblingSummary.enrolledSiblingCount + 1
+        },
+        collectPayment: options?.collectPayment,
+        paymentMethod: options?.paymentMethod
       }
-    }
+    });
 
-    return { discounts, discountTotal, discountApprovalRequired };
-  }
-
-  private exceedsThreshold(amount: number, threshold: string | null): boolean {
-    if (threshold == null) return false;
-    return amount > Number(threshold);
-  }
-
-  private computeDiscountAmount(
-    feeLines: EnrollmentPreviewResult["feeLines"],
-    valueType: string,
-    value: number,
-    discountType: string,
-    criteria: Record<string, unknown> | null
-  ): number {
-    const parsed = siblingDiscountCriteriaSchema.safeParse(criteria);
-    const appliesToFeeTypes =
-      parsed.success && parsed.data.appliesToFeeTypes?.length
-        ? parsed.data.appliesToFeeTypes
-        : discountType === "sibling"
-          ? [...mandatoryEnrollmentFeeTypes]
-          : null;
-
-    const eligibleLines =
-      appliesToFeeTypes != null
-        ? feeLines.filter((line) => appliesToFeeTypes.includes(line.feeType))
-        : feeLines;
-
-    const base = eligibleLines.reduce((sum, line) => sum + line.lineTotal, 0);
-    if (base <= 0) return 0;
-
-    if (valueType === "percentage") {
-      return Math.round((base * value) / 100);
-    }
-
-    return Math.min(value, base);
+    return {
+      discounts: result.discounts.map((discount) => ({
+        id: discount.id,
+        ruleId: discount.ruleId,
+        name: discount.name,
+        discountType: discount.discountType,
+        amount: discount.amount,
+        source: discount.source,
+        stackable: discount.stackable,
+        eligibilityReason: discount.eligibilityReason,
+        status: discount.status,
+        requiresApproval: discount.requiresApproval
+      })),
+      discountTotal: result.discountTotal,
+      discountApprovalRequired: result.discountApprovalRequired
+    };
   }
 
   private async syncClassroomPlacementTx(

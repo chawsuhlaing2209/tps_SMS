@@ -120,8 +120,13 @@ export class ListInvoicesQueryDto {
   @IsString() @IsOptional() month?: string
   @IsUUID() @IsOptional() academicYearId?: string
   @IsUUID() @IsOptional() gradeId?: string
+  @IsString() @Transform(trimString) @IsOptional() search?: string
   @IsNumber() @IsOptional() @Type(() => Number) limit?: number
   @IsNumber() @IsOptional() @Type(() => Number) offset?: number
+}
+
+export class InvoiceMetricsQueryDto {
+  @IsUUID() @IsOptional() academicYearId?: string
 }
 
 export class ListPaymentsQueryDto {
@@ -129,12 +134,34 @@ export class ListPaymentsQueryDto {
   @IsBoolean() @IsOptional() @Transform(({ value }) => value === 'true') verified?: boolean
   @IsString() @IsOptional() dateFrom?: string
   @IsString() @IsOptional() dateTo?: string
+  @IsUUID() @IsOptional() academicYearId?: string
+  @IsString() @Transform(trimString) @IsOptional() search?: string
   @IsNumber() @IsOptional() @Type(() => Number) limit?: number
   @IsNumber() @IsOptional() @Type(() => Number) offset?: number
 }
 
+export class PaymentMetricsQueryDto {
+  @IsUUID() @IsOptional() academicYearId?: string
+}
+
 export class MonthlyReportQueryDto {
   @IsString() @IsNotEmpty() declare month: string
+}
+
+export class BillingRosterQueryDto {
+  @IsUUID() declare academicYearId: string
+  @IsUUID() @IsOptional() gradeId?: string
+  @IsString() @IsOptional() @IsIn(['paid', 'partial', 'due', 'overdue']) status?: string
+  @IsString() @Transform(trimString) @IsOptional() search?: string
+}
+
+export class CollectPaymentDto {
+  @IsUUID() declare studentId: string
+  @IsUUID() @IsOptional() academicYearId?: string
+  @IsNumber() @Type(() => Number) declare amount: number
+  @IsString() @IsNotEmpty() @IsIn([...paymentMethods]) declare method: string
+  @IsString() @Transform(trimString) @IsOptional() referenceNumber?: string
+  @IsString() @Transform(trimString) @IsOptional() notes?: string
 }
 
 export class ReceivablesQueryDto {

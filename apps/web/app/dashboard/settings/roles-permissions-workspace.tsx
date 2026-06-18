@@ -12,11 +12,11 @@ import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Switch } from "../../../components/ui/switch";
+import { Toggle } from "../../../components/shared/toggle";
 import { ConfirmDialog } from "../../../components/shared/confirm-dialog";
 import { ApiError, useApiMutation, useApiQuery } from "../../lib/api";
 import { Field } from "../../lib/form";
-import { Icon } from "../../lib/icon";
+import { Icon } from "../../lib/material-icon";
 import { hasAnyPermission } from "../../lib/permissions";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { getSession } from "../../lib/session";
@@ -317,88 +317,95 @@ export function RolesPermissionsWorkspace() {
             </div>
           ) : (
             <>
-              <div className="roles-detail-head">
-                <div className="roles-detail-head__main">
-                  <span
-                    className="roles-detail-head__avatar"
-                    style={{ background: selectedDisplay.accent }}
-                  >
-                    {selectedDisplay.initials}
-                  </span>
-                  <div>
-                    <h2>{selectedDisplay.label}</h2>
-                    <p className="muted">
-                      {selectedRole.status === "inactive"
-                        ? t("roleDisabledSummary")
-                        : allEnabled
-                          ? t("fullAccessSummary")
-                          : t(`summaries.${selectedDisplay.summaryKey}`)}
-                    </p>
+              <div className="roles-detail-card">
+                <div className="roles-detail-head">
+                  <div className="roles-detail-head__main">
+                    <span
+                      className="roles-detail-head__avatar"
+                      style={{ background: selectedDisplay.accent }}
+                    >
+                      {selectedDisplay.initials}
+                    </span>
+                    <div>
+                      <h2>{selectedDisplay.label}</h2>
+                      <p className="muted">
+                        {selectedRole.status === "inactive"
+                          ? t("roleDisabledSummary")
+                          : allEnabled
+                            ? t("fullAccessSummary")
+                            : t(`summaries.${selectedDisplay.summaryKey}`)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="roles-detail-head__actions">
+                    <label className="roles-detail-head__toggle">
+                      <Toggle
+                        checked={selectedRole.status === "active"}
+                        onCheckedChange={handleRoleEnabledChange}
+                        disabled={updateRole.isPending}
+                        aria-label={t("roleEnabled")}
+                      />
+                    </label>
+                    <span className="roles-detail-head__badge">
+                      {t("userCount", { count: selectedRole.userCount })}
+                    </span>
                   </div>
                 </div>
-                <div className="roles-detail-head__actions">
-                  <label className="roles-detail-head__toggle">
-                    <span>{t("roleEnabled")}</span>
-                    <Switch
-                      checked={selectedRole.status === "active"}
-                      onCheckedChange={handleRoleEnabledChange}
-                      disabled={updateRole.isPending}
-                      aria-label={t("roleEnabled")}
-                    />
-                  </label>
-                  <span className="roles-detail-head__badge">
-                    {t("userCount", { count: selectedRole.userCount })}
-                  </span>
+
+                <div className="roles-category-badges">
+                  {permissionCategories.map((category) => {
+                    const counts = categoryCounts[category];
+                    return (
+                      <span
+                        key={category}
+                        className={`roles-category-badge ${categoryBadgeColor(category)}`}
+                      >
+                        <span className="roles-category-badge__dot" aria-hidden />
+                        {t("categoryCount", {
+                          enabled: counts.enabled,
+                          total: counts.total,
+                          category: p(`categories.${category}`)
+                        })}
+                      </span>
+                    );
+                  })}
                 </div>
+
+                {statusError ? (
+                  <p className="error-text" role="alert">
+                    {statusError}
+                  </p>
+                ) : null}
+                {/* {selectedRole.status === "active" && selectedRole.userCount > 0 ? (
+                  <p className="muted">{t("roleHasUsersHint", { count: selectedRole.userCount })}</p>
+                ) : null} */}
               </div>
 
-              {statusError ? (
-                <p className="error-text" role="alert">
-                  {statusError}
-                </p>
-              ) : null}
-              {selectedRole.status === "active" && selectedRole.userCount > 0 ? (
-                <p className="muted">{t("roleHasUsersHint", { count: selectedRole.userCount })}</p>
-              ) : null}
+              <div className="roles-permissions-card">
+            
 
-              <div className="roles-category-badges">
-                {permissionCategories.map((category) => {
-                  const counts = categoryCounts[category];
-                  return (
-                    <span
-                      key={category}
-                      className={`roles-category-badge ${categoryBadgeColor(category)}`}
-                    >
-                      <span className="roles-category-badge__dot" aria-hidden />
-                      {t("categoryCount", {
-                        enabled: counts.enabled,
-                        total: counts.total,
-                        category: p(`categories.${category}`)
-                      })}
-                    </span>
-                  );
-                })}
-              </div>
-
-              <div className="roles-permissions">
-                {tenantPermissionCatalog.map((group) => (
-                  <section key={group.category} className="roles-permission-group">
-                    <h3>{p(`categories.${group.category}`)}</h3>
-                    <ul>
-                      {group.items.map((item) => (
-                        <li key={item.permission} className="roles-permission-row">
-                          <span>{p(`items.${item.labelKey}`)}</span>
-                          <Switch
-                            checked={draftSet.has(item.permission)}
-                            onCheckedChange={(checked) => togglePermission(item.permission, checked)}
-                            disabled={selectedRole.status === "inactive" || updateRole.isPending}
-                            aria-label={p(`items.${item.labelKey}`)}
-                          />
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                ))}
+                <ul className="roles-permissions-list">
+                  {tenantPermissionCatalog.map((group) => (
+                    <li key={group.category} className="roles-permissions-list__group">
+                      <div className="roles-permission-section">
+                        {p(`categories.${group.category}`)}
+                      </div>
+                      <ul>
+                        {group.items.map((item) => (
+                          <li key={item.permission} className="roles-permission-row">
+                            <span>{p(`items.${item.labelKey}`)}</span>
+                            <Toggle
+                              checked={draftSet.has(item.permission)}
+                              onCheckedChange={(checked) => togglePermission(item.permission, checked)}
+                              disabled={selectedRole.status === "inactive" || updateRole.isPending}
+                              aria-label={p(`items.${item.labelKey}`)}
+                            />
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                  ))}
+                </ul>
               </div>
 
               {formError ? (

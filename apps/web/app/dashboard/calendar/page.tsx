@@ -8,7 +8,7 @@ import { z } from "zod";
 import { useApiMutation, useApiQuery } from "../../lib/api";
 import { DataTable } from "../../lib/data-table";
 import { Field } from "../../lib/form";
-import { Icon } from "../../lib/icon";
+import { Icon } from "../../lib/material-icon";
 import { hasAnyPermission } from "../../lib/permissions";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { getSession } from "../../lib/session";
@@ -183,8 +183,7 @@ export default function CalendarPage() {
 
   return (
     <div className="page-stack">
-      <section className="panel">
-        <TablePanelHead
+      <TablePanelHead
           title={t("listTitle")}
           extra={
             <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
@@ -220,7 +219,6 @@ export default function CalendarPage() {
         >
           <DataTable columns={columns} data={events.data ?? []} />
         </TablePanelBody>
-      </section>
 
       <RecordFormSheet
         open={formMode !== null}

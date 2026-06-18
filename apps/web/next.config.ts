@@ -13,6 +13,15 @@ const apiProxyTarget =
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   transpilePackages: ["@sms/shared"],
+  async redirects() {
+    return [
+      {
+        source: "/dashboard/settings/discounts",
+        destination: "/dashboard/finance/discounts",
+        permanent: false
+      }
+    ];
+  },
   async rewrites() {
     return [
       {

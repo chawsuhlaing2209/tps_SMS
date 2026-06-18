@@ -17,9 +17,18 @@ export class DiscountsController {
   constructor(private readonly discountsService: DiscountsService) {}
 
   @Get("rules")
-  @RequirePermissions("discount.request")
+  @RequireAnyPermissions("discount.request", "discount.approve")
   listDiscountRules(@Param("tenantId") tenantId: string) {
     return this.discountsService.listDiscountRules(tenantId);
+  }
+
+  @Get("metrics")
+  @RequireAnyPermissions("discount.request", "discount.approve")
+  getDiscountMetrics(
+    @Param("tenantId") tenantId: string,
+    @Query("academicYearId") academicYearId?: string
+  ) {
+    return this.discountsService.getDiscountMetrics(tenantId, academicYearId);
   }
 
   @Post("rules")

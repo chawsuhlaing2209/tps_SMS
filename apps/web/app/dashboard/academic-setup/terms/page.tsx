@@ -8,7 +8,7 @@ import { z } from "zod";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { DataTable } from "../../../lib/data-table";
 import { Field } from "../../../lib/form";
-import { Icon } from "../../../lib/icon";
+import { Icon } from "../../../lib/material-icon";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { TablePanelBody, TablePanelHead } from "../../../lib/table-panel";
 import { zodResolver } from "../../../lib/zod-resolver";
@@ -130,7 +130,7 @@ export default function TermsPage() {
   ];
 
   return (
-    <section className="panel">
+    <>
       <TablePanelHead
         title={t("terms")}
         onRefresh={() => void terms.refetch()}
@@ -201,6 +201,6 @@ export default function TermsPage() {
           <input type="date" {...form.register("endsOn")} />
         </Field>
       </RecordFormSheet>
-    </section>
+    </>
   );
 }

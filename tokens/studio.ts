@@ -1,160 +1,111 @@
 /**
- * Parse Tokens Studio export (tokens.json) → flat token map + design-tokens.css
+ * Build design-tokens.css from Figma Variables export (`tokens.json`).
+ *
+ * Run: npm run tokens:build
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { buildLegacyCompatAliases } from "./legacy-compat.js";
+import { buildFigmaTokenMap } from "./figma-export.js";
+import {
+  buildCompositeTokenMap,
+  buildCompositeTypographyCss,
+} from "./composite.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 
 const REF_PATTERN = /^\{(.+)\}$/;
 
-type StudioNode = Record<string, unknown>;
+/** Namespace for CSS vars emitted from `tokens.json` (PDS design system). */
+export const STUDIO_CSS_VAR_PREFIX = "pds";
 
-function slugKey(key: string): string {
-  return key.trim();
+function slugSegment(segment: string): string {
+  return segment
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-zA-Z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
-function isStudioLeaf(node: unknown): node is { type?: string; value: unknown } {
-  return (
-    typeof node === "object" &&
-    node !== null &&
-    "value" in node &&
-    !Array.isArray(node)
-  );
-}
-
-function isGradientLeaf(node: unknown): node is {
-  type: string;
-  value: { gradientType?: string; rotation?: number; stops?: Array<{ position: number; color: string }> };
-} {
-  return (
-    isStudioLeaf(node) &&
-    (node as { type?: string }).type === "custom-gradient" &&
-    typeof (node as { value?: unknown }).value === "object"
-  );
-}
-
-function flattenStudio(
-  tree: StudioNode,
-  prefix = "",
-  out: Array<{ path: string; type?: string; raw: unknown }> = [],
-): Array<{ path: string; type?: string; raw: unknown }> {
-  for (const [key, node] of Object.entries(tree)) {
-    if (key.startsWith("$")) continue;
-    const segment = slugKey(key).replace(/\s+/g, "-");
-    const path = prefix ? `${prefix}.${segment}` : segment;
-
-    if (isGradientLeaf(node)) {
-      out.push({ path, type: "gradient", raw: node.value });
-      continue;
-    }
-
-    if (isStudioLeaf(node)) {
-      const leafType = (node as { type?: string }).type;
-      if (leafType === "custom-fontStyle") {
-        continue;
-      }
-      out.push({ path, type: leafType, raw: node.value });
-      continue;
-    }
-
-    if (typeof node === "object" && node !== null) {
-      flattenStudio(node as StudioNode, path, out);
+/** Drop parent segment when the child already includes it (e.g. padding + padding-large). */
+function collapsePathSegments(segments: string[]): string[] {
+  if (segments.length === 0) return segments;
+  const out: string[] = [segments[0]!];
+  for (let i = 1; i < segments.length; i++) {
+    const curr = segments[i]!;
+    const prev = out[out.length - 1]!;
+    if (
+      curr === prev ||
+      curr.startsWith(`${prev}-`) ||
+      curr.split("-").includes(prev)
+    ) {
+      out[out.length - 1] = curr;
+    } else {
+      out.push(curr);
     }
   }
   return out;
 }
 
-function normalizeColor(value: unknown): string {
-  if (typeof value !== "string") return String(value);
-  const trimmed = value.trim();
-  if (/^#[0-9a-f]{8}$/i.test(trimmed) && trimmed.slice(7, 9).toLowerCase() === "ff") {
-    return trimmed.slice(0, 7);
+function dedupeConsecutiveHyphenParts(name: string): string {
+  const parts = name.split("-").filter(Boolean);
+  const out: string[] = [];
+  for (const part of parts) {
+    if (out.length > 0 && out[out.length - 1] === part) {
+      continue;
+    }
+    out.push(part);
   }
-  return trimmed;
+  return out.join("-");
 }
 
-function normalizeRawValue(type: string | undefined, raw: unknown, path = ""): string {
-  if (typeof raw === "number") {
-    if (path.includes("font-weight") || path.includes("fontWeight")) return String(raw);
-    if (type === "dimension" || type === "number") return `${raw}px`;
-    return String(raw);
-  }
-  if (typeof raw === "string") {
-    const trimmed = raw.trim();
-    if (REF_PATTERN.test(trimmed)) return trimmed;
-    if (type === "color") return normalizeColor(trimmed);
-    if (type === "string" || type === "fontFamilies" || type === "text") {
-      if (trimmed.startsWith('"') && trimmed.endsWith('"')) return trimmed.slice(1, -1);
-      return trimmed;
-    }
-    if (type === "dimension" || type === "number") {
-      if (/^\d+(\.\d+)?$/.test(trimmed)) return `${trimmed}px`;
-      return trimmed;
-    }
-    return trimmed;
-  }
-  if (type === "gradient" && typeof raw === "object" && raw !== null) {
-    const gradient = raw as {
-      gradientType?: string;
-      rotation?: number;
-      stops?: Array<{ position: number; color: string }>;
-    };
-    const stops = gradient.stops ?? [];
-    const colors = stops.map(
-      (stop) => `${normalizeColor(stop.color)} ${Math.round(stop.position * 100)}%`,
-    );
-    const angle = gradient.rotation ?? 180;
-    return `linear-gradient(${angle}deg, ${colors.join(", ")})`;
-  }
-  return String(raw);
-}
-
-/** Tokens Studio path → valid CSS custom property (hyphen groups, Figma-aligned). */
+/** Token path → `--pds-*` custom property with redundant layer segments collapsed. */
 export function pathToCssVar(path: string): string {
   let normalized = path;
-  if (normalized.startsWith("semantic.")) {
-    normalized = normalized.slice("semantic.".length);
-  } else if (normalized.startsWith("primitives.")) {
+  if (normalized.startsWith("primitives.")) {
     normalized = normalized.slice("primitives.".length);
-  } else if (normalized.startsWith("gradient.")) {
-    normalized = normalized.slice("gradient.".length);
-  } else if (normalized.startsWith("font.")) {
-    normalized = normalized.slice("font.".length);
-  } else if (normalized.startsWith("typography.")) {
-    normalized = normalized.slice("typography.".length);
+  } else if (normalized.startsWith("semantic.")) {
+    normalized = normalized.slice("semantic.".length);
+  } else if (normalized.startsWith("type.")) {
+    normalized = normalized.slice("type.".length);
+    return `--${STUDIO_CSS_VAR_PREFIX}-type-${dedupeConsecutiveHyphenParts(
+      collapsePathSegments(
+        normalized.split(".").map(slugSegment).filter(Boolean),
+      ).join("-"),
+    )}`;
   }
-  const name = normalized
-    .replace(/\./g, "-")
-    .replace(/\s+/g, "-")
-    .replace(/[^a-zA-Z0-9-]/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-  return `--${name}`;
-}
 
-function normalizeRefPath(refPath: string): string {
-  return refPath.replace(/\s+/g, "-");
+  const segments = normalized
+    .split(".")
+    .map(slugSegment)
+    .filter(Boolean);
+
+  let name = dedupeConsecutiveHyphenParts(
+    collapsePathSegments(segments).join("-"),
+  );
+
+  if (name.startsWith(`${STUDIO_CSS_VAR_PREFIX}-`)) {
+    name = name.slice(STUDIO_CSS_VAR_PREFIX.length + 1);
+  } else if (name === STUDIO_CSS_VAR_PREFIX) {
+    name = "";
+  }
+
+  name = dedupeConsecutiveHyphenParts(name);
+  return name
+    ? `--${STUDIO_CSS_VAR_PREFIX}-${name}`
+    : `--${STUDIO_CSS_VAR_PREFIX}`;
 }
 
 function resolveRefPath(refPath: string, byPath: Map<string, string>): string | undefined {
-  const normalized = normalizeRefPath(
-    refPath
-      .replace(/^compact\./, "comfort.")
-      .replace(/^border\.border-width\.pds-border-width-base$/, "border.width.pdi-border-width"),
-  );
   const candidates = [
-    normalizeRefPath(refPath),
-    normalized,
-    `primitives.${normalizeRefPath(refPath)}`,
-    `primitives.${normalized}`,
-    `semantic.${normalizeRefPath(refPath)}`,
-    `semantic.${normalized}`,
+    refPath,
+    `primitives.${refPath}`,
+    `semantic.${refPath}`,
   ];
   for (const candidate of candidates) {
     if (byPath.has(candidate)) return candidate;
@@ -184,16 +135,43 @@ function resolveValue(
   return resolved;
 }
 
-function loadExportTree(): StudioNode {
-  return JSON.parse(readFileSync(join(ROOT, "tokens.json"), "utf8")) as StudioNode;
+const DERIVED_TOKENS: Array<[string, string]> = [
+  [
+    "font-family.body-stack",
+    '"Hanken Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+  ],
+  [
+    "font-family.display-stack",
+    '"Bricolage Grotesque", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+  ],
+];
+
+const PRIMITIVE_TYPOLOGY_PREFIXES = [
+  "primitives.font-size.",
+  "primitives.font-weight.",
+  "primitives.letter-spacing.",
+  "primitives.font-family.",
+];
+
+function isPrimitiveTypographyPath(path: string): boolean {
+  return PRIMITIVE_TYPOLOGY_PREFIXES.some((prefix) => path.startsWith(prefix));
 }
 
 export function buildStudioTokenMap(): Map<string, string> {
-  const flat = flattenStudio(loadExportTree());
+  const figmaTokens = buildFigmaTokenMap();
   const byPath = new Map<string, string>();
 
-  for (const { path, type, raw } of flat) {
-    byPath.set(path, normalizeRawValue(type, raw, path));
+  for (const { path, raw } of figmaTokens.values()) {
+    if (isPrimitiveTypographyPath(path)) continue;
+    byPath.set(path, raw);
+  }
+
+  for (const [path, value] of buildCompositeTokenMap().entries()) {
+    byPath.set(path, value);
+  }
+
+  for (const [path, value] of DERIVED_TOKENS) {
+    byPath.set(path, value);
   }
 
   const cssVarByPath = new Map<string, string>();
@@ -219,9 +197,24 @@ export function buildStudioDesignCss(): string {
     "",
   ];
 
-  const groups = new Map<string, Array<[string, string]>>();
+  const cssVarOwners = new Map<string, { path: string; value: string }>();
   for (const [path, value] of byPath.entries()) {
-    if (path.startsWith("typography.")) continue;
+    if (value.includes("{missing") || value.includes("{unresolved")) continue;
+    if (isPrimitiveTypographyPath(path)) continue;
+
+    const cssVar = pathToCssVar(path);
+    const existing = cssVarOwners.get(cssVar);
+    const preferCurrent =
+      !existing ||
+      (existing.path.startsWith("primitives.") && !path.startsWith("primitives."));
+
+    if (preferCurrent) {
+      cssVarOwners.set(cssVar, { path, value });
+    }
+  }
+
+  const groups = new Map<string, Array<[string, string]>>();
+  for (const { path, value } of cssVarOwners.values()) {
     const cssVar = pathToCssVar(path);
     const group = path.split(".")[0] ?? "misc";
     const bucket = groups.get(group) ?? [];
@@ -238,14 +231,8 @@ export function buildStudioDesignCss(): string {
     lines.push("");
   }
 
-  lines.push("  /* ── Legacy aliases (Padauk app compat) ── */");
-  for (const [cssVar, value] of buildLegacyCompatAliases()) {
-    lines.push(`  ${cssVar}: ${value};`);
-  }
-  lines.push(`  --gradient-shell: var(--shell-gradient);`);
-  lines.push(`  --font-size-28: 28px;`);
-
   lines.push("}", "");
+  lines.push(buildCompositeTypographyCss());
   return lines.join("\n");
 }
 

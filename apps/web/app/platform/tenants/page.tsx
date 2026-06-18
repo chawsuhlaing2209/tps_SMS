@@ -10,6 +10,7 @@ import { usePlatformMutation, usePlatformQuery } from "../../lib/api";
 import { DataTable } from "../../lib/data-table";
 import { Field } from "../../lib/form";
 import { zodResolver } from "../../lib/zod-resolver";
+import { StatusBadge } from "../../../components/shared/badge";
 
 type Tenant = {
   id: string;
@@ -155,7 +156,7 @@ export default function PlatformTenantsPage() {
       id: "status",
       header: c("status"),
       cell: ({ row }) => (
-        <span className={`badge badge--${row.original.status}`}>{row.original.status}</span>
+        <StatusBadge status={row.original.status} />
       )
     },
     { id: "language", header: t("language"), accessorKey: "defaultLanguage" },

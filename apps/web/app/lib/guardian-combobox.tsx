@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 import { useApiQuery } from "./api";
-import { Icon } from "./icon";
+import { Icon } from "./material-icon";
 import { TableSearchInput } from "./table-search";
 
 type GuardianOption = {

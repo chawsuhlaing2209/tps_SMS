@@ -6,7 +6,7 @@ import { useState } from "react";
 import { useApiQuery } from "../../lib/api";
 import { DataTable } from "../../lib/data-table";
 import { PaginationControls } from "../../lib/pagination-controls";
-import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
+import { TablePanelBody, TablePanelHead, DataTableSection } from "../../lib/table-panel";
 import { TableSearchInput } from "../../lib/table-search";
 
 type AuditLog = {
@@ -66,8 +66,8 @@ export default function AuditPage() {
 
   return (
     <div className="page-stack">
-      <section className="panel">
-        <TablePanelHead
+    <DataTableSection>
+      <TablePanelHead
           title={t("events")}
           onRefresh={() => void audit.refetch()}
           extra={
@@ -95,7 +95,7 @@ export default function AuditPage() {
           total={audit.data?.total ?? 0}
           onPageChange={setPage}
         />
-      </section>
+    </DataTableSection>
     </div>
   );
 }

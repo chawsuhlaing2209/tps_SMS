@@ -34,6 +34,16 @@ export class PreviewEnrollmentDto {
   @IsArray()
   @IsUUID("4", { each: true })
   optionalFeeItemIds?: string[];
+
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  collectPayment?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @IsIn([...paymentMethods])
+  paymentMethod?: string;
 }
 
 export class CreateEnrollmentDto {

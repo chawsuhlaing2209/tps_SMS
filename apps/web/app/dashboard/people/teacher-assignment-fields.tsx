@@ -3,8 +3,8 @@
 import { useTranslations } from "next-intl";
 import type { UpdateTeacherAssignmentsInput } from "@sms/shared";
 import { CheckboxList } from "../../../components/shared/checkbox-list";
-import { Switch } from "../../../components/ui/switch";
-import { Icon } from "../../lib/icon";
+import { Toggle } from "../../../components/shared/toggle";
+import { Icon } from "../../lib/material-icon";
 
 export type AssignmentOptions = {
   academicYears: { id: string; name: string; status: string }[];
@@ -268,7 +268,7 @@ export function TeacherAssignmentFields({
           {showGrades ? (
             <section className="assign-block">
               <div className="assign-toggle">
-                <Switch
+                <Toggle
                   checked={draft.isGradeChief}
                   onCheckedChange={(checked) =>
                     onChange({
@@ -308,7 +308,7 @@ export function TeacherAssignmentFields({
           {showHomeroom ? (
             <section className="assign-block">
               <div className="assign-toggle">
-                <Switch
+                <Toggle
                   checked={draft.isHomeroom}
                   onCheckedChange={(checked) =>
                     onChange({

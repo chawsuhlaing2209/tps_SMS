@@ -1,8 +1,9 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { apiFetch } from "./api";
-import { getSession, setSession, type Session } from "./session";
+import { apiFetch, ApiError } from "./api";
+import { clearSession, getSession, setSession, type Session } from "./session";
 
 type MeResponse = {
   userId: string;
@@ -13,6 +14,7 @@ type MeResponse = {
 };
 
 export function useWorkspace() {
+  const router = useRouter();
   const [session, setSessionState] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
 
@@ -40,14 +42,21 @@ export function useWorkspace() {
         }
         const merged: Session = {
           ...current!,
+          tenantId: me.tenantId,
           displayName: me.displayName ?? current!.displayName,
           roles: me.roles,
           permissions: me.permissions
         };
         setSession(merged);
         setSessionState(merged);
-      } catch {
+      } catch (error) {
         if (!cancelled) {
+          if (error instanceof ApiError && [401, 403, 404].includes(error.status)) {
+            clearSession();
+            setSessionState(null);
+            router.replace("/");
+            return;
+          }
           setSessionState(current);
         }
       } finally {
@@ -62,7 +71,7 @@ export function useWorkspace() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [router]);
 
   return { session, ready };
 }

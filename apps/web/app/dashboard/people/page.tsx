@@ -48,7 +48,8 @@ export default function PeoplePage() {
       <PageHeader
         title={t("studentsDirectoryTitle")}
         description={t("studentsDirectoryDescription")}
-        breadcrumbs={[{ label: nav("group_school") }, { label: nav("students") }]}
+        resetTrail={[{ label: nav("students"), href: "/dashboard/people?tab=students" }]}
+        segment={{ label: nav("students"), href: "/dashboard/people?tab=students" }}
       />
 
       <nav className="directory-tabs">

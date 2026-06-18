@@ -2,7 +2,8 @@
 
 import { useTranslations } from "next-intl";
 import { Fragment } from "react";
-import { Icon } from "../lib/icon";
+import Link from "next/link";
+import { Icon } from "../lib/material-icon";
 import { WorkingYearBadge } from "./working-year-badge";
 import { useResolvedPageHeader } from "./page-header-context";
 
@@ -14,14 +15,25 @@ export function DashboardTopbar() {
     <header className="dash-topbar">
       <div className="dash-topbar-left">
         {breadcrumbs.length ? (
-          <div className="dash-topbar-crumb">
-            {breadcrumbs.map((crumb, index) => (
-              <Fragment key={`${crumb.label}-${index}`}>
-                {index > 0 ? <span className="dash-topbar-crumb__sep">/</span> : null}
-                <span>{crumb.label}</span>
-              </Fragment>
-            ))}
-          </div>
+          <nav className="dash-topbar-crumb" aria-label="Breadcrumb">
+            {breadcrumbs.map((crumb, index) => {
+              const isLast = index === breadcrumbs.length - 1;
+              return (
+                <Fragment key={`${crumb.label}-${index}`}>
+                  {index > 0 ? <span className="dash-topbar-crumb__sep">/</span> : null}
+                  {crumb.href && !isLast ? (
+                    <Link href={crumb.href} className="dash-topbar-crumb__link">
+                      {crumb.label}
+                    </Link>
+                  ) : (
+                    <span className={isLast ? "dash-topbar-crumb__current" : undefined}>
+                      {crumb.label}
+                    </span>
+                  )}
+                </Fragment>
+              );
+            })}
+          </nav>
         ) : null}
         <h1 className="dash-topbar-title">{title}</h1>
         {description ? <p className="dash-topbar-desc">{description}</p> : null}

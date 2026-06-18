@@ -8,10 +8,12 @@ import { z } from "zod";
 import { useApiMutation, useApiQuery } from "../../lib/api";
 import { DataTable, DirectoryNameCell } from "../../lib/data-table";
 import { Field } from "../../lib/form";
-import { Icon } from "../../lib/icon";
+import { Icon } from "../../lib/material-icon";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
 import { zodResolver } from "../../lib/zod-resolver";
+import { StatusBadge } from "../../../components/shared/badge";
+import { StatCard, StatGrid } from "../../../components/shared/stat-card";
 
 type Enquiry = {
   id: string;
@@ -95,30 +97,28 @@ export default function AdmissionsPage() {
       header: c("status"),
       accessorKey: "status",
       cell: ({ row }) => (
-        <span className={`badge badge--${row.original.status}`}>{row.original.status}</span>
+        <StatusBadge status={row.original.status} />
       )
     }
   ];
 
   return (
     <div className="page-stack">
-      <div className="stat-grid">
-        <div className="stat-card">
-          <span className="stat-label">{t("totalEnquiries")}</span>
-          <span className="stat-value">
-            {dashboard.isLoading ? "…" : (dashboard.data?.totalEnquiries ?? 0)}
-          </span>
-        </div>
-      </div>
+      <StatGrid>
+        <StatCard
+          icon={<Icon name="group_add" size={18} />}
+          label={t("totalEnquiries")}
+          value={dashboard.isLoading ? "…" : (dashboard.data?.totalEnquiries ?? 0)}
+        />
+      </StatGrid>
 
-      <section className="panel">
-        <TablePanelHead
+      <TablePanelHead
           title={t("listTitle")}
           onRefresh={() => void enquiries.refetch()}
           onAdd={() => setSheetOpen(true)}
           addLabel={t("createEnquiry")}
         />
-        <TablePanelBody
+      <TablePanelBody
           loading={enquiries.isLoading}
           error={enquiries.isError ? c("somethingWrong") : null}
           empty={!enquiries.data?.data.length}
@@ -129,7 +129,6 @@ export default function AdmissionsPage() {
             getRowHref={(enquiry) => `/dashboard/admissions/${enquiry.id}`}
           />
         </TablePanelBody>
-      </section>
 
       <RecordFormSheet
         open={sheetOpen}

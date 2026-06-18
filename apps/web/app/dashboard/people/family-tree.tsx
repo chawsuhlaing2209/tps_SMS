@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { Icon } from "../../lib/icon";
+import { Icon } from "../../lib/material-icon";
 
 export type FamilyTreeGuardian = {
   id: string;

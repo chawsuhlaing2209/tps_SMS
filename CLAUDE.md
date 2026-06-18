@@ -122,7 +122,7 @@ Copy `.env.example` to `.env`. Required vars:
 
 See `DESIGN.md` for the full visual language (**Padauk School OS** — ink-green shell + spring-lime CTAs).
 
-**Token pipeline:** edit `tokens/semantic.json` (or `tokens/extensions.json`) → `npm run tokens:build` → `apps/web/app/design-tokens.css` (generated). Component classes live in `apps/web/app/globals.css`. `apps/web/tailwind.config.ts` mirrors the same CSS variables for utilities. Never hardcode hex in components.
+**Token pipeline:** edit `tokens.json` (Figma export) and/or `composite_tokens.json` → `npm run tokens:build` → `apps/web/app/design-tokens.css` (generated). Component classes live in `apps/web/app/globals.css`. `apps/web/tailwind.config.ts` mirrors the same CSS variables for utilities. Never hardcode hex in components.
 
 **UI conventions:**
 - Wise-inspired: 1px borders, restrained color, trustworthy finance UX

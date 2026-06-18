@@ -4,10 +4,10 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Switch } from "../../../components/ui/switch";
+import { Toggle } from "../../../components/shared/toggle";
+import { FormField, FormInput, FormTextarea } from "../../../components/shared/form-input";
 import { ApiError, useApiMutation, useApiQuery } from "../../lib/api";
-import { Field } from "../../lib/form";
-import { Icon } from "../../lib/icon";
+import { Icon } from "../../lib/material-icon";
 import { hasAnyPermission } from "../../lib/permissions";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { getSession } from "../../lib/session";
@@ -125,15 +125,14 @@ export default function DepartmentsPage() {
         breadcrumbs={[{ label: nav("group_admin") }, { label: nav("departments") }]}
       />
 
-      <section className="panel">
-        <TablePanelHead
-          title={t("listTitle")}
-          help={t("listHelp")}
-          onRefresh={() => void departments.refetch()}
-          onAdd={openCreate}
-          addLabel={t("addDepartment")}
-        />
-        <TablePanelBody
+      <TablePanelHead
+        title={t("listTitle")}
+        help={t("listHelp")}
+        onRefresh={() => void departments.refetch()}
+        onAdd={openCreate}
+        addLabel={t("addDepartment")}
+      />
+      <TablePanelBody
           loading={departments.isLoading}
           error={departments.isError ? c("somethingWrong") : null}
           empty={!departments.data?.length}
@@ -148,10 +147,10 @@ export default function DepartmentsPage() {
                 </button>
                 <label className="departments-list__toggle">
                   <span>{t("active")}</span>
-                  <Switch
+                  <Toggle
                     checked={row.status === "active"}
                     disabled={row.status === "active" && row.staffCount > 0 ? false : false}
-                    onCheckedChange={(checked) => {
+                    onCheckedChange={(checked: boolean) => {
                       if (!checked && row.staffCount > 0) {
                         setFormError(t("cannotDisableWithStaff", { count: row.staffCount }));
                         return;
@@ -164,7 +163,6 @@ export default function DepartmentsPage() {
             ))}
           </ul>
         </TablePanelBody>
-      </section>
 
       <RecordFormSheet
         open={createOpen}
@@ -193,12 +191,12 @@ export default function DepartmentsPage() {
           </>
         }
       >
-        <Field label={t("name")} error={form.formState.errors.name?.message}>
-          <input {...form.register("name")} />
-        </Field>
-        <Field label={t("descriptionLabel")}>
-          <textarea {...form.register("description")} rows={3} />
-        </Field>
+        <FormField label={t("name")} error={form.formState.errors.name?.message}>
+          <FormInput {...form.register("name")} />
+        </FormField>
+        <FormField label={t("descriptionLabel")}>
+          <FormTextarea {...form.register("description")} rows={3} />
+        </FormField>
         {formError ? <p className="error-text">{formError}</p> : null}
       </RecordFormSheet>
     </div>

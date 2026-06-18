@@ -21,15 +21,16 @@
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f",
-    "db:reset": "docker compose down -v && docker compose up -d",
+    "db:reset": "bash scripts/db-reset.sh",
     "db:generate": "npm run db:generate -w @sms/api",
     "db:migrate": "npm run db:migrate -w @sms/api",
     "db:seed": "npm run db:seed -w @sms/api",
     "db:backup": "bash scripts/db-backup.sh",
     "db:restore": "bash scripts/db-restore.sh",
     "tokens:build": "npx tsx tokens/build.ts",
+    "tokens:check": "npx tsx tokens/check-tokens.ts",
     "tokens:export-dtcg": "npx tsx tokens/export-dtcg.ts",
-    "tokens:migrate-css": "npx tsx tokens/migrate-globals.ts"
+    "tokens:migrate-pds": "npx tsx tokens/migrate-to-pds.ts"
   },
   "engines": {
     "node": ">=20.11.0 <23",

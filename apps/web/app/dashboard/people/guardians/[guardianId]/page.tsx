@@ -11,11 +11,12 @@ import { ApiError, useApiMutation, useApiQuery } from "../../../../lib/api";
 import { DataTable, DirectoryNameCell } from "../../../../lib/data-table";
 import { Field } from "../../../../lib/form";
 import { HeroMoreActionsMenu, HeroOutlineAction, HeroPrimaryAction } from "../../../../lib/hero-more-actions";
-import { Icon } from "../../../../lib/icon";
+import { Icon } from "../../../../lib/material-icon";
 import { hasAnyPermission } from "../../../../lib/permissions";
 import { RecordFormSheet } from "../../../../lib/record-sheet";
 import { getSession } from "../../../../lib/session";
 import { TablePanelBody, TablePanelHead } from "../../../../lib/table-panel";
+import { StatusBadge } from "../../../../../components/shared/badge";
 import { zodResolver } from "../../../../lib/zod-resolver";
 import { PageHeader } from "../../../page-header-context";
 
@@ -111,7 +112,6 @@ export default function GuardianDetailPage() {
     return (
       <div className="page-stack">
         <p className="error-text">{t("notFound")}</p>
-        <Link href="/dashboard/people?tab=guardians">{t("backToList")}</Link>
       </div>
     );
   }
@@ -145,9 +145,10 @@ export default function GuardianDetailPage() {
       header: c("status"),
       accessorKey: "status",
       cell: ({ row }) => (
-        <span className={`badge badge--${row.original.status}`}>
-          {s(`status_${row.original.status}` as "status_draft")}
-        </span>
+        <StatusBadge
+          status={row.original.status}
+          label={s(`status_${row.original.status}` as "status_draft")}
+        />
       )
     }
   ];
@@ -169,8 +170,6 @@ export default function GuardianDetailPage() {
           { label: p("directoryTitle"), href: "/dashboard/people" },
           { label: t("directoryTitle"), href: "/dashboard/people?tab=guardians" }
         ]}
-        backHref="/dashboard/people?tab=guardians"
-        backLabel={t("backToList")}
       />
 
       <section className="structure-room-banner student-profile-banner">
@@ -242,17 +241,14 @@ export default function GuardianDetailPage() {
         </article>
       </div>
 
-      <section className="panel">
-        <TablePanelHead title={t("linkedStudents")} help={t("profileHelp")} />
-        <TablePanelBody loading={false} error={null} empty={!data.students.length}>
-          <DataTable
-            columns={studentColumns}
-            data={data.students}
-            showUpdatedAt={false}
-            getRowHref={(student) => `/dashboard/students/${student.id}`}
-          />
-        </TablePanelBody>
-      </section>
+      <TablePanelBody loading={false} error={null} empty={!data.students.length}>
+        <DataTable
+          columns={studentColumns}
+          data={data.students}
+          showUpdatedAt={false}
+          getRowHref={(student) => `/dashboard/students/${student.id}`}
+        />
+      </TablePanelBody>
 
       <RecordFormSheet
         open={editOpen}

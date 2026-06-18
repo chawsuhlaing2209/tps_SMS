@@ -1,17 +1,15 @@
-import {
-  mandatoryEnrollmentFeeTypes,
-  type EnrollmentPreviewResult,
-  siblingDiscountCriteriaSchema,
-} from '@sms/shared'
-import { and, eq, gte, isNull, lte, ne, or } from 'drizzle-orm'
+import { type EnrollmentPreviewResult } from '@sms/shared'
+import { and, eq, ne } from 'drizzle-orm'
 import type { Database } from '../db/db.module.js'
 import {
-  discountRules,
+  evaluateDiscountsFromDb,
+  siblingSummaryMessage,
+} from '../discounts/discount-evaluation.logic.js'
+import {
   enrollmentFeePlans,
   enrollmentFeePlanGrades,
   enrollments,
   feeItems,
-  studentDiscounts,
   students,
 } from '../db/schema.js'
 
@@ -75,7 +73,11 @@ async function buildSiblingSummary(
     return {
       eligible: false,
       enrolledSiblingCount: 0,
-      message: 'No family group linked — sibling discount not evaluated.',
+      studentPosition: 1,
+      message: siblingSummaryMessage(
+        { eligible: false, enrolledSiblingCount: 0, studentPosition: 1 },
+        false,
+      ),
     }
   }
 
@@ -101,165 +103,16 @@ async function buildSiblingSummary(
     )
 
   const count = siblingRows.length
-  const eligible = count >= 1
+  const summary = {
+    eligible: count >= 1,
+    enrolledSiblingCount: count,
+    studentPosition: count + 1,
+  }
 
   return {
-    eligible,
-    enrolledSiblingCount: count,
-    message: eligible
-      ? `${count} enrolled sibling(s) in this family for the selected year.`
-      : 'No enrolled siblings in this family for the selected year.',
+    ...summary,
+    message: siblingSummaryMessage(summary, true),
   }
-}
-
-function exceedsThreshold(amount: number, threshold: string | null): boolean {
-  if (threshold == null) return false
-  return amount > Number(threshold)
-}
-
-function computeDiscountAmount(
-  feeLines: EnrollmentPreviewResult['feeLines'],
-  valueType: string,
-  value: number,
-  discountType: string,
-  criteria: Record<string, unknown> | null,
-): number {
-  const parsed = siblingDiscountCriteriaSchema.safeParse(criteria)
-  const appliesToFeeTypes =
-    parsed.success && parsed.data.appliesToFeeTypes?.length
-      ? parsed.data.appliesToFeeTypes
-      : discountType === 'sibling'
-        ? [...mandatoryEnrollmentFeeTypes]
-        : null
-
-  const eligibleLines =
-    appliesToFeeTypes != null
-      ? feeLines.filter((line) => appliesToFeeTypes.includes(line.feeType))
-      : feeLines
-
-  const base = eligibleLines.reduce((sum, line) => sum + line.lineTotal, 0)
-  if (base <= 0) return 0
-
-  if (valueType === 'percentage') {
-    return Math.round((base * value) / 100)
-  }
-
-  return Math.min(value, base)
-}
-
-async function evaluateDiscounts(
-  db: Database,
-  tenantId: string,
-  studentId: string,
-  feeLines: EnrollmentPreviewResult['feeLines'],
-  siblingSummary: EnrollmentPreviewResult['siblingSummary'],
-): Promise<{
-  discounts: EnrollmentPreviewResult['discounts']
-  discountTotal: number
-  discountApprovalRequired: boolean
-}> {
-  const today = new Date().toISOString().slice(0, 10)
-  const discounts: EnrollmentPreviewResult['discounts'] = []
-  let discountTotal = 0
-  let discountApprovalRequired = false
-
-  const approvedStudentDiscounts = await db
-    .select({
-      id: studentDiscounts.id,
-      ruleName: discountRules.name,
-      discountType: discountRules.discountType,
-      valueType: discountRules.valueType,
-      value: discountRules.value,
-      approvalThreshold: discountRules.approvalThreshold,
-      criteria: discountRules.criteria,
-    })
-    .from(studentDiscounts)
-    .innerJoin(discountRules, eq(studentDiscounts.discountRuleId, discountRules.id))
-    .where(
-      and(
-        eq(studentDiscounts.tenantId, tenantId),
-        eq(studentDiscounts.studentId, studentId),
-        eq(studentDiscounts.status, 'approved'),
-        eq(discountRules.status, 'active'),
-        lte(studentDiscounts.effectiveFrom, today),
-        or(isNull(studentDiscounts.effectiveTo), gte(studentDiscounts.effectiveTo, today)),
-      ),
-    )
-
-  for (const row of approvedStudentDiscounts) {
-    const amount = computeDiscountAmount(
-      feeLines,
-      row.valueType,
-      Number(row.value),
-      row.discountType,
-      row.criteria,
-    )
-    if (amount <= 0) continue
-
-    const requiresApproval = exceedsThreshold(amount, row.approvalThreshold)
-    if (requiresApproval) discountApprovalRequired = true
-
-    discounts.push({
-      id: row.id,
-      name: row.ruleName,
-      discountType: row.discountType,
-      amount,
-      source: 'student_discount',
-      status: 'approved',
-      requiresApproval,
-    })
-    discountTotal += amount
-  }
-
-  if (siblingSummary.eligible) {
-    const siblingRules = await db
-      .select()
-      .from(discountRules)
-      .where(
-        and(
-          eq(discountRules.tenantId, tenantId),
-          eq(discountRules.discountType, 'sibling'),
-          eq(discountRules.status, 'active'),
-        ),
-      )
-
-    for (const rule of siblingRules) {
-      if (discounts.some((d) => d.source === 'rule' && d.discountType === 'sibling')) {
-        continue
-      }
-
-      const parsed = siblingDiscountCriteriaSchema.safeParse(rule.criteria)
-      const criteria = parsed.success ? parsed.data : { type: 'sibling' as const }
-      const minSiblings = criteria.minEnrolledSiblings ?? 1
-      if (siblingSummary.enrolledSiblingCount < minSiblings) {
-        continue
-      }
-
-      const amount = computeDiscountAmount(
-        feeLines,
-        rule.valueType,
-        Number(rule.value),
-        rule.discountType,
-        rule.criteria,
-      )
-      if (amount <= 0) continue
-
-      const requiresApproval = exceedsThreshold(amount, rule.approvalThreshold)
-      if (requiresApproval) discountApprovalRequired = true
-
-      discounts.push({
-        id: rule.id,
-        name: rule.name,
-        discountType: rule.discountType,
-        amount,
-        source: 'rule',
-        requiresApproval,
-      })
-      discountTotal += amount
-    }
-  }
-
-  return { discounts, discountTotal, discountApprovalRequired }
 }
 
 export async function previewRecurringBilling(
@@ -330,21 +183,41 @@ export async function previewRecurringBilling(
     input.studentId,
     input.academicYearId,
   )
-  const { discounts, discountTotal, discountApprovalRequired } = await evaluateDiscounts(
-    db,
+
+  const result = await evaluateDiscountsFromDb(db, {
     tenantId,
-    student.id,
-    feeLines,
-    siblingSummary,
-  )
+    studentId: student.id,
+    context: {
+      billingContext: 'recurring',
+      academicYearId: input.academicYearId,
+      gradeId: input.gradeId,
+      feeLines,
+      siblingSummary: {
+        eligible: siblingSummary.eligible,
+        enrolledSiblingCount: siblingSummary.enrolledSiblingCount,
+        studentPosition: siblingSummary.studentPosition ?? siblingSummary.enrolledSiblingCount + 1,
+      },
+    },
+  })
 
   return {
     feeLines,
     subtotal,
-    discountTotal,
-    total: Math.max(0, subtotal - discountTotal),
-    discounts,
+    discountTotal: result.discountTotal,
+    total: Math.max(0, subtotal - result.discountTotal),
+    discounts: result.discounts.map((discount) => ({
+      id: discount.id,
+      ruleId: discount.ruleId,
+      name: discount.name,
+      discountType: discount.discountType,
+      amount: discount.amount,
+      source: discount.source,
+      stackable: discount.stackable,
+      eligibilityReason: discount.eligibilityReason,
+      status: discount.status,
+      requiresApproval: discount.requiresApproval,
+    })),
     siblingSummary,
-    discountApprovalRequired,
+    discountApprovalRequired: result.discountApprovalRequired,
   }
 }

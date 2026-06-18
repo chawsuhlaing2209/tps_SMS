@@ -6,8 +6,9 @@ import Link from "next/link";
 import { useState } from "react";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { DataTable } from "../../../lib/data-table";
-import { Icon } from "../../../lib/icon";
+import { Icon } from "../../../lib/material-icon";
 import { TablePanelBody, TablePanelHead } from "../../../lib/table-panel";
+import { StatusBadge } from "../../../../components/shared/badge";
 
 type SalaryRecord = {
   id: string;
@@ -53,7 +54,7 @@ export default function SalaryRecordsPage() {
       header: c("status"),
       accessorKey: "status",
       cell: ({ row }) => (
-        <span className={`badge badge--${row.original.status}`}>{row.original.status}</span>
+        <StatusBadge status={row.original.status} />
       )
     }
   ];
