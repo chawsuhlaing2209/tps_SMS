@@ -1,5 +1,7 @@
+import { buildInvoiceNumber } from '@sms/shared'
 import { and, eq, gte, isNull, lte, or } from 'drizzle-orm'
 import { recordAuditEvent } from '../audit/audit.logic.js'
+import { persistInvoiceDiscountLines } from '../discounts/discount-evaluation.logic.js'
 import type { Database } from '../db/db.module.js'
 import {
   enrollments,
@@ -54,6 +56,7 @@ export async function generateMonthlyInvoices(
 
   const approvedEnrollments = await db
     .select({
+      id: enrollments.id,
       studentId: enrollments.studentId,
       gradeId: enrollments.gradeId,
       familyGroupId: students.familyGroupId,
@@ -124,7 +127,7 @@ export async function generateMonthlyInvoices(
       continue
     }
 
-    const invoiceNumber = `INV-R-${billingMonth.replace('-', '')}-${Date.now()}-${enrollment.studentId.slice(0, 8)}`
+    const invoiceNumber = buildInvoiceNumber(new Date(monthStart))
 
     const invoiceId = await db.transaction(async (tx) => {
       const [invoice] = await tx
@@ -132,6 +135,7 @@ export async function generateMonthlyInvoices(
         .values({
           tenantId,
           studentId: enrollment.studentId,
+          enrollmentId: enrollment.id,
           familyGroupId: enrollment.familyGroupId,
           invoiceNumber,
           issueDate: monthStart,
@@ -159,6 +163,27 @@ export async function generateMonthlyInvoices(
           updatedBy: actorUserId,
         })),
       )
+
+      if (actorUserId) {
+        await persistInvoiceDiscountLines(
+          tx,
+          tenantId,
+          invoice!.id,
+          preview.discounts.map((discount) => ({
+            id: discount.id,
+            ruleId: discount.ruleId ?? discount.id,
+            name: discount.name,
+            discountType: discount.discountType,
+            amount: discount.amount,
+            source: discount.source,
+            stackable: discount.stackable ?? false,
+            requiresApproval: discount.requiresApproval ?? false,
+            status: discount.status,
+            eligibilityReason: discount.eligibilityReason,
+          })),
+          actorUserId,
+        )
+      }
 
       return invoice!.id
     })

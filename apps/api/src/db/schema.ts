@@ -844,6 +844,9 @@ export const discountRules = pgTable("discount_rules", {
   valueType: text("value_type").notNull(),
   value: numeric("value", { precision: 14, scale: 2 }).notNull(),
   approvalThreshold: numeric("approval_threshold", { precision: 14, scale: 2 }),
+  triggerMode: text("trigger_mode").default("auto").notNull(),
+  stackable: boolean("stackable").default(false).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
   criteria: jsonb("criteria").$type<Record<string, unknown>>().default({}).notNull(),
   status: recordStatusEnum("status").default("active").notNull()
 });
@@ -859,6 +862,31 @@ export const studentDiscounts = pgTable("student_discounts", {
   effectiveTo: date("effective_to"),
   status: approvalStatusEnum("status").default("draft").notNull()
 });
+
+export const invoiceDiscountLines = pgTable(
+  "invoice_discount_lines",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...tenantFields,
+    invoiceId: uuid("invoice_id")
+      .references(() => invoices.id, { onDelete: "cascade" })
+      .notNull(),
+    discountRuleId: uuid("discount_rule_id").references(() => discountRules.id),
+    studentDiscountId: uuid("student_discount_id").references(() => studentDiscounts.id),
+    name: text("name").notNull(),
+    discountType: text("discount_type").notNull(),
+    source: text("source").notNull(),
+    stackable: boolean("stackable").default(false).notNull(),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    eligibilityReason: text("eligibility_reason")
+  },
+  (table) => ({
+    tenantInvoiceIdx: index("invoice_discount_lines_tenant_invoice_idx").on(
+      table.tenantId,
+      table.invoiceId
+    )
+  })
+);
 
 export const payments = pgTable("payments", {
   id: uuid("id").primaryKey().defaultRandom(),

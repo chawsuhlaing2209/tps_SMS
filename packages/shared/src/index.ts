@@ -5,4 +5,6 @@ export * from "./permission-catalog.js";
 export * from "./product-decisions.js";
 export * from "./role-display.js";
 export * from "./roles.js";
+export * from "./discounts.js";
+export * from "./invoice-numbers.js";
 export * from "./validation.js";

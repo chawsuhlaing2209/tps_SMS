@@ -1,21 +1,24 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common'
-import { and, eq, gte, lte, inArray, isNotNull, isNull, ne, sql, sum, count, desc, exists } from 'drizzle-orm'
+import { buildInvoiceNumber } from '@sms/shared'
+import { and, eq, gte, lte, inArray, isNotNull, isNull, ne, sql, sum, count, desc, exists, ilike, or } from 'drizzle-orm'
 import { AuditService } from '../audit/audit.service.js'
 import { DB, type Database } from '../db/db.module.js'
 import {
-  academicYears, discountRules, enrollmentFeePlans, enrollmentFeePlanGrades, enrollments, feeItems, grades, invoices, invoiceItems,
-  payments, paymentPlanInstallments, paymentPlans, receipts, salaryRecords, studentDiscounts, studentServices, students,
+  academicYears, classrooms, discountRules, enrollmentFeePlans, enrollmentFeePlanGrades, enrollments, familyGroups, feeItems, grades, guardians, invoices, invoiceDiscountLines, invoiceItems,
+  payments, paymentPlanInstallments, paymentPlans, receipts, salaryRecords, studentDiscounts, studentServices, students, tenants, tenantSettings, terms, users,
 } from '../db/schema.js'
 import type {
+  BillingRosterQueryDto, CollectPaymentDto,
   CreateFeeItemDto, CreateEnrollmentFeePlanDto, CreateInvoiceDto,
   CreatePaymentPlanDto, GenerateMonthlyInvoicesDto, RecordPaymentDto, RefundPaymentDto,
   UpdatePaymentPlanInstallmentsDto, UpdatePaymentPlanDto,
   VerifyPaymentDto, ListInvoicesQueryDto, ListPaymentsQueryDto,
   MonthlyReportQueryDto, ReceivablesQueryDto, UpdateFeeItemDto,
-  UpdateEnrollmentFeePlanDto,
+  UpdateEnrollmentFeePlanDto, InvoiceMetricsQueryDto, PaymentMetricsQueryDto,
 } from './dto.js'
 import { InvoicesQueueService } from './invoices-queue.service.js'
 import { RecurringBillingService } from './recurring-billing.service.js'
+import { NotificationsService } from '../notifications/notifications.service.js'
 
 @Injectable()
 export class FinanceService {
@@ -24,6 +27,7 @@ export class FinanceService {
     private readonly auditService: AuditService,
     private readonly recurringBillingService: RecurringBillingService,
     private readonly invoicesQueueService: InvoicesQueueService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // ── Fee Items ──────────────────────────────────────────────────────────────
@@ -649,9 +653,52 @@ export class FinanceService {
 
   // ── Invoices ───────────────────────────────────────────────────────────────
 
+  /** Resolve enrollment for invoice rows when enrollmentId was not persisted (legacy seed). */
+  private enrollmentJoinCondition(tenantId: string, academicYearId?: string) {
+    const fallbackEnrollment = and(
+      isNull(invoices.enrollmentId),
+      eq(enrollments.studentId, invoices.studentId),
+      eq(enrollments.status, 'approved'),
+      ...(academicYearId ? [eq(enrollments.academicYearId, academicYearId)] : []),
+    )
+
+    return and(
+      eq(enrollments.tenantId, tenantId),
+      or(eq(invoices.enrollmentId, enrollments.id), fallbackEnrollment),
+    )
+  }
+
+  private paymentAcademicYearFilter(tenantId: string, academicYearId: string) {
+    return exists(
+      this.db
+        .select({ id: invoices.id })
+        .from(invoices)
+        .where(
+          and(
+            eq(invoices.id, payments.invoiceId),
+            eq(invoices.tenantId, tenantId),
+            exists(
+              this.db
+                .select({ id: enrollments.id })
+                .from(enrollments)
+                .where(
+                  and(
+                    eq(enrollments.tenantId, tenantId),
+                    eq(enrollments.studentId, invoices.studentId),
+                    eq(enrollments.academicYearId, academicYearId),
+                    eq(enrollments.status, 'approved'),
+                  ),
+                ),
+            ),
+          ),
+        ),
+    )
+  }
+
   async listInvoices(tenantId: string, query: ListInvoicesQueryDto) {
     const conditions = [eq(invoices.tenantId, tenantId)]
-    if (query.status) conditions.push(eq(invoices.status, query.status as any))
+    const statusFilter = query.status === 'due' ? 'unpaid' : query.status
+    if (statusFilter) conditions.push(eq(invoices.status, statusFilter as any))
     if (query.studentId) conditions.push(eq(invoices.studentId, query.studentId))
     if (query.source) conditions.push(eq(invoices.source, query.source as 'enrollment' | 'recurring' | 'ad_hoc'))
 
@@ -676,10 +723,64 @@ export class FinanceService {
             ),
         ),
       )
+    } else if (query.academicYearId) {
+      conditions.push(
+        exists(
+          this.db
+            .select({ id: enrollments.id })
+            .from(enrollments)
+            .where(
+              and(
+                eq(enrollments.tenantId, tenantId),
+                eq(enrollments.studentId, invoices.studentId),
+                eq(enrollments.academicYearId, query.academicYearId),
+                eq(enrollments.status, 'approved'),
+              ),
+            ),
+        ),
+      )
+    }
+
+    if (query.search?.trim()) {
+      const term = `%${query.search.trim()}%`
+      conditions.push(
+        or(
+          ilike(invoices.invoiceNumber, term),
+          ilike(students.fullName, term),
+          exists(
+            this.db
+              .select({ id: students.id })
+              .from(students)
+              .leftJoin(familyGroups, eq(students.familyGroupId, familyGroups.id))
+              .leftJoin(guardians, eq(familyGroups.primaryGuardianId, guardians.id))
+              .where(
+                and(
+                  eq(students.id, invoices.studentId),
+                  eq(students.tenantId, tenantId),
+                  ilike(guardians.fullName, term),
+                ),
+              ),
+          ),
+        )!,
+      )
     }
 
     const limit = query.limit ?? 50
     const offset = query.offset ?? 0
+
+    const verifiedPaidSql = sql<string>`(
+      SELECT COALESCE(SUM(
+        CASE
+          WHEN ${payments.kind} = 'payment' THEN ${payments.amount}::numeric
+          WHEN ${payments.kind} = 'refund' THEN -${payments.amount}::numeric
+          ELSE 0
+        END
+      ), 0)
+      FROM ${payments}
+      WHERE ${payments.invoiceId} = ${invoices.id}
+        AND ${payments.tenantId} = ${tenantId}
+        AND ${payments.verifiedAt} IS NOT NULL
+    )`
 
     const rows = await this.db
       .select({
@@ -697,9 +798,15 @@ export class FinanceService {
         updatedAt: invoices.updatedAt,
         enrollmentId: invoices.enrollmentId,
         studentFullName: students.fullName,
+        gradeName: grades.name,
+        classroomName: classrooms.name,
+        verifiedPaid: verifiedPaidSql,
       })
       .from(invoices)
-      .leftJoin(students, eq(invoices.studentId, students.id))
+      .leftJoin(students, and(eq(invoices.studentId, students.id), eq(students.tenantId, tenantId)))
+      .leftJoin(enrollments, this.enrollmentJoinCondition(tenantId, query.academicYearId))
+      .leftJoin(grades, eq(enrollments.gradeId, grades.id))
+      .leftJoin(classrooms, eq(enrollments.classroomId, classrooms.id))
       .where(and(...conditions))
       .orderBy(desc(invoices.updatedAt))
       .limit(limit)
@@ -708,10 +815,113 @@ export class FinanceService {
     const countResult = await this.db
       .select({ total: count() })
       .from(invoices)
+      .leftJoin(students, and(eq(invoices.studentId, students.id), eq(students.tenantId, tenantId)))
       .where(and(...conditions))
     const totalCount = countResult[0]?.total ?? 0
 
-    return { data: rows, total: Number(totalCount), limit, offset }
+    const data = rows.map((row) => {
+      const total = Number(row.total)
+      const paid = Number(row.verifiedPaid ?? 0)
+      return {
+        ...row,
+        balanceDue: Math.max(0, total - paid),
+        verifiedPaid: paid,
+      }
+    })
+
+    return { data, total: Number(totalCount), limit, offset }
+  }
+
+  async getInvoiceMetrics(tenantId: string, query: InvoiceMetricsQueryDto) {
+    const conditions = [eq(invoices.tenantId, tenantId)]
+    if (query.academicYearId) {
+      conditions.push(
+        exists(
+          this.db
+            .select({ id: enrollments.id })
+            .from(enrollments)
+            .where(
+              and(
+                eq(enrollments.tenantId, tenantId),
+                eq(enrollments.studentId, invoices.studentId),
+                eq(enrollments.academicYearId, query.academicYearId),
+                eq(enrollments.status, 'approved'),
+              ),
+            ),
+        ),
+      )
+    }
+
+    const verifiedPaidSql = sql<string>`(
+      SELECT COALESCE(SUM(
+        CASE
+          WHEN ${payments.kind} = 'payment' THEN ${payments.amount}::numeric
+          WHEN ${payments.kind} = 'refund' THEN -${payments.amount}::numeric
+          ELSE 0
+        END
+      ), 0)
+      FROM ${payments}
+      WHERE ${payments.invoiceId} = ${invoices.id}
+        AND ${payments.tenantId} = ${tenantId}
+        AND ${payments.verifiedAt} IS NOT NULL
+    )`
+
+    const rows = await this.db
+      .select({
+        status: invoices.status,
+        total: invoices.total,
+        dueDate: invoices.dueDate,
+        verifiedPaid: verifiedPaidSql,
+      })
+      .from(invoices)
+      .where(and(...conditions))
+
+    const today = new Date().toISOString().slice(0, 10)
+    let allCount = 0
+    let allBilled = 0
+    let settledCount = 0
+    let openCount = 0
+    let openAmount = 0
+    let overdueCount = 0
+
+    for (const row of rows) {
+      const total = Number(row.total)
+      const paid = Number(row.verifiedPaid ?? 0)
+      const balance = Math.max(0, total - paid)
+      const isOverdue =
+        balance > 0 && Boolean(row.dueDate && row.dueDate < today) && row.status !== 'paid'
+      allCount += 1
+      allBilled += total
+
+      if (row.status === 'paid' || balance <= 0) {
+        settledCount += 1
+      } else if (row.status === 'overdue' || isOverdue) {
+        overdueCount += 1
+        openCount += 1
+        openAmount += balance
+      } else if (['unpaid', 'partial'].includes(row.status)) {
+        openCount += 1
+        openAmount += balance
+      }
+    }
+
+    const { term } = await this.resolveCurrentTerm(tenantId, query.academicYearId)
+
+    return {
+      allCount,
+      allBilled,
+      settledCount,
+      openCount,
+      openAmount,
+      overdueCount,
+      termName: term?.name ?? null,
+    }
+  }
+
+  private async resolveCurrentTerm(tenantId: string, academicYearId?: string) {
+    if (!academicYearId) return { term: null as { name: string } | null }
+    const { currentTerm } = await this.resolveBillingPeriod(tenantId, academicYearId)
+    return { term: currentTerm }
   }
 
   async getInvoice(tenantId: string, invoiceId: string) {
@@ -726,16 +936,29 @@ export class FinanceService {
       .from(invoiceItems)
       .where(eq(invoiceItems.invoiceId, invoiceId))
 
+    const discountLines = await this.db
+      .select()
+      .from(invoiceDiscountLines)
+      .where(
+        and(eq(invoiceDiscountLines.invoiceId, invoiceId), eq(invoiceDiscountLines.tenantId, tenantId))
+      )
+
     const invoicePayments = await this.db
       .select()
       .from(payments)
       .where(eq(payments.invoiceId, invoiceId))
 
-    return { ...invoice, items, payments: invoicePayments }
+    const context = await this.resolveStudentBillingContext(
+      tenantId,
+      invoice.studentId,
+      invoice.enrollmentId,
+    )
+
+    return { ...invoice, items, discountLines, payments: invoicePayments, ...context }
   }
 
   async createInvoice(tenantId: string, actorUserId: string, dto: CreateInvoiceDto) {
-    const invoiceNumber = `INV-${Date.now()}`
+    const invoiceNumber = buildInvoiceNumber(new Date())
     const subtotal = dto.items.reduce((s, i) => s + (i.unitAmount * (i.quantity ?? 1)), 0)
 
     const [invoice] = await this.db.insert(invoices).values({
@@ -899,10 +1122,26 @@ export class FinanceService {
   // ── Payments ───────────────────────────────────────────────────────────────
 
   async listPayments(tenantId: string, query: ListPaymentsQueryDto) {
-    const conditions = [eq(payments.tenantId, tenantId)]
+    const conditions = [eq(payments.tenantId, tenantId), eq(payments.kind, 'payment')]
     if (query.method) conditions.push(eq(payments.method, query.method as any))
     if (query.verified === true) conditions.push(isNotNull(payments.verifiedAt))
-    if (query.verified === false) conditions.push(sql`${payments.verifiedAt} IS NULL`)
+    if (query.verified === false) conditions.push(isNull(payments.verifiedAt))
+    if (query.dateFrom) conditions.push(gte(payments.paidAt, new Date(query.dateFrom)))
+    if (query.dateTo) conditions.push(lte(payments.paidAt, new Date(query.dateTo)))
+
+    if (query.academicYearId) {
+      conditions.push(this.paymentAcademicYearFilter(tenantId, query.academicYearId))
+    }
+
+    if (query.search?.trim()) {
+      const term = `%${query.search.trim()}%`
+      conditions.push(
+        or(
+          ilike(receipts.receiptNumber, term),
+          ilike(students.fullName, term),
+        )!,
+      )
+    }
 
     const limit = query.limit ?? 50
     const offset = query.offset ?? 0
@@ -920,17 +1159,33 @@ export class FinanceService {
         verifiedAt: payments.verifiedAt,
         notes: payments.notes,
         createdAt: payments.createdAt,
+        createdBy: payments.createdBy,
         invoiceNumber: invoices.invoiceNumber,
+        receiptNumber: receipts.receiptNumber,
+        studentFullName: students.fullName,
+        gradeName: grades.name,
+        classroomName: classrooms.name,
+        recordedByName: users.displayName,
       })
       .from(payments)
       .leftJoin(invoices, and(eq(payments.invoiceId, invoices.id), eq(invoices.tenantId, tenantId)))
+      .leftJoin(receipts, and(eq(receipts.paymentId, payments.id), eq(receipts.tenantId, tenantId)))
+      .leftJoin(students, and(eq(invoices.studentId, students.id), eq(students.tenantId, tenantId)))
+      .leftJoin(enrollments, this.enrollmentJoinCondition(tenantId, query.academicYearId))
+      .leftJoin(grades, eq(enrollments.gradeId, grades.id))
+      .leftJoin(classrooms, eq(enrollments.classroomId, classrooms.id))
+      .leftJoin(users, eq(payments.createdBy, users.id))
       .where(and(...conditions))
+      .orderBy(desc(payments.paidAt))
       .limit(limit)
       .offset(offset)
 
     const [countRow] = await this.db
       .select({ total: count() })
       .from(payments)
+      .leftJoin(invoices, and(eq(payments.invoiceId, invoices.id), eq(invoices.tenantId, tenantId)))
+      .leftJoin(receipts, and(eq(receipts.paymentId, payments.id), eq(receipts.tenantId, tenantId)))
+      .leftJoin(students, and(eq(invoices.studentId, students.id), eq(students.tenantId, tenantId)))
       .where(and(...conditions))
 
     const data = await Promise.all(rows.map(async (row) => {
@@ -943,6 +1198,77 @@ export class FinanceService {
     }))
 
     return { data, total: Number(countRow?.total ?? 0), limit, offset }
+  }
+
+  async getPaymentMetrics(tenantId: string, query: PaymentMetricsQueryDto) {
+    const conditions = [
+      eq(payments.tenantId, tenantId),
+      eq(payments.kind, 'payment'),
+      isNotNull(payments.verifiedAt),
+    ]
+
+    if (query.academicYearId) {
+      conditions.push(this.paymentAcademicYearFilter(tenantId, query.academicYearId))
+    }
+
+    const rows = await this.db
+      .select({
+        amount: payments.amount,
+        method: payments.method,
+        paidAt: payments.paidAt,
+      })
+      .from(payments)
+      .where(and(...conditions))
+
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+
+    let receivedTotal = 0
+    let receivedCount = 0
+    let todayTotal = 0
+    let todayCount = 0
+    const methodTotals = new Map<string, number>()
+
+    for (const row of rows) {
+      const amount = Number(row.amount)
+      receivedTotal += amount
+      receivedCount += 1
+
+      const paidAt = row.paidAt ? new Date(row.paidAt) : null
+      if (paidAt && paidAt >= today && paidAt < tomorrow) {
+        todayTotal += amount
+        todayCount += 1
+      }
+
+      methodTotals.set(row.method, (methodTotals.get(row.method) ?? 0) + amount)
+    }
+
+    let topMethod: string | null = null
+    let topMethodShare = 0
+    if (receivedTotal > 0 && methodTotals.size) {
+      for (const [method, total] of methodTotals) {
+        const share = total / receivedTotal
+        if (share > topMethodShare) {
+          topMethod = method
+          topMethodShare = share
+        }
+      }
+    }
+
+    const { term } = await this.resolveCurrentTerm(tenantId, query.academicYearId)
+
+    return {
+      receivedTotal,
+      receivedCount,
+      todayTotal,
+      todayCount,
+      topMethod,
+      topMethodShare: Math.round(topMethodShare * 100),
+      averageReceipt: receivedCount ? Math.round(receivedTotal / receivedCount) : 0,
+      termName: term?.name ?? null,
+    }
   }
 
   async recordPayment(tenantId: string, invoiceId: string, actorUserId: string, dto: RecordPaymentDto) {
@@ -989,7 +1315,54 @@ export class FinanceService {
     await this.auditService.recordEvent(
       this.auditService.createEvent({ tenantId, actorUserId, action: 'payment.record', recordType: 'payment', recordId: payment!.id, after: payment })
     )
-    return payment
+
+    const updatedVerifiedTotal = await this.getVerifiedNetPaid(invoiceId)
+    const remainingBalance = Math.max(0, invoiceTotal - updatedVerifiedTotal)
+    const receipt = await this.issueReceiptForPayment(tenantId, actorUserId, payment!.id, {
+      studentId: invoice.studentId,
+      enrollmentId: invoice.enrollmentId,
+      amountPaid: dto.amount,
+      method: dto.method,
+      referenceNumber: dto.referenceNumber?.trim() || null,
+      remainingBalance,
+      invoiceNumber: invoice.invoiceNumber,
+    })
+
+    return { payment, receipt }
+  }
+
+  async sendInvoiceToGuardian(tenantId: string, invoiceId: string, actorUserId: string) {
+    const invoice = await this.getInvoice(tenantId, invoiceId)
+    const recipient = invoice.guardianEmail?.trim()
+    if (!recipient) {
+      throw new BadRequestException('Primary guardian has no email on file.')
+    }
+
+    await this.notificationsService.sendEmail({
+      tenantId,
+      templateKey: 'invoice-sent',
+      recipient,
+      variables: {
+        invoiceNumber: invoice.invoiceNumber,
+        studentName: invoice.studentFullName,
+        total: invoice.total,
+        dueDate: invoice.dueDate ?? '',
+        guardianName: invoice.guardianName ?? '',
+      },
+    })
+
+    await this.auditService.recordEvent(
+      this.auditService.createEvent({
+        tenantId,
+        actorUserId,
+        action: 'invoice.send_guardian',
+        recordType: 'invoice',
+        recordId: invoiceId,
+        after: { recipient, invoiceNumber: invoice.invoiceNumber },
+      }),
+    )
+
+    return { sent: true }
   }
 
   async verifyPayment(tenantId: string, paymentId: string, actorUserId: string, dto: VerifyPaymentDto) {
@@ -1172,6 +1545,526 @@ export class FinanceService {
       .where(and(eq(receipts.id, receiptId), eq(receipts.tenantId, tenantId)))
     if (!receipt) throw new NotFoundException('Receipt not found')
     return receipt
+  }
+
+  // ── Billing roster & cashiering ──────────────────────────────────────────────
+
+  private readonly CLOSED_STATUSES = ['paid', 'cancelled', 'waived', 'refunded']
+
+  /** Resolve the academic-year window and (current/first) term for a period. */
+  private async resolveBillingPeriod(tenantId: string, academicYearId: string) {
+    const [year] = await this.db
+      .select({ id: academicYears.id, name: academicYears.name, startsOn: academicYears.startsOn, endsOn: academicYears.endsOn })
+      .from(academicYears)
+      .where(and(eq(academicYears.tenantId, tenantId), eq(academicYears.id, academicYearId)))
+    if (!year) throw new NotFoundException('Academic year not found')
+
+    const termRows = await this.db
+      .select({ id: terms.id, name: terms.name, startsOn: terms.startsOn, endsOn: terms.endsOn })
+      .from(terms)
+      .where(and(eq(terms.tenantId, tenantId), eq(terms.academicYearId, academicYearId)))
+      .orderBy(terms.startsOn)
+
+    const today = new Date().toISOString().slice(0, 10)
+    const currentTerm =
+      termRows.find((term) => term.startsOn <= today && term.endsOn >= today) ?? termRows[0] ?? null
+
+    return { year, currentTerm, periodStart: year.startsOn, periodEnd: year.endsOn }
+  }
+
+  /**
+   * Per-student billing roster for the Fees & Billing workspace: billed / paid /
+   * balance and collection metrics, scoped to an academic year and optional grade.
+   */
+  async getBillingRoster(tenantId: string, query: BillingRosterQueryDto) {
+    const { year, currentTerm, periodStart, periodEnd } = await this.resolveBillingPeriod(
+      tenantId,
+      query.academicYearId,
+    )
+
+    const enrollmentConditions = [
+      eq(enrollments.tenantId, tenantId),
+      eq(enrollments.academicYearId, query.academicYearId),
+      eq(enrollments.status, 'approved'),
+    ]
+    if (query.gradeId) enrollmentConditions.push(eq(enrollments.gradeId, query.gradeId))
+
+    const enrollmentRows = await this.db
+      .select({
+        studentId: enrollments.studentId,
+        gradeId: enrollments.gradeId,
+        gradeName: grades.name,
+        gradeSortOrder: grades.sortOrder,
+        classroomName: classrooms.name,
+        classroomRoom: classrooms.room,
+        studentFullName: students.fullName,
+        admissionNumber: students.admissionNumber,
+        guardianName: guardians.fullName,
+        guardianPhone: guardians.phone,
+      })
+      .from(enrollments)
+      .innerJoin(students, eq(enrollments.studentId, students.id))
+      .leftJoin(grades, eq(enrollments.gradeId, grades.id))
+      .leftJoin(classrooms, eq(enrollments.classroomId, classrooms.id))
+      .leftJoin(familyGroups, eq(students.familyGroupId, familyGroups.id))
+      .leftJoin(guardians, eq(familyGroups.primaryGuardianId, guardians.id))
+      .where(and(...enrollmentConditions))
+
+    // De-dupe by student (a student may have multiple enrollment rows historically).
+    const byStudent = new Map<string, (typeof enrollmentRows)[number]>()
+    for (const row of enrollmentRows) {
+      if (!byStudent.has(row.studentId)) byStudent.set(row.studentId, row)
+    }
+    const studentIds = [...byStudent.keys()]
+
+    const invoiceRows = studentIds.length
+      ? await this.db
+          .select({
+            id: invoices.id,
+            studentId: invoices.studentId,
+            total: invoices.total,
+            status: invoices.status,
+            dueDate: invoices.dueDate,
+            issueDate: invoices.issueDate,
+          })
+          .from(invoices)
+          .where(
+            and(
+              eq(invoices.tenantId, tenantId),
+              inArray(invoices.studentId, studentIds),
+              gte(invoices.issueDate, periodStart),
+              lte(invoices.issueDate, periodEnd),
+            ),
+          )
+          .orderBy(invoices.issueDate)
+      : []
+
+    const invoiceIds = invoiceRows.map((row) => row.id)
+    const paidByInvoice = new Map<string, number>()
+    if (invoiceIds.length) {
+      const paymentRows = await this.db
+        .select({ invoiceId: payments.invoiceId, amount: payments.amount, kind: payments.kind })
+        .from(payments)
+        .where(and(inArray(payments.invoiceId, invoiceIds), isNotNull(payments.verifiedAt)))
+      for (const row of paymentRows) {
+        const prev = paidByInvoice.get(row.invoiceId) ?? 0
+        const amount = Number(row.amount)
+        paidByInvoice.set(row.invoiceId, row.kind === 'refund' ? prev - amount : prev + amount)
+      }
+    }
+
+    const today = new Date().toISOString().slice(0, 10)
+    const invoicesByStudent = new Map<string, typeof invoiceRows>()
+    for (const inv of invoiceRows) {
+      const bucket = invoicesByStudent.get(inv.studentId) ?? []
+      bucket.push(inv)
+      invoicesByStudent.set(inv.studentId, bucket)
+    }
+
+    type RosterRow = {
+      studentId: string
+      studentFullName: string
+      admissionNumber: string
+      gradeId: string
+      gradeName: string
+      classroomName: string | null
+      guardianName: string | null
+      guardianPhone: string | null
+      billed: number
+      paid: number
+      balance: number
+      status: 'paid' | 'partial' | 'due' | 'overdue'
+      primaryInvoiceId: string | null
+    }
+
+    const rows: RosterRow[] = []
+    const gradeSet = new Map<string, { id: string; name: string; sortOrder: number }>()
+
+    for (const studentId of studentIds) {
+      const meta = byStudent.get(studentId)!
+      if (meta.gradeId && meta.gradeName) {
+        gradeSet.set(meta.gradeId, {
+          id: meta.gradeId,
+          name: meta.gradeName,
+          sortOrder: meta.gradeSortOrder ?? 0,
+        })
+      }
+
+      const studentInvoices = invoicesByStudent.get(studentId) ?? []
+      let billed = 0
+      let paid = 0
+      let hasOverdue = false
+      let primaryInvoiceId: string | null = null
+      let latestInvoiceId: string | null = null
+
+      for (const inv of studentInvoices) {
+        billed += Number(inv.total)
+        const net = paidByInvoice.get(inv.id) ?? 0
+        paid += net
+        latestInvoiceId = inv.id
+        const open = !this.CLOSED_STATUSES.includes(inv.status)
+        const remaining = Number(inv.total) - net
+        if (open && remaining > 0) {
+          if (!primaryInvoiceId) primaryInvoiceId = inv.id
+          if (inv.dueDate && inv.dueDate < today) hasOverdue = true
+        }
+      }
+
+      const balance = Math.max(0, billed - paid)
+      let status: RosterRow['status']
+      if (billed > 0 && balance <= 0) status = 'paid'
+      else if (hasOverdue) status = 'overdue'
+      else if (paid > 0 && balance > 0) status = 'partial'
+      else status = 'due'
+
+      rows.push({
+        studentId,
+        studentFullName: meta.studentFullName,
+        admissionNumber: meta.admissionNumber,
+        gradeId: meta.gradeId,
+        gradeName: meta.gradeName ?? '—',
+        classroomName: meta.classroomName ?? null,
+        guardianName: meta.guardianName ?? null,
+        guardianPhone: meta.guardianPhone ?? null,
+        billed,
+        paid,
+        balance,
+        status,
+        primaryInvoiceId: primaryInvoiceId ?? latestInvoiceId,
+      })
+    }
+
+    // Metrics reflect the grade scope (before search / status filters).
+    const metrics = rows.reduce(
+      (acc, row) => {
+        acc.billed += row.billed
+        acc.collected += row.paid
+        acc.outstanding += row.balance
+        if (row.balance > 0) acc.owingStudents += 1
+        if (row.status === 'overdue') {
+          acc.overdue += row.balance
+          acc.overdueStudents += 1
+        }
+        return acc
+      },
+      { billed: 0, collected: 0, outstanding: 0, overdue: 0, owingStudents: 0, overdueStudents: 0 },
+    )
+    const collectionRate = metrics.billed > 0 ? Math.round((metrics.collected / metrics.billed) * 100) : 0
+
+    let filtered = rows
+    if (query.status) filtered = filtered.filter((row) => row.status === query.status)
+    if (query.search) {
+      const needle = query.search.toLowerCase()
+      filtered = filtered.filter(
+        (row) =>
+          row.studentFullName.toLowerCase().includes(needle) ||
+          (row.guardianName?.toLowerCase().includes(needle) ?? false) ||
+          row.admissionNumber.toLowerCase().includes(needle),
+      )
+    }
+
+    filtered.sort(
+      (a, b) =>
+        (gradeSet.get(a.gradeId)?.sortOrder ?? 0) - (gradeSet.get(b.gradeId)?.sortOrder ?? 0) ||
+        a.studentFullName.localeCompare(b.studentFullName),
+    )
+
+    const gradeList = [...gradeSet.values()].sort((a, b) => a.sortOrder - b.sortOrder)
+
+    return {
+      academicYear: { id: year.id, name: year.name },
+      term: currentTerm ? { id: currentTerm.id, name: currentTerm.name } : null,
+      grades: gradeList.map((grade) => ({ id: grade.id, name: grade.name })),
+      metrics: { ...metrics, collectionRate, totalStudents: rows.length },
+      rows: filtered,
+    }
+  }
+
+  private async nextReceiptNumber(tenantId: string, prefix: string) {
+    const [row] = await this.db
+      .select({ value: count() })
+      .from(receipts)
+      .where(eq(receipts.tenantId, tenantId))
+    const sequence = 8500 + Number(row?.value ?? 0) + 1
+    return `${prefix}-${sequence}`
+  }
+
+  private async resolveStudentBillingContext(
+    tenantId: string,
+    studentId: string,
+    enrollmentId?: string | null,
+  ) {
+    const enrollmentConditions = [
+      eq(enrollments.tenantId, tenantId),
+      eq(enrollments.studentId, studentId),
+      eq(enrollments.status, 'approved'),
+    ]
+    if (enrollmentId) {
+      enrollmentConditions.push(eq(enrollments.id, enrollmentId))
+    }
+
+    const [enrollment] = await this.db
+      .select({
+        gradeName: grades.name,
+        classroomName: classrooms.name,
+        classroomRoom: classrooms.room,
+        academicYearId: enrollments.academicYearId,
+      })
+      .from(enrollments)
+      .leftJoin(grades, eq(enrollments.gradeId, grades.id))
+      .leftJoin(classrooms, eq(enrollments.classroomId, classrooms.id))
+      .where(and(...enrollmentConditions))
+      .orderBy(desc(enrollments.confirmedAt))
+
+    let academicYearName = '—'
+    let termName: string | null = null
+    if (enrollment?.academicYearId) {
+      const { year, currentTerm } = await this.resolveBillingPeriod(tenantId, enrollment.academicYearId)
+      academicYearName = year.name
+      termName = currentTerm?.name ?? null
+    }
+
+    const [settings] = await this.db
+      .select({
+        schoolName: tenantSettings.schoolName,
+        address: tenantSettings.address,
+        contactPhone: tenantSettings.contactPhone,
+      })
+      .from(tenantSettings)
+      .where(eq(tenantSettings.tenantId, tenantId))
+    const [tenant] = await this.db
+      .select({ name: tenants.name })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+    const [student] = await this.db
+      .select({ fullName: students.fullName })
+      .from(students)
+      .where(and(eq(students.tenantId, tenantId), eq(students.id, studentId)))
+    const [guardian] = await this.db
+      .select({ fullName: guardians.fullName, phone: guardians.phone, email: guardians.email })
+      .from(students)
+      .leftJoin(familyGroups, eq(students.familyGroupId, familyGroups.id))
+      .leftJoin(guardians, eq(familyGroups.primaryGuardianId, guardians.id))
+      .where(and(eq(students.tenantId, tenantId), eq(students.id, studentId)))
+
+    return {
+      studentFullName: student?.fullName ?? '—',
+      gradeName: enrollment?.gradeName ?? null,
+      classroomName: enrollment?.classroomName ?? null,
+      room: enrollment?.classroomRoom ?? null,
+      guardianName: guardian?.fullName ?? null,
+      guardianPhone: guardian?.phone ?? null,
+      guardianEmail: guardian?.email ?? null,
+      schoolName: settings?.schoolName ?? tenant?.name ?? 'School',
+      schoolAddress: settings?.address ?? null,
+      schoolContactPhone: settings?.contactPhone ?? null,
+      academicYearName,
+      termName,
+    }
+  }
+
+  private async issueReceiptForPayment(
+    tenantId: string,
+    actorUserId: string,
+    paymentId: string,
+    input: {
+      studentId: string
+      enrollmentId?: string | null
+      amountPaid: number
+      method: string
+      referenceNumber: string | null
+      remainingBalance: number
+      invoiceNumber?: string | null
+    },
+  ) {
+    const context = await this.resolveStudentBillingContext(
+      tenantId,
+      input.studentId,
+      input.enrollmentId,
+    )
+    const [settings] = await this.db
+      .select({ receiptPrefix: tenantSettings.receiptPrefix })
+      .from(tenantSettings)
+      .where(eq(tenantSettings.tenantId, tenantId))
+    const [cashier] = await this.db
+      .select({ displayName: users.displayName })
+      .from(users)
+      .where(eq(users.id, actorUserId))
+
+    const receiptPrefix = settings?.receiptPrefix?.trim() || 'RCPT'
+    const receiptNumber = await this.nextReceiptNumber(tenantId, receiptPrefix)
+    const [receiptRow] = await this.db
+      .insert(receipts)
+      .values({
+        tenantId,
+        createdBy: actorUserId,
+        updatedBy: actorUserId,
+        paymentId,
+        receiptNumber,
+      })
+      .returning()
+
+    return {
+      id: receiptRow!.id,
+      receiptNumber,
+      issuedAt: receiptRow!.issuedAt,
+      schoolName: context.schoolName,
+      studentName: context.studentFullName,
+      gradeName: context.gradeName,
+      classroomName: context.classroomName,
+      room: context.room,
+      guardianName: context.guardianName,
+      guardianPhone: context.guardianPhone,
+      method: input.method,
+      academicYearName: context.academicYearName,
+      termName: context.termName,
+      referenceNumber: input.referenceNumber,
+      cashier: cashier?.displayName ?? '—',
+      amountPaid: input.amountPaid,
+      remainingBalance: input.remainingBalance,
+      currency: 'MMK',
+      invoiceNumber: input.invoiceNumber ?? null,
+    }
+  }
+
+  /**
+   * Cashier flow for the Fees & Billing workspace: record a (point-of-sale,
+   * immediately-verified) payment against a student's oldest open invoice and
+   * issue a printable receipt payload.
+   */
+  async collectPayment(tenantId: string, actorUserId: string, dto: CollectPaymentDto) {
+    const [enrollment] = await this.db
+      .select({
+        gradeName: grades.name,
+        classroomName: classrooms.name,
+        classroomRoom: classrooms.room,
+        academicYearId: enrollments.academicYearId,
+      })
+      .from(enrollments)
+      .leftJoin(grades, eq(enrollments.gradeId, grades.id))
+      .leftJoin(classrooms, eq(enrollments.classroomId, classrooms.id))
+      .where(
+        and(
+          eq(enrollments.tenantId, tenantId),
+          eq(enrollments.studentId, dto.studentId),
+          eq(enrollments.status, 'approved'),
+          ...(dto.academicYearId ? [eq(enrollments.academicYearId, dto.academicYearId)] : []),
+        ),
+      )
+      .orderBy(desc(enrollments.confirmedAt))
+
+    const academicYearId = dto.academicYearId ?? enrollment?.academicYearId
+    if (!academicYearId) throw new BadRequestException('No active enrollment for this student.')
+
+    const { year, currentTerm, periodStart, periodEnd } = await this.resolveBillingPeriod(
+      tenantId,
+      academicYearId,
+    )
+
+    const openInvoices = await this.db
+      .select({ id: invoices.id, total: invoices.total, status: invoices.status })
+      .from(invoices)
+      .where(
+        and(
+          eq(invoices.tenantId, tenantId),
+          eq(invoices.studentId, dto.studentId),
+          gte(invoices.issueDate, periodStart),
+          lte(invoices.issueDate, periodEnd),
+          inArray(invoices.status, ['unpaid', 'partial', 'overdue'] as any[]),
+        ),
+      )
+      .orderBy(invoices.issueDate)
+
+    if (!openInvoices.length) {
+      throw new BadRequestException('This student has no open invoice to collect against.')
+    }
+
+    if (dto.amount <= 0) throw new BadRequestException('Amount must be greater than zero.')
+    if (dto.method !== 'cash' && !dto.referenceNumber?.trim()) {
+      throw new BadRequestException('Transaction ID is required for non-cash payments.')
+    }
+
+    // Spread the amount across open invoices, oldest first.
+    let remainingToApply = dto.amount
+    let lastPaymentId: string | null = null
+    let lastInvoiceId: string | null = null
+
+    for (const invoice of openInvoices) {
+      if (remainingToApply <= 0) break
+      const net = await this.getVerifiedNetPaid(invoice.id)
+      const invoiceRemaining = Number(invoice.total) - net
+      if (invoiceRemaining <= 0) continue
+
+      const applied = Math.min(remainingToApply, invoiceRemaining)
+      const [payment] = await this.db
+        .insert(payments)
+        .values({
+          tenantId,
+          createdBy: actorUserId,
+          updatedBy: actorUserId,
+          invoiceId: invoice.id,
+          kind: 'payment',
+          amount: String(applied),
+          method: dto.method as any,
+          referenceNumber: dto.referenceNumber?.trim() || null,
+          notes: dto.notes?.trim() || null,
+          paidAt: new Date(),
+          verifiedAt: new Date(),
+          verifiedByUserId: actorUserId,
+        })
+        .returning()
+
+      await this.recalculateInvoiceStatus(tenantId, invoice.id, actorUserId)
+      await this.auditService.recordEvent(
+        this.auditService.createEvent({
+          tenantId,
+          actorUserId,
+          action: 'payment.collect',
+          recordType: 'payment',
+          recordId: payment!.id,
+          after: payment,
+        }),
+      )
+
+      remainingToApply -= applied
+      lastPaymentId = payment!.id
+      lastInvoiceId = invoice.id
+    }
+
+    if (!lastPaymentId || !lastInvoiceId) {
+      throw new BadRequestException('Payment could not be applied — the balance is already settled.')
+    }
+
+    // Remaining student balance across the billing period after this collection.
+    const periodInvoices = await this.db
+      .select({ id: invoices.id, total: invoices.total })
+      .from(invoices)
+      .where(
+        and(
+          eq(invoices.tenantId, tenantId),
+          eq(invoices.studentId, dto.studentId),
+          gte(invoices.issueDate, periodStart),
+          lte(invoices.issueDate, periodEnd),
+        ),
+      )
+    let remainingBalance = 0
+    for (const invoice of periodInvoices) {
+      const net = await this.getVerifiedNetPaid(invoice.id)
+      remainingBalance += Math.max(0, Number(invoice.total) - net)
+    }
+
+    const receipt = await this.issueReceiptForPayment(tenantId, actorUserId, lastPaymentId, {
+      studentId: dto.studentId,
+      amountPaid: dto.amount,
+      method: dto.method,
+      referenceNumber: dto.referenceNumber?.trim() || null,
+      remainingBalance,
+    })
+
+    return {
+      payment: { id: lastPaymentId, invoiceId: lastInvoiceId },
+      receipt,
+    }
   }
 
   // ── Reports ────────────────────────────────────────────────────────────────

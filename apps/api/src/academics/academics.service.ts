@@ -11,10 +11,12 @@ import {
   academicYears,
   classroomStudents,
   classrooms,
+  gradeChiefAssignments,
   gradeSubjects,
   grades,
   reportCards,
   sections,
+  staff,
   subjects,
   terms
 } from "../db/schema.js";
@@ -989,12 +991,26 @@ export class AcademicsService {
           )
         );
 
+      const [gradeChiefRow] = await this.db
+        .select({ name: staff.fullName })
+        .from(gradeChiefAssignments)
+        .innerJoin(staff, eq(gradeChiefAssignments.staffId, staff.id))
+        .where(
+          and(
+            eq(gradeChiefAssignments.tenantId, tenantId),
+            eq(gradeChiefAssignments.academicYearId, academicYearId),
+            eq(gradeChiefAssignments.gradeId, grade.id)
+          )
+        )
+        .limit(1);
+
       results.push({
         ...grade,
         subjectCount: uniqueSubjects.length,
         subjects: uniqueSubjects,
         classroomCount: classroomCountRow?.count ?? 0,
-        studentCount: studentCountRow?.count ?? 0
+        studentCount: studentCountRow?.count ?? 0,
+        gradeChiefName: gradeChiefRow?.name ?? null
       });
     }
 
