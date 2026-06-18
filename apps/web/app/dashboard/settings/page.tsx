@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function SettingsPage() {
-  redirect("/dashboard/settings/user-roles");
+  redirect("/dashboard/academic-setup/years");
 }
