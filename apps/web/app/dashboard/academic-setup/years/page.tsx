@@ -7,7 +7,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
-import { Toggle } from "../../../../components/shared/toggle";
+import { Switch as Toggle } from "../../../../components/ui/switch";
 import { StatusBadge } from "../../../../components/shared/badge";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { DataTable } from "../../../lib/data-table";
@@ -137,7 +137,7 @@ export default function AcademicYearsPage() {
               checked={isActive}
               disabled={setActive.isPending}
               aria-label={t("toggleYearActive", { name: year.name })}
-              onCheckedChange={(checked) => requestToggle(year, checked)}
+              onCheckedChange={(checked: boolean) => requestToggle(year, checked)}
             />
             <StatusBadge status={year.status} />
           </div>

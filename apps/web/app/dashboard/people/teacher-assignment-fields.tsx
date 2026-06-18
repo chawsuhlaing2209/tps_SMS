@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import type { UpdateTeacherAssignmentsInput } from "@sms/shared";
 import { CheckboxList } from "../../../components/shared/checkbox-list";
-import { Toggle } from "../../../components/shared/toggle";
+import { Switch as Toggle } from "../../../components/ui/switch";
 import { Icon } from "../../lib/material-icon";
 
 export type AssignmentOptions = {
@@ -270,7 +270,7 @@ export function TeacherAssignmentFields({
               <div className="assign-toggle">
                 <Toggle
                   checked={draft.isGradeChief}
-                  onCheckedChange={(checked) =>
+                  onCheckedChange={(checked: boolean) =>
                     onChange({
                       ...draft,
                       isGradeChief: checked,
@@ -310,7 +310,7 @@ export function TeacherAssignmentFields({
               <div className="assign-toggle">
                 <Toggle
                   checked={draft.isHomeroom}
-                  onCheckedChange={(checked) =>
+                  onCheckedChange={(checked: boolean) =>
                     onChange({
                       ...draft,
                       isHomeroom: checked,
