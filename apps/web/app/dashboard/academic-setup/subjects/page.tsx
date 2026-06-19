@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { useApiMutation, useApiQuery } from "../../../lib/api";
+import { useApiMutation, useReferenceApiQuery } from "../../../lib/api";
 import { Icon } from "../../../lib/material-icon";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { zodResolver } from "../../../lib/zod-resolver";
@@ -79,10 +79,10 @@ export default function SubjectsPage() {
   const [formMode, setFormMode] = useState<FormMode | null>(null);
 
   const currentYear = useCurrentAcademicYear();
-  const grades = useApiQuery<Grade[]>((tn) => `/tenants/${tn}/academics/grades`);
+  const grades = useReferenceApiQuery<Grade[]>((tn) => `/tenants/${tn}/academics/grades`);
   const { contextYearId } = useAcademicYearContext(currentYear.data);
 
-  const subjects = useApiQuery<SubjectOverview[]>((tn) =>
+  const subjects = useReferenceApiQuery<SubjectOverview[]>((tn) =>
     contextYearId ? setupSubjectsPath(tn, contextYearId) : null
   );
 

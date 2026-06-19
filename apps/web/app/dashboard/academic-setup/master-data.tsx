@@ -7,7 +7,7 @@ import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { type UseQueryResult } from "@tanstack/react-query";
-import { useApiMutation, useApiQuery } from "../../lib/api";
+import { useApiMutation, useReferenceApiQuery } from "../../lib/api";
 import { DataTable } from "../../lib/data-table";
 import { Field } from "../../lib/form";
 import { Icon } from "../../lib/material-icon";
@@ -28,7 +28,7 @@ export type MasterField = {
 export function useMasterDataResource<T extends StatusRecord = StatusRecord>(resource: string) {
   const path = (tenantId: string) => `/tenants/${tenantId}/academics/${resource}`;
 
-  const query = useApiQuery<T[]>(path);
+  const query = useReferenceApiQuery<T[]>(path);
 
   const create = useApiMutation<Record<string, unknown>>(
     (body, tenantId) => ({

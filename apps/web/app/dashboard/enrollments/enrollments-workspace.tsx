@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { useApiQuery } from "../../lib/api";
+import { useApiQuery, useReferenceApiQuery } from "../../lib/api";
 import { useCurrentAcademicYear } from "../../lib/use-current-academic-year";
 import { DataTable } from "../../lib/data-table";
 import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
@@ -79,8 +79,8 @@ export function EnrollmentsWorkspace({
     setResumeDraft(resumeEnrollment.data);
   }, [resumeEnrollmentId, resumeEnrollment.data]);
 
-  const grades = useApiQuery<Grade[]>((tn) => `/tenants/${tn}/academics/grades`);
-  const classrooms = useApiQuery<Classroom[]>((tn) => `/tenants/${tn}/classrooms`);
+  const grades = useReferenceApiQuery<Grade[]>((tn) => `/tenants/${tn}/academics/grades`);
+  const classrooms = useReferenceApiQuery<Classroom[]>((tn) => `/tenants/${tn}/classrooms`);
 
   const enrollmentsQuery = useMemo(() => {
     const params = new URLSearchParams();

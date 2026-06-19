@@ -10,7 +10,7 @@ import { z } from "zod";
 import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
 import { Toggle } from "../../../../components/shared/toggle";
 import { StatusBadge } from "../../../../components/shared/badge";
-import { useApiMutation, useApiQuery } from "../../../lib/api";
+import { useApiMutation, useReferenceApiQuery } from "../../../lib/api";
 import { DataTable } from "../../../lib/data-table";
 import { Field } from "../../../lib/form";
 import { Icon } from "../../../lib/material-icon";
@@ -56,7 +56,7 @@ export default function AcademicYearsPage() {
   const [formMode, setFormMode] = useState<FormMode | null>(null);
   const [toggleConfirm, setToggleConfirm] = useState<ToggleConfirm | null>(null);
 
-  const years = useApiQuery<AcademicYearOverview[]>(SETUP_PATH);
+  const years = useReferenceApiQuery<AcademicYearOverview[]>(SETUP_PATH);
   const activeYear = years.data?.find((year) => year.status === "active");
 
   const create = useApiMutation<YearValues>(

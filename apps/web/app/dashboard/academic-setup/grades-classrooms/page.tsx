@@ -8,7 +8,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { CheckboxList, PdsSelectField } from "../../../../components/pds";
 import { EmptyState } from "../../../../components/shared/empty-state";
-import { useApiMutation, useApiQuery } from "../../../lib/api";
+import { useApiMutation, useReferenceApiQuery } from "../../../lib/api";
 import { Field } from "../../../lib/form";
 import { Icon } from "../../../lib/material-icon";
 import { RecordFormSheet } from "../../../lib/record-sheet";
@@ -100,11 +100,11 @@ export default function GradesClassroomsPage() {
   const [gradeFormMode, setGradeFormMode] = useState<GradeFormMode | null>(null);
   const [roomFormMode, setRoomFormMode] = useState<RoomFormMode | null>(null);
 
-  const grades = useApiQuery<GradeOverview[]>((tn) =>
+  const grades = useReferenceApiQuery<GradeOverview[]>((tn) =>
     contextYearId ? setupGradesPath(tn, contextYearId) : null
   );
-  const subjects = useApiQuery<Subject[]>((tn) => `/tenants/${tn}/academics/subjects`);
-  const teachers = useApiQuery<{ data: StaffMember[] }>(
+  const subjects = useReferenceApiQuery<Subject[]>((tn) => `/tenants/${tn}/academics/subjects`);
+  const teachers = useReferenceApiQuery<{ data: StaffMember[] }>(
     (tn) => `/tenants/${tn}/hr/staff?employmentRole=teacher&limit=200`
   );
 
@@ -135,7 +135,7 @@ export default function GradesClassroomsPage() {
 
   const selectedGrade = activeGrades.find((g) => g.id === selectedGradeId) ?? null;
 
-  const classrooms = useApiQuery<ClassroomOverview[]>(
+  const classrooms = useReferenceApiQuery<ClassroomOverview[]>(
     (tn) =>
       contextYearId && selectedGradeId
         ? setupClassroomsPath(tn, contextYearId, selectedGradeId)

@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useApiQuery } from "../../../../lib/api";
+import { useReferenceApiQuery } from "../../../../lib/api";
 import { Icon } from "../../../../lib/material-icon";
 import { PageHeader } from "../../../page-header-context";
 import { StatusBadge } from "../../../../../components/shared/badge";
@@ -36,7 +36,7 @@ export default function AcademicYearDetailPage() {
   const nav = useTranslations("nav");
   const c = useTranslations("common");
 
-  const years = useApiQuery<AcademicYearOverview[]>(SETUP_PATH);
+  const years = useReferenceApiQuery<AcademicYearOverview[]>(SETUP_PATH);
   const year = years.data?.find((row) => row.id === yearId);
 
   return (

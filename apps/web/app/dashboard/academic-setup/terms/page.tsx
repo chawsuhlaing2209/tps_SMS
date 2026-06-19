@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { useApiMutation, useApiQuery } from "../../../lib/api";
+import { useApiMutation, useReferenceApiQuery } from "../../../lib/api";
 import { DataTable } from "../../../lib/data-table";
 import { Field } from "../../../lib/form";
 import { Icon } from "../../../lib/material-icon";
@@ -41,7 +41,7 @@ export default function TermsPage() {
 
   const currentYear = useCurrentAcademicYear();
   const { contextYearId } = useAcademicYearContext(currentYear.data);
-  const terms = useApiQuery<Term[]>(TERMS_PATH);
+  const terms = useReferenceApiQuery<Term[]>(TERMS_PATH);
 
   const create = useApiMutation<TermValues>(
     (body, tenant) => ({

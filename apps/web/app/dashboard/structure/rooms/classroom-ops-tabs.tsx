@@ -4,7 +4,7 @@ import { FormInput } from "../../../../components/shared/form-input";
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
-import { useApiMutation, useApiQuery } from "../../../lib/api";
+import { useApiMutation, useApiQuery, useReferenceApiQuery } from "../../../lib/api";
 import { DataTable } from "../../../lib/data-table";
 import { Field } from "../../../lib/form";
 import { Icon } from "../../../lib/material-icon";
@@ -118,8 +118,8 @@ export function ClassroomOpsTabs({
   const roster = useApiQuery<ClassroomStudent[]>(
     (tenant) => `/tenants/${tenant}/classrooms/${classroomId}/students`
   );
-  const grades = useApiQuery<Grade[]>((tenant) => `/tenants/${tenant}/academics/grades`);
-  const classrooms = useApiQuery<Classroom[]>((tenant) => `/tenants/${tenant}/classrooms`);
+  const grades = useReferenceApiQuery<Grade[]>((tenant) => `/tenants/${tenant}/academics/grades`);
+  const classrooms = useReferenceApiQuery<Classroom[]>((tenant) => `/tenants/${tenant}/classrooms`);
   const sessions = useApiQuery<AttendanceSession[]>(
     (tenant) => `/tenants/${tenant}/classrooms/${classroomId}/attendance-sessions`
   );

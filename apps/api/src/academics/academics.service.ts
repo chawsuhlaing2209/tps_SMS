@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException
 } from "@nestjs/common";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
 import {
@@ -947,61 +947,70 @@ export class AcademicsService {
       .where(eq(academicYears.tenantId, tenantId))
       .orderBy(academicYears.startsOn);
 
-    const results = [];
+    if (!years.length) {
+      return [];
+    }
 
-    for (const year of years) {
-      const [gradeCountRow] = await this.db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(grades)
-        .where(
-          and(
-            eq(grades.tenantId, tenantId),
-            eq(grades.status, "active"),
-            sql`(
-              exists (
-                select 1 from ${classrooms} c
-                where c.grade_id = ${grades.id}
-                  and c.tenant_id = ${tenantId}
-                  and c.academic_year_id = ${year.id}
-              )
-              or exists (
-                select 1 from ${gradeSubjects} gs
-                where gs.grade_id = ${grades.id}
-                  and gs.tenant_id = ${tenantId}
-                  and gs.academic_year_id = ${year.id}
-              )
-            )`
-          )
-        );
-
-      const [classroomCountRow] = await this.db
-        .select({ count: sql<number>`count(*)::int` })
+    const [classroomCountRows, studentCountRows, gradeCountRows] = await Promise.all([
+      this.db
+        .select({
+          academicYearId: classrooms.academicYearId,
+          count: sql<number>`count(*)::int`
+        })
         .from(classrooms)
-        .where(
-          and(eq(classrooms.tenantId, tenantId), eq(classrooms.academicYearId, year.id))
-        );
-
-      const [studentCountRow] = await this.db
-        .select({ count: sql<number>`count(distinct ${classroomStudents.studentId})::int` })
+        .where(eq(classrooms.tenantId, tenantId))
+        .groupBy(classrooms.academicYearId),
+      this.db
+        .select({
+          academicYearId: classrooms.academicYearId,
+          count: sql<number>`count(distinct ${classroomStudents.studentId})::int`
+        })
         .from(classroomStudents)
         .innerJoin(classrooms, eq(classroomStudents.classroomId, classrooms.id))
         .where(
           and(
             eq(classroomStudents.tenantId, tenantId),
-            eq(classrooms.academicYearId, year.id),
             isNull(classroomStudents.effectiveTo)
           )
-        );
+        )
+        .groupBy(classrooms.academicYearId),
+      this.db.execute<{ year_id: string; count: number }>(sql`
+        SELECT year_id, COUNT(DISTINCT grade_id)::int AS count
+        FROM (
+          SELECT c.academic_year_id AS year_id, c.grade_id AS grade_id
+          FROM ${classrooms} c
+          INNER JOIN ${grades} g ON g.id = c.grade_id
+          WHERE c.tenant_id = ${tenantId}
+            AND g.tenant_id = ${tenantId}
+            AND g.status = 'active'
+          UNION
+          SELECT gs.academic_year_id AS year_id, gs.grade_id AS grade_id
+          FROM ${gradeSubjects} gs
+          INNER JOIN ${grades} g ON g.id = gs.grade_id
+          WHERE gs.tenant_id = ${tenantId}
+            AND g.tenant_id = ${tenantId}
+            AND g.status = 'active'
+        ) active_grades
+        GROUP BY year_id
+      `)
+    ]);
 
-      results.push({
-        ...year,
-        gradeCount: gradeCountRow?.count ?? 0,
-        classroomCount: classroomCountRow?.count ?? 0,
-        studentCount: studentCountRow?.count ?? 0
-      });
-    }
+    const classroomCounts = new Map(
+      classroomCountRows.map((row) => [row.academicYearId, row.count])
+    );
+    const studentCounts = new Map(
+      studentCountRows.map((row) => [row.academicYearId, row.count])
+    );
+    const gradeCounts = new Map(
+      gradeCountRows.rows.map((row) => [row.year_id, row.count])
+    );
 
-    return results;
+    return years.map((year) => ({
+      ...year,
+      gradeCount: gradeCounts.get(year.id) ?? 0,
+      classroomCount: classroomCounts.get(year.id) ?? 0,
+      studentCount: studentCounts.get(year.id) ?? 0
+    }));
   }
 
   async listGradesOverview(tenantId: string, academicYearId: string) {
@@ -1013,78 +1022,107 @@ export class AcademicsService {
       .where(eq(grades.tenantId, tenantId))
       .orderBy(grades.sortOrder, grades.name);
 
-    const results = [];
+    if (!gradeRows.length) {
+      return [];
+    }
 
-    for (const grade of gradeRows) {
-      const subjectRows = await this.db
-        .select({
-          id: subjects.id,
-          name: subjects.name,
-          code: subjects.code,
-          colorKey: subjects.colorKey
-        })
-        .from(gradeSubjects)
-        .innerJoin(subjects, eq(gradeSubjects.subjectId, subjects.id))
-        .where(
-          and(
-            eq(gradeSubjects.tenantId, tenantId),
-            eq(gradeSubjects.academicYearId, academicYearId),
-            eq(gradeSubjects.gradeId, grade.id)
+    const gradeIds = gradeRows.map((grade) => grade.id);
+
+    const [subjectRows, classroomCountRows, studentCountRows, gradeChiefRows] =
+      await Promise.all([
+        this.db
+          .select({
+            gradeId: gradeSubjects.gradeId,
+            id: subjects.id,
+            name: subjects.name,
+            code: subjects.code,
+            colorKey: subjects.colorKey
+          })
+          .from(gradeSubjects)
+          .innerJoin(subjects, eq(gradeSubjects.subjectId, subjects.id))
+          .where(
+            and(
+              eq(gradeSubjects.tenantId, tenantId),
+              eq(gradeSubjects.academicYearId, academicYearId),
+              inArray(gradeSubjects.gradeId, gradeIds)
+            )
           )
-        )
-        .orderBy(subjects.name);
-
-      const uniqueSubjects = this.dedupeSubjectsByCode(subjectRows);
-
-      const [classroomCountRow] = await this.db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(classrooms)
-        .where(
-          and(
-            eq(classrooms.tenantId, tenantId),
-            eq(classrooms.academicYearId, academicYearId),
-            eq(classrooms.gradeId, grade.id)
+          .orderBy(subjects.name),
+        this.db
+          .select({
+            gradeId: classrooms.gradeId,
+            count: sql<number>`count(*)::int`
+          })
+          .from(classrooms)
+          .where(
+            and(
+              eq(classrooms.tenantId, tenantId),
+              eq(classrooms.academicYearId, academicYearId),
+              inArray(classrooms.gradeId, gradeIds)
+            )
           )
-        );
-
-      const [studentCountRow] = await this.db
-        .select({ count: sql<number>`count(distinct ${classroomStudents.studentId})::int` })
-        .from(classroomStudents)
-        .innerJoin(classrooms, eq(classroomStudents.classroomId, classrooms.id))
-        .where(
-          and(
-            eq(classroomStudents.tenantId, tenantId),
-            eq(classrooms.academicYearId, academicYearId),
-            eq(classrooms.gradeId, grade.id),
-            isNull(classroomStudents.effectiveTo)
+          .groupBy(classrooms.gradeId),
+        this.db
+          .select({
+            gradeId: classrooms.gradeId,
+            count: sql<number>`count(distinct ${classroomStudents.studentId})::int`
+          })
+          .from(classroomStudents)
+          .innerJoin(classrooms, eq(classroomStudents.classroomId, classrooms.id))
+          .where(
+            and(
+              eq(classroomStudents.tenantId, tenantId),
+              eq(classrooms.academicYearId, academicYearId),
+              inArray(classrooms.gradeId, gradeIds),
+              isNull(classroomStudents.effectiveTo)
+            )
           )
-        );
-
-      const [gradeChiefRow] = await this.db
-        .select({ name: staff.fullName, staffId: staff.id })
-        .from(gradeChiefAssignments)
-        .innerJoin(staff, eq(gradeChiefAssignments.staffId, staff.id))
-        .where(
-          and(
-            eq(gradeChiefAssignments.tenantId, tenantId),
-            eq(gradeChiefAssignments.academicYearId, academicYearId),
-            eq(gradeChiefAssignments.gradeId, grade.id)
+          .groupBy(classrooms.gradeId),
+        this.db
+          .select({
+            gradeId: gradeChiefAssignments.gradeId,
+            name: staff.fullName,
+            staffId: staff.id
+          })
+          .from(gradeChiefAssignments)
+          .innerJoin(staff, eq(gradeChiefAssignments.staffId, staff.id))
+          .where(
+            and(
+              eq(gradeChiefAssignments.tenantId, tenantId),
+              eq(gradeChiefAssignments.academicYearId, academicYearId),
+              inArray(gradeChiefAssignments.gradeId, gradeIds)
+            )
           )
-        )
-        .limit(1);
+      ]);
 
-      results.push({
+    const subjectsByGrade = new Map<string, typeof subjectRows>();
+    for (const row of subjectRows) {
+      const bucket = subjectsByGrade.get(row.gradeId) ?? [];
+      bucket.push(row);
+      subjectsByGrade.set(row.gradeId, bucket);
+    }
+
+    const classroomCounts = new Map(
+      classroomCountRows.map((row) => [row.gradeId, row.count])
+    );
+    const studentCounts = new Map(studentCountRows.map((row) => [row.gradeId, row.count]));
+    const gradeChiefs = new Map(
+      gradeChiefRows.map((row) => [row.gradeId, { name: row.name, staffId: row.staffId }])
+    );
+
+    return gradeRows.map((grade) => {
+      const uniqueSubjects = this.dedupeSubjectsByCode(subjectsByGrade.get(grade.id) ?? []);
+      const chief = gradeChiefs.get(grade.id);
+      return {
         ...grade,
         subjectCount: uniqueSubjects.length,
         subjects: uniqueSubjects,
-        classroomCount: classroomCountRow?.count ?? 0,
-        studentCount: studentCountRow?.count ?? 0,
-        gradeChiefName: gradeChiefRow?.name ?? null,
-        gradeChiefStaffId: gradeChiefRow?.staffId ?? null
-      });
-    }
-
-    return results;
+        classroomCount: classroomCounts.get(grade.id) ?? 0,
+        studentCount: studentCounts.get(grade.id) ?? 0,
+        gradeChiefName: chief?.name ?? null,
+        gradeChiefStaffId: chief?.staffId ?? null
+      };
+    });
   }
 
   async listSubjectsOverview(tenantId: string, academicYearId: string) {
@@ -1096,32 +1134,42 @@ export class AcademicsService {
       .where(eq(subjects.tenantId, tenantId))
       .orderBy(subjects.name);
 
-    const results = [];
-
-    for (const subject of subjectRows) {
-      const gradeRows = await this.db
-        .select({
-          id: grades.id,
-          name: grades.name
-        })
-        .from(gradeSubjects)
-        .innerJoin(grades, eq(gradeSubjects.gradeId, grades.id))
-        .where(
-          and(
-            eq(gradeSubjects.tenantId, tenantId),
-            eq(gradeSubjects.academicYearId, academicYearId),
-            eq(gradeSubjects.subjectId, subject.id)
-          )
-        )
-        .orderBy(grades.name);
-
-      results.push({
-        ...subject,
-        gradeCount: gradeRows.length,
-        grades: gradeRows
-      });
+    if (!subjectRows.length) {
+      return [];
     }
 
-    return results;
+    const subjectIds = subjectRows.map((subject) => subject.id);
+    const gradeRows = await this.db
+      .select({
+        subjectId: gradeSubjects.subjectId,
+        id: grades.id,
+        name: grades.name
+      })
+      .from(gradeSubjects)
+      .innerJoin(grades, eq(gradeSubjects.gradeId, grades.id))
+      .where(
+        and(
+          eq(gradeSubjects.tenantId, tenantId),
+          eq(gradeSubjects.academicYearId, academicYearId),
+          inArray(gradeSubjects.subjectId, subjectIds)
+        )
+      )
+      .orderBy(grades.name);
+
+    const gradesBySubject = new Map<string, Array<{ id: string; name: string }>>();
+    for (const row of gradeRows) {
+      const bucket = gradesBySubject.get(row.subjectId) ?? [];
+      bucket.push({ id: row.id, name: row.name });
+      gradesBySubject.set(row.subjectId, bucket);
+    }
+
+    return subjectRows.map((subject) => {
+      const gradesForSubject = gradesBySubject.get(subject.id) ?? [];
+      return {
+        ...subject,
+        gradeCount: gradesForSubject.length,
+        grades: gradesForSubject
+      };
+    });
   }
 }
