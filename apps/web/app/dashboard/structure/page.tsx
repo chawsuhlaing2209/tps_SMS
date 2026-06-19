@@ -8,7 +8,7 @@ import { SubjectChip, SubjectChipGroup } from "../../../components/pds";
 import { ConfirmDialog } from "../../../components/shared/confirm-dialog";
 import { EmptyState } from "../../../components/shared/empty-state";
 import { Button } from "../../../components/ui/button";
-import { useApiMutation, useApiQuery } from "../../lib/api";
+import { useApiMutation, useApiQuery, useReferenceApiQuery } from "../../lib/api";
 import { Icon } from "../../lib/material-icon";
 import { hasAnyPermission } from "../../lib/permissions";
 import { getSession } from "../../lib/session";
@@ -80,15 +80,15 @@ export default function SchoolStructurePage() {
   const [editingRoom, setEditingRoom] = useState<ClassroomOverview | null>(null);
   const [deletingRoom, setDeletingRoom] = useState<ClassroomOverview | null>(null);
 
-  const years = useApiQuery<YearOverview[]>((tenant) =>
+  const years = useReferenceApiQuery<YearOverview[]>((tenant) =>
     `/tenants/${tenant}/academics/setup/academic-years`
   );
-  const grades = useApiQuery<GradeOverview[]>(
+  const grades = useReferenceApiQuery<GradeOverview[]>(
     (tenant) =>
       yearId ? `/tenants/${tenant}/academics/setup/academic-years/${yearId}/grades` : null
   );
-  const terms = useApiQuery<Term[]>((tenant) => `/tenants/${tenant}/academics/terms`);
-  const subjectsOverview = useApiQuery<{ id: string }[]>(
+  const terms = useReferenceApiQuery<Term[]>((tenant) => `/tenants/${tenant}/academics/terms`);
+  const subjectsOverview = useReferenceApiQuery<{ id: string }[]>(
     (tenant) =>
       yearId ? `/tenants/${tenant}/academics/setup/academic-years/${yearId}/subjects` : null
   );
@@ -137,7 +137,7 @@ export default function SchoolStructurePage() {
         : null
   );
 
-  const teachers = useApiQuery<{ data: StaffMember[] }>(
+  const teachers = useReferenceApiQuery<{ data: StaffMember[] }>(
     (tenant) => `/tenants/${tenant}/hr/staff?employmentRole=teacher&limit=200`
   );
 

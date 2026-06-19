@@ -765,7 +765,7 @@ export class FinanceService {
       )
     }
 
-    const limit = query.limit ?? 50
+    const limit = Math.min(query.limit ?? 50, 200)
     const offset = query.offset ?? 0
     const sortDir = query.sortDir === 'asc' ? 'asc' : 'desc'
     const createdAtOrder = sortDir === 'asc' ? asc(invoices.createdAt) : desc(invoices.createdAt)
@@ -852,6 +852,7 @@ export class FinanceService {
 
     const roster = await this.getBillingRoster(tenantId, {
       academicYearId: query.academicYearId,
+      metricsOnly: true,
     })
 
     return {
@@ -1037,15 +1038,34 @@ export class FinanceService {
   }
 
   private async getRefundedTotalForPayment(paymentId: string): Promise<number> {
-    const [row] = await this.db
-      .select({ total: sum(payments.amount) })
+    const totals = await this.getRefundedTotalsForPayments([paymentId])
+    return totals.get(paymentId) ?? 0
+  }
+
+  private async getRefundedTotalsForPayments(paymentIds: string[]): Promise<Map<string, number>> {
+    const totals = new Map<string, number>()
+    if (!paymentIds.length) return totals
+
+    const rows = await this.db
+      .select({
+        refundedPaymentId: payments.refundedPaymentId,
+        total: sum(payments.amount),
+      })
       .from(payments)
       .where(and(
-        eq(payments.refundedPaymentId, paymentId),
+        inArray(payments.refundedPaymentId, paymentIds),
         eq(payments.kind, 'refund'),
         isNotNull(payments.verifiedAt),
       ))
-    return Number(row?.total ?? 0)
+      .groupBy(payments.refundedPaymentId)
+
+    for (const row of rows) {
+      if (row.refundedPaymentId) {
+        totals.set(row.refundedPaymentId, Number(row.total ?? 0))
+      }
+    }
+
+    return totals
   }
 
   private async recalculateInvoiceStatus(tenantId: string, invoiceId: string, actorUserId: string) {
@@ -1107,7 +1127,7 @@ export class FinanceService {
       )
     }
 
-    const limit = query.limit ?? 50
+    const limit = Math.min(query.limit ?? 50, 200)
     const offset = query.offset ?? 0
 
     const rows = await this.db
@@ -1154,10 +1174,15 @@ export class FinanceService {
       .leftJoin(students, and(eq(invoices.studentId, students.id), eq(students.tenantId, tenantId)))
       .where(and(...conditions))
 
-    const data = await Promise.all(rows.map(async (row) => {
+    const refundablePaymentIds = rows
+      .filter((row) => row.kind === 'payment' && row.verifiedAt)
+      .map((row) => row.id)
+    const refundedTotals = await this.getRefundedTotalsForPayments(refundablePaymentIds)
+
+    const data = rows.map((row) => {
       let refundableAmount: number | null = null
       if (row.kind === 'payment' && row.verifiedAt) {
-        const refunded = await this.getRefundedTotalForPayment(row.id)
+        const refunded = refundedTotals.get(row.id) ?? 0
         refundableAmount = Math.max(0, Number(row.amount) - refunded)
       }
       return {
@@ -1167,7 +1192,7 @@ export class FinanceService {
         billingMonth: billingMonthFromIssueDate(row.invoiceIssueDate),
         paymentPlan: paymentPlanKeyFromInvoiceSource(row.invoiceSource),
       }
-    }))
+    })
 
     return { data, total: Number(countRow?.total ?? 0), limit, offset }
   }
@@ -1183,47 +1208,42 @@ export class FinanceService {
       conditions.push(this.paymentAcademicYearFilter(tenantId, query.academicYearId))
     }
 
-    const rows = await this.db
-      .select({
-        amount: payments.amount,
-        method: payments.method,
-        paidAt: payments.paidAt,
-      })
-      .from(payments)
-      .where(and(...conditions))
-
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const tomorrow = new Date(today)
     tomorrow.setDate(tomorrow.getDate() + 1)
 
-    let receivedTotal = 0
-    let receivedCount = 0
-    let todayTotal = 0
-    let todayCount = 0
-    const methodTotals = new Map<string, number>()
+    const [totalsRow] = await this.db
+      .select({
+        receivedTotal: sql<string>`COALESCE(SUM(${payments.amount}::numeric), 0)`,
+        receivedCount: sql<number>`COUNT(*)::int`,
+        todayTotal: sql<string>`COALESCE(SUM(CASE WHEN ${payments.paidAt} >= ${today} AND ${payments.paidAt} < ${tomorrow} THEN ${payments.amount}::numeric ELSE 0 END), 0)`,
+        todayCount: sql<number>`COUNT(CASE WHEN ${payments.paidAt} >= ${today} AND ${payments.paidAt} < ${tomorrow} THEN 1 END)::int`,
+      })
+      .from(payments)
+      .where(and(...conditions))
 
-    for (const row of rows) {
-      const amount = Number(row.amount)
-      receivedTotal += amount
-      receivedCount += 1
+    const methodRows = await this.db
+      .select({
+        method: payments.method,
+        total: sql<string>`SUM(${payments.amount}::numeric)`,
+      })
+      .from(payments)
+      .where(and(...conditions))
+      .groupBy(payments.method)
 
-      const paidAt = row.paidAt ? new Date(row.paidAt) : null
-      if (paidAt && paidAt >= today && paidAt < tomorrow) {
-        todayTotal += amount
-        todayCount += 1
-      }
-
-      methodTotals.set(row.method, (methodTotals.get(row.method) ?? 0) + amount)
-    }
+    const receivedTotal = Number(totalsRow?.receivedTotal ?? 0)
+    const receivedCount = totalsRow?.receivedCount ?? 0
+    const todayTotal = Number(totalsRow?.todayTotal ?? 0)
+    const todayCount = totalsRow?.todayCount ?? 0
 
     let topMethod: string | null = null
     let topMethodShare = 0
-    if (receivedTotal > 0 && methodTotals.size) {
-      for (const [method, total] of methodTotals) {
-        const share = total / receivedTotal
+    if (receivedTotal > 0 && methodRows.length) {
+      for (const row of methodRows) {
+        const share = Number(row.total ?? 0) / receivedTotal
         if (share > topMethodShare) {
-          topMethod = method
+          topMethod = row.method
           topMethodShare = share
         }
       }
@@ -1549,34 +1569,37 @@ export class FinanceService {
    * balance and collection metrics, scoped to an academic year and optional grade.
    */
   async getBillingRoster(tenantId: string, query: BillingRosterQueryDto) {
+    const metricsOnly = query.metricsOnly === true
     const { year, currentTerm, periodStart, periodEnd } = await this.resolveBillingPeriod(
       tenantId,
       query.academicYearId,
     )
 
-    // Grade chips must list every grade with confirmed enrollments for the year,
-    // regardless of the active gradeId filter on rows/metrics.
-    const gradeNavRows = await this.db
-      .select({
-        id: grades.id,
-        name: grades.name,
-        sortOrder: grades.sortOrder,
-      })
-      .from(enrollments)
-      .innerJoin(grades, eq(enrollments.gradeId, grades.id))
-      .where(
-        and(
-          eq(enrollments.tenantId, tenantId),
-          eq(enrollments.academicYearId, query.academicYearId),
-          isNotNull(enrollments.confirmedAt),
-        ),
-      )
-      .groupBy(grades.id, grades.name, grades.sortOrder)
-      .orderBy(grades.sortOrder)
-
     const gradeSet = new Map<string, { id: string; name: string; sortOrder: number }>()
-    for (const grade of gradeNavRows) {
-      gradeSet.set(grade.id, grade)
+    if (!metricsOnly) {
+      // Grade chips must list every grade with confirmed enrollments for the year,
+      // regardless of the active gradeId filter on rows/metrics.
+      const gradeNavRows = await this.db
+        .select({
+          id: grades.id,
+          name: grades.name,
+          sortOrder: grades.sortOrder,
+        })
+        .from(enrollments)
+        .innerJoin(grades, eq(enrollments.gradeId, grades.id))
+        .where(
+          and(
+            eq(enrollments.tenantId, tenantId),
+            eq(enrollments.academicYearId, query.academicYearId),
+            isNotNull(enrollments.confirmedAt),
+          ),
+        )
+        .groupBy(grades.id, grades.name, grades.sortOrder)
+        .orderBy(grades.sortOrder)
+
+      for (const grade of gradeNavRows) {
+        gradeSet.set(grade.id, grade)
+      }
     }
 
     const enrollmentConditions = [
@@ -1701,6 +1724,14 @@ export class FinanceService {
     }
 
     const rows: RosterRow[] = []
+    const metrics = {
+      billed: 0,
+      collected: 0,
+      outstanding: 0,
+      overdue: 0,
+      owingStudents: 0,
+      overdueStudents: 0,
+    }
 
     for (const studentId of studentIds) {
       const meta = byStudent.get(studentId)!
@@ -1751,42 +1782,51 @@ export class FinanceService {
       else if (paid > 0 && balance > 0) status = 'partial'
       else status = 'due'
 
-      rows.push({
-        studentId,
-        studentFullName: meta.studentFullName,
-        admissionNumber: meta.admissionNumber,
-        gradeId: meta.gradeId,
-        gradeName: meta.gradeName ?? '—',
-        classroomName: meta.classroomName ?? null,
-        guardianName: meta.guardianName ?? null,
-        guardianPhone: meta.guardianPhone ?? null,
-        billed,
-        paid,
-        balance,
-        status,
-        primaryInvoiceId: resolvedPrimaryId,
-        primaryInvoiceCreatedAt,
-        primaryBillingMonth,
-        primaryPaymentPlan,
-      })
+      metrics.billed += billed
+      metrics.collected += paid
+      metrics.outstanding += balance
+      if (balance > 0) metrics.owingStudents += 1
+      if (status === 'overdue') {
+        metrics.overdue += balance
+        metrics.overdueStudents += 1
+      }
+
+      if (!metricsOnly) {
+        rows.push({
+          studentId,
+          studentFullName: meta.studentFullName,
+          admissionNumber: meta.admissionNumber,
+          gradeId: meta.gradeId,
+          gradeName: meta.gradeName ?? '—',
+          classroomName: meta.classroomName ?? null,
+          guardianName: meta.guardianName ?? null,
+          guardianPhone: meta.guardianPhone ?? null,
+          billed,
+          paid,
+          balance,
+          status,
+          primaryInvoiceId: resolvedPrimaryId,
+          primaryInvoiceCreatedAt,
+          primaryBillingMonth,
+          primaryPaymentPlan,
+        })
+      }
     }
 
-    // Metrics reflect the grade scope (before search / status filters).
-    const metrics = rows.reduce(
-      (acc, row) => {
-        acc.billed += row.billed
-        acc.collected += row.paid
-        acc.outstanding += row.balance
-        if (row.balance > 0) acc.owingStudents += 1
-        if (row.status === 'overdue') {
-          acc.overdue += row.balance
-          acc.overdueStudents += 1
-        }
-        return acc
-      },
-      { billed: 0, collected: 0, outstanding: 0, overdue: 0, owingStudents: 0, overdueStudents: 0 },
-    )
     const collectionRate = metrics.billed > 0 ? Math.round((metrics.collected / metrics.billed) * 100) : 0
+
+    if (metricsOnly) {
+      return {
+        academicYear: { id: year.id, name: year.name },
+        term: currentTerm ? { id: currentTerm.id, name: currentTerm.name } : null,
+        grades: [],
+        metrics: { ...metrics, collectionRate, totalStudents: studentIds.length },
+        rows: [],
+        total: 0,
+        limit: 0,
+        offset: 0,
+      }
+    }
 
     let filtered = rows
     if (query.owingOnly) filtered = filtered.filter((row) => row.balance > 0)

@@ -3,7 +3,7 @@ import { FormInput } from "../../../../../components/shared/form-input";
 
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
-import { useApiQuery } from "../../../../lib/api";
+import { useApiQuery, LIVE_DATA_STALE_MS } from "../../../../lib/api";
 import { DirectoryMemberCell } from "../../../../lib/data-table";
 import { Icon } from "../../../../lib/material-icon";
 import { PaginationControls } from "../../../../lib/pagination-controls";
@@ -95,8 +95,10 @@ export function CollectionRosterPanel() {
     return params.toString();
   }, [academicYearId, gradeId, page, search, sortDir, sortKey, status]);
 
-  const roster = useApiQuery<Roster>((tenant) =>
-    academicYearId ? `/tenants/${tenant}/finance/billing/roster?${rosterQuery}` : null
+  const roster = useApiQuery<Roster>(
+    (tenant) =>
+      academicYearId ? `/tenants/${tenant}/finance/billing/roster?${rosterQuery}` : null,
+    { staleTime: LIVE_DATA_STALE_MS }
   );
 
   const data = roster.data;

@@ -129,8 +129,8 @@ export class ListInvoicesQueryDto {
   @IsString() @Transform(trimString) @IsOptional() search?: string
   @IsString() @IsOptional() @IsIn(['createdAt']) sortBy?: string
   @IsString() @IsOptional() @IsIn(['asc', 'desc']) sortDir?: string
-  @IsNumber() @IsOptional() @Type(() => Number) limit?: number
-  @IsNumber() @IsOptional() @Type(() => Number) offset?: number
+  @IsNumber() @IsOptional() @Type(() => Number) @Min(1) @Max(200) limit?: number
+  @IsNumber() @IsOptional() @Type(() => Number) @Min(0) offset?: number
 }
 
 export class InvoiceMetricsQueryDto {
@@ -144,8 +144,8 @@ export class ListPaymentsQueryDto {
   @IsString() @IsOptional() dateTo?: string
   @IsUUID() @IsOptional() academicYearId?: string
   @IsString() @Transform(trimString) @IsOptional() search?: string
-  @IsNumber() @IsOptional() @Type(() => Number) limit?: number
-  @IsNumber() @IsOptional() @Type(() => Number) offset?: number
+  @IsNumber() @IsOptional() @Type(() => Number) @Min(1) @Max(200) limit?: number
+  @IsNumber() @IsOptional() @Type(() => Number) @Min(0) offset?: number
 }
 
 export class PaymentMetricsQueryDto {
@@ -166,6 +166,7 @@ export class BillingRosterQueryDto {
   @IsString() @IsOptional() @IsIn(['student', 'status', 'balance']) sortBy?: 'student' | 'status' | 'balance'
   @IsString() @IsOptional() @IsIn(['asc', 'desc']) sortDir?: 'asc' | 'desc'
   @IsBoolean() @IsOptional() @Transform(parseBoolean) owingOnly?: boolean
+  @IsBoolean() @IsOptional() @Transform(parseBoolean) metricsOnly?: boolean
 }
 
 export class CollectPaymentDto {

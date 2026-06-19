@@ -16,6 +16,17 @@ import { toastError, toastSuccess } from "./toast";
 // (see next.config.ts), so there is never a cross-origin/CORS request.
 const API_PREFIX = "/api";
 
+/** Master data (years, grades, subjects) — safe to cache briefly between navigations. */
+export const REFERENCE_DATA_STALE_MS = 60_000;
+
+/** Finance, roster, and operational lists — always refetch on mount. */
+export const LIVE_DATA_STALE_MS = 0;
+
+export type ApiQueryOptions = {
+  staleTime?: number;
+  gcTime?: number;
+};
+
 export class ApiError extends Error {
   status: number;
 
@@ -111,7 +122,8 @@ export async function invalidateTenantPaths(
  * tenant id and returns the request path, or null to skip the request.
  */
 export function useApiQuery<T>(
-  buildPath: (tenantId: string) => string | null
+  buildPath: (tenantId: string) => string | null,
+  options: ApiQueryOptions = {}
 ): UseQueryResult<T> & { tenantId: string | null } {
   const session = getSession();
   const tenantId = session?.tenantId ?? null;
@@ -120,10 +132,19 @@ export function useApiQuery<T>(
   const query = useQuery<T>({
     queryKey: tenantId && path ? tenantQueryKey(tenantId, path) : ["tenant", "anonymous"],
     queryFn: () => apiFetch<T>(path as string),
-    enabled: Boolean(tenantId && path)
+    enabled: Boolean(tenantId && path),
+    staleTime: options.staleTime,
+    gcTime: options.gcTime
   });
 
   return { ...query, tenantId };
+}
+
+/** Cached reads for academic master data and other slow-changing reference lists. */
+export function useReferenceApiQuery<T>(
+  buildPath: (tenantId: string) => string | null
+): UseQueryResult<T> & { tenantId: string | null } {
+  return useApiQuery<T>(buildPath, { staleTime: REFERENCE_DATA_STALE_MS });
 }
 
 /**
