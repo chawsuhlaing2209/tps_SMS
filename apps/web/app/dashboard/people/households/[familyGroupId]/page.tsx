@@ -1,4 +1,5 @@
 "use client";
+import { FormInput } from "../../../../../components/shared/form-input";
 
 import type { FamilyTreeGuardian, FamilyTreeStudent } from "../../family-tree";
 import { FamilyTree } from "../../family-tree";
@@ -16,6 +17,7 @@ import { RecordFormSheet } from "../../../../lib/record-sheet";
 import { getSession } from "../../../../lib/session";
 import { StudentCombobox } from "../../../../lib/student-combobox";
 import { TablePanelBody, TablePanelHead } from "../../../../lib/table-panel";
+import { PdsSelectField } from "../../../../../components/pds";
 import { zodResolver } from "../../../../lib/zod-resolver";
 import { PageHeader } from "../../../page-header-context";
 
@@ -96,13 +98,13 @@ export default function HouseholdDetailPage() {
   });
 
   if (household.isLoading) {
-    return <p className="muted">{c("loading")}</p>;
+    return <p className="pds-type-body-s-regular muted">{c("loading")}</p>;
   }
 
   if (household.isError || !household.data) {
     return (
       <div className="page-stack">
-        <p className="error-text">{t("notFound")}</p>
+        <p className="pds-type-body-m-medium error-text">{t("notFound")}</p>
       </div>
     );
   }
@@ -129,11 +131,11 @@ export default function HouseholdDetailPage() {
         extra={
           canManage ? (
             <div className="form-actions form-actions--inline">
-              <button type="button" className="btn-ghost" onClick={() => setEditOpen(true)}>
+              <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setEditOpen(true)}>
                 <Icon name="edit" />
                 {t("editHousehold")}
               </button>
-              <button type="button" className="btn-ghost" onClick={() => setAddStudentOpen(true)}>
+              <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setAddStudentOpen(true)}>
                 <Icon name="person_add" />
                 {t("addStudent")}
               </button>
@@ -143,12 +145,12 @@ export default function HouseholdDetailPage() {
       />
       <TablePanelBody loading={false} error={null}>
           {data.primaryGuardian ? (
-            <p className="muted panel-help">
+            <p className="pds-type-body-s-regular muted panel-help">
               {t("primaryGuardianLine", { name: data.primaryGuardian.fullName })}
             </p>
           ) : null}
           <FamilyTree guardians={data.guardians} students={data.students} />
-          <p className="muted panel-help">{t("siblingHint")}</p>
+          <p className="pds-type-body-s-regular muted panel-help">{t("siblingHint")}</p>
       </TablePanelBody>
 
       <RecordFormSheet
@@ -173,10 +175,10 @@ export default function HouseholdDetailPage() {
         })}
         footer={
           <>
-            <button type="button" className="btn-ghost" onClick={() => setEditOpen(false)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setEditOpen(false)}>
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={updateHousehold.isPending}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={updateHousehold.isPending}>
               <Icon name="save" />
               {updateHousehold.isPending ? c("loading") : c("save")}
             </button>
@@ -184,23 +186,29 @@ export default function HouseholdDetailPage() {
         }
       >
         <Field label={t("householdName")} error={form.formState.errors.name?.message}>
-          <input {...form.register("name")} />
+          <FormInput {...form.register("name")} />
         </Field>
         <Field
           label={t("primaryGuardian")}
           error={form.formState.errors.primaryGuardianId?.message}
         >
-          <select {...form.register("primaryGuardianId")}>
-            <option value="">{t("selectPrimaryGuardian")}</option>
-            {(guardians.data ?? data.guardians).map((guardian) => (
-              <option key={guardian.id} value={guardian.id}>
-                {guardian.fullName}
-              </option>
-            ))}
-          </select>
+          <PdsSelectField
+            variant="form"
+            value={form.watch("primaryGuardianId")}
+            onValueChange={(value) =>
+              form.setValue("primaryGuardianId", typeof value === "string" ? value : "", {
+                shouldValidate: true
+              })
+            }
+            placeholder={t("selectPrimaryGuardian")}
+            options={(guardians.data ?? data.guardians).map((guardian) => ({
+              value: guardian.id,
+              label: guardian.fullName
+            }))}
+          />
         </Field>
         {formError ? (
-          <p className="error-text" role="alert">
+          <p className="pds-type-body-m-medium error-text" role="alert">
             {formError}
           </p>
         ) : null}
@@ -237,10 +245,10 @@ export default function HouseholdDetailPage() {
         }}
         footer={
           <>
-            <button type="button" className="btn-ghost" onClick={() => setAddStudentOpen(false)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setAddStudentOpen(false)}>
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={addStudent.isPending}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={addStudent.isPending}>
               <Icon name="person_add" />
               {addStudent.isPending ? c("loading") : t("addStudentConfirm")}
             </button>
@@ -255,7 +263,7 @@ export default function HouseholdDetailPage() {
           />
         </Field>
         {formError ? (
-          <p className="error-text" role="alert">
+          <p className="pds-type-body-m-medium error-text" role="alert">
             {formError}
           </p>
         ) : null}

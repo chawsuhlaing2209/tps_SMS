@@ -67,21 +67,21 @@ export function TablePanelHead({
         .join(" ")}
     >
       {banner ? (
-        <p className="table-toolbar-card__banner">{banner}</p>
+        <p className="pds-type-body-m-medium table-toolbar-card__banner">{banner}</p>
       ) : help ? (
-        <p className="module-strip__help">{help}</p>
+        <p className="pds-type-body-m-medium module-strip__help">{help}</p>
       ) : null}
       {hasActions ? (
         <div className="table-section__actions">
           {extra}
           {onAdd ? (
-            <button type="button" className="btn-primary" onClick={onAdd}>
+            <button type="button" className="pds-type-body-m-bold btn-primary" onClick={onAdd}>
               <Icon name="add" />
               {addLabel ?? c("add")}
             </button>
           ) : null}
           {onRefresh ? (
-            <button type="button" className="btn-ghost" onClick={onRefresh}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={onRefresh}>
               <Icon name="refresh" />
               {c("refresh")}
             </button>
@@ -121,7 +121,7 @@ export function TablePanelBody({
     return (
       <section className="table-card">
         <div className="table-card__body">
-          <p className="muted">{c("loading")}</p>
+          <p className="pds-type-body-s-regular muted">{c("loading")}</p>
         </div>
       </section>
     );
@@ -130,7 +130,7 @@ export function TablePanelBody({
     return (
       <section className="table-card">
         <div className="table-card__body">
-          <EmptyState compact icon="error" title={c("somethingWrong")} description={error} />
+          <EmptyState compact embedded icon="error" title={c("somethingWrong")} description={error} />
         </div>
       </section>
     );
@@ -141,6 +141,7 @@ export function TablePanelBody({
         <div className="table-card__body">
           <EmptyState
             compact
+            embedded
             icon={emptyIcon ?? "inbox"}
             title={emptyTitle ?? c("empty")}
             description={emptyDescription}

@@ -70,9 +70,9 @@ export function InvoiceVerifyPayments({
   return (
     <>
       <section className="invoice-doc__verify">
-        <div className="invoice-doc__verify-head">
+        <div className="pds-type-body-m-medium invoice-doc__verify-head">
           <strong>{t("verifyPendingTitle")}</strong>
-          <p className="muted">{t("verifyPendingHelp")}</p>
+          <p className="pds-type-body-s-regular muted">{t("verifyPendingHelp")}</p>
         </div>
         <ul className="invoice-doc__verify-list">
           {unverified.map((payment) => (
@@ -83,7 +83,7 @@ export function InvoiceVerifyPayments({
                 </span>
                 <StatusBadge status="pending" label={t("pendingVerification")} />
               </div>
-              <p className="muted invoice-doc__verify-meta">
+              <p className="pds-type-body-s-regular muted invoice-doc__verify-meta">
                 {t("paidAt")}: {formatDateTime(payment.paidAt)}
                 {payment.referenceNumber ? (
                   <>
@@ -94,7 +94,7 @@ export function InvoiceVerifyPayments({
               </p>
               <button
                 type="button"
-                className="btn-primary btn-verify"
+                className="pds-type-body-m-bold btn-primary btn-verify"
                 disabled={verify.isPending}
                 onClick={() => {
                   setVerifyTargetId(payment.id);
@@ -121,12 +121,12 @@ export function InvoiceVerifyPayments({
           }}
           footer={
             <>
-              <button type="button" className="btn-ghost" onClick={closeVerify}>
+              <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={closeVerify}>
                 {c("cancel")}
               </button>
               <button
                 type="button"
-                className="btn-primary"
+                className="pds-type-body-m-bold btn-primary"
                 disabled={verify.isPending || !verifyReason.trim()}
                 onClick={async () => {
                   if (!verifyTargetId) return;

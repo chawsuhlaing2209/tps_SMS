@@ -7,27 +7,49 @@ export type EmptyStateProps = {
   icon?: string;
   title: ReactNode;
   description?: ReactNode;
-  /** Optional call-to-action (e.g. a `<button className="btn-primary">`). */
+  /** Optional call-to-action (e.g. PDS `<Button>`). */
   action?: ReactNode;
-  /** Compact variant for inline/table contexts. */
+  /** Smaller icon and tighter padding for table/modal contexts. */
   compact?: boolean;
+  /** Strip card chrome when nested inside `.table-card`, `.panel`, etc. */
+  embedded?: boolean;
   className?: string;
 };
 
 /**
- * Consistent empty / first-run block. Use for "no records yet", filtered-to-zero,
- * and error fallbacks instead of a bare `<p className="muted">`.
+ * PDS empty state (Figma EmptyState / node 54:2584).
+ * Centered card with chartreuse icon badge, title, optional description, and CTA.
  */
-export function EmptyState({ icon, title, description, action, compact, className }: EmptyStateProps) {
+export function EmptyState({
+  icon = "inbox",
+  title,
+  description,
+  action,
+  compact,
+  embedded,
+  className,
+}: EmptyStateProps) {
   return (
-    <div className={cn("empty-state", compact && "empty-state--compact", className)}>
+    <div
+      className={cn(
+        "empty-state",
+        compact && "empty-state--compact",
+        embedded && "empty-state--embedded",
+        className,
+      )}
+      role="status"
+    >
       {icon ? (
-        <span className="empty-state__icon" aria-hidden>
-          <Icon name={icon} size={compact ? 20 : 28} />
-        </span>
+        <div className="empty-state__icon" aria-hidden>
+          <Icon name={icon} size={compact ? 24 : 36} />
+        </div>
       ) : null}
-      <p className="empty-state__title">{title}</p>
-      {description ? <p className="empty-state__desc">{description}</p> : null}
+      <div className="empty-state__content">
+        <p className="pds-type-title-s-extrabold empty-state__title">{title}</p>
+        {description ? (
+          <p className="pds-type-body-s-regular empty-state__desc">{description}</p>
+        ) : null}
+      </div>
       {action ? <div className="empty-state__action">{action}</div> : null}
     </div>
   );

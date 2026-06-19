@@ -1,16 +1,18 @@
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
+import { Icon } from "../../app/lib/material-icon";
 import { cn } from "../../lib/utils";
 
 /** Figma Button: type × color × state (enabled/hover/disabled via CSS). */
 const buttonVariants = cva(
-  "pds-btn inline-flex items-center justify-center whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pds-states-focus)] disabled:pointer-events-none disabled:cursor-not-allowed",
+  "pds-btn pds-type-body-m-bold inline-flex items-center justify-center whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pds-states-focus)] disabled:pointer-events-none disabled:cursor-not-allowed",
   {
     variants: {
       buttonType: {
         filled: "pds-btn--filled",
         outlined: "pds-btn--outlined",
+        ghost: "pds-btn--ghost",
       },
       buttonColor: {
         primary: "pds-btn--primary",
@@ -45,7 +47,7 @@ const buttonVariants = cva(
   }
 );
 
-export type ButtonType = "filled" | "outlined";
+export type ButtonType = "filled" | "outlined" | "ghost";
 export type ButtonColor = "primary" | "secondary";
 export type ButtonSurface = "light" | "dark";
 
@@ -53,12 +55,16 @@ export interface ButtonProps
   extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "color">,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean;
-  /** Figma `type` — filled or outlined. */
+  /** Figma `type` — filled, outlined, or ghost. */
   buttonType?: ButtonType;
   /** Figma `color` — primary or secondary. */
   buttonColor?: ButtonColor;
   /** Light canvas (default) or dark shell surfaces (outlined on-dark tokens). */
   surface?: ButtonSurface;
+  /** Figma `prefix` — leading Material icon. */
+  prefixIcon?: string;
+  /** Figma `suffix` — trailing Material icon. */
+  suffixIcon?: string;
 }
 
 function resolveFigmaButton(
@@ -70,16 +76,26 @@ function resolveFigmaButton(
     return { type: "filled", color: "primary" };
   }
 
+  if (variant === "ghost") {
+    return {
+      type: "ghost",
+      color: buttonColor ?? "primary",
+    };
+  }
+
   const type: ButtonType =
-    buttonType ?? (variant === "outline" || variant === "ghost" ? "outlined" : "filled");
+    buttonType ?? (variant === "outline" ? "outlined" : "filled");
   const color: ButtonColor = buttonColor ?? "primary";
 
+  // Legacy shadcn classes only when using variant API without explicit buttonType.
   const legacyClass =
-    variant === "default"
-      ? "btn-primary"
-      : variant === "outline" || variant === "ghost"
-        ? "btn-ghost"
-        : undefined;
+    buttonType != null
+      ? undefined
+      : variant === "default"
+        ? "btn-primary"
+        : variant === "outline"
+          ? "btn-ghost"
+          : undefined;
 
   return { type, color, legacyClass };
 }
@@ -94,6 +110,9 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       surface = "light",
       buttonType,
       buttonColor,
+      prefixIcon,
+      suffixIcon,
+      children,
       asChild = false,
       ...props
     },
@@ -102,24 +121,72 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const Comp = asChild ? Slot : "button";
     const figma = resolveFigmaButton(variant, buttonType, buttonColor);
     const useFigmaStyles = variant !== "destructive" && variant !== "link";
+    const mergedClassName = cn(
+      buttonVariants({
+        buttonType: useFigmaStyles ? figma.type : undefined,
+        buttonColor: useFigmaStyles ? figma.color : undefined,
+        surface: useFigmaStyles ? surface : undefined,
+        variant,
+        size,
+      }),
+      useFigmaStyles ? figma.legacyClass : undefined,
+      className
+    );
+
+    const leadingIcon = prefixIcon ? <Icon name={prefixIcon} size={18} /> : null;
+    const trailingIcon = suffixIcon ? <Icon name={suffixIcon} size={18} /> : null;
+
+    if (asChild) {
+      if (!React.isValidElement(children)) {
+        return (
+          <button
+            className={mergedClassName}
+            ref={ref}
+            type={type}
+            data-figma-node="2:95"
+            {...props}
+          >
+            {leadingIcon}
+            {children}
+            {trailingIcon}
+          </button>
+        );
+      }
+
+      const child = children as React.ReactElement<{ children?: React.ReactNode }>;
+
+      return (
+        <Comp
+          className={mergedClassName}
+          ref={ref}
+          data-figma-node="2:95"
+          {...props}
+        >
+          {React.cloneElement(
+            child,
+            undefined,
+            <>
+              {leadingIcon}
+              {child.props.children}
+              {trailingIcon}
+            </>
+          )}
+        </Comp>
+      );
+    }
 
     return (
       <Comp
-        className={cn(
-          buttonVariants({
-            buttonType: useFigmaStyles ? figma.type : undefined,
-            buttonColor: useFigmaStyles ? figma.color : undefined,
-            surface: useFigmaStyles ? surface : undefined,
-            variant,
-            size,
-          }),
-          useFigmaStyles ? figma.legacyClass : undefined,
-          className
-        )}
+        className={mergedClassName}
         ref={ref}
-        type={asChild ? undefined : type}
+        type={type}
+        data-figma-node="2:95"
         {...props}
-      />
+      >
+        {leadingIcon}
+        {children}
+        {trailingIcon}
+      </Comp>
     );
   }
 );

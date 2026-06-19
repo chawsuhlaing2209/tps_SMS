@@ -7,11 +7,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { FormField, FormInput, FormTextarea, PercentInput } from "../../../../components/shared/form-input";
-import { OptionChip, OptionChipGrid } from "../../../../components/shared/option-chip";
-import { SegmentedControl } from "../../../../components/shared/segmented-control";
+import { CheckboxList } from "../../../../components/pds";
+import { SegmentedControl } from "../../../../components/pds/composites/segmented-control";
 import { SelectionCard, SelectionCardGrid } from "../../../../components/shared/selection-card";
 import { Stepper } from "../../../../components/shared/stepper";
 import { Toggle } from "../../../../components/shared/toggle";
+import { EmptyState } from "../../../../components/shared/empty-state";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { Icon } from "../../../lib/material-icon";
 import { hasAnyPermission } from "../../../lib/permissions";
@@ -205,16 +206,11 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
     setFormErrors({});
   }
 
-  function toggleFeeItem(feeItemId: string) {
-    setForm((current) => {
-      const selected = current.feeItemIds.includes(feeItemId);
-      return {
-        ...current,
-        feeItemIds: selected
-          ? current.feeItemIds.filter((id) => id !== feeItemId)
-          : [...current.feeItemIds, feeItemId]
-      };
-    });
+  function setFeeItemIds(feeItemIds: string[]) {
+    setForm((current) => ({ ...current, feeItemIds }));
+    if (formErrors.feeItemIds) {
+      setFormErrors((current) => ({ ...current, feeItemIds: undefined }));
+    }
   }
 
   function togglePaymentPlan(frequency: (typeof discountPaymentPlanFrequencies)[number]) {
@@ -305,17 +301,17 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
   }
 
   if (!canManage) {
-    return <p className="muted">{t("noAccess")}</p>;
+    return <EmptyState icon="lock" title={t("noAccess")} />;
   }
 
   if (mode === "edit" && rules.isLoading) {
-    return <p className="muted">{c("loading")}</p>;
+    return <p className="pds-type-body-s-regular muted">{c("loading")}</p>;
   }
 
   if (mode === "edit" && !editingRule && !rules.isLoading) {
     return (
       <div className="page-stack">
-        <p className="error-text">{t("ruleNotFound")}</p>
+        <p className="pds-type-body-m-medium error-text">{t("ruleNotFound")}</p>
       </div>
     );
   }
@@ -360,8 +356,10 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
             {currentStep === "type" ? (
               <section className="discount-setup-section">
                 <div className="discount-setup-section-header">
-                  <h2>{t("setupTypeTitle")}</h2>
-                  <p className="muted">{t("setupTypeHelpCustom")}</p>
+                  <h2 className="pds-type-title-xs-bold">{t("setupTypeTitle")}</h2>
+                  <p className="pds-type-body-s-regular discount-setup-section__intro muted">
+                    {t("setupTypeHelpCustom")}
+                  </p>
                 </div>
                
 
@@ -405,7 +403,7 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
                         onChange={(event) => setField("value", event.target.value)}
                         aria-label={t("discountPercentage")}
                       />
-                      <span className="muted">{t("percentOffEligible")}</span>
+                      <span className="pds-type-body-s-regular muted">{t("percentOffEligible")}</span>
                     </div>
                   ) : (
                     <div className="amount-input">
@@ -418,7 +416,7 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
                         aria-label={t("fixedAmountLabel")}
                         inputClassName="amount-input__field"
                       />
-                      <span className="amount-input__suffix">MMK</span>
+                      <span className="pds-type-body-m-medium amount-input__suffix">MMK</span>
                     </div>
                   )}
                 </FormField>
@@ -427,30 +425,32 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
 
             {currentStep === "scope" ? (
               <section className="discount-setup-section">
-                <h2>{t("setupScopeTitle")}</h2>
-                <p className="muted">{t("setupScopeHelpCustom")}</p>
+                <h2 className="pds-type-title-xs-bold">{t("setupScopeTitle")}</h2>
+                <p className="pds-type-body-s-regular discount-setup-section__intro muted">
+                  {t("setupScopeHelpCustom")}
+                </p>
 
                 <FormField
                   label={t("feeComponentsLabel")}
                   required
                   labelStyle="caps"
-                  hint={t("feeComponentsHelp")}
                   error={formErrors.feeItemIds}
                 >
-                  <OptionChipGrid>
-                    {scopeFeeItems.map((item) => {
-                      const selected = form.feeItemIds.includes(item.id);
-                      return (
-                        <OptionChip
-                          key={item.id}
-                          selected={selected}
-                          label={item.name}
-                          detail={formatMoney(sampleAmountForFeeType(item.feeType))}
-                          onClick={() => toggleFeeItem(item.id)}
-                        />
-                      );
-                    })}
-                  </OptionChipGrid>
+                  <CheckboxList
+                    title={finance("feeComponents")}
+                    options={scopeFeeItems.map((item) => ({
+                      id: item.id,
+                      label: item.name,
+                      description: t(`feeComponentDescriptions.${item.feeType}`),
+                      amount: sampleAmountForFeeType(item.feeType),
+                    }))}
+                    selectedIds={form.feeItemIds}
+                    onChange={setFeeItemIds}
+                    disabled={feeItems.isLoading}
+                  />
+                  <p className="pds-type-body-s-regular discount-setup-section__note muted">
+                    {t("feeComponentsHelp")}
+                  </p>
                 </FormField>
 
                 <FormField label={t("gradeLevelsLabel")} labelStyle="caps">
@@ -496,32 +496,40 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
                     </div>
                   )}
                   {formErrors.gradeIds ? (
-                    <span className="field-error">{formErrors.gradeIds}</span>
+                    <span className="pds-type-body-s-regular field-error">{formErrors.gradeIds}</span>
                   ) : null}
                 </FormField>
 
                 <FormField label={t("paymentPlansLabel")} labelStyle="caps">
-                  <OptionChipGrid>
+                  <SelectionCardGrid>
                     {discountPaymentPlanFrequencies.map((frequency) => {
                       const selected = form.paymentPlanFrequencies.includes(frequency);
+                      const iconName =
+                        frequency === "annual"
+                          ? "savings"
+                          : frequency === "monthly"
+                            ? "calendar_month"
+                            : "date_range";
                       return (
-                        <OptionChip
+                        <SelectionCard
                           key={frequency}
                           selected={selected}
-                          label={t(PAYMENT_PLAN_LABEL_KEYS[frequency])}
+                          icon={<Icon name={iconName} />}
+                          title={t(PAYMENT_PLAN_LABEL_KEYS[frequency])}
+                          description={t(`paymentPlanDesc_${frequency}`)}
                           onClick={() => togglePaymentPlan(frequency)}
                         />
                       );
                     })}
-                  </OptionChipGrid>
+                  </SelectionCardGrid>
                 </FormField>
               </section>
             ) : null}
 
             {currentStep === "eligibility" ? (
               <section className="discount-setup-section">
-                <h2>{t("setupEligibilityTitle")}</h2>
-                <p className="muted">{t("setupEligibilityHelpCustom")}</p>
+                <h2 className="pds-type-title-xs-bold">{t("setupEligibilityTitle")}</h2>
+                <p className="pds-type-body-s-regular muted">{t("setupEligibilityHelpCustom")}</p>
 
                 <FormField label={t("applicationModeLabel")} labelStyle="caps">
                   <SegmentedControl
@@ -533,7 +541,7 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
                       { id: "request", label: t("tagRequest") }
                     ]}
                   />
-                  <p className="muted">
+                  <p className="pds-type-body-s-regular muted">
                     {form.triggerMode === "auto" ? t("autoApplyHelp") : t("requestOnlyHelp")}
                   </p>
                 </FormField>
@@ -546,7 +554,7 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
                         onCheckedChange={(checked) => setField("requireSiblingMatch", checked)}
                         aria-label={t("requireSiblingMatch")}
                       />
-                      <span className="muted">{t("requireSiblingMatchHelp")}</span>
+                      <span className="pds-type-body-s-regular muted">{t("requireSiblingMatchHelp")}</span>
                     </div>
                     {form.requireSiblingMatch ? (
                       <div className="form-grid-2">
@@ -574,7 +582,7 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
                         onCheckedChange={(checked) => setField("requiresPaymentAtEnrollment", checked)}
                         aria-label={t("requiresPaymentAtEnrollment")}
                       />
-                      <span className="muted">{t("requiresPaymentAtEnrollmentHelp")}</span>
+                      <span className="pds-type-body-s-regular muted">{t("requiresPaymentAtEnrollmentHelp")}</span>
                     </div>
 
                     <div className="form-inline-toggle">
@@ -583,7 +591,7 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
                         onCheckedChange={(checked) => setField("requiresDocumentation", checked)}
                         aria-label={t("requiresDocumentation")}
                       />
-                      <span className="muted">{t("requiresDocumentationHelp")}</span>
+                      <span className="pds-type-body-s-regular muted">{t("requiresDocumentationHelp")}</span>
                     </div>
                   </div>
                 </FormField>
@@ -601,8 +609,8 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
 
             {currentStep === "rules" ? (
               <section className="discount-setup-section">
-                <h2>{t("setupRulesTitle")}</h2>
-                <p className="muted">{t("setupRulesHelp")}</p>
+                <h2 className="pds-type-title-xs-bold">{t("setupRulesTitle")}</h2>
+                <p className="pds-type-body-s-regular muted">{t("setupRulesHelp")}</p>
 
                 <FormField label={t("stackableLabel")} labelStyle="caps">
                   <div className="form-inline-toggle">
@@ -611,22 +619,22 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
                       onCheckedChange={(checked) => setField("stackable", checked)}
                       aria-label={t("stackableLabel")}
                     />
-                    <span className="muted">
+                    <span className="pds-type-body-s-regular muted">
                       {form.stackable ? t("stackableHelp") : t("bestWinsHelp")}
                     </span>
                   </div>
                 </FormField>
 
-                <p className="muted">{t("stackCapNote")}</p>
+                <p className="pds-type-body-s-regular muted">{t("stackCapNote")}</p>
               </section>
             ) : null}
 
             {currentStep === "review" ? (
               <section className="discount-setup-section">
-                <h2>{t("setupReviewTitle")}</h2>
-                <p className="muted">{t("setupReviewHelp")}</p>
+                <h2 className="pds-type-title-xs-bold">{t("setupReviewTitle")}</h2>
+                <p className="pds-type-body-s-regular muted">{t("setupReviewHelp")}</p>
 
-                <dl className="discount-review-list">
+                <dl className="pds-type-body-s-regular discount-review-list">
                   <div>
                     <dt>{t("ruleName")}</dt>
                     <dd>{form.name}</dd>
@@ -684,18 +692,18 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
             ) : null}
 
             <footer className="discount-setup-footer">
-              <button type="button" className="btn-ghost" onClick={goBack}>
+              <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={goBack}>
                 <Icon name="arrow_back" />
                 {step === 0 ? c("cancel") : c("previous")}
               </button>
-              <span className="discount-setup-footer__meta">
+              <span className="pds-type-body-m-medium discount-setup-footer__meta">
                 {t("setupStepMeta", {
                   current: step + 1,
                   total: DISCOUNT_SETUP_STEPS.length,
                   label: t(`setupStep_${currentStep}`)
                 })}
               </span>
-              <button type="button" className="btn-primary" disabled={saving} onClick={() => void goNext()}>
+              <button type="button" className="pds-type-body-m-bold btn-primary" disabled={saving} onClick={() => void goNext()}>
                 {step === DISCOUNT_SETUP_STEPS.length - 1 ? (
                   saving ? t("creating") : mode === "edit" ? c("save") : t("createDiscount")
                 ) : (

@@ -200,15 +200,15 @@ export function DirectoryMemberCell({
   return (
     <span className="directory-member">
       <span
-        className="directory-avatar"
+        className="pds-type-title-xs-bold directory-avatar"
         style={{ background: swatch.bg, color: swatch.text }}
         aria-hidden
       >
         {deriveInitials(name)}
       </span>
       <span className="directory-member__text">
-        <span className="directory-member__name">{name}</span>
-        {meta ? <span className="directory-member__meta">{meta}</span> : null}
+        <span className="pds-type-body-m-medium directory-member__name">{name}</span>
+        {meta ? <span className="pds-type-body-s-regular directory-member__meta">{meta}</span> : null}
       </span>
     </span>
   );
@@ -227,7 +227,7 @@ export function DirectoryNameCell({
       <span className="directory-member">
         {avatar}
         <span className="directory-member__text">
-          <span className="directory-member__name">{name}</span>
+          <span className="pds-type-body-m-medium directory-member__name">{name}</span>
         </span>
       </span>
     );
@@ -326,7 +326,7 @@ export function DataTable<TData>({
                   {header.isPlaceholder ? null : canSort ? (
                     <button
                       type="button"
-                      className="table-sort"
+                      className="pds-type-caption-s table-sort"
                       onClick={header.column.getToggleSortingHandler()}
                     >
                       {flexRender(header.column.columnDef.header, header.getContext())}

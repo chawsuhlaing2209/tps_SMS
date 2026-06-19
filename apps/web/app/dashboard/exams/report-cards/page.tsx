@@ -14,7 +14,9 @@ import { hasAnyPermission } from "../../../lib/permissions";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { getSession } from "../../../lib/session";
 import { TablePanelBody, TablePanelHead } from "../../../lib/table-panel";
+import { PdsSelectField } from "../../../../components/pds";
 import { StatusBadge } from "../../../../components/shared/badge";
+import { EmptyState } from "../../../../components/shared/empty-state";
 import { zodResolver } from "../../../lib/zod-resolver";
 import { PageHeader } from "../../page-header-context";
 
@@ -132,7 +134,7 @@ export default function ReportCardsPage() {
             {row.original.status !== "approved" && row.original.status !== "published" ? (
               <button
                 type="button"
-                className="row-action"
+                className="pds-type-body-s-regular row-action"
                 disabled={approve.isPending}
                 onClick={() => void approve.mutateAsync({ id: row.original.id })}
               >
@@ -142,7 +144,7 @@ export default function ReportCardsPage() {
             {row.original.status !== "published" ? (
               <button
                 type="button"
-                className="row-action"
+                className="pds-type-body-s-regular row-action"
                 disabled={publish.isPending}
                 onClick={() => void publish.mutateAsync({ id: row.original.id })}
               >
@@ -155,7 +157,7 @@ export default function ReportCardsPage() {
   ];
 
   if (!canView) {
-    return <p className="muted">{c("empty")}</p>;
+    return <EmptyState icon="description" title={c("empty")} />;
   }
 
   return (
@@ -168,15 +170,16 @@ export default function ReportCardsPage() {
         title={t("reportCardsTitle")}
         extra={
           <label className="form-inline">
-            <span className="muted">{t("filterClassroom")}</span>
-            <select value={classroomFilter} onChange={(e) => setClassroomFilter(e.target.value)}>
-              <option value="">{t("allClassrooms")}</option>
-              {classrooms.data?.map((cl) => (
-                <option key={cl.id} value={cl.id}>
-                  {cl.name}
-                </option>
-              ))}
-            </select>
+            <span className="pds-type-body-s-regular muted">{t("filterClassroom")}</span>
+            <PdsSelectField
+              variant="filter"
+              value={classroomFilter}
+              onValueChange={(value) => setClassroomFilter(typeof value === "string" ? value : "")}
+              placeholder={t("allClassrooms")}
+              options={
+                classrooms.data?.map((cl) => ({ value: cl.id, label: cl.name })) ?? []
+              }
+            />
           </label>
         }
         onRefresh={() => void cards.refetch()}
@@ -214,10 +217,10 @@ export default function ReportCardsPage() {
         })}
         footer={
           <>
-            <button type="button" className="btn-ghost" onClick={() => setOpen(false)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setOpen(false)}>
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={form.formState.isSubmitting}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={form.formState.isSubmitting}>
               <Icon name="bolt" />
               {form.formState.isSubmitting ? t("creating") : t("generate")}
             </button>
@@ -225,24 +228,30 @@ export default function ReportCardsPage() {
         }
       >
         <Field label={t("classroom")} error={form.formState.errors.classroomId?.message}>
-          <select {...form.register("classroomId")}>
-            <option value="">{t("selectClassroom")}</option>
-            {classrooms.data?.map((cl) => (
-              <option key={cl.id} value={cl.id}>
-                {cl.name}
-              </option>
-            ))}
-          </select>
+          <PdsSelectField
+            variant="form"
+            value={form.watch("classroomId")}
+            onValueChange={(value) =>
+              form.setValue("classroomId", typeof value === "string" ? value : "", {
+                shouldValidate: true
+              })
+            }
+            placeholder={t("selectClassroom")}
+            options={classrooms.data?.map((cl) => ({ value: cl.id, label: cl.name })) ?? []}
+          />
         </Field>
         <Field label={t("term")} error={form.formState.errors.termId?.message}>
-          <select {...form.register("termId")}>
-            <option value="">{t("selectTerm")}</option>
-            {terms.data?.map((term) => (
-              <option key={term.id} value={term.id}>
-                {term.name}
-              </option>
-            ))}
-          </select>
+          <PdsSelectField
+            variant="form"
+            value={form.watch("termId")}
+            onValueChange={(value) =>
+              form.setValue("termId", typeof value === "string" ? value : "", {
+                shouldValidate: true
+              })
+            }
+            placeholder={t("selectTerm")}
+            options={terms.data?.map((term) => ({ value: term.id, label: term.name })) ?? []}
+          />
         </Field>
       </RecordFormSheet>
     </>

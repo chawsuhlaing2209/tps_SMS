@@ -1,4 +1,5 @@
 "use client";
+import { FormInput } from "../../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
@@ -7,7 +8,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
-import { Switch as Toggle } from "../../../../components/ui/switch";
+import { Toggle } from "../../../../components/shared/toggle";
 import { StatusBadge } from "../../../../components/shared/badge";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { DataTable } from "../../../lib/data-table";
@@ -16,6 +17,8 @@ import { Icon } from "../../../lib/material-icon";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { TablePanelBody, TablePanelHead } from "../../../lib/table-panel";
 import { zodResolver } from "../../../lib/zod-resolver";
+import { ModulePageHeader } from "../../module-page-header";
+import { moduleBreadcrumbs } from "../../../lib/page-header-utils";
 
 type AcademicYearOverview = {
   id: string;
@@ -47,6 +50,8 @@ const invalidateYearPaths = (tenant: string) => [
 
 export default function AcademicYearsPage() {
   const t = useTranslations("academics");
+  const setup = useTranslations("academicSetup");
+  const nav = useTranslations("nav");
   const c = useTranslations("common");
   const [formMode, setFormMode] = useState<FormMode | null>(null);
   const [toggleConfirm, setToggleConfirm] = useState<ToggleConfirm | null>(null);
@@ -152,10 +157,10 @@ export default function AcademicYearsPage() {
         <div style={{ display: "flex", gap: "8px" }}>
           {row.original.status !== "archived" ? (
             <>
-              <button type="button" className="row-action" onClick={() => openEdit(row.original)}>
+              <button type="button" className="pds-type-body-s-regular row-action" onClick={() => openEdit(row.original)}>
                 {t("edit")}
               </button>
-              <Link href={`/dashboard/academic-setup/years/${row.original.id}`} className="row-action">
+              <Link href={`/dashboard/academic-setup/years/${row.original.id}`} className="pds-type-body-s-regular row-action">
                 {t("view")}
               </Link>
             </>
@@ -180,6 +185,11 @@ export default function AcademicYearsPage() {
 
   return (
     <>
+      <ModulePageHeader
+        navKey="academicSetup"
+        title={setup("years")}
+        breadcrumbs={moduleBreadcrumbs("academicSetup", nav, [{ label: setup("years") }])}
+      />
       <TablePanelHead
         banner={
           activeYear ? (
@@ -229,10 +239,10 @@ export default function AcademicYearsPage() {
         })}
         footer={
           <>
-            <button type="button" className="btn-ghost" onClick={() => setFormMode(null)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setFormMode(null)}>
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={form.formState.isSubmitting}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={form.formState.isSubmitting}>
               <Icon name="check" />
               {form.formState.isSubmitting
                 ? t("creating")
@@ -244,13 +254,13 @@ export default function AcademicYearsPage() {
         }
       >
         <Field label={c("name")} error={form.formState.errors.name?.message}>
-          <input placeholder={t("yearNamePlaceholder")} {...form.register("name")} />
+          <FormInput placeholder={t("yearNamePlaceholder")} {...form.register("name")} />
         </Field>
         <Field label={t("starts")} error={form.formState.errors.startsOn?.message}>
-          <input type="date" {...form.register("startsOn")} />
+          <FormInput type="date" {...form.register("startsOn")} />
         </Field>
         <Field label={t("ends")} error={form.formState.errors.endsOn?.message}>
-          <input type="date" {...form.register("endsOn")} />
+          <FormInput type="date" {...form.register("endsOn")} />
         </Field>
       </RecordFormSheet>
 

@@ -6,7 +6,7 @@ const Table = React.forwardRef<
   React.HTMLAttributes<HTMLTableElement>
 >(({ className, ...props }, ref) => (
   <div className="padauk-table-wrap">
-    <table ref={ref} className={cn('padauk-table', className)} {...props} />
+    <table ref={ref} className={cn('pds-type-body-m-medium padauk-table', className)} {...props} />
   </div>
 ))
 Table.displayName = 'Table'
@@ -47,7 +47,7 @@ const TableHead = React.forwardRef<
   HTMLTableCellElement,
   React.ThHTMLAttributes<HTMLTableCellElement>
 >(({ className, ...props }, ref) => (
-  <th ref={ref} className={className} {...props} />
+  <th ref={ref} className={cn("pds-type-caption-s", className)} {...props} />
 ))
 TableHead.displayName = 'TableHead'
 

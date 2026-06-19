@@ -1,11 +1,13 @@
 "use client";
+import { FormInput } from "../../../../components/shared/form-input";
 
 import { useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { CheckboxList } from "../../../../components/shared/checkbox-list";
+import { CheckboxList } from "../../../../components/pds";
+import { EmptyState } from "../../../../components/shared/empty-state";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { Field } from "../../../lib/form";
 import { Icon } from "../../../lib/material-icon";
@@ -297,15 +299,16 @@ export default function GradesClassroomsPage() {
   };
 
   if (currentYear.isLoading) {
-    return <p className="muted">{c("loading")}</p>;
+    return <p className="pds-type-body-s-regular muted">{c("loading")}</p>;
   }
 
   if (!currentYear.data || !contextYearId) {
     return (
-      <div className="setup-empty">
-        <h2>{t("structureEmptyTitle")}</h2>
-        <p className="muted">{setup("gradesClassroomsNeedYear")}</p>
-      </div>
+      <EmptyState
+        icon="school"
+        title={t("structureEmptyTitle")}
+        description={setup("gradesClassroomsNeedYear")}
+      />
     );
   }
 
@@ -324,7 +327,7 @@ export default function GradesClassroomsPage() {
       />
 
       <section className="module-strip module-strip--stack setup-grade-selector">
-        <p className="module-strip__label">{setup("selectGradeLevel")}</p>
+        <p className="pds-type-label-s-medium module-strip__label">{setup("selectGradeLevel")}</p>
         <div className="setup-grade-rail" aria-label={setup("selectGradeLevel")}>
           {activeGrades.map((grade) => {
             const active = grade.id === selectedGradeId;
@@ -347,46 +350,40 @@ export default function GradesClassroomsPage() {
       </section>
 
       {!selectedGrade ? (
-        <div className="setup-empty setup-empty--compact">
-          <p className="muted">{t("structureNoGrades")}</p>
-          {/* <button type="button" className="btn-primary" onClick={openCreateGrade}>
-            <Icon name="add" />
-            {t("addGrade")}
-          </button> */}
-        </div>
+        <EmptyState compact embedded icon="school" title={t("structureNoGrades")} />
       ) : (
         <div className="setup-grade-layout">
           <aside className="setup-grade-sidebar">
-            <div className="setup-grade-summary">
-              <h3>{selectedGrade.name}</h3>
-              {/* {stream ? <p className="setup-grade-summary__stream">{stream}</p> : null} */}
+            <div className="pds-type-title-xl-extrabold setup-grade-summary">
+              <h3 className="pds-type-title-xxs-extrabold">{selectedGrade.name}</h3>
+              {/* {stream ? <p className="pds-type-body-m-medium setup-grade-summary__stream">{stream}</p> : null} */}
               <div className="setup-grade-summary__chief">
-                <span className="setup-grade-summary__chief-label">{t("gradeChiefTitle")}</span>
-                <strong className="setup-grade-summary__chief-name">
+                <span className="pds-type-label-s-medium setup-grade-summary__chief-label">{t("gradeChiefTitle")}</span>
+                <strong className="pds-type-body-l-medium setup-grade-summary__chief-name">
                   {selectedGrade.gradeChiefName ?? t("gradeChiefUnassigned")}
                 </strong>
               </div>
               <div className="setup-grade-summary__stats">
                 <div>
-                  <span className="setup-grade-summary__stat-label">{setup("roomsStat")}</span>
-                  <strong className="setup-grade-summary__stat-value">
+                  <span className="pds-type-label-s-medium setup-grade-summary__stat-label">{setup("roomsStat")}</span>
+                  <strong className="pds-type-display-m setup-grade-summary__stat-value">
                     {selectedGrade.classroomCount}
                   </strong>
                 </div>
                 <div>
-                  <span className="setup-grade-summary__stat-label">{setup("subjectsStat")}</span>
-                  <strong className="setup-grade-summary__stat-value">
+                  <span className="pds-type-label-s-medium setup-grade-summary__stat-label">{setup("subjectsStat")}</span>
+                  <strong className="pds-type-display-m setup-grade-summary__stat-value">
                     {selectedGrade.subjectCount}
                   </strong>
                 </div>
               </div>
-              <button type="button" className="setup-grade-summary__edit" onClick={openEditGrade}>
+              <button type="button" className="pds-type-body-s-regular setup-grade-summary__edit" onClick={openEditGrade}>
                 {t("editGradeTitle")}
               </button>
             </div>
 
             <div className="setup-subjects-offered">
-              <p className="setup-subjects-offered__label">{setup("subjectsOffered")}</p>
+              <p className="pds-type-label-s-medium setup-subjects-offered__label">{setup("subjectsOffered")}</p>
               {selectedGrade.subjects.length ? (
                 <ul className="setup-subjects-offered__list">
                   {selectedGrade.subjects.map((subject) => {
@@ -397,37 +394,31 @@ export default function GradesClassroomsPage() {
                           className="setup-subjects-offered__dot"
                           style={{ background: colors.bg }}
                         />
-                        <span className="setup-subjects-offered__name">{subject.name}</span>
-                        <Icon name={subjectIcon(subject.name)} className="setup-subjects-offered__icon" />
+                        <span className="pds-type-body-m-medium setup-subjects-offered__name">{subject.name}</span>
+                        <Icon name={subjectIcon(subject.name)} className="pds-type-title-xs-bold setup-subjects-offered__icon" />
                       </li>
                     );
                   })}
                 </ul>
               ) : (
-                <p className="setup-subjects-offered__empty muted">{t("noSubjectsYet")}</p>
+                <EmptyState compact embedded icon="menu_book" title={t("noSubjectsYet")} />
               )}
             </div>
           </aside>
 
           <section className="setup-classrooms-main">
-            <div className="setup-classrooms-panel__head">
-              <h3>{setup("classroomsInGrade", { grade: selectedGrade.name })}</h3>
-              <button type="button" className="btn-hero-primary" onClick={openCreateRoom}>
+            <div className="pds-type-title-xs-bold setup-classrooms-panel__head">
+              <h3 className="pds-type-title-xxs-extrabold">{setup("classroomsInGrade", { grade: selectedGrade.name })}</h3>
+              <button type="button" className="pds-type-body-m-bold btn-hero-primary" onClick={openCreateRoom}>
                 <Icon name="add" />
                 {setup("addRoom")}
               </button>
             </div>
 
             {classrooms.isLoading ? (
-              <p className="muted">{c("loading")}</p>
+              <p className="pds-type-body-s-regular muted">{c("loading")}</p>
             ) : !activeRooms.length ? (
-              <div className="setup-empty setup-empty--compact">
-                <p className="muted">{t("structureNoRooms")}</p>
-                {/* <button type="button" className="btn-hero-primary" onClick={openCreateRoom}>
-                  <Icon name="add" />
-                  {setup("addRoom")}
-                </button> */}
-              </div>
+              <EmptyState compact embedded icon="meeting_room" title={t("structureNoRooms")} />
             ) : (
               <ul className="setup-classroom-list">
                 {activeRooms.map((room) => {
@@ -438,27 +429,27 @@ export default function GradesClassroomsPage() {
                   return (
                     <li key={room.id} className="setup-classroom-card">
                       <div className="setup-classroom-card__top">
-                        <div className="setup-classroom-card__identity">
-                          <span className="setup-classroom-card__mark" aria-hidden>
+                        <div className="pds-type-title-s-extrabold setup-classroom-card__identity">
+                          <span className="pds-type-title-s-extrabold setup-classroom-card__mark" aria-hidden>
                             {roomLetter(room.name)}
                           </span>
                           <div>
                             <h4>{room.name}</h4>
-                            <p className="setup-classroom-card__meta">{capacityLabel}</p>
+                            <p className="pds-type-body-s-semibold setup-classroom-card__meta">{capacityLabel}</p>
                           </div>
                         </div>
                         <button
                           type="button"
-                          className="btn-outline setup-classroom-card__edit"
+                          className="pds-type-body-m-medium btn-outline setup-classroom-card__edit"
                           onClick={() => openEditRoom(room)}
                         >
                           {t("edit")}
                         </button>
                       </div>
-                      <div className="setup-classroom-card__homeroom">
+                      <div className="pds-type-body-m-medium setup-classroom-card__homeroom">
                         <Icon name="person" />
-                        <div className="setup-classroom-card__homeroom-text">
-                          <p className="setup-classroom-card__homeroom-label">
+                        <div className="pds-type-body-s-regular setup-classroom-card__homeroom-text">
+                          <p className="pds-type-label-s-bold setup-classroom-card__homeroom-label">
                             {t("homeroomTeacher")}
                           </p>
                           <p>
@@ -467,11 +458,11 @@ export default function GradesClassroomsPage() {
                         </div>
                         <button
                           type="button"
-                          className="btn-ghost"
+                          className="pds-type-body-m-bold btn-ghost"
                           onClick={() => openEditRoom(room)}
                         >
                           {setup("changeHomeroom")}
-                          <Icon name="chevron_right" className="ms" />
+                          <Icon name="chevron_right" className="pds-type-body-m-medium ms" />
                         </button>
                       </div>
                     </li>
@@ -499,7 +490,7 @@ export default function GradesClassroomsPage() {
           <>
             <button
               type="button"
-              className="btn-ghost"
+              className="pds-type-body-m-bold btn-ghost"
               onClick={() => {
                 setGradeFormMode(null);
                 gradeForm.reset(gradeDefaultValues);
@@ -509,7 +500,7 @@ export default function GradesClassroomsPage() {
             </button>
             <button
               type="submit"
-              className="btn-primary"
+              className="pds-type-body-m-bold btn-primary"
               disabled={gradeForm.formState.isSubmitting}
             >
               <Icon name="check" />
@@ -523,30 +514,31 @@ export default function GradesClassroomsPage() {
         }
       >
         <Field label={t("gradeName")} error={gradeForm.formState.errors.name?.message}>
-          <input type="text" placeholder={t("gradeNamePlaceholder")} {...gradeForm.register("name")} />
+          <FormInput type="text" placeholder={t("gradeNamePlaceholder")} {...gradeForm.register("name")} />
         </Field>
         <Field label={t("minAge")}>
-          <input type="number" min={0} {...gradeForm.register("minAge")} />
+          <FormInput type="number" min={0} {...gradeForm.register("minAge")} />
         </Field>
         <Field label={t("maxAge")}>
-          <input type="number" min={0} {...gradeForm.register("maxAge")} />
+          <FormInput type="number" min={0} {...gradeForm.register("maxAge")} />
         </Field>
         <Field label={t("subjectsForGrade")}>
           <CheckboxList
+            title={t("subjectsForGrade")}
             options={activeSubjects.map((s) => ({ id: s.id, label: s.name }))}
             selectedIds={selectedSubjectIds}
             onChange={(ids) => gradeForm.setValue("subjectIds", ids, { shouldDirty: true })}
-            emptyMessage={<p className="muted">{t("noSubjectsYet")}</p>}
+            emptyTitle={t("noSubjectsYet")}
           />
         </Field>
         {gradeFormMode?.type === "create" ? (
           <>
-            <p className="setup-form-section-label">{setup("firstClassroomOptional")}</p>
+            <p className="pds-type-body-s-regular setup-form-section-label">{setup("firstClassroomOptional")}</p>
             <Field label={t("classroomName")}>
-              <input type="text" placeholder={t("classroomNamePlaceholder")} {...gradeForm.register("roomName")} />
+              <FormInput type="text" placeholder={t("classroomNamePlaceholder")} {...gradeForm.register("roomName")} />
             </Field>
             <Field label={t("capacity")}>
-              <input type="number" min={1} {...gradeForm.register("roomCapacity")} />
+              <FormInput type="number" min={1} {...gradeForm.register("roomCapacity")} />
             </Field>
           </>
         ) : null}

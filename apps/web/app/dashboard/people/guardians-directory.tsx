@@ -1,4 +1,5 @@
 "use client";
+import { FormInput } from "../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
@@ -82,7 +83,7 @@ export function GuardiansDirectory() {
         <DirectoryNameCell
           name={row.original.fullName}
           avatar={
-            <span className="directory-avatar directory-avatar--guardian">
+            <span className="pds-type-title-xs-bold directory-avatar directory-avatar--guardian">
               <Icon name="supervisor_account" />
             </span>
           }
@@ -141,10 +142,10 @@ export function GuardiansDirectory() {
         })}
         footer={
           <>
-            <button type="button" className="btn-ghost" onClick={() => setCreateOpen(false)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setCreateOpen(false)}>
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={create.isPending}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={create.isPending}>
               <Icon name="add" />
               {create.isPending ? c("loading") : t("createGuardian")}
             </button>
@@ -152,13 +153,13 @@ export function GuardiansDirectory() {
         }
       >
         <Field label={t("firstName")} error={form.formState.errors.firstName?.message}>
-          <input {...form.register("firstName")} />
+          <FormInput {...form.register("firstName")} />
         </Field>
         <Field label={t("lastName")} error={form.formState.errors.lastName?.message}>
-          <input {...form.register("lastName")} />
+          <FormInput {...form.register("lastName")} />
         </Field>
         <Field label={t("phone")} error={form.formState.errors.phone?.message}>
-          <input {...form.register("phone")} />
+          <FormInput {...form.register("phone")} />
         </Field>
       </RecordFormSheet>
     </>

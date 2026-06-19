@@ -5,6 +5,8 @@ import { useState } from "react";
 import { apiFetch, useApiMutation } from "../../../lib/api";
 import { Icon } from "../../../lib/material-icon";
 import { getSession } from "../../../lib/session";
+import { ModulePageHeader } from "../../module-page-header";
+import { moduleBreadcrumbs } from "../../../lib/page-header-utils";
 
 type MasterData = {
   grades: { name: string; minAge?: number | null; maxAge?: number | null }[];
@@ -16,6 +18,8 @@ const IMPORT_JSON_PLACEHOLDER = '{ "grades": [], "subjects": [] }';
 
 export default function MasterDataToolsPage() {
   const t = useTranslations("academics");
+  const setup = useTranslations("academicSetup");
+  const nav = useTranslations("nav");
   const c = useTranslations("common");
 
   const [exported, setExported] = useState<string>("");
@@ -80,25 +84,30 @@ export default function MasterDataToolsPage() {
 
   return (
     <div className="page-stack">
+      <ModulePageHeader
+        navKey="academicSetup"
+        title={setup("tools")}
+        breadcrumbs={moduleBreadcrumbs("academicSetup", nav, [{ label: setup("tools") }])}
+      />
       <section className="panel">
         <div className="panel-head">
-          <h2>{t("exportTitle")}</h2>
-          <button type="button" className="btn-primary" disabled={exporting} onClick={() => void handleExport()}>
+          <h2 className="pds-type-title-xs-bold">{t("exportTitle")}</h2>
+          <button type="button" className="pds-type-body-m-bold btn-primary" disabled={exporting} onClick={() => void handleExport()}>
             <Icon name="download" />
             {exporting ? c("loading") : t("exportButton")}
           </button>
         </div>
-        <p className="muted">{t("exportHelp")}</p>
-        {exportError ? <p className="error-text">{exportError}</p> : null}
-        {exported ? <textarea className="code-area" readOnly value={exported} /> : null}
+        <p className="pds-type-body-s-regular muted">{t("exportHelp")}</p>
+        {exportError ? <p className="pds-type-body-m-medium error-text">{exportError}</p> : null}
+        {exported ? <textarea className="pds-type-body-m-medium code-area" readOnly value={exported} /> : null}
       </section>
 
       <section className="panel">
         <div className="panel-head">
-          <h2>{t("importTitle")}</h2>
+          <h2 className="pds-type-title-xs-bold">{t("importTitle")}</h2>
           <button
             type="button"
-            className="btn-primary"
+            className="pds-type-body-m-bold btn-primary"
             disabled={importMutation.isPending || !importText.trim()}
             onClick={() => void handleImport()}
           >
@@ -106,16 +115,16 @@ export default function MasterDataToolsPage() {
             {importMutation.isPending ? c("loading") : t("importButton")}
           </button>
         </div>
-        <p className="muted">{t("importHelp")}</p>
+        <p className="pds-type-body-s-regular muted">{t("importHelp")}</p>
         <textarea
-          className="code-area"
+          className="pds-type-body-m-medium code-area"
           placeholder={IMPORT_JSON_PLACEHOLDER}
           value={importText}
           onChange={(event) => setImportText(event.target.value)}
         />
-        {importError ? <p className="error-text">{importError}</p> : null}
+        {importError ? <p className="pds-type-body-m-medium error-text">{importError}</p> : null}
         {importResult ? (
-          <p className="form-feedback form-feedback--ok">
+          <p className="pds-type-body-m-medium form-feedback form-feedback--ok">
             {t("importSummary", {
               grades: importResult.grades,
               subjects: importResult.subjects

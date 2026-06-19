@@ -31,10 +31,14 @@ export function OptionChip({
       onClick={onClick}
     >
       <span className="option-chip__indicator" aria-hidden>
-        {selected ? <Icon name="check" size={14} /> : null}
+        <Icon
+          name={selected ? "check_box" : "check_box_outline_blank"}
+          filled={selected}
+          size={16}
+        />
       </span>
-      <span className="option-chip__label">{label}</span>
-      {detail ? <span className="option-chip__detail">{detail}</span> : null}
+      <span className="pds-type-body-m-medium option-chip__label">{label}</span>
+      {detail ? <span className="pds-type-body-m-medium option-chip__detail">{detail}</span> : null}
     </button>
   );
 }

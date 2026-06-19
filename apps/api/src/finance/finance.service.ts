@@ -1,6 +1,6 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common'
-import { buildInvoiceNumber } from '@sms/shared'
-import { and, eq, gte, lte, inArray, isNotNull, isNull, ne, sql, sum, count, desc, exists, ilike, or } from 'drizzle-orm'
+import { buildInvoiceNumber, buildPaymentNumber, billingMonthFromIssueDate, paymentPlanKeyFromInvoiceSource } from '@sms/shared'
+import { and, eq, gte, lte, inArray, isNotNull, isNull, ne, sql, sum, count, asc, desc, exists, ilike, or } from 'drizzle-orm'
 import { AuditService } from '../audit/audit.service.js'
 import { DB, type Database } from '../db/db.module.js'
 import {
@@ -767,6 +767,8 @@ export class FinanceService {
 
     const limit = query.limit ?? 50
     const offset = query.offset ?? 0
+    const sortDir = query.sortDir === 'asc' ? 'asc' : 'desc'
+    const createdAtOrder = sortDir === 'asc' ? asc(invoices.createdAt) : desc(invoices.createdAt)
 
     const verifiedPaidSql = sql<string>`(
       SELECT COALESCE(SUM(
@@ -808,7 +810,7 @@ export class FinanceService {
       .leftJoin(grades, eq(enrollments.gradeId, grades.id))
       .leftJoin(classrooms, eq(enrollments.classroomId, classrooms.id))
       .where(and(...conditions))
-      .orderBy(desc(invoices.updatedAt))
+      .orderBy(createdAtOrder)
       .limit(limit)
       .offset(offset)
 
@@ -826,6 +828,8 @@ export class FinanceService {
         ...row,
         balanceDue: Math.max(0, total - paid),
         verifiedPaid: paid,
+        billingMonth: billingMonthFromIssueDate(row.issueDate),
+        paymentPlan: paymentPlanKeyFromInvoiceSource(row.source),
       }
     })
 
@@ -833,88 +837,32 @@ export class FinanceService {
   }
 
   async getInvoiceMetrics(tenantId: string, query: InvoiceMetricsQueryDto) {
-    const conditions = [eq(invoices.tenantId, tenantId)]
-    if (query.academicYearId) {
-      conditions.push(
-        exists(
-          this.db
-            .select({ id: enrollments.id })
-            .from(enrollments)
-            .where(
-              and(
-                eq(enrollments.tenantId, tenantId),
-                eq(enrollments.studentId, invoices.studentId),
-                eq(enrollments.academicYearId, query.academicYearId),
-                eq(enrollments.status, 'approved'),
-              ),
-            ),
-        ),
-      )
-    }
-
-    const verifiedPaidSql = sql<string>`(
-      SELECT COALESCE(SUM(
-        CASE
-          WHEN ${payments.kind} = 'payment' THEN ${payments.amount}::numeric
-          WHEN ${payments.kind} = 'refund' THEN -${payments.amount}::numeric
-          ELSE 0
-        END
-      ), 0)
-      FROM ${payments}
-      WHERE ${payments.invoiceId} = ${invoices.id}
-        AND ${payments.tenantId} = ${tenantId}
-        AND ${payments.verifiedAt} IS NOT NULL
-    )`
-
-    const rows = await this.db
-      .select({
-        status: invoices.status,
-        total: invoices.total,
-        dueDate: invoices.dueDate,
-        verifiedPaid: verifiedPaidSql,
-      })
-      .from(invoices)
-      .where(and(...conditions))
-
-    const today = new Date().toISOString().slice(0, 10)
-    let allCount = 0
-    let allBilled = 0
-    let settledCount = 0
-    let openCount = 0
-    let openAmount = 0
-    let overdueCount = 0
-
-    for (const row of rows) {
-      const total = Number(row.total)
-      const paid = Number(row.verifiedPaid ?? 0)
-      const balance = Math.max(0, total - paid)
-      const isOverdue =
-        balance > 0 && Boolean(row.dueDate && row.dueDate < today) && row.status !== 'paid'
-      allCount += 1
-      allBilled += total
-
-      if (row.status === 'paid' || balance <= 0) {
-        settledCount += 1
-      } else if (row.status === 'overdue' || isOverdue) {
-        overdueCount += 1
-        openCount += 1
-        openAmount += balance
-      } else if (['unpaid', 'partial'].includes(row.status)) {
-        openCount += 1
-        openAmount += balance
+    if (!query.academicYearId) {
+      return {
+        billed: 0,
+        collected: 0,
+        outstanding: 0,
+        overdue: 0,
+        owingStudents: 0,
+        overdueStudents: 0,
+        collectionRate: 0,
+        termName: null as string | null,
       }
     }
 
-    const { term } = await this.resolveCurrentTerm(tenantId, query.academicYearId)
+    const roster = await this.getBillingRoster(tenantId, {
+      academicYearId: query.academicYearId,
+    })
 
     return {
-      allCount,
-      allBilled,
-      settledCount,
-      openCount,
-      openAmount,
-      overdueCount,
-      termName: term?.name ?? null,
+      billed: roster.metrics.billed,
+      collected: roster.metrics.collected,
+      outstanding: roster.metrics.outstanding,
+      overdue: roster.metrics.overdue,
+      owingStudents: roster.metrics.owingStudents,
+      overdueStudents: roster.metrics.overdueStudents,
+      collectionRate: roster.metrics.collectionRate,
+      termName: roster.term?.name ?? null,
     }
   }
 
@@ -944,9 +892,25 @@ export class FinanceService {
       )
 
     const invoicePayments = await this.db
-      .select()
+      .select({
+        id: payments.id,
+        invoiceId: payments.invoiceId,
+        kind: payments.kind,
+        refundedPaymentId: payments.refundedPaymentId,
+        amount: payments.amount,
+        method: payments.method,
+        referenceNumber: payments.referenceNumber,
+        paidAt: payments.paidAt,
+        verifiedAt: payments.verifiedAt,
+        notes: payments.notes,
+        createdAt: payments.createdAt,
+        createdBy: payments.createdBy,
+        receiptNumber: receipts.receiptNumber,
+      })
       .from(payments)
-      .where(eq(payments.invoiceId, invoiceId))
+      .leftJoin(receipts, and(eq(receipts.paymentId, payments.id), eq(receipts.tenantId, tenantId)))
+      .where(and(eq(payments.invoiceId, invoiceId), eq(payments.tenantId, tenantId)))
+      .orderBy(desc(payments.paidAt), desc(payments.createdAt))
 
     const context = await this.resolveStudentBillingContext(
       tenantId,
@@ -1161,6 +1125,8 @@ export class FinanceService {
         createdAt: payments.createdAt,
         createdBy: payments.createdBy,
         invoiceNumber: invoices.invoiceNumber,
+        invoiceIssueDate: invoices.issueDate,
+        invoiceSource: invoices.source,
         receiptNumber: receipts.receiptNumber,
         studentFullName: students.fullName,
         gradeName: grades.name,
@@ -1176,7 +1142,7 @@ export class FinanceService {
       .leftJoin(classrooms, eq(enrollments.classroomId, classrooms.id))
       .leftJoin(users, eq(payments.createdBy, users.id))
       .where(and(...conditions))
-      .orderBy(desc(payments.paidAt))
+      .orderBy(desc(payments.createdAt), desc(payments.paidAt))
       .limit(limit)
       .offset(offset)
 
@@ -1194,7 +1160,13 @@ export class FinanceService {
         const refunded = await this.getRefundedTotalForPayment(row.id)
         refundableAmount = Math.max(0, Number(row.amount) - refunded)
       }
-      return { ...row, refundableAmount }
+      return {
+        ...row,
+        paymentNumber: row.receiptNumber,
+        refundableAmount,
+        billingMonth: billingMonthFromIssueDate(row.invoiceIssueDate),
+        paymentPlan: paymentPlanKeyFromInvoiceSource(row.invoiceSource),
+      }
     }))
 
     return { data, total: Number(countRow?.total ?? 0), limit, offset }
@@ -1582,15 +1554,42 @@ export class FinanceService {
       query.academicYearId,
     )
 
+    // Grade chips must list every grade with confirmed enrollments for the year,
+    // regardless of the active gradeId filter on rows/metrics.
+    const gradeNavRows = await this.db
+      .select({
+        id: grades.id,
+        name: grades.name,
+        sortOrder: grades.sortOrder,
+      })
+      .from(enrollments)
+      .innerJoin(grades, eq(enrollments.gradeId, grades.id))
+      .where(
+        and(
+          eq(enrollments.tenantId, tenantId),
+          eq(enrollments.academicYearId, query.academicYearId),
+          isNotNull(enrollments.confirmedAt),
+        ),
+      )
+      .groupBy(grades.id, grades.name, grades.sortOrder)
+      .orderBy(grades.sortOrder)
+
+    const gradeSet = new Map<string, { id: string; name: string; sortOrder: number }>()
+    for (const grade of gradeNavRows) {
+      gradeSet.set(grade.id, grade)
+    }
+
     const enrollmentConditions = [
       eq(enrollments.tenantId, tenantId),
       eq(enrollments.academicYearId, query.academicYearId),
-      eq(enrollments.status, 'approved'),
+      isNotNull(enrollments.confirmedAt),
     ]
     if (query.gradeId) enrollmentConditions.push(eq(enrollments.gradeId, query.gradeId))
 
     const enrollmentRows = await this.db
       .select({
+        enrollmentId: enrollments.id,
+        enrollmentInvoiceId: enrollments.invoiceId,
         studentId: enrollments.studentId,
         gradeId: enrollments.gradeId,
         gradeName: grades.name,
@@ -1603,12 +1602,16 @@ export class FinanceService {
         guardianPhone: guardians.phone,
       })
       .from(enrollments)
-      .innerJoin(students, eq(enrollments.studentId, students.id))
+      .innerJoin(
+        students,
+        and(eq(enrollments.studentId, students.id), eq(students.tenantId, tenantId)),
+      )
       .leftJoin(grades, eq(enrollments.gradeId, grades.id))
       .leftJoin(classrooms, eq(enrollments.classroomId, classrooms.id))
       .leftJoin(familyGroups, eq(students.familyGroupId, familyGroups.id))
       .leftJoin(guardians, eq(familyGroups.primaryGuardianId, guardians.id))
       .where(and(...enrollmentConditions))
+      .orderBy(desc(enrollments.confirmedAt))
 
     // De-dupe by student (a student may have multiple enrollment rows historically).
     const byStudent = new Map<string, (typeof enrollmentRows)[number]>()
@@ -1616,6 +1619,22 @@ export class FinanceService {
       if (!byStudent.has(row.studentId)) byStudent.set(row.studentId, row)
     }
     const studentIds = [...byStudent.keys()]
+    const enrollmentIds = enrollmentRows.map((row) => row.enrollmentId)
+    const enrollmentInvoiceIds = enrollmentRows
+      .map((row) => row.enrollmentInvoiceId)
+      .filter((id): id is string => Boolean(id))
+
+    const invoiceScopeParts = [
+      ...(enrollmentIds.length > 0 ? [inArray(invoices.enrollmentId, enrollmentIds)] : []),
+      ...(enrollmentInvoiceIds.length > 0 ? [inArray(invoices.id, enrollmentInvoiceIds)] : []),
+      and(
+        isNull(invoices.enrollmentId),
+        gte(invoices.issueDate, periodStart),
+        lte(invoices.issueDate, periodEnd),
+      ),
+    ]
+    const invoiceScope =
+      invoiceScopeParts.length === 1 ? invoiceScopeParts[0]! : or(...invoiceScopeParts)
 
     const invoiceRows = studentIds.length
       ? await this.db
@@ -1626,14 +1645,15 @@ export class FinanceService {
             status: invoices.status,
             dueDate: invoices.dueDate,
             issueDate: invoices.issueDate,
+            source: invoices.source,
+            createdAt: invoices.createdAt,
           })
           .from(invoices)
           .where(
             and(
               eq(invoices.tenantId, tenantId),
               inArray(invoices.studentId, studentIds),
-              gte(invoices.issueDate, periodStart),
-              lte(invoices.issueDate, periodEnd),
+              invoiceScope,
             ),
           )
           .orderBy(invoices.issueDate)
@@ -1675,39 +1695,53 @@ export class FinanceService {
       balance: number
       status: 'paid' | 'partial' | 'due' | 'overdue'
       primaryInvoiceId: string | null
+      primaryInvoiceCreatedAt: string | null
+      primaryBillingMonth: string | null
+      primaryPaymentPlan: ReturnType<typeof paymentPlanKeyFromInvoiceSource> | null
     }
 
     const rows: RosterRow[] = []
-    const gradeSet = new Map<string, { id: string; name: string; sortOrder: number }>()
 
     for (const studentId of studentIds) {
       const meta = byStudent.get(studentId)!
-      if (meta.gradeId && meta.gradeName) {
-        gradeSet.set(meta.gradeId, {
-          id: meta.gradeId,
-          name: meta.gradeName,
-          sortOrder: meta.gradeSortOrder ?? 0,
-        })
-      }
 
       const studentInvoices = invoicesByStudent.get(studentId) ?? []
       let billed = 0
       let paid = 0
       let hasOverdue = false
       let primaryInvoiceId: string | null = null
+      let primaryInvoiceCreatedAt: string | null = null
+      let primaryBillingMonth: string | null = null
+      let primaryPaymentPlan: ReturnType<typeof paymentPlanKeyFromInvoiceSource> | null = null
       let latestInvoiceId: string | null = null
+      let latestInvoice: (typeof invoiceRows)[number] | null = null
 
       for (const inv of studentInvoices) {
         billed += Number(inv.total)
         const net = paidByInvoice.get(inv.id) ?? 0
         paid += net
         latestInvoiceId = inv.id
+        latestInvoice = inv
         const open = !this.CLOSED_STATUSES.includes(inv.status)
         const remaining = Number(inv.total) - net
         if (open && remaining > 0) {
-          if (!primaryInvoiceId) primaryInvoiceId = inv.id
+          if (!primaryInvoiceId) {
+            primaryInvoiceId = inv.id
+            primaryInvoiceCreatedAt = inv.createdAt instanceof Date ? inv.createdAt.toISOString() : String(inv.createdAt)
+            primaryBillingMonth = billingMonthFromIssueDate(inv.issueDate)
+            primaryPaymentPlan = paymentPlanKeyFromInvoiceSource(inv.source)
+          }
           if (inv.dueDate && inv.dueDate < today) hasOverdue = true
         }
+      }
+
+      const resolvedPrimaryId = primaryInvoiceId ?? latestInvoiceId
+      if (resolvedPrimaryId && latestInvoice && !primaryInvoiceCreatedAt) {
+        const primary = studentInvoices.find((inv) => inv.id === resolvedPrimaryId) ?? latestInvoice
+        primaryInvoiceCreatedAt =
+          primary.createdAt instanceof Date ? primary.createdAt.toISOString() : String(primary.createdAt)
+        primaryBillingMonth = billingMonthFromIssueDate(primary.issueDate)
+        primaryPaymentPlan = paymentPlanKeyFromInvoiceSource(primary.source)
       }
 
       const balance = Math.max(0, billed - paid)
@@ -1730,7 +1764,10 @@ export class FinanceService {
         paid,
         balance,
         status,
-        primaryInvoiceId: primaryInvoiceId ?? latestInvoiceId,
+        primaryInvoiceId: resolvedPrimaryId,
+        primaryInvoiceCreatedAt,
+        primaryBillingMonth,
+        primaryPaymentPlan,
       })
     }
 
@@ -1763,11 +1800,7 @@ export class FinanceService {
       )
     }
 
-    filtered.sort(
-      (a, b) =>
-        (gradeSet.get(a.gradeId)?.sortOrder ?? 0) - (gradeSet.get(b.gradeId)?.sortOrder ?? 0) ||
-        a.studentFullName.localeCompare(b.studentFullName),
-    )
+    filtered.sort((a, b) => a.studentFullName.localeCompare(b.studentFullName))
 
     const gradeList = [...gradeSet.values()].sort((a, b) => a.sortOrder - b.sortOrder)
 
@@ -1781,12 +1814,7 @@ export class FinanceService {
   }
 
   private async nextReceiptNumber(tenantId: string, prefix: string) {
-    const [row] = await this.db
-      .select({ value: count() })
-      .from(receipts)
-      .where(eq(receipts.tenantId, tenantId))
-    const sequence = 8500 + Number(row?.value ?? 0) + 1
-    return `${prefix}-${sequence}`
+    return buildPaymentNumber(prefix.trim() || 'PMT')
   }
 
   private async resolveStudentBillingContext(
@@ -2145,6 +2173,53 @@ export class FinanceService {
       inArray(invoices.status, ['unpaid', 'partial', 'overdue'] as any[]),
     ]
 
+    if (query.status) {
+      conditions.push(eq(invoices.status, query.status as 'unpaid' | 'partial' | 'overdue'))
+    }
+
+    if (query.gradeId) {
+      conditions.push(
+        exists(
+          this.db
+            .select({ id: enrollments.id })
+            .from(enrollments)
+            .where(
+              and(
+                eq(enrollments.tenantId, tenantId),
+                eq(enrollments.studentId, invoices.studentId),
+                eq(enrollments.gradeId, query.gradeId),
+                eq(enrollments.status, 'approved'),
+              ),
+            ),
+        ),
+      )
+    }
+
+    const verifiedPaidSql = sql<string>`(
+      SELECT COALESCE(SUM(
+        CASE
+          WHEN ${payments.kind} = 'payment' THEN ${payments.amount}::numeric
+          WHEN ${payments.kind} = 'refund' THEN -${payments.amount}::numeric
+          ELSE 0
+        END
+      ), 0)
+      FROM ${payments}
+      WHERE ${payments.invoiceId} = ${invoices.id}
+        AND ${payments.tenantId} = ${tenantId}
+        AND ${payments.verifiedAt} IS NOT NULL
+    )`
+
+    const gradeNameSql = sql<string | null>`(
+      SELECT ${grades.name}
+      FROM ${enrollments}
+      LEFT JOIN ${grades} ON ${enrollments.gradeId} = ${grades.id}
+      WHERE ${enrollments.tenantId} = ${tenantId}
+        AND ${enrollments.studentId} = ${invoices.studentId}
+        AND ${enrollments.status} = 'approved'
+      ORDER BY ${enrollments.confirmedAt} DESC NULLS LAST
+      LIMIT 1
+    )`
+
     const rows = await this.db
       .select({
         id: invoices.id,
@@ -2155,18 +2230,34 @@ export class FinanceService {
         total: invoices.total,
         status: invoices.status,
         studentFullName: students.fullName,
+        verifiedPaid: verifiedPaidSql,
+        gradeName: gradeNameSql,
       })
       .from(invoices)
-      .leftJoin(students, eq(invoices.studentId, students.id))
+      .leftJoin(students, and(eq(invoices.studentId, students.id), eq(students.tenantId, tenantId)))
       .where(and(...conditions))
+      .orderBy(desc(invoices.dueDate), desc(invoices.issueDate))
 
     const today = new Date()
-    return rows.map(row => ({
-      ...row,
-      daysOverdue: row.dueDate
-        ? Math.max(0, Math.floor((today.getTime() - new Date(row.dueDate).getTime()) / 86400000))
-        : null,
-    }))
+    return rows.map((row) => {
+      const total = Number(row.total)
+      const paid = Number(row.verifiedPaid ?? 0)
+      return {
+        id: row.id,
+        invoiceNumber: row.invoiceNumber,
+        studentId: row.studentId,
+        studentFullName: row.studentFullName,
+        gradeName: row.gradeName,
+        issueDate: row.issueDate,
+        dueDate: row.dueDate,
+        total: row.total,
+        balanceDue: Math.max(0, total - paid),
+        status: row.status,
+        daysOverdue: row.dueDate
+          ? Math.max(0, Math.floor((today.getTime() - new Date(row.dueDate).getTime()) / 86400000))
+          : null,
+      }
+    })
   }
 
   async getFinanceDashboard(tenantId: string) {

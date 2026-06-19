@@ -27,6 +27,8 @@ import {
   payments,
   receipts,
   roles,
+  schoolOperatingHourBlocks,
+  schoolScheduleSettings,
   staff,
   studentServices,
   students,
@@ -36,9 +38,11 @@ import {
   tenantSettings,
   tenants,
   terms,
+  timetablePeriods,
   userRoles,
   users
 } from "./schema.js";
+import { buildPeriodRowsFromSchedule } from "../school-schedule/school-schedule.service.js";
 
 // Load env from the API folder first, then the repo root.
 config();
@@ -373,6 +377,103 @@ async function seedDemoClassroomData(
   await seedDemoEnrollmentBilling(db, tenantId, year.id, grade.id, classroomAId);
   await seedDemoPaymentPlans(db, tenantId);
   await seedFeesBillingDemo(db, tenantId, year.id);
+}
+
+/** Default school hours + generated lesson periods for the active academic year. */
+async function seedTimetableSchedule(
+  db: ReturnType<typeof drizzle>,
+  tenantId: string,
+  academicYearId: string,
+  actorUserId: string | null
+) {
+  const [existingPeriod] = await db
+    .select({ id: timetablePeriods.id })
+    .from(timetablePeriods)
+    .where(
+      and(
+        eq(timetablePeriods.tenantId, tenantId),
+        eq(timetablePeriods.academicYearId, academicYearId)
+      )
+    )
+    .limit(1);
+
+  if (existingPeriod) {
+    return;
+  }
+
+  const [existingSettings] = await db
+    .select({ id: schoolScheduleSettings.id })
+    .from(schoolScheduleSettings)
+    .where(eq(schoolScheduleSettings.tenantId, tenantId))
+    .limit(1);
+
+  if (!existingSettings) {
+    await db.insert(schoolScheduleSettings).values({
+      tenantId,
+      shortBreakStartsAt: "10:15",
+      shortBreakEndsAt: "10:30",
+      lunchBreakStartsAt: "12:00",
+      lunchBreakEndsAt: "13:00",
+      periodDurationMinutes: 45,
+      workingDays: [1, 2, 3, 4, 5],
+      createdBy: actorUserId,
+      updatedBy: actorUserId
+    });
+  }
+
+  const [existingBlock] = await db
+    .select({ id: schoolOperatingHourBlocks.id })
+    .from(schoolOperatingHourBlocks)
+    .where(eq(schoolOperatingHourBlocks.tenantId, tenantId))
+    .limit(1);
+
+  let blockId = existingBlock?.id;
+
+  if (!blockId) {
+    const [block] = await db
+      .insert(schoolOperatingHourBlocks)
+      .values({
+        tenantId,
+        label: "Regular school day",
+        startsAt: "08:00",
+        endsAt: "15:00",
+        isPrimary: true,
+        sortOrder: 0,
+        createdBy: actorUserId,
+        updatedBy: actorUserId
+      })
+      .returning({ id: schoolOperatingHourBlocks.id });
+    blockId = block?.id;
+  }
+
+  if (!blockId || !actorUserId) {
+    return;
+  }
+
+  const rows = buildPeriodRowsFromSchedule({
+    tenantId,
+    academicYearId,
+    actorUserId,
+    periodDurationMinutes: 45,
+    shortBreakStartsAt: "10:15",
+    shortBreakEndsAt: "10:30",
+    lunchBreakStartsAt: "12:00",
+    lunchBreakEndsAt: "13:00",
+    blocks: [
+      {
+        id: blockId,
+        label: "Regular school day",
+        startsAt: "08:00",
+        endsAt: "15:00",
+        isPrimary: true,
+        sortOrder: 0
+      }
+    ]
+  });
+
+  if (rows.length) {
+    await db.insert(timetablePeriods).values(rows);
+  }
 }
 
 /**
@@ -1287,6 +1388,10 @@ async function seedTenant(
   if (input.slug === "demo-alpha") {
     await seedTeachingSectors(db, tenant.id);
     await seedDemoClassroomData(db, tenant.id, input.slug, ownerPasswordHash);
+  }
+
+  if (academicYearId && owner?.id) {
+    await seedTimetableSchedule(db, tenant.id, academicYearId, owner.id);
   }
 
   return { tenant, academicYearId };

@@ -2,7 +2,8 @@
 
 import { useTranslations } from "next-intl";
 import type { UpdateTeacherTeachingSetupInput } from "@sms/shared";
-import { CheckboxList } from "../../../components/shared/checkbox-list";
+import { CheckBox, CheckboxList, PdsSelectField } from "../../../components/pds";
+import { EmptyState } from "../../../components/shared/empty-state";
 import { Toggle } from "../../../components/shared/toggle";
 import { Icon } from "../../lib/material-icon";
 
@@ -228,7 +229,7 @@ export function TeacherTeachingSetupFields({
   const t = useTranslations("teachers");
 
   if (loading) {
-    return <p className="muted">{t("loadingTeachingSetup")}</p>;
+    return <p className="pds-type-body-s-regular muted">{t("loadingTeachingSetup")}</p>;
   }
 
   const showSectors = (options?.sectors.length ?? 0) > 1;
@@ -293,9 +294,9 @@ export function TeacherTeachingSetupFields({
     <div className="assign-step teaching-setup">
       {showSectors ? (
         <section className="assign-block">
-          <p className="field-label">{t("sectorLabel")}</p>
-          <p className="muted assign-help">{t("sectorHelp")}</p>
           <CheckboxList
+            title={t("sectorLabel")}
+            description={t("sectorHelp")}
             options={(options?.sectors ?? []).map((sector) => ({
               id: sector.id,
               label: sector.name
@@ -315,32 +316,32 @@ export function TeacherTeachingSetupFields({
       ) : null}
 
       <section className="assign-block">
-        <p className="field-label">{t("subjectCompetencyLabel")}</p>
-        <p className="muted assign-help">{t("subjectCompetencyHelp")}</p>
         <CheckboxList
+          title={t("subjectCompetencyLabel")}
+          description={t("subjectCompetencyHelp")}
           options={(options?.subjects ?? []).map((subject) => ({
             id: subject.id,
             label: `${subject.name}${subject.code ? ` (${subject.code})` : ""}`
           }))}
           selectedIds={draft.competentSubjectIds}
           onChange={setCompetentSubjectIds}
-          emptyMessage={<p className="muted">{t("noSubjectsCatalog")}</p>}
+          emptyTitle={t("noSubjectsCatalog")}
         />
       </section>
 
       <section className="assign-block">
-        <p className="field-label">{t("gradeEligibilityLabel")}</p>
-        <p className="muted assign-help">{t("gradeEligibilityHelp")}</p>
         <CheckboxList
+          title={t("gradeEligibilityLabel")}
+          description={t("gradeEligibilityHelp")}
           options={sectorGrades.map((grade) => ({ id: grade.id, label: grade.name }))}
           selectedIds={draft.eligibleGradeIds}
           onChange={setEligibleGradeIds}
-          emptyMessage={<p className="muted">{t("noGradesAvailable")}</p>}
+          emptyTitle={t("noGradesAvailable")}
         />
       </section>
 
       {draft.eligibleGradeIds.length === 0 ? (
-        <p className="muted assign-empty">{t("selectGradeEligibilityFirst")}</p>
+        <EmptyState compact embedded icon="school" title={t("selectGradeEligibilityFirst")} />
       ) : (
         <>
           <section className="assign-block">
@@ -358,7 +359,7 @@ export function TeacherTeachingSetupFields({
               />
               <div>
                 <strong>{t("gradeChiefToggle")}</strong>
-                <p className="muted assign-help">{t("gradeChiefHelp")}</p>
+                <p className="pds-type-body-s-regular muted assign-help">{t("gradeChiefHelp")}</p>
               </div>
             </div>
             {draft.isGradeChief ? (
@@ -369,7 +370,7 @@ export function TeacherTeachingSetupFields({
                   onChange={(ids) => onChange({ ...draft, chiefGradeIds: ids })}
                 />
                 {conflicts.map((conflict) => (
-                  <p key={conflict.gradeId} className="assign-warning" role="alert">
+                  <p key={conflict.gradeId} className="pds-type-body-s-regular assign-warning" role="alert">
                     <Icon name="warning" size={16} />
                     {t("chiefConflictWarning", {
                       grade: conflict.gradeName,
@@ -383,13 +384,13 @@ export function TeacherTeachingSetupFields({
 
           <section className="assign-block">
             <div className="teaching-setup__classroom-head">
-              <div>
-                <p className="field-label">{t("classroomAssignmentsLabel")}</p>
-                <p className="muted assign-help">{t("classroomAssignmentsHelp")}</p>
+              <div className="assign-block__intro">
+                <p className="pds-type-title-xxs-extrabold assign-block__title">{t("classroomAssignmentsLabel")}</p>
+                <p className="pds-type-body-s-regular muted assign-help">{t("classroomAssignmentsHelp")}</p>
               </div>
               <button
                 type="button"
-                className="btn-ghost btn-ghost--compact"
+                className="pds-type-body-m-bold btn-ghost btn-ghost--compact"
                 onClick={() =>
                   onChange({
                     ...draft,
@@ -406,47 +407,64 @@ export function TeacherTeachingSetupFields({
             </div>
 
             {draft.classroomRows.length === 0 ? (
-              <p className="muted">{t("noClassroomRows")}</p>
+              <EmptyState compact embedded icon="meeting_room" title={t("noClassroomRows")} />
             ) : (
               <div className="teaching-setup__table">
+                <div className="pds-type-caption-m teaching-setup__table-header">
+                  <span>{t("classroomColumn")}</span>
+                  <span>{t("homeroomColumn")}</span>
+                  <span>{t("subjectColumn")}</span>
+                  <span className="sr-only">{t("removeClassroomRow")}</span>
+                </div>
                 {draft.classroomRows.map((row, index) => (
                   <div key={row.key} className="teaching-setup__row">
-                    <FieldSelect
-                      label={t("classroomColumn")}
+                    <PdsSelectField
+                      variant="form"
                       value={row.classroomId}
-                      options={classroomOptions}
-                      onChange={(classroomId) => {
-                        const next = [...draft.classroomRows];
-                        next[index] = { ...row, classroomId, subjectId: "" };
-                        onChange({ ...draft, classroomRows: next });
+                      onValueChange={(next) => {
+                        const classroomId = typeof next === "string" ? next : "";
+                        const nextRows = [...draft.classroomRows];
+                        nextRows[index] = { ...row, classroomId, subjectId: "" };
+                        onChange({ ...draft, classroomRows: nextRows });
                       }}
+                      placeholder="—"
+                      options={classroomOptions.map((option) => ({
+                        value: option.id,
+                        label: option.label
+                      }))}
                     />
-                    <label className="teaching-setup__homeroom">
-                      <input
-                        type="checkbox"
-                        checked={row.homeroom}
-                        onChange={(event) => {
-                          const next = [...draft.classroomRows];
-                          next[index] = { ...row, homeroom: event.target.checked };
-                          onChange({ ...draft, classroomRows: next });
-                        }}
-                      />
-                      {t("homeroomColumn")}
-                    </label>
-                    <FieldSelect
-                      label={t("subjectColumn")}
-                      value={row.subjectId}
-                      options={subjectOptionsForClassroom(row.classroomId)}
-                      onChange={(subjectId) => {
-                        const next = [...draft.classroomRows];
-                        next[index] = { ...row, subjectId };
-                        onChange({ ...draft, classroomRows: next });
+                    <CheckBox
+                      checked={row.homeroom}
+                      size="sm"
+                      showLabel={false}
+                      showDescription={false}
+                      label={t("homeroomColumn")}
+                      onCheckedChange={(checked) => {
+                        const nextRows = [...draft.classroomRows];
+                        nextRows[index] = { ...row, homeroom: checked };
+                        onChange({ ...draft, classroomRows: nextRows });
                       }}
+                      className="pds-type-body-s-regular teaching-setup__homeroom"
+                    />
+                    <PdsSelectField
+                      variant="form"
+                      value={row.subjectId}
                       disabled={!row.classroomId || draft.competentSubjectIds.length === 0}
+                      onValueChange={(next) => {
+                        const subjectId = typeof next === "string" ? next : "";
+                        const nextRows = [...draft.classroomRows];
+                        nextRows[index] = { ...row, subjectId };
+                        onChange({ ...draft, classroomRows: nextRows });
+                      }}
+                      placeholder="—"
+                      options={subjectOptionsForClassroom(row.classroomId).map((option) => ({
+                        value: option.id,
+                        label: option.label
+                      }))}
                     />
                     <button
                       type="button"
-                      className="btn-ghost btn-ghost--compact teaching-setup__remove"
+                      className="pds-type-body-m-bold btn-ghost btn-ghost--compact teaching-setup__remove"
                       onClick={() =>
                         onChange({
                           ...draft,
@@ -465,33 +483,5 @@ export function TeacherTeachingSetupFields({
         </>
       )}
     </div>
-  );
-}
-
-function FieldSelect({
-  label,
-  value,
-  options,
-  onChange,
-  disabled
-}: {
-  label: string;
-  value: string;
-  options: { id: string; label: string }[];
-  onChange: (value: string) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <label className="teaching-setup__field">
-      <span className="field-label">{label}</span>
-      <select value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
-        <option value="">—</option>
-        {options.map((option) => (
-          <option key={option.id} value={option.id}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
   );
 }

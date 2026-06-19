@@ -10,7 +10,9 @@ import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
 import { DataTable } from "../../../lib/data-table";
 import { Field } from "../../../lib/form";
 import { Icon } from "../../../lib/material-icon";
+import { PdsSelectField } from "../../../../components/pds";
 import { EnrollmentWizard } from "../../enrollments/enrollment-wizard";
+import { EmptyState } from "../../../../components/shared/empty-state";
 import { PageHeader } from "../../page-header-context";
 
 type Activity = {
@@ -130,13 +132,13 @@ export default function EnquiryDetailPage() {
   };
 
   if (enquiry.isLoading) {
-    return <p className="muted">{c("loading")}</p>;
+    return <p className="pds-type-body-s-regular muted">{c("loading")}</p>;
   }
 
   if (enquiry.isError || !enquiry.data) {
     return (
       <div className="page-stack">
-        <p className="error-text">{t("notFound")}</p>
+        <p className="pds-type-body-m-medium error-text">{t("notFound")}</p>
       </div>
     );
   }
@@ -153,29 +155,34 @@ export default function EnquiryDetailPage() {
           { label: nav("admissions"), href: "/dashboard/admissions" }
         ]}
       />
-      <p className="muted">
+      <p className="pds-type-body-s-regular muted">
         {t("grade")}: {data.targetGrade ?? "—"} · {c("status")}: {data.status}
       </p>
 
       <section className="panel">
         <div className="panel-head">
-          <h2>{t("updateStatus")}</h2>
+          <h2 className="pds-type-title-xs-bold">{t("updateStatus")}</h2>
         </div>
         <div className="entity-form">
           <Field label={c("status")}>
-            <select value={status || data.status} onChange={(e) => setStatus(e.target.value)}>
-              <option value="new">new</option>
-              <option value="contacted">contacted</option>
-              <option value="visit_scheduled">visit_scheduled</option>
-              <option value="offered">offered</option>
-              <option value="enrolled">enrolled</option>
-              <option value="lost">lost</option>
-            </select>
+            <PdsSelectField
+              variant="form"
+              value={status || data.status}
+              onValueChange={(value) => setStatus(typeof value === "string" ? value : "")}
+              options={[
+                { value: "new", label: "new" },
+                { value: "contacted", label: "contacted" },
+                { value: "visit_scheduled", label: "visit_scheduled" },
+                { value: "offered", label: "offered" },
+                { value: "enrolled", label: "enrolled" },
+                { value: "lost", label: "lost" }
+              ]}
+            />
           </Field>
           <div className="form-actions">
             <button
               type="button"
-              className="btn-primary"
+              className="pds-type-body-m-bold btn-primary"
               disabled={update.isPending}
               onClick={() => void update.mutateAsync({ status: status || data.status })}
             >
@@ -184,7 +191,7 @@ export default function EnquiryDetailPage() {
             </button>
             <button
               type="button"
-              className="btn-primary"
+              className="pds-type-body-m-bold btn-primary"
               disabled={startEnrollment.isPending || enrollmentBlocked}
               onClick={() => void openEnrollmentWizard()}
             >
@@ -193,26 +200,31 @@ export default function EnquiryDetailPage() {
             </button>
           </div>
           {startError ? (
-            <p className="error-text" role="alert">
+            <p className="pds-type-body-m-medium error-text" role="alert">
               {startError}
             </p>
           ) : null}
-          {!enrollmentBlocked ? <p className="muted panel-help">{t("startEnrollmentHelp")}</p> : null}
+          {!enrollmentBlocked ? <p className="pds-type-body-s-regular muted panel-help">{t("startEnrollmentHelp")}</p> : null}
         </div>
       </section>
 
       <section className="panel">
         <div className="panel-head">
-          <h2>{t("addActivity")}</h2>
+          <h2 className="pds-type-title-xs-bold">{t("addActivity")}</h2>
         </div>
         <div className="entity-form">
           <Field label={t("activityType")}>
-            <select value={activityType} onChange={(e) => setActivityType(e.target.value)}>
-              <option value="call">call</option>
-              <option value="visit">visit</option>
-              <option value="email">email</option>
-              <option value="note">note</option>
-            </select>
+            <PdsSelectField
+              variant="form"
+              value={activityType}
+              onValueChange={(value) => setActivityType(typeof value === "string" ? value : "call")}
+              options={[
+                { value: "call", label: "call" },
+                { value: "visit", label: "visit" },
+                { value: "email", label: "email" },
+                { value: "note", label: "note" }
+              ]}
+            />
           </Field>
           <Field label={t("notes")}>
             <textarea rows={2} value={activityNotes} onChange={(e) => setActivityNotes(e.target.value)} />
@@ -220,7 +232,7 @@ export default function EnquiryDetailPage() {
           <div className="form-actions">
             <button
               type="button"
-              className="btn-primary"
+              className="pds-type-body-m-bold btn-primary"
               disabled={!activityNotes || addActivity.isPending}
               onClick={() => {
                 void addActivity.mutateAsync({ activityType, notes: activityNotes }).then(() => {
@@ -236,7 +248,7 @@ export default function EnquiryDetailPage() {
         {data.activities.length ? (
           <DataTable columns={activityColumns} data={data.activities} />
         ) : (
-          <p className="muted">{t("noActivities")}</p>
+          <EmptyState compact embedded icon="history" title={t("noActivities")} />
         )}
       </section>
 

@@ -26,7 +26,7 @@ export function Toggle({ className, label, id, ...props }: ToggleProps) {
 
   return (
     <label className="form-toggle-field" htmlFor={id}>
-      <span className="form-toggle-field__label">{label}</span>
+      <span className="pds-type-body-m-medium form-toggle-field__label">{label}</span>
       {switchEl}
     </label>
   );

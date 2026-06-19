@@ -1,0 +1,127 @@
+/* PDS DetailCard — ink-green profile / entity hero (Figma 75:9199). */
+
+.pds-detail-card {
+  align-items: center;
+  background: linear-gradient(
+    173deg,
+    var(--pds-color-spring-green-1000) 0%,
+    var(--pds-color-spring-green-850) 104%
+  );
+  border-radius: var(--pds-radius-24);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pds-gap-large);
+  justify-content: space-between;
+  overflow: hidden;
+  padding: var(--pds-size-large) var(--pds-padding-xx-large);
+  width: 100%;
+}
+
+.pds-detail-card__main {
+  align-items: flex-start;
+  display: flex;
+  flex: 1 1 18rem;
+  gap: var(--pds-gap-large);
+  min-width: 0;
+}
+
+.pds-detail-card__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--pds-gap-x-small);
+  min-width: 0;
+}
+
+.pds-detail-card__title-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pds-gap-small);
+}
+
+.pds-detail-card__title {
+  color: var(--pds-text-invert-primary);
+  margin: 0;
+}
+
+.pds-detail-card__meta {
+  color: var(--pds-text-placeholder);
+  margin: 0;
+}
+
+.pds-detail-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pds-gap-small);
+  padding-top: var(--pds-gap-x-small);
+}
+
+.pds-detail-card__actions {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: var(--pds-gap-medium);
+}
+
+.pds-detail-card-avatar {
+  align-items: center;
+  border-radius: var(--pds-radius-base);
+  color: var(--pds-text-invert-primary);
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 4.5rem;
+  justify-content: center;
+  width: 4.5rem;
+}
+
+.pds-detail-card-avatar--student {
+  background: var(--pds-color-accent-pomegrate);
+}
+
+.pds-detail-card-avatar--teacher {
+  background: var(--pds-color-blue-700);
+}
+
+.pds-detail-card-avatar__initials {
+  font-size: var(--pds-size-x-large);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.pds-detail-card-status {
+  background: var(--pds-notification-background-success);
+  border-radius: var(--pds-radius-pill);
+  color: var(--pds-notification-foreground-success);
+  display: inline-flex;
+  max-height: 1.5rem;
+  padding: var(--pds-gap-xx-small) var(--pds-gap-small);
+}
+
+.pds-detail-card-tag {
+  align-items: center;
+  background: var(--pds-shell-raise);
+  border: var(--pds-border-weight-1) solid var(--pds-shell-line);
+  border-radius: var(--pds-radius-pill);
+  color: var(--pds-border-color-primary);
+  display: inline-flex;
+  gap: var(--pds-gap-x-small);
+  padding: var(--pds-padding-xx-small) var(--pds-padding-small);
+}
+
+.pds-detail-card-tag__icon {
+  color: var(--pds-compliment-brand);
+  line-height: 1;
+}
+
+@media (max-width: 720px) {
+  .pds-detail-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pds-detail-card__actions {
+    justify-content: flex-start;
+  }
+}

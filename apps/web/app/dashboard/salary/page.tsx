@@ -1,4 +1,5 @@
 "use client";
+import { FormInput } from "../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
@@ -13,6 +14,8 @@ import { RecordFormSheet } from "../../lib/record-sheet";
 import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
 import { zodResolver } from "../../lib/zod-resolver";
 import { StatusBadge } from "../../../components/shared/badge";
+import { ModulePageHeader } from "../module-page-header";
+import { moduleBreadcrumbs } from "../../lib/page-header-utils";
 
 type Component = {
   id: string;
@@ -29,6 +32,7 @@ const COMPONENTS_PATH = (tenant: string) => `/tenants/${tenant}/salary/component
 
 export default function SalaryComponentsPage() {
   const t = useTranslations("salary");
+  const nav = useTranslations("nav");
   const a = useTranslations("academics");
   const c = useTranslations("common");
   const [formMode, setFormMode] = useState<FormMode | null>(null);
@@ -107,12 +111,12 @@ export default function SalaryComponentsPage() {
         <div style={{ display: "flex", gap: "8px" }}>
           {row.original.status !== "archived" ? (
             <>
-              <button type="button" className="row-action" onClick={() => openEdit(row.original)}>
+              <button type="button" className="pds-type-body-s-regular row-action" onClick={() => openEdit(row.original)}>
                 {a("edit")}
               </button>
               <button
                 type="button"
-                className="row-action"
+                className="pds-type-body-s-regular row-action"
                 disabled={archive.isPending}
                 onClick={() => void archive.mutateAsync({ id: row.original.id })}
               >
@@ -122,7 +126,7 @@ export default function SalaryComponentsPage() {
           ) : (
             <button
               type="button"
-              className="row-action"
+              className="pds-type-body-s-regular row-action"
               disabled={reactivate.isPending}
               onClick={() => void reactivate.mutateAsync({ id: row.original.id })}
             >
@@ -135,7 +139,13 @@ export default function SalaryComponentsPage() {
   ];
 
   return (
-    <section className="panel">
+    <>
+      <ModulePageHeader
+        navKey="salary"
+        title={t("components")}
+        breadcrumbs={moduleBreadcrumbs("salary", nav, [{ label: t("components") }])}
+      />
+      <section className="panel">
       <TablePanelHead
         title={t("components")}
         onRefresh={() => void components.refetch()}
@@ -174,10 +184,10 @@ export default function SalaryComponentsPage() {
         })}
         footer={
           <>
-            <button type="button" className="btn-ghost" onClick={() => setFormMode(null)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setFormMode(null)}>
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={form.formState.isSubmitting}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={form.formState.isSubmitting}>
               <Icon name="check" />
               {form.formState.isSubmitting ? c("loading") : c("save")}
             </button>
@@ -185,12 +195,13 @@ export default function SalaryComponentsPage() {
         }
       >
         <Field label={c("name")} error={form.formState.errors.name?.message}>
-          <input {...form.register("name")} />
+          <FormInput {...form.register("name")} />
         </Field>
         <Field label={t("componentType")} error={form.formState.errors.componentType?.message}>
-          <input {...form.register("componentType")} />
+          <FormInput {...form.register("componentType")} />
         </Field>
       </RecordFormSheet>
     </section>
+    </>
   );
 }

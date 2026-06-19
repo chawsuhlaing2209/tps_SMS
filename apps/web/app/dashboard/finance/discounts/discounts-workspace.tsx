@@ -8,10 +8,11 @@ import {
 } from "@sms/shared";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Badge } from "../../../../components/shared/badge";
 import { Toggle } from "../../../../components/shared/toggle";
 import { EmptyState } from "../../../../components/shared/empty-state";
+import { Button } from "../../../../components/ui/button";
 import { StatCard, StatGrid } from "../../../../components/shared/stat-card";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { Icon } from "../../../lib/material-icon";
@@ -19,6 +20,7 @@ import { hasAnyPermission } from "../../../lib/permissions";
 import { getSession } from "../../../lib/session";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
 import { PageHeader } from "../../page-header-context";
+import { DiscountRequestsPanel } from "./discount-requests-panel";
 import { type DiscountRuleRecord } from "./discount-form";
 
 const RULES_PATH = (tenant: string) => `/tenants/${tenant}/discounts/rules`;
@@ -110,6 +112,7 @@ export function DiscountsWorkspace() {
   const permissions = getSession()?.permissions;
   const canView = hasAnyPermission(permissions, ["discount.request", "discount.approve"]);
   const canManage = hasAnyPermission(permissions, ["discount.approve"]);
+  const [view, setView] = useState<"rules" | "requests">("rules");
 
   const currentYear = useCurrentAcademicYear();
   const academicYearId = currentYear.data?.id ?? "";
@@ -236,19 +239,19 @@ export function DiscountsWorkspace() {
     return (
       <section key={group} className="discount-list-group">
         <div className="discount-list-group__head">
-          <h2>{t(titleKey)}</h2>
+          <h2 className="pds-type-title-xs-bold">{t(titleKey)}</h2>
           <span className="discount-list-group__meta">{t(metaKey, { count: items.length })}</span>
         </div>
         <div className="discount-table-wrap">
           <table className="padauk-table discount-table">
             <thead>
               <tr>
-                <th>{t("colDiscount")}</th>
-                <th>{t("colValue")}</th>
-                <th>{t("colScope")}</th>
-                <th>{t("colApplication")}</th>
-                <th>{t("colActive")}</th>
-                <th>{t("colAction")}</th>
+                <th className="pds-type-caption-s">{t("colDiscount")}</th>
+                <th className="pds-type-caption-s">{t("colValue")}</th>
+                <th className="pds-type-caption-s">{t("colScope")}</th>
+                <th className="pds-type-caption-s">{t("colApplication")}</th>
+                <th className="pds-type-caption-s">{t("colActive")}</th>
+                <th className="pds-type-caption-s">{t("colAction")}</th>
               </tr>
             </thead>
             <tbody>{items.map(renderRuleRow)}</tbody>
@@ -263,7 +266,7 @@ export function DiscountsWorkspace() {
       <PageHeader
         title={t("pageTitle")}
         breadcrumbs={[
-          { label: nav("finance"), href: "/dashboard/finance/billing" },
+          { label: nav("finance"), href: "/dashboard/finance/invoices" },
           { label: t("pageTitle") }
         ]}
       />
@@ -278,6 +281,37 @@ export function DiscountsWorkspace() {
       ) : null}
 
       {canView ? (
+        <nav className="fees-view-toggle" aria-label={t("viewToggleLabel")}>
+          <button
+            type="button"
+            className={
+              view === "rules"
+                ? "fees-view-toggle__link fees-view-toggle__link--active"
+                : "fees-view-toggle__link"
+            }
+            aria-current={view === "rules" ? "page" : undefined}
+            onClick={() => setView("rules")}
+          >
+            {t("viewRules")}
+          </button>
+          <button
+            type="button"
+            className={
+              view === "requests"
+                ? "fees-view-toggle__link fees-view-toggle__link--active"
+                : "fees-view-toggle__link"
+            }
+            aria-current={view === "requests" ? "page" : undefined}
+            onClick={() => setView("requests")}
+          >
+            {t("viewRequests")}
+          </button>
+        </nav>
+      ) : null}
+
+      {view === "requests" && canView ? <DiscountRequestsPanel /> : null}
+
+      {view === "rules" && canView ? (
         <StatGrid>
           <StatCard
             accent
@@ -313,36 +347,36 @@ export function DiscountsWorkspace() {
 
       {!canView ? (
         <section className="panel">
-          <EmptyState icon="lock" title={t("noAccess")} />
+          <EmptyState embedded icon="lock" title={t("noAccess")} />
         </section>
       ) : null}
-      {canView && rules.isLoading ? <p className="muted">{c("loading")}</p> : null}
-      {canView && rules.isError ? (
+      {view === "rules" && canView && rules.isLoading ? <p className="pds-type-body-s-regular muted">{c("loading")}</p> : null}
+      {view === "rules" && canView && rules.isError ? (
         <section className="panel">
-          <EmptyState icon="error" title={c("somethingWrong")} />
+          <EmptyState embedded icon="error" title={c("somethingWrong")} />
         </section>
       ) : null}
 
-      {canView && !rules.isLoading && !rules.isError && !visibleRules.length ? (
+      {view === "rules" && canView && !rules.isLoading && !rules.isError && !visibleRules.length ? (
         <section className="panel">
           <EmptyState
+            embedded
             icon="sell"
             title={t("noRules")}
             action={
               canManage ? (
-                <Link href="/dashboard/finance/discounts/new" className="btn-primary">
-                  <Icon name="add" />
-                  {t("addDiscount")}
-                </Link>
+                <Button buttonType="filled" buttonColor="secondary" prefixIcon="add" asChild>
+                  <Link href="/dashboard/finance/discounts/new">{t("addDiscount")}</Link>
+                </Button>
               ) : null
             }
           />
         </section>
       ) : null}
 
-      {GROUP_ORDER.map((group) => renderGroup(group, groupedRules[group]))}
+      {view === "rules" ? GROUP_ORDER.map((group) => renderGroup(group, groupedRules[group])) : null}
 
-      <p className="discounts-config-footnote">{t("infoCallout")}</p>
+      {view === "rules" ? <p className="discounts-config-footnote">{t("infoCallout")}</p> : null}
     </div>
   );
 }

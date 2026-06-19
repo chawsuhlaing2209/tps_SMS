@@ -1,4 +1,5 @@
 "use client";
+import { FormInput } from "../../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
@@ -14,6 +15,8 @@ import { TablePanelBody, TablePanelHead } from "../../../lib/table-panel";
 import { zodResolver } from "../../../lib/zod-resolver";
 import { useAcademicYearContext } from "../use-academic-year-context";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
+import { ModulePageHeader } from "../../module-page-header";
+import { moduleBreadcrumbs } from "../../../lib/page-header-utils";
 
 type Term = {
   id: string;
@@ -31,6 +34,8 @@ const TERMS_PATH = (tenant: string) => `/tenants/${tenant}/academics/terms`;
 
 export default function TermsPage() {
   const t = useTranslations("academics");
+  const setup = useTranslations("academicSetup");
+  const nav = useTranslations("nav");
   const c = useTranslations("common");
   const [formMode, setFormMode] = useState<FormMode | null>(null);
 
@@ -113,12 +118,12 @@ export default function TermsPage() {
       enableSorting: false,
       cell: ({ row }) => (
         <div style={{ display: "flex", gap: "8px" }}>
-          <button type="button" className="row-action" onClick={() => openEdit(row.original)}>
+          <button type="button" className="pds-type-body-s-regular row-action" onClick={() => openEdit(row.original)}>
             {t("edit")}
           </button>
           <button
             type="button"
-            className="row-action"
+            className="pds-type-body-s-regular row-action"
             disabled={remove.isPending}
             onClick={() => void remove.mutateAsync({ id: row.original.id })}
           >
@@ -131,6 +136,11 @@ export default function TermsPage() {
 
   return (
     <>
+      <ModulePageHeader
+        navKey="academicSetup"
+        title={setup("terms")}
+        breadcrumbs={moduleBreadcrumbs("academicSetup", nav, [{ label: setup("terms") }])}
+      />
       <TablePanelHead
         title={t("terms")}
         onRefresh={() => void terms.refetch()}
@@ -174,10 +184,10 @@ export default function TermsPage() {
         })}
         footer={
           <>
-            <button type="button" className="btn-ghost" onClick={() => setFormMode(null)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setFormMode(null)}>
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={form.formState.isSubmitting}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={form.formState.isSubmitting}>
               <Icon name="check" />
               {form.formState.isSubmitting
                 ? t("creating")
@@ -189,16 +199,16 @@ export default function TermsPage() {
         }
       >
         <Field label={t("year")}>
-          <input readOnly value={currentYear.data?.name ?? ""} />
+          <FormInput readOnly value={currentYear.data?.name ?? ""} />
         </Field>
         <Field label={c("name")} error={form.formState.errors.name?.message}>
-          <input placeholder={t("termNamePlaceholder")} {...form.register("name")} />
+          <FormInput placeholder={t("termNamePlaceholder")} {...form.register("name")} />
         </Field>
         <Field label={t("starts")} error={form.formState.errors.startsOn?.message}>
-          <input type="date" {...form.register("startsOn")} />
+          <FormInput type="date" {...form.register("startsOn")} />
         </Field>
         <Field label={t("ends")} error={form.formState.errors.endsOn?.message}>
-          <input type="date" {...form.register("endsOn")} />
+          <FormInput type="date" {...form.register("endsOn")} />
         </Field>
       </RecordFormSheet>
     </>

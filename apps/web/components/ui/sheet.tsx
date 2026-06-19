@@ -29,14 +29,14 @@ const SheetContent = React.forwardRef<
     <SheetPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed inset-y-0 right-0 z-50 flex h-svh max-h-svh flex-col overflow-hidden w-full max-w-[480px] bg-surface-raised border-l border-border shadow-lg',
+        'record-sheet__content fixed inset-y-0 right-0 z-50 flex h-svh max-h-svh w-full max-w-[480px] flex-col overflow-hidden',
         'duration-300 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right',
         className
       )}
       {...props}
     >
       {children}
-      <SheetPrimitive.Close className="absolute right-4 top-4 rounded opacity-70 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-brand">
+      <SheetPrimitive.Close className="record-sheet__close">
         <X className="h-4 w-4" />
         <span className="sr-only">Close</span>
       </SheetPrimitive.Close>
@@ -46,7 +46,7 @@ const SheetContent = React.forwardRef<
 SheetContent.displayName = 'SheetContent'
 
 const SheetHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn('flex shrink-0 flex-col gap-1 px-6 py-4 border-b border-border', className)} {...props} />
+  <div className={cn('record-sheet__header-shell shrink-0', className)} {...props} />
 )
 const SheetTitle = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Title>,
@@ -56,12 +56,24 @@ const SheetTitle = React.forwardRef<
 ))
 SheetTitle.displayName = 'SheetTitle'
 
+const SheetDescription = React.forwardRef<
+  React.ElementRef<typeof SheetPrimitive.Description>,
+  React.ComponentPropsWithoutRef<typeof SheetPrimitive.Description>
+>(({ className, ...props }, ref) => (
+  <SheetPrimitive.Description
+    ref={ref}
+    className={cn('text-base text-text-muted', className)}
+    {...props}
+  />
+))
+SheetDescription.displayName = SheetPrimitive.Description.displayName
+
 const SheetFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn('flex shrink-0 justify-end gap-2 px-6 py-4 border-t border-border', className)} {...props} />
+  <div className={cn('record-sheet__footer-shell shrink-0', className)} {...props} />
 )
 
 const SheetBody = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn('min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4', className)} {...props} />
+  <div className={cn('record-sheet__body-shell min-h-0 flex-1 overflow-y-auto overscroll-contain', className)} {...props} />
 )
 
-export { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetFooter, SheetBody, SheetClose }
+export { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter, SheetBody, SheetClose }

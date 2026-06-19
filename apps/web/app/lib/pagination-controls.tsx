@@ -17,7 +17,7 @@ export function PaginationControls({ page, pageSize, total, onPageChange }: Prop
 
   return (
     <div className="pagination">
-      <span className="muted">
+      <span className="pds-type-body-s-regular muted">
         {t("paginationSummary", {
           from: total === 0 ? 0 : page * pageSize + 1,
           to: Math.min((page + 1) * pageSize, total),
@@ -27,18 +27,18 @@ export function PaginationControls({ page, pageSize, total, onPageChange }: Prop
       <div className="pagination-actions">
         <button
           type="button"
-          className="btn-ghost"
+          className="pds-type-body-m-bold btn-ghost"
           disabled={!canPrev}
           onClick={() => onPageChange(page - 1)}
         >
           {t("previous")}
         </button>
-        <span className="muted">
+        <span className="pds-type-body-s-regular muted">
           {t("pageOf", { page: page + 1, total: totalPages })}
         </span>
         <button
           type="button"
-          className="btn-ghost"
+          className="pds-type-body-m-bold btn-ghost"
           disabled={!canNext}
           onClick={() => onPageChange(page + 1)}
         >

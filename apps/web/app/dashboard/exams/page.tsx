@@ -1,4 +1,5 @@
 "use client";
+import { FormInput } from "../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
@@ -14,8 +15,12 @@ import { RecordFormSheet } from "../../lib/record-sheet";
 import { getSession } from "../../lib/session";
 import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
 import { zodResolver } from "../../lib/zod-resolver";
+import { PdsSelectField } from "../../../components/pds";
+import { EmptyState } from "../../../components/shared/empty-state";
 import { StatusBadge } from "../../../components/shared/badge";
 import { useCurrentAcademicYear } from "../../lib/use-current-academic-year";
+import { ModulePageHeader } from "../module-page-header";
+import { moduleBreadcrumbs } from "../../lib/page-header-utils";
 
 type ExamCycle = {
   id: string;
@@ -32,6 +37,7 @@ const CYCLES_PATH = (tenant: string) => `/tenants/${tenant}/exam-cycles`;
 
 export default function ExamCyclesPage() {
   const t = useTranslations("exams");
+  const nav = useTranslations("nav");
   const c = useTranslations("common");
   const requiredMessage = c("required");
   const permissions = getSession()?.permissions;
@@ -86,11 +92,16 @@ export default function ExamCyclesPage() {
   ];
 
   if (!canManage) {
-    return <p className="muted">{c("empty")}</p>;
+    return <EmptyState icon="quiz" title={c("empty")} />;
   }
 
   return (
     <>
+      <ModulePageHeader
+        navKey="exams"
+        title={t("cyclesTitle")}
+        breadcrumbs={moduleBreadcrumbs("exams", nav, [{ label: t("cycles") }])}
+      />
       <TablePanelHead
         title={t("cyclesTitle")}
         onRefresh={() => void cycles.refetch()}
@@ -126,10 +137,10 @@ export default function ExamCyclesPage() {
         })}
         footer={
           <>
-            <button type="button" className="btn-ghost" onClick={() => setOpen(false)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setOpen(false)}>
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={form.formState.isSubmitting}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={form.formState.isSubmitting}>
               <Icon name="check" />
               {form.formState.isSubmitting ? t("creating") : c("save")}
             </button>
@@ -137,18 +148,27 @@ export default function ExamCyclesPage() {
         }
       >
         <Field label={t("cycleName")} error={form.formState.errors.name?.message}>
-          <input type="text" {...form.register("name")} />
+          <FormInput type="text" {...form.register("name")} />
         </Field>
         <Field label={t("examType")} error={form.formState.errors.examType?.message}>
-          <select {...form.register("examType")}>
-            <option value="term">term</option>
-            <option value="midterm">midterm</option>
-            <option value="final">final</option>
-            <option value="quiz">quiz</option>
-          </select>
+          <PdsSelectField
+            variant="form"
+            value={form.watch("examType")}
+            onValueChange={(value) =>
+              form.setValue("examType", typeof value === "string" ? value : "term", {
+                shouldValidate: true
+              })
+            }
+            options={[
+              { value: "term", label: "term" },
+              { value: "midterm", label: "midterm" },
+              { value: "final", label: "final" },
+              { value: "quiz", label: "quiz" }
+            ]}
+          />
         </Field>
         <Field label={t("academicYear")}>
-          <input readOnly value={currentYear.data?.name ?? ""} />
+          <FormInput readOnly value={currentYear.data?.name ?? ""} />
         </Field>
       </RecordFormSheet>
     </>

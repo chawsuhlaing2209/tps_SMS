@@ -16,6 +16,16 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
         <SecondarySideNav
           groups={[
             {
+              label: t("navSchool"),
+              items: [
+                {
+                  href: "/dashboard/settings/school-schedule",
+                  label: t("schoolSchedule.title"),
+                  icon: "schedule"
+                }
+              ]
+            },
+            {
               label: t("navSystem"),
               items: [
                 {

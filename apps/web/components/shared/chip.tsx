@@ -16,7 +16,7 @@ export type ChipProps = {
  */
 export function Chip({ children, dotColor, className }: ChipProps) {
   return (
-    <span className={cn("chip", className)}>
+    <span className={cn("pds-type-label-s-bold chip", className)}>
       {dotColor ? <span className="chip__dot" style={{ background: dotColor }} aria-hidden /> : null}
       {children}
     </span>

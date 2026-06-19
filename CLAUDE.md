@@ -64,13 +64,13 @@ const mutation = useApiMutation<CreateStudentDto, Student>(
 **Component structure:**
 ```
 apps/web/app/lib/              Padauk UI wrappers (Panel, DataTable, DetailHero, RecordList, …)
-apps/web/app/dashboard/        Shell layout, PageHeader context, top bar, sidebar
+apps/web/app/dashboard/        Shell layout, PageHeader context, in-body chrome, sidebar
 apps/web/components/ui/        shadcn/ui primitives (Dialog, Sheet, Button, Table shell)
 apps/web/components/shared/    ConfirmDialog, AppToast, CheckboxList
 apps/web/app/globals.css       Padauk component classes (.panel, .padauk-table, .btn-primary, …)
 ```
 
-**Page layout:** Publish title/breadcrumbs with `PageHeader` from `app/dashboard/page-header-context.tsx`; the sticky `DashboardTopbar` renders them. Page body uses `.page-stack` → optional `DetailHero` → `.panel` sections.
+**Page layout:** Publish title/breadcrumbs/actions with `PageHeader` from `app/dashboard/page-header-context.tsx`; the layout renders `DashboardPageChrome` (breadcrumb + utilities) and `DashboardPageTitle`. Page body uses `.page-stack` → optional `DetailCard` → `.panel` sections.
 
 **Form pattern:** `react-hook-form` + Zod via `zodResolver` from `app/lib/zod-resolver.ts`. Validate with shared Zod schemas from `@sms/shared`. Create/edit flows use `RecordFormSheet` (shadcn Sheet, 480px).
 

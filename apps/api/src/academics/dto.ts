@@ -137,6 +137,14 @@ export class CreateSubjectDto {
   subjectType?: string;
 
   @IsOptional()
+  @IsString()
+  colorKey?: string;
+
+  @IsOptional()
+  @IsString()
+  iconKey?: string;
+
+  @IsOptional()
   @IsUUID()
   academicYearId?: string;
 
@@ -159,6 +167,14 @@ export class UpdateSubjectDto {
   @IsOptional()
   @IsString()
   subjectType?: string;
+
+  @IsOptional()
+  @IsString()
+  colorKey?: string;
+
+  @IsOptional()
+  @IsString()
+  iconKey?: string;
 
   @IsOptional()
   @IsUUID()

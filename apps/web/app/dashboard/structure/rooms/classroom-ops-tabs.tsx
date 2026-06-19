@@ -1,4 +1,5 @@
 "use client";
+import { FormInput } from "../../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
@@ -7,7 +8,8 @@ import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { DataTable } from "../../../lib/data-table";
 import { Field } from "../../../lib/form";
 import { Icon } from "../../../lib/material-icon";
-import { PersonCard, RecordCardGrid } from "../../../lib/person-card";
+import { EntityList, EntityListItem, PdsSelectField } from "../../../../components/pds";
+import { EmptyState } from "../../../../components/shared/empty-state";
 import { hasAnyPermission } from "../../../lib/permissions";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { getSession } from "../../../lib/session";
@@ -72,6 +74,17 @@ const ATTENDANCE_STATUSES = [
   "leave",
   "half_day"
 ] as const;
+
+function personInitials(name: string) {
+  return (
+    name
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? "")
+      .join("") || "?"
+  );
+}
 
 export function ClassroomOpsTabs({
   classroomId,
@@ -204,7 +217,7 @@ export function ClassroomOpsTabs({
       cell: ({ row }) => (
         <button
           type="button"
-          className="row-action"
+          className="pds-type-body-s-regular row-action"
           onClick={() =>
             setSelectedSessionId((current) =>
               current === row.original.id ? null : row.original.id
@@ -269,26 +282,28 @@ export function ClassroomOpsTabs({
         <section className="panel">
           <TablePanelHead
             title={t("rosterTitle")}
-            help={t("rosterHelp")}
             onRefresh={() => void roster.refetch()}
             onAdd={canEnroll ? () => setEnrollOpen(true) : undefined}
             addLabel={t("enrollStudent")}
           />
+          <p className="pds-type-body-s-regular muted panel-help">{t("rosterHelp")}</p>
           <TablePanelBody
             loading={roster.isLoading}
             error={roster.isError ? c("somethingWrong") : null}
             empty={!roster.data?.length}
           >
-            <RecordCardGrid>
+            <EntityList>
               {(roster.data ?? []).map((student) => (
-                <PersonCard
+                <EntityListItem
                   key={student.id}
-                  name={student.fullName}
-                  secondary={student.admissionNumber ?? undefined}
+                  title={student.fullName}
+                  meta={student.admissionNumber ?? undefined}
+                  initials={personInitials(student.fullName)}
+                  nameForColor={student.fullName}
                   href={`/dashboard/students/${student.id}`}
                 />
               ))}
-            </RecordCardGrid>
+            </EntityList>
           </TablePanelBody>
         </section>
       ) : null}
@@ -319,7 +334,7 @@ export function ClassroomOpsTabs({
 
           {selectedSessionId ? (
             <div className="panel-body">
-              <h3>{t("recordsTitle")}</h3>
+              <h3 className="pds-type-title-xxs-extrabold">{t("recordsTitle")}</h3>
               <TablePanelBody
                 loading={sessionDetail.isLoading}
                 error={sessionDetail.isError ? c("somethingWrong") : null}
@@ -375,10 +390,10 @@ export function ClassroomOpsTabs({
         }}
         footer={
           <>
-            <button type="button" className="btn-ghost" onClick={() => setTakeOpen(false)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setTakeOpen(false)}>
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={openSession.isPending}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={openSession.isPending}>
               <Icon name="fact_check" />
               {openSession.isPending ? t("openingSession") : t("openSession")}
             </button>
@@ -386,17 +401,19 @@ export function ClassroomOpsTabs({
         }
       >
         <Field label={t("sessionDate")}>
-          <input type="date" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)} />
+          <FormInput type="date" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)} />
         </Field>
         <Field label={t("subject")}>
-          <select value={markSubjectId} onChange={(e) => setMarkSubjectId(e.target.value)}>
-            <option value="">{t("selectSubject")}</option>
-            {subjects.data?.map((s) => (
-              <option key={s.subjectId} value={s.subjectId}>
-                {s.subjectName}
-              </option>
-            ))}
-          </select>
+          <PdsSelectField
+            variant="form"
+            value={markSubjectId}
+            onValueChange={(value) => setMarkSubjectId(typeof value === "string" ? value : "")}
+            placeholder={t("selectSubject")}
+            options={(subjects.data ?? []).map((subject) => ({
+              value: subject.subjectId,
+              label: subject.subjectName
+            }))}
+          />
         </Field>
       </RecordFormSheet>
 
@@ -417,7 +434,7 @@ export function ClassroomOpsTabs({
           <>
             <button
               type="button"
-              className="btn-ghost"
+              className="pds-type-body-m-bold btn-ghost"
               onClick={() => {
                 setMarkingSession(null);
                 setMarks({});
@@ -427,7 +444,7 @@ export function ClassroomOpsTabs({
             </button>
             <button
               type="submit"
-              className="btn-primary"
+              className="pds-type-body-m-bold btn-primary"
               disabled={markRecords.isPending || closeSession.isPending}
             >
               <Icon name="check" />
@@ -440,7 +457,7 @@ export function ClassroomOpsTabs({
       >
         <button
           type="button"
-          className="btn-ghost"
+          className="pds-type-body-m-bold btn-ghost"
           onClick={() =>
             setMarks(() => {
               const next: Record<string, string> = {};
@@ -453,25 +470,27 @@ export function ClassroomOpsTabs({
           {t("markAll")}
         </button>
         {roster.isLoading ? (
-          <p className="muted">{c("loading")}</p>
+          <p className="pds-type-body-s-regular muted">{c("loading")}</p>
         ) : !roster.data?.length ? (
-          <p className="muted">{t("noRecords")}</p>
+          <EmptyState compact embedded icon="inbox" title={t("noRecords")} />
         ) : (
           <div className="form-stack">
             {roster.data.map((student) => (
               <Field key={student.id} label={student.fullName}>
-                <select
+                <PdsSelectField
+                  variant="form"
                   value={marks[student.id] ?? "present"}
-                  onChange={(e) =>
-                    setMarks((prev) => ({ ...prev, [student.id]: e.target.value }))
+                  onValueChange={(value) =>
+                    setMarks((prev) => ({
+                      ...prev,
+                      [student.id]: typeof value === "string" ? value : "present"
+                    }))
                   }
-                >
-                  {ATTENDANCE_STATUSES.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </select>
+                  options={ATTENDANCE_STATUSES.map((status) => ({
+                    value: status,
+                    label: status
+                  }))}
+                />
               </Field>
             ))}
           </div>

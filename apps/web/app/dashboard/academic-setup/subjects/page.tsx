@@ -5,18 +5,27 @@ import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
-import { Field } from "../../../lib/form";
 import { Icon } from "../../../lib/material-icon";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { zodResolver } from "../../../lib/zod-resolver";
-import { CheckboxList } from "../../../../components/shared/checkbox-list";
+import { FormField, FormInput } from "../../../../components/shared/form-input";
 import { Chip, ChipGroup } from "../../../../components/shared/chip";
 import { useAcademicYearContext } from "../use-academic-year-context";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
 import { PageHeader } from "../../page-header-context";
 import { TablePanelBody, TablePanelHead } from "../../../lib/table-panel";
 import { gradeBadgeLabel } from "../grade-label";
-import { subjectColor, subjectIcon } from "../../structure/subject-colors";
+import {
+  defaultSubjectColorKey,
+  defaultSubjectIconKey,
+  SUBJECT_COLOR_OPTIONS,
+  SUBJECT_ICON_OPTIONS,
+  subjectColor,
+  subjectIcon,
+  type SubjectColorKey,
+  type SubjectIconKey
+} from "../../structure/subject-colors";
+import { SubjectAppearanceFields } from "./subject-form-fields";
 
 type Grade = { id: string; name: string; status: string };
 type GradeSubject = {
@@ -29,6 +38,8 @@ type SubjectOverview = {
   id: string;
   name: string;
   code: string | null;
+  colorKey: string | null;
+  iconKey: string | null;
   status: string;
   gradeCount: number;
   grades: { id: string; name: string }[];
@@ -37,6 +48,8 @@ type SubjectOverview = {
 type FormValues = {
   name: string;
   code: string;
+  colorKey: SubjectColorKey;
+  iconKey: SubjectIconKey;
   academicYearId: string;
   gradeIds: string[];
 };
@@ -67,7 +80,6 @@ export default function SubjectsPage() {
 
   const currentYear = useCurrentAcademicYear();
   const grades = useApiQuery<Grade[]>((tn) => `/tenants/${tn}/academics/grades`);
-  const mappings = useApiQuery<GradeSubject[]>(MAPPINGS_PATH);
   const { contextYearId } = useAcademicYearContext(currentYear.data);
 
   const subjects = useApiQuery<SubjectOverview[]>((tn) =>
@@ -104,6 +116,8 @@ export default function SubjectsPage() {
       z.object({
         name: z.string().trim().min(1, requiredMessage),
         code: z.string(),
+        colorKey: z.enum(SUBJECT_COLOR_OPTIONS.map((entry) => entry.key) as [SubjectColorKey, ...SubjectColorKey[]]),
+        iconKey: z.enum(SUBJECT_ICON_OPTIONS.map((entry) => entry.key) as [SubjectIconKey, ...SubjectIconKey[]]),
         academicYearId: z.string().uuid(requiredMessage),
         gradeIds: z.array(z.string())
       }),
@@ -113,6 +127,8 @@ export default function SubjectsPage() {
   const defaultValues: FormValues = {
     name: "",
     code: "",
+    colorKey: "azure",
+    iconKey: "maths",
     academicYearId: "",
     gradeIds: []
   };
@@ -124,10 +140,22 @@ export default function SubjectsPage() {
 
   const activeGrades = grades.data?.filter((grade) => grade.status !== "archived") ?? [];
   const selectedGradeIds = form.watch("gradeIds");
+  const colorKey = form.watch("colorKey");
+  const iconKey = form.watch("iconKey");
   const activeSubjects = (subjects.data ?? []).filter((s) => s.status !== "archived");
 
+  const closeSheet = () => {
+    setFormMode(null);
+    form.reset(defaultValues);
+  };
+
   const openCreate = () => {
-    form.reset({ ...defaultValues, academicYearId: contextYearId });
+    form.reset({
+      ...defaultValues,
+      academicYearId: contextYearId,
+      colorKey: "azure",
+      iconKey: "maths"
+    });
     setFormMode({ type: "create" });
   };
 
@@ -135,6 +163,8 @@ export default function SubjectsPage() {
     form.reset({
       name: subject.name,
       code: subject.code ?? "",
+      colorKey: (subject.colorKey as SubjectColorKey | null) ?? defaultSubjectColorKey(subject.name),
+      iconKey: (subject.iconKey as SubjectIconKey | null) ?? defaultSubjectIconKey(subject.name),
       academicYearId: contextYearId,
       gradeIds: subject.grades.map((grade) => grade.id)
     });
@@ -144,6 +174,8 @@ export default function SubjectsPage() {
   const buildPayload = (values: FormValues) => ({
     name: values.name,
     code: values.code || undefined,
+    colorKey: values.colorKey,
+    iconKey: values.iconKey,
     academicYearId: values.academicYearId,
     gradeIds: values.gradeIds
   });
@@ -181,20 +213,21 @@ export default function SubjectsPage() {
         error={error}
         empty={!activeSubjects.length}
       >
-        <table className="setup-subjects-table">
+        <table className="pds-type-body-m-medium padauk-table setup-subjects-table">
           <thead>
             <tr>
-              <th scope="col">{setup("subjectNameColumn")}</th>
-              <th scope="col">{setup("subjectIconColumn")}</th>
-              <th scope="col">{setup("applicableGradesColumn")}</th>
-              <th scope="col" className="setup-subjects-table__actions-col">
+              <th scope="col" className="pds-type-caption-s">{setup("subjectNameColumn")}</th>
+              <th scope="col" className="pds-type-caption-s">{setup("subjectIconColumn")}</th>
+              <th scope="col" className="pds-type-caption-s">{setup("applicableGradesColumn")}</th>
+              <th scope="col" className="pds-type-caption-s setup-subjects-table__actions-col">
                 <span className="sr-only">{t("actions")}</span>
               </th>
             </tr>
           </thead>
           <tbody>
             {activeSubjects.map((subject) => {
-              const colors = subjectColor(subject.name);
+              const colors = subjectColor(subject.name, subject.colorKey);
+              const icon = subjectIcon(subject.name, subject.iconKey);
               return (
                 <tr key={subject.id}>
                   <td>
@@ -203,29 +236,29 @@ export default function SubjectsPage() {
                         className="setup-subjects-table__dot"
                         style={{ background: colors.bg }}
                       />
-                      <span className="setup-subjects-table__title">{subject.name}</span>
+                      <span className="pds-type-body-l-medium setup-subjects-table__title">{subject.name}</span>
                     </div>
                   </td>
                   <td className="setup-subjects-table__icon-cell">
                     <span className="setup-subjects-table__icon" aria-hidden>
-                      <Icon name={subjectIcon(subject.name)} />
+                      <Icon name={icon} size={20} />
                     </span>
                   </td>
-                  <td>
+                  <td className="setup-subjects-table__grades-cell">
                     <ChipGroup>
                       {subject.grades.length ? (
                         subject.grades.map((grade) => (
                           <Chip key={grade.id}>{gradeBadgeLabel(grade.name)}</Chip>
                         ))
                       ) : (
-                        <span className="muted">—</span>
+                        <span className="pds-type-body-s-regular muted">—</span>
                       )}
                     </ChipGroup>
                   </td>
                   <td className="setup-subjects-table__actions-col">
                     <button
                       type="button"
-                      className="btn-outline setup-subjects-table__edit"
+                      className="pds-type-body-m-medium btn-outline setup-subjects-table__edit"
                       onClick={() => openEdit(subject)}
                     >
                       {t("edit")}
@@ -241,12 +274,11 @@ export default function SubjectsPage() {
       <RecordFormSheet
         open={formMode !== null}
         onOpenChange={(open) => {
-          if (!open) {
-            setFormMode(null);
-            form.reset(defaultValues);
-          }
+          if (!open) closeSheet();
         }}
+        headerIcon="menu_book"
         title={formMode?.type === "edit" ? t("editSubjectTitle") : t("addSubjectTitle")}
+        help={t("addSubjectHelp")}
         onSubmit={form.handleSubmit(async (values) => {
           const payload = buildPayload(values);
           if (formMode?.type === "edit") {
@@ -254,49 +286,52 @@ export default function SubjectsPage() {
           } else {
             await create.mutateAsync(payload);
           }
-          setFormMode(null);
-          form.reset(defaultValues);
+          closeSheet();
         })}
         footer={
           <>
-            <button
-              type="button"
-              className="btn-ghost"
-              onClick={() => {
-                setFormMode(null);
-                form.reset(defaultValues);
-              }}
-            >
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={closeSheet}>
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={form.formState.isSubmitting}>
-              <Icon name="check" />
+            <p className="pds-type-body-s-regular muted record-sheet__footer-note">{t("subjectFooterNote")}</p>
+            <button
+              type="submit"
+              className="pds-type-body-m-bold btn-primary"
+              disabled={form.formState.isSubmitting}
+            >
+              <Icon name={formMode?.type === "edit" ? "check" : "add"} />
               {form.formState.isSubmitting
                 ? t("creating")
                 : formMode?.type === "edit"
                   ? c("save")
-                  : t("addSubject")}
+                  : t("createSubject")}
             </button>
           </>
         }
       >
-        <Field label={t("subjectName")} error={form.formState.errors.name?.message}>
-          <input type="text" placeholder={t("subjectNamePlaceholder")} {...form.register("name")} />
-        </Field>
-        <Field label={t("code")} error={form.formState.errors.code?.message}>
-          <input type="text" {...form.register("code")} />
-        </Field>
-        <Field label={t("year")}>
-          <input readOnly value={currentYear.data?.name ?? ""} />
-        </Field>
-        <Field label={t("gradesForSubject")}>
-          <CheckboxList
-            options={activeGrades.map((grade) => ({ id: grade.id, label: grade.name }))}
-            selectedIds={selectedGradeIds}
-            onChange={(gradeIds) => form.setValue("gradeIds", gradeIds, { shouldDirty: true })}
-            emptyMessage={<p className="muted">{t("noGradesYet")}</p>}
+        <FormField
+          label={t("subjectName")}
+          required
+          labelStyle="caps"
+          error={form.formState.errors.name?.message}
+        >
+          <FormInput
+            type="text"
+            placeholder={t("subjectNamePlaceholder")}
+            inputState={form.formState.errors.name ? "error" : "enabled"}
+            {...form.register("name")}
           />
-        </Field>
+        </FormField>
+
+        <SubjectAppearanceFields
+          colorKey={colorKey}
+          iconKey={iconKey}
+          gradeIds={selectedGradeIds}
+          grades={activeGrades}
+          onColorKeyChange={(key) => form.setValue("colorKey", key, { shouldDirty: true })}
+          onIconKeyChange={(key) => form.setValue("iconKey", key, { shouldDirty: true })}
+          onGradeIdsChange={(gradeIds) => form.setValue("gradeIds", gradeIds, { shouldDirty: true })}
+        />
       </RecordFormSheet>
     </>
   );

@@ -1,4 +1,5 @@
 "use client";
+import { FormInput } from "../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
@@ -14,6 +15,7 @@ import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
 import { zodResolver } from "../../lib/zod-resolver";
 import { StatusBadge } from "../../../components/shared/badge";
 import { StatCard, StatGrid } from "../../../components/shared/stat-card";
+import { ModulePageHeader } from "../module-page-header";
 
 type Enquiry = {
   id: string;
@@ -46,6 +48,7 @@ const ENQUIRIES_PATH = (tenant: string) => `/tenants/${tenant}/admissions/enquir
 
 export default function AdmissionsPage() {
   const t = useTranslations("admissions");
+  const nav = useTranslations("nav");
   const c = useTranslations("common");
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -104,6 +107,7 @@ export default function AdmissionsPage() {
 
   return (
     <div className="page-stack">
+      <ModulePageHeader navKey="admissions" title={nav("admissions")} />
       <StatGrid>
         <StatCard
           icon={<Icon name="group_add" size={18} />}
@@ -152,10 +156,10 @@ export default function AdmissionsPage() {
         })}
         footer={
           <>
-            <button type="button" className="btn-ghost" onClick={() => setSheetOpen(false)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setSheetOpen(false)}>
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={form.formState.isSubmitting}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={form.formState.isSubmitting}>
               <Icon name="add" />
               {form.formState.isSubmitting ? c("loading") : t("createEnquiry")}
             </button>
@@ -163,16 +167,16 @@ export default function AdmissionsPage() {
         }
       >
         <Field label={t("prospect")} error={form.formState.errors.prospectName?.message}>
-          <input {...form.register("prospectName")} />
+          <FormInput {...form.register("prospectName")} />
         </Field>
         <Field label={t("guardianPhone")}>
-          <input {...form.register("guardianPhone")} />
+          <FormInput {...form.register("guardianPhone")} />
         </Field>
         <Field label={t("grade")}>
-          <input {...form.register("interestedGrade")} />
+          <FormInput {...form.register("interestedGrade")} />
         </Field>
         <Field label={t("source")} error={form.formState.errors.source?.message}>
-          <input {...form.register("source")} />
+          <FormInput {...form.register("source")} />
         </Field>
         <Field label={t("notes")}>
           <textarea rows={2} {...form.register("notes")} />

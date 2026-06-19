@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import { cn } from "../../lib/utils";
+import { PdsSelectField, type SelectFieldOption } from "../pds/fields/select-field";
+import { PdsDatePickerField, type PdsDatePickerFieldProps } from "../pds/fields/date-picker-field";
 
 /** Figma Input states: enabled, hovered (CSS), disabled, Completed, error. */
 export type InputState = "enabled" | "disabled" | "completed" | "error";
@@ -29,7 +31,7 @@ export const FormInput = React.forwardRef<HTMLInputElement, FormInputProps>(
           ref={ref}
           type={type}
           disabled={isDisabled}
-          className={cn("form-input", inputStateClass(inputState, isDisabled), inputClassName)}
+          className={cn("pds-type-body-m-medium form-input", inputStateClass(inputState, isDisabled), inputClassName)}
           aria-invalid={inputState === "error" ? true : undefined}
           {...props}
         />
@@ -54,7 +56,7 @@ export const FormTextarea = React.forwardRef<HTMLTextAreaElement, FormTextareaPr
         rows={rows}
         disabled={isDisabled}
         className={cn(
-          "form-input form-input--textarea",
+          "pds-type-body-m-medium form-input form-input--textarea",
           inputStateClass(inputState, isDisabled),
           textareaClassName,
           className
@@ -67,34 +69,50 @@ export const FormTextarea = React.forwardRef<HTMLTextAreaElement, FormTextareaPr
 );
 FormTextarea.displayName = "FormTextarea";
 
-export type FormSelectProps = React.SelectHTMLAttributes<HTMLSelectElement> & {
+export type FormSelectProps = {
+  options: SelectFieldOption[];
+  value?: string;
+  onValueChange?: (value: string) => void;
+  placeholder?: string;
   selectClassName?: string;
   inputState?: InputState;
+  disabled?: boolean;
+  className?: string;
+  variant?: "form" | "filter";
 };
 
-export const FormSelect = React.forwardRef<HTMLSelectElement, FormSelectProps>(
-  ({ className, selectClassName, children, inputState = "enabled", disabled, ...props }, ref) => {
-    const isDisabled = disabled || inputState === "disabled";
+export function FormSelect({
+  options,
+  value,
+  onValueChange,
+  placeholder,
+  selectClassName,
+  inputState = "enabled",
+  disabled,
+  className,
+  variant = "form",
+}: FormSelectProps) {
+  return (
+    <div className={cn("form-input-wrap", className)}>
+      <PdsSelectField
+        className={selectClassName}
+        options={options}
+        value={value}
+        onValueChange={(next) => onValueChange?.(typeof next === "string" ? next : "")}
+        placeholder={placeholder}
+        inputState={inputState}
+        disabled={disabled}
+        variant={variant}
+      />
+    </div>
+  );
+}
 
-    return (
-      <select
-        ref={ref}
-        disabled={isDisabled}
-        className={cn(
-          "form-input form-input--select",
-          inputStateClass(inputState, isDisabled),
-          selectClassName,
-          className
-        )}
-        aria-invalid={inputState === "error" ? true : undefined}
-        {...props}
-      >
-        {children}
-      </select>
-    );
-  }
-);
-FormSelect.displayName = "FormSelect";
+export type FormDatePickerProps = PdsDatePickerFieldProps;
+
+export function FormDatePicker(props: FormDatePickerProps) {
+  return <PdsDatePickerField {...props} />;
+}
 
 export type FormFieldProps = {
   label: string;
@@ -131,17 +149,17 @@ export function FormField({
     <div className={cn("form-field-block", className)}>
       <label
         htmlFor={htmlFor}
-        className={cn("form-field-block__label", labelStyle === "caps" && "form-field-block__label--caps")}
+        className={cn("pds-type-body-m-medium form-field-block__label", labelStyle === "caps" && "pds-type-caption-s form-field-block__label--caps")}
       >
         {label}
         {required ? <span className="form-field-block__required"> *</span> : null}
       </label>
       <div className={cn("form-field-block__control", suffix && "form-field-block__control--suffix")}>
         {control}
-        {suffix ? <span className="form-field-block__suffix">{suffix}</span> : null}
+        {suffix ? <span className="pds-type-body-m-medium form-field-block__suffix">{suffix}</span> : null}
       </div>
-      {hint ? <p className="form-field-block__hint muted">{hint}</p> : null}
-      {error ? <p className="form-field-block__error">{error}</p> : null}
+      {hint ? <p className="pds-type-body-s-regular form-field-block__hint muted">{hint}</p> : null}
+      {error ? <p className="pds-type-body-s-regular form-field-block__error">{error}</p> : null}
     </div>
   );
 }
@@ -168,10 +186,10 @@ export function PercentInput({
         max={100}
         step={1}
         inputState={inputState}
-        inputClassName={cn("percent-input__field", inputClassName)}
+        inputClassName={cn("pds-type-body-l-medium pds-type-body-l-medium percent-input__field", inputClassName)}
         {...props}
       />
-      <span className="percent-input__suffix">{suffixText}</span>
+      <span className="pds-type-body-m-medium percent-input__suffix">{suffixText}</span>
     </div>
   );
 }

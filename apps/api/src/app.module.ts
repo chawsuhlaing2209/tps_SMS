@@ -20,6 +20,7 @@ import { IdentityModule } from "./identity/identity.module.js";
 import { LmsModule } from "./lms/lms.module.js";
 import { ReportCardsModule } from "./report-cards/report-cards.module.js";
 import { SalaryModule } from "./salary/salary.module.js";
+import { SchoolScheduleModule } from "./school-schedule/school-schedule.module.js";
 import { StudentsModule } from "./students/students.module.js";
 import { TenancyModule } from "./tenancy/tenancy.module.js";
 import { TimetableModule } from "./timetable/timetable.module.js";
@@ -46,6 +47,7 @@ import { TimetableModule } from "./timetable/timetable.module.js";
     HrModule,
     DepartmentsModule,
     SalaryModule,
+    SchoolScheduleModule,
     DiscountsModule,
     CalendarModule,
     TimetableModule,

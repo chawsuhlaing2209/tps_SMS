@@ -1,6 +1,8 @@
 "use client";
+import { FormInput } from "../../../../components/shared/form-input";
 
 import { mandatoryEnrollmentFeeTypes } from "@sms/shared";
+import { cn } from "../../../../lib/utils";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -12,6 +14,8 @@ import { RecordFormSheet } from "../../../lib/record-sheet";
 import { zodResolver } from "../../../lib/zod-resolver";
 import { PageHeader } from "../../page-header-context";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
+import { CheckBox } from "../../../../components/pds";
+import { EmptyState } from "../../../../components/shared/empty-state";
 import styles from "./fee-structures.module.css";
 
 type Grade = { id: string; name: string; status?: string; sortOrder?: number };
@@ -308,17 +312,17 @@ export default function FeeStructuresPage() {
         description={t("feeStructuresHelp")}
         breadcrumbs={[
           { label: nav("group_business") },
-          { label: nav("finance"), href: "/dashboard/finance/billing" },
+          { label: nav("finance"), href: "/dashboard/finance/invoices" },
           { label: t("feeStructuresTitle") }
         ]}
       />
 
       {!workingYearId ? (
-        <p className="muted">{t("selectAcademicYear")}</p>
+        <p className="pds-type-body-s-regular muted">{t("selectAcademicYear")}</p>
       ) : (
         <div className={styles.layout}>
           <aside className={styles.gradeNav}>
-            <p className={styles.gradeNavLabel}>{t("gradeLevelNav")}</p>
+            <p className={cn("pds-type-label-s-medium", styles.gradeNavLabel)}>{t("gradeLevelNav")}</p>
             {activeGrades.map((grade) => {
               const total = summaryByGrade.get(grade.id) ?? 0;
               const active = grade.id === selectedGradeId;
@@ -330,8 +334,8 @@ export default function FeeStructuresPage() {
                   onClick={() => setSelectedGradeId(grade.id)}
                 >
                   <span>
-                    <span className={styles.gradeNavName}>{grade.name}</span>
-                    <span className={styles.gradeNavAmount}>{formatMmk(total)}</span>
+                    <span className={cn("pds-type-body-m-bold", styles.gradeNavName)}>{grade.name}</span>
+                    <span className={cn("pds-type-body-s-regular", styles.gradeNavAmount)}>{formatMmk(total)}</span>
                   </span>
                   {active ? (
                     <Icon name="check_circle" size={18} className={styles.gradeNavCheck} />
@@ -346,28 +350,28 @@ export default function FeeStructuresPage() {
               <>
                 <section className={styles.hero}>
                   <div>
-                    <p className={styles.heroEyebrow}>
+                    <p className={cn("pds-type-caption-m", styles.heroEyebrow)}>
                       {t("annualLabel")} · {selectedGrade.name}
                     </p>
-                    <p className={styles.heroTotal}>{formatAmount(totalAnnual)}</p>
-                    <p className={styles.heroSub}>{t("annualCurrencyHint")}</p>
+                    <p className={cn("pds-type-display-m", styles.heroTotal)}>{formatAmount(totalAnnual)}</p>
+                    <p className={cn("pds-type-body-m-medium", styles.heroSub)}>{t("annualCurrencyHint")}</p>
                   </div>
                   <div className={styles.heroStats}>
                     <div className={styles.heroStat}>
-                      <span className={styles.heroStatLabel}>{t("perTerm")}</span>
-                      <strong className={styles.heroStatValue}>
+                      <span className={cn("pds-type-label-s-bold", styles.heroStatLabel)}>{t("perTerm")}</span>
+                      <strong className={cn("pds-type-title-s-extrabold", styles.heroStatValue)}>
                         {formatMmk(totalAnnual / 3)}
                       </strong>
                     </div>
                     <div className={styles.heroStat}>
-                      <span className={styles.heroStatLabel}>{t("perMonth")}</span>
-                      <strong className={styles.heroStatValue}>
+                      <span className={cn("pds-type-label-s-bold", styles.heroStatLabel)}>{t("perMonth")}</span>
+                      <strong className={cn("pds-type-title-s-extrabold", styles.heroStatValue)}>
                         {formatMmk(totalAnnual / 12)}
                       </strong>
                     </div>
                     <div className={styles.heroStat}>
-                      <span className={styles.heroStatLabel}>{t("estRevenue")}</span>
-                      <strong className={styles.heroStatValue}>
+                      <span className={cn("pds-type-label-s-bold", styles.heroStatLabel)}>{t("estRevenue")}</span>
+                      <strong className={cn("pds-type-title-s-extrabold", styles.heroStatValue)}>
                         {formatMmk(totalAnnual * (selectedSummary?.studentCount ?? 0))}
                       </strong>
                     </div>
@@ -376,18 +380,18 @@ export default function FeeStructuresPage() {
 
                 <section className={styles.componentsPanel}>
                   <div className={styles.componentsHead}>
-                    <h2 className={styles.componentsTitle}>{t("feeComponents")}</h2>
-                    <button type="button" className={styles.componentsAdd} onClick={openCreate}>
+                    <h2 className={cn("pds-type-title-xs-bold", styles.componentsTitle)}>{t("feeComponents")}</h2>
+                    <button type="button" className={cn("pds-type-body-m-bold", styles.componentsAdd)} onClick={openCreate}>
                       <Icon name="add" />
                       {t("addComponent")}
                     </button>
                   </div>
 
                   {!gradeComponents.length ? (
-                    <p className={`muted ${styles.componentsEmpty}`}>{t("noFeeComponents")}</p>
+                    <EmptyState compact embedded icon="receipt_long" title={t("noFeeComponents")} />
                   ) : (
                     <div className={styles.componentTable}>
-                      <div className={styles.componentTableHead}>
+                      <div className={cn("pds-type-caption-s", styles.componentTableHead)}>
                         <span>{t("feeComponentColumn")}</span>
                         <span className={styles.componentTableAnnualHead}>
                           {t("feeAnnualColumn")}
@@ -408,13 +412,13 @@ export default function FeeStructuresPage() {
                               aria-hidden
                             />
                             <span className={styles.componentTitleRow}>
-                              <span className={styles.componentTitle}>{row.name}</span>
+                              <span className={cn("pds-type-body-m-bold", styles.componentTitle)}>{row.name}</span>
                               {isRequired ? (
-                                <span className={styles.requiredBadge}>{t("requiredBadge")}</span>
+                                <span className={cn("pds-type-label-s-bold", styles.requiredBadge)}>{t("requiredBadge")}</span>
                               ) : null}
                             </span>
                           </div>
-                          <span className={styles.componentAmount}>
+                          <span className={cn("pds-type-body-m-bold", styles.componentAmount)}>
                             {formatAmount(row.annualAmount)}
                           </span>
                           <div className={styles.shareCell}>
@@ -427,11 +431,11 @@ export default function FeeStructuresPage() {
                                 }}
                               />
                             </div>
-                            <span className={styles.sharePct}>{row.share}%</span>
+                            <span className={cn("pds-type-body-s-semibold", styles.sharePct)}>{row.share}%</span>
                           </div>
                           <button
                             type="button"
-                            className={`btn-outline ${styles.componentEdit}`}
+                            className={cn("pds-type-body-s-semibold", "btn-outline", styles.componentEdit)}
                             onClick={() => openEdit(row.planId, row.feeItemId)}
                           >
                             {a("edit")}
@@ -446,7 +450,7 @@ export default function FeeStructuresPage() {
             ) : null}
 
             <section className={styles.comparisonPanel}>
-              <h2 className={styles.comparisonTitle}>{t("annualComparisonTitle")}</h2>
+              <h2 className={cn("pds-type-title-s-extrabold", styles.comparisonTitle)}>{t("annualComparisonTitle")}</h2>
               {(summary.data?.grades ?? []).map((row) => {
                 const width =
                   summary.data?.maxTotal && summary.data.maxTotal > 0
@@ -454,11 +458,11 @@ export default function FeeStructuresPage() {
                     : 0;
                 return (
                   <div key={row.gradeId} className={styles.comparisonRow}>
-                    <span className={styles.comparisonLabel}>{row.gradeName}</span>
+                    <span className={cn("pds-type-body-m-medium", styles.comparisonLabel)}>{row.gradeName}</span>
                     <div className={styles.comparisonBar}>
                       <div className={styles.comparisonFill} style={{ width: `${width}%` }} />
                     </div>
-                    <span className={styles.comparisonValue}>{formatMmk(row.totalAnnual)}</span>
+                    <span className={cn("pds-type-body-m-bold", styles.comparisonValue)}>{formatMmk(row.totalAnnual)}</span>
                   </div>
                 );
               })}
@@ -509,10 +513,10 @@ export default function FeeStructuresPage() {
         })}
         footer={
           <>
-            <button type="button" className="btn-ghost" onClick={() => setFormMode(null)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setFormMode(null)}>
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={form.formState.isSubmitting}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={form.formState.isSubmitting}>
               <Icon name="add" />
               {form.formState.isSubmitting ? c("loading") : t("saveComponent")}
             </button>
@@ -521,7 +525,7 @@ export default function FeeStructuresPage() {
       >
         {formMode?.type === "create" ? (
           <Field label={t("componentName")} error={form.formState.errors.name?.message}>
-            <input
+            <FormInput
               {...form.register("name")}
               placeholder={t("componentNamePlaceholder")}
             />
@@ -529,13 +533,13 @@ export default function FeeStructuresPage() {
         ) : null}
 
         <div>
-          <p className={styles.modalSectionLabel}>{t("billingFrequency")}</p>
+          <p className={cn("pds-type-label-s-medium", styles.modalSectionLabel)}>{t("billingFrequency")}</p>
           <div className={styles.pillRow}>
             {BILLING_TYPES.map((value) => (
               <button
                 key={value}
                 type="button"
-                className={`${styles.pill} ${billingType === value ? styles.pillActive : ""}`}
+                className={cn("pds-type-body-s-semibold", styles.pill, billingType === value && styles.pillActive)}
                 onClick={() => form.setValue("billingType", value, { shouldDirty: true })}
               >
                 {t(`billingTypes.${value}`)}
@@ -545,8 +549,8 @@ export default function FeeStructuresPage() {
         </div>
 
         <Field label={t("annualAmount")} error={form.formState.errors.amount?.message}>
-          <input type="number" step="1" {...form.register("amount")} />
-          <p className={styles.amountHint}>
+          <FormInput type="number" step="1" {...form.register("amount")} />
+          <p className={cn("pds-type-body-s-regular", styles.amountHint)}>
             {t("amountSplitHint", {
               term: formatMmk(annualPreview / 3),
               month: formatMmk(annualPreview / 12)
@@ -555,8 +559,8 @@ export default function FeeStructuresPage() {
         </Field>
 
         <div>
-          <p className={styles.modalSectionLabel}>{t("applyToGrades")}</p>
-          <p className="muted">{t("applyToGradesHelp")}</p>
+          <p className={cn("pds-type-label-s-medium", styles.modalSectionLabel)}>{t("applyToGrades")}</p>
+          <p className="pds-type-body-s-regular muted">{t("applyToGradesHelp")}</p>
           <div className={`${styles.pillRow} ${styles.gradePillRow}`} style={{ marginTop: 12 }}>
             {activeGrades.map((grade) => {
               const selected = form.watch("gradeIds").includes(grade.id);
@@ -564,7 +568,7 @@ export default function FeeStructuresPage() {
                 <button
                   key={grade.id}
                   type="button"
-                  className={`${styles.gradePill} ${selected ? styles.gradePillActive : ""}`}
+                  className={cn("pds-type-body-s-semibold", styles.gradePill, selected && styles.gradePillActive)}
                   onClick={() => toggleGrade(grade.id)}
                 >
                   {selected ? <Icon name="check" size={14} /> : null}
@@ -577,22 +581,29 @@ export default function FeeStructuresPage() {
             {t("selectAllGrades")}
           </button>
           {form.formState.errors.gradeIds ? (
-            <p className="error-text">{form.formState.errors.gradeIds.message}</p>
+            <p className="pds-type-body-m-medium error-text">{form.formState.errors.gradeIds.message}</p>
           ) : null}
         </div>
 
         {formMode?.type === "create" ? (
           <div className={styles.requiredToggle}>
             <span>
-              <span className={styles.requiredToggleTitle}>{t("markRequired")}</span>
-              <span className={styles.requiredToggleHelp}>{t("markRequiredHelp")}</span>
+              <span className={cn("pds-type-body-m-medium", styles.requiredToggleTitle)}>{t("markRequired")}</span>
+              <span className={cn("pds-type-body-s-regular", styles.requiredToggleHelp)}>{t("markRequiredHelp")}</span>
             </span>
-            <input type="checkbox" {...form.register("required")} />
+            <CheckBox
+              checked={form.watch("required")}
+              showLabel={false}
+              showDescription={false}
+              onCheckedChange={(checked) =>
+                form.setValue("required", checked, { shouldValidate: true })
+              }
+            />
           </div>
         ) : null}
 
         {formError ? (
-          <p className="error-text" role="alert">
+          <p className="pds-type-body-m-medium error-text" role="alert">
             {formError}
           </p>
         ) : null}

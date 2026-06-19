@@ -1,4 +1,5 @@
 "use client";
+import { FormDatePicker, FormInput } from "../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
@@ -14,6 +15,8 @@ import { RecordFormSheet } from "../../lib/record-sheet";
 import { getSession } from "../../lib/session";
 import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
 import { zodResolver } from "../../lib/zod-resolver";
+import { ModulePageHeader } from "../module-page-header";
+import { PdsSelectField } from "../../../components/pds";
 import { useCurrentAcademicYear } from "../../lib/use-current-academic-year";
 
 type CalendarEvent = {
@@ -44,6 +47,7 @@ const CALENDAR_PATH = (tenant: string) => `/tenants/${tenant}/calendar`;
 
 export default function CalendarPage() {
   const t = useTranslations("calendar");
+  const nav = useTranslations("nav");
   const c = useTranslations("common");
   const requiredMessage = c("required");
   const permissions = getSession()?.permissions;
@@ -165,12 +169,12 @@ export default function CalendarPage() {
       cell: ({ row }) =>
         canManage ? (
           <div style={{ display: "flex", gap: "8px" }}>
-            <button type="button" className="row-action" onClick={() => openEdit(row.original)}>
+            <button type="button" className="pds-type-body-s-regular row-action" onClick={() => openEdit(row.original)}>
               {t("edit")}
             </button>
             <button
               type="button"
-              className="row-action"
+              className="pds-type-body-s-regular row-action"
               disabled={remove.isPending}
               onClick={() => void remove.mutateAsync({ id: row.original.id })}
             >
@@ -183,28 +187,33 @@ export default function CalendarPage() {
 
   return (
     <div className="page-stack">
+      <ModulePageHeader navKey="calendar" title={nav("calendar")} />
       <TablePanelHead
           title={t("listTitle")}
           extra={
             <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
               <label className="form-inline">
-                <input
+                <FormDatePicker
                   type="month"
-                  aria-label={t("month")}
+                  variant="filter"
+                  ariaLabel={t("month")}
+                  placeholder={t("month")}
                   value={month}
-                  onChange={(e) => setMonth(e.target.value)}
+                  onValueChange={setMonth}
                 />
               </label>
               <label className="form-inline">
-                <span className="muted">{t("filterType")}</span>
-                <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-                  <option value="">{t("allTypes")}</option>
-                  {EVENT_TYPES.map((type) => (
-                    <option key={type} value={type}>
-                      {eventTypeLabel(type)}
-                    </option>
-                  ))}
-                </select>
+                <span className="pds-type-body-s-regular muted">{t("filterType")}</span>
+                <PdsSelectField
+                  variant="filter"
+                  value={typeFilter}
+                  onValueChange={(value) => setTypeFilter(typeof value === "string" ? value : "")}
+                  placeholder={t("allTypes")}
+                  options={EVENT_TYPES.map((type) => ({
+                    value: type,
+                    label: eventTypeLabel(type)
+                  }))}
+                />
               </label>
             </div>
           }
@@ -251,7 +260,7 @@ export default function CalendarPage() {
           <>
             <button
               type="button"
-              className="btn-ghost"
+              className="pds-type-body-m-bold btn-ghost"
               onClick={() => {
                 setFormMode(null);
                 form.reset(defaultValues);
@@ -259,7 +268,7 @@ export default function CalendarPage() {
             >
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={form.formState.isSubmitting}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={form.formState.isSubmitting}>
               <Icon name="check" />
               {form.formState.isSubmitting ? t("creating") : c("save")}
             </button>
@@ -267,25 +276,31 @@ export default function CalendarPage() {
         }
       >
         <Field label={t("eventTitle")} error={form.formState.errors.title?.message}>
-          <input type="text" {...form.register("title")} />
+          <FormInput type="text" {...form.register("title")} />
         </Field>
         <Field label={t("eventType")} error={form.formState.errors.eventType?.message}>
-          <select {...form.register("eventType")}>
-            {EVENT_TYPES.map((type) => (
-              <option key={type} value={type}>
-                {eventTypeLabel(type)}
-              </option>
-            ))}
-          </select>
+          <PdsSelectField
+            variant="form"
+            value={form.watch("eventType")}
+            onValueChange={(value) =>
+              form.setValue("eventType", typeof value === "string" ? value : "event", {
+                shouldValidate: true
+              })
+            }
+            options={EVENT_TYPES.map((type) => ({
+              value: type,
+              label: eventTypeLabel(type)
+            }))}
+          />
         </Field>
         <Field label={t("startDate")} error={form.formState.errors.startDate?.message}>
-          <input type="date" {...form.register("startDate")} />
+          <FormInput type="date" {...form.register("startDate")} />
         </Field>
         <Field label={t("endDate")} error={form.formState.errors.endDate?.message}>
-          <input type="date" {...form.register("endDate")} />
+          <FormInput type="date" {...form.register("endDate")} />
         </Field>
         <Field label={t("academicYear")}>
-          <input readOnly value={currentYear.data?.name ?? ""} />
+          <FormInput readOnly value={currentYear.data?.name ?? ""} />
         </Field>
         <Field label={t("eventDescription")} error={form.formState.errors.description?.message}>
           <textarea rows={3} {...form.register("description")} />

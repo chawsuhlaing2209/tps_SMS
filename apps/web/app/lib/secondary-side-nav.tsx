@@ -66,7 +66,7 @@ export function SecondarySideNav({
       {groups.map((group) => (
         <div className="secondary-side-nav__group" key={group.label ?? group.items[0]?.href}>
           {group.label ? (
-            <span className="secondary-side-nav__label">{group.label}</span>
+            <span className="pds-type-caption-s secondary-side-nav__label">{group.label}</span>
           ) : null}
           {group.items.map((item) => {
             const active = item.href === activeHref;
@@ -76,8 +76,8 @@ export function SecondarySideNav({
                 href={item.href}
                 className={
                   active
-                    ? "secondary-side-nav__link secondary-side-nav__link--active"
-                    : "secondary-side-nav__link"
+                    ? "pds-type-body-m-bold secondary-side-nav__link secondary-side-nav__link--active"
+                    : "pds-type-body-m-medium secondary-side-nav__link"
                 }
               >
                 <Icon name={item.icon} className="secondary-side-nav__icon" />

@@ -349,6 +349,8 @@ export const subjects = pgTable("subjects", {
   ...tenantFields,
   name: text("name").notNull(),
   code: text("code"),
+  colorKey: text("color_key"),
+  iconKey: text("icon_key"),
   subjectType: text("subject_type").default("required").notNull(),
   status: recordStatusEnum("status").default("active").notNull()
 });
@@ -597,14 +599,50 @@ export const calendarEvents = pgTable("calendar_events", {
   metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull()
 });
 
+export const schoolOperatingHourBlocks = pgTable(
+  "school_operating_hour_blocks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...tenantFields,
+    label: text("label"),
+    startsAt: text("starts_at").notNull(),
+    endsAt: text("ends_at").notNull(),
+    isPrimary: boolean("is_primary").default(false).notNull(),
+    sortOrder: integer("sort_order").default(0).notNull()
+  },
+  (table) => ({
+    tenantIdx: index("school_operating_hour_blocks_tenant_idx").on(table.tenantId)
+  })
+);
+
+export const schoolScheduleSettings = pgTable(
+  "school_schedule_settings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...tenantFields,
+    shortBreakStartsAt: text("short_break_starts_at"),
+    shortBreakEndsAt: text("short_break_ends_at"),
+    lunchBreakStartsAt: text("lunch_break_starts_at"),
+    lunchBreakEndsAt: text("lunch_break_ends_at"),
+    periodDurationMinutes: integer("period_duration_minutes").default(45).notNull(),
+    workingDays: jsonb("working_days").$type<number[]>().default([1, 2, 3, 4, 5]).notNull()
+  },
+  (table) => ({
+    tenantUnique: uniqueIndex("school_schedule_settings_tenant_unique").on(table.tenantId)
+  })
+);
+
 export const timetablePeriods = pgTable("timetable_periods", {
   id: uuid("id").primaryKey().defaultRandom(),
   ...tenantFields,
   academicYearId: uuid("academic_year_id").references(() => academicYears.id).notNull(),
+  operatingHourBlockId: uuid("operating_hour_block_id").references(() => schoolOperatingHourBlocks.id),
   name: text("name").notNull(),
   startsAt: text("starts_at").notNull(),
   endsAt: text("ends_at").notNull(),
-  sortOrder: integer("sort_order").default(0).notNull()
+  sortOrder: integer("sort_order").default(0).notNull(),
+  periodType: text("period_type").default("lesson").notNull(),
+  isBreak: boolean("is_break").default(false).notNull()
 });
 
 export const timetableSlots = pgTable("timetable_slots", {

@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "../../../components/shared/confirm-dialog";
+import { EmptyState } from "../../../components/shared/empty-state";
+import { Button } from "../../../components/ui/button";
 import { useApiMutation, useApiQuery } from "../../lib/api";
 import { Icon } from "../../lib/material-icon";
 import { hasAnyPermission } from "../../lib/permissions";
@@ -225,19 +227,21 @@ export default function SchoolStructurePage() {
   };
 
   if (currentYear.isLoading || years.isLoading) {
-    return <p className="muted">{c("loading")}</p>;
+    return <p className="pds-type-body-s-regular muted">{c("loading")}</p>;
   }
 
   if (!currentYear.data) {
     return (
-      <div className="structure-empty">
-        <h2>{t("structureEmptyTitle")}</h2>
-        <p className="muted">{t("structureEmptyHelp")}</p>
-        <Link href="/dashboard/academic-setup/years" className="btn-primary">
-          <Icon name="settings" />
-          {t("manageYears")}
-        </Link>
-      </div>
+      <EmptyState
+        icon="account_tree"
+        title={t("structureEmptyTitle")}
+        description={t("structureEmptyHelp")}
+        action={
+          <Button buttonType="filled" buttonColor="secondary" prefixIcon="settings" asChild>
+            <Link href="/dashboard/academic-setup/years">{t("manageYears")}</Link>
+          </Button>
+        }
+      />
     );
   }
 
@@ -257,9 +261,9 @@ export default function SchoolStructurePage() {
 
       <section className="structure-year-banner">
         <div className="structure-year-banner__main">
-          <p className="structure-year-banner__label">{t("academicYearLabel")}</p>
-          <h3>{yearOverview?.name ?? currentYear.data.name}</h3>
-          <p className="structure-year-banner__meta">
+          <p className="pds-type-caption-m structure-year-banner__label">{t("academicYearLabel")}</p>
+          <h2 className="pds-type-title-xl-extrabold">{yearOverview?.name ?? currentYear.data.name}</h2>
+          <p className="pds-type-body-m-medium structure-year-banner__meta">
             {yearOverview
               ? formatDateRange(yearOverview.startsOn, yearOverview.endsOn)
               : formatDateRange(currentYear.data.startsOn, currentYear.data.endsOn)}
@@ -268,15 +272,15 @@ export default function SchoolStructurePage() {
           </p>
         </div>
         <div className="structure-year-stats">
-          <div className="structure-stat">
+          <div className="pds-type-title-m-extrabold structure-stat">
             <strong>{yearOverview?.gradeCount ?? gradesInYearCount}</strong>
             <span>{t("statGrades")}</span>
           </div>
-          <div className="structure-stat">
+          <div className="pds-type-title-m-extrabold structure-stat">
             <strong>{yearOverview?.classroomCount ?? 0}</strong>
             <span>{t("statRooms")}</span>
           </div>
-          <div className="structure-stat">
+          <div className="pds-type-title-m-extrabold structure-stat">
             <strong>{subjectsOverview.data?.length ?? 0}</strong>
             <span>{t("statSubjects")}</span>
           </div>
@@ -304,7 +308,7 @@ export default function SchoolStructurePage() {
             );
           })}
           {!activeGrades.length ? (
-            <p className="muted">{t("structureNoGrades")}</p>
+            <EmptyState compact embedded icon="school" title={t("structureNoGrades")} />
           ) : null}
         </section>
       </div>
@@ -313,7 +317,7 @@ export default function SchoolStructurePage() {
         <section className="structure-rooms">
           <div className="structure-grade-head">
             <div className="structure-grade-head__title">
-              <h3>{t("gradeTitleWithStudents", { grade: selectedGrade.name, count: selectedGrade.studentCount })}</h3>
+              <h3 className="pds-type-title-xxs-extrabold">{t("gradeTitleWithStudents", { grade: selectedGrade.name, count: selectedGrade.studentCount })}</h3>
             </div>
             <div className="structure-segment-tabs" role="tablist" aria-label={t("gradeViewsLabel")}>
               {gradeTabs.map((tab) => {
@@ -342,17 +346,26 @@ export default function SchoolStructurePage() {
           {activeTab === "classrooms" ? (
             <div className="structure-tab-panel" role="tabpanel">
               {canManage && !classrooms.data?.length && !classrooms.isLoading ? (
-                <div className="structure-empty structure-empty--compact">
-                  <p className="muted">{t("structureNoRooms")}</p>
-                  <button type="button" className="btn-primary" onClick={openCreate}>
-                    <Icon name="add" />
-                    {t("addClassroom")}
-                  </button>
-                </div>
+                <EmptyState
+                  compact
+                  embedded
+                  icon="meeting_room"
+                  title={t("structureNoRooms")}
+                  action={
+                    <Button
+                      buttonType="filled"
+                      buttonColor="secondary"
+                      prefixIcon="add"
+                      onClick={openCreate}
+                    >
+                      {t("addClassroom")}
+                    </Button>
+                  }
+                />
               ) : null}
 
               {classrooms.isLoading ? (
-                <p className="muted">{c("loading")}</p>
+                <p className="pds-type-body-s-regular muted">{c("loading")}</p>
               ) : classrooms.data?.length ? (
                 <div className="structure-room-grid">
                   {(classrooms.data ?? [])
@@ -362,18 +375,18 @@ export default function SchoolStructurePage() {
                       return (
                         <article key={room.id} className="structure-room-card">
                           <div className="structure-room-card__head">
-                            <span className="structure-room-card__mark" style={{ background: accent }}>
+                            <span className="pds-type-title-s-extrabold structure-room-card__mark" style={{ background: accent }}>
                               {roomLetter(room.name)}
                             </span>
                             <div>
                               <h4>{room.name}</h4>
-                              <p className="structure-room-card__count">
+                              <p className="pds-type-body-s-regular structure-room-card__count">
                                 {t("roomStudentCount", { count: room.studentCount })}
                               </p>
                             </div>
                           </div>
-                          <p className="structure-room-card__teacher-label">{t("homeroomTeacher")}</p>
-                          <p className="structure-room-card__teacher-name">
+                          <p className="pds-type-body-s-regular structure-room-card__teacher-label">{t("homeroomTeacher")}</p>
+                          <p className="pds-type-body-m-medium structure-room-card__teacher-name">
                             {room.classTeacherName ?? "—"}
                           </p>
                           <div className="structure-room-card__subjects">
@@ -390,13 +403,13 @@ export default function SchoolStructurePage() {
                               );
                             })}
                             {!room.subjects?.length ? (
-                              <span className="muted">{t("noSubjectsYet")}</span>
+                              <span className="pds-type-body-s-regular muted">{t("noSubjectsYet")}</span>
                             ) : null}
                           </div>
                           <div className="structure-room-card__footer">
                             <Link
                               href={`/dashboard/structure/rooms/${room.id}`}
-                              className="structure-room-card__link"
+                              className="pds-type-body-s-regular structure-room-card__link"
                             >
                               {t("openClassroom")}
                             </Link>
@@ -406,14 +419,12 @@ export default function SchoolStructurePage() {
                     })}
                 </div>
               ) : canManage ? null : (
-                <div className="structure-empty structure-empty--compact">
-                  <p className="muted">{t("structureNoRooms")}</p>
-                </div>
+                <EmptyState compact embedded icon="meeting_room" title={t("structureNoRooms")} />
               )}
             </div>
           ) : (
             <div className="structure-tab-panel" role="tabpanel">
-              <div className="structure-tab-placeholder">
+              <div className="pds-type-body-m-medium structure-tab-placeholder">
                 {activeTab === "gradebook" ? t("gradebookComingSoon") : t("leaderboardComingSoon")}
               </div>
             </div>

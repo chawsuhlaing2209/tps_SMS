@@ -1,4 +1,5 @@
 "use client";
+import { FormInput } from "../../../../components/shared/form-input";
 
 import { useTranslations } from "next-intl";
 import Link from "next/link";
@@ -12,6 +13,7 @@ import { RecordFormSheet } from "../../../lib/record-sheet";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
 import { PageHeader } from "../../page-header-context";
 import { FinanceTableShell } from "../finance-table-shell";
+import { formatBillingMonth, formatCreatedAt } from "../format-finance";
 
 type PaymentRow = {
   id: string;
@@ -26,6 +28,10 @@ type PaymentRow = {
   notes: string | null;
   refundableAmount: number | null;
   receiptNumber: string | null;
+  paymentNumber: string | null;
+  createdAt: string;
+  billingMonth: string | null;
+  paymentPlan: "enrollment" | "monthly" | "one_off";
   studentFullName: string | null;
   studentId?: string;
   gradeName: string | null;
@@ -213,39 +219,39 @@ export default function PaymentsPage() {
 
       <section className="fees-metrics" aria-label={t("title")}>
         <article className="fees-metric fees-metric--accent">
-          <span className="fees-metric__label">
+          <span className="pds-type-body-s-semibold fees-metric__label">
             <Icon name="account_balance_wallet" size={16} />
             {t("received")}
-            {termName ? <span className="fees-metric__chip">{termName}</span> : null}
+            {termName ? <span className="pds-type-caption-s fees-metric__chip">{termName}</span> : null}
           </span>
-          <strong className="fees-metric__value">
+          <strong className="pds-type-title-m-extrabold fees-metric__value">
             {compactMMK(metricData?.receivedTotal ?? 0)}
           </strong>
-          <span className="fees-metric__sub">
+          <span className="pds-type-body-s-regular fees-metric__sub">
             {t("transactionCount", { count: metricData?.receivedCount ?? 0 })}
           </span>
         </article>
 
         <article className="fees-metric">
-          <span className="fees-metric__label">
+          <span className="pds-type-body-s-semibold fees-metric__label">
             <Icon name="today" size={16} />
             {t("today")}
           </span>
-          <strong className="fees-metric__value">{compactMMK(metricData?.todayTotal ?? 0)}</strong>
-          <span className="fees-metric__sub">
+          <strong className="pds-type-title-m-extrabold fees-metric__value">{compactMMK(metricData?.todayTotal ?? 0)}</strong>
+          <span className="pds-type-body-s-regular fees-metric__sub">
             {t("receiptsToday", { count: metricData?.todayCount ?? 0 })}
           </span>
         </article>
 
         <article className="fees-metric">
-          <span className="fees-metric__label">
+          <span className="pds-type-body-s-semibold fees-metric__label">
             <Icon name="qr_code_2" size={16} />
             {t("topMethod")}
           </span>
-          <strong className="fees-metric__value fees-metric__value--compact">
+          <strong className="pds-type-title-m-extrabold fees-metric__value fees-metric__value--compact">
             {topMethodLabel}
           </strong>
-          <span className="fees-metric__sub">
+          <span className="pds-type-body-s-regular fees-metric__sub">
             {metricData?.topMethod
               ? t("methodShare", {
                   share: metricData.topMethodShare ?? 0
@@ -255,21 +261,21 @@ export default function PaymentsPage() {
         </article>
 
         <article className="fees-metric">
-          <span className="fees-metric__label">
+          <span className="pds-type-body-s-semibold fees-metric__label">
             <Icon name="trending_up" size={16} />
             {t("avgReceipt")}
           </span>
-          <strong className="fees-metric__value">
+          <strong className="pds-type-title-m-extrabold fees-metric__value">
             {compactMMK(metricData?.averageReceipt ?? 0)}
           </strong>
-          <span className="fees-metric__sub">{t("perTransaction")}</span>
+          <span className="pds-type-body-s-regular fees-metric__sub">{t("perTransaction")}</span>
         </article>
       </section>
 
       <section className="fees-toolbar">
-        <div className="fees-search">
+        <div className="pds-type-body-m-medium fees-search">
           <Icon name="search" size={18} className="fees-search__icon" />
-          <input
+          <FormInput
             type="search"
             value={search}
             onChange={(event) => {
@@ -306,15 +312,18 @@ export default function PaymentsPage() {
         emptyMessage={t("empty")}
       >
         <div className="padauk-table-wrap">
-          <table className="padauk-table">
+          <table className="pds-type-body-m-medium padauk-table">
             <thead>
               <tr>
-                <th>{t("receipt")}</th>
-                <th>{t("date")}</th>
-                <th>{t("student")}</th>
-                <th>{tFinance("method")}</th>
-                <th className="padauk-table__num">{t("amountRecordedBy")}</th>
-                <th className="padauk-table__actions">{tFinance("actions")}</th>
+                <th className="pds-type-caption-s">{t("paymentId")}</th>
+                <th className="pds-type-caption-s">{t("created")}</th>
+                <th className="pds-type-caption-s">{tFinance("billingMonth")}</th>
+                <th className="pds-type-caption-s">{tFinance("paymentPlan")}</th>
+                <th className="pds-type-caption-s">{t("date")}</th>
+                <th className="pds-type-caption-s">{t("student")}</th>
+                <th className="pds-type-caption-s">{tFinance("method")}</th>
+                <th className="pds-type-caption-s padauk-table__num">{t("amountRecordedBy")}</th>
+                <th className="pds-type-caption-s padauk-table__actions">{tFinance("actions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -323,8 +332,11 @@ export default function PaymentsPage() {
                 return (
                   <tr key={row.id}>
                     <td>
-                      <strong>{row.receiptNumber ?? row.referenceNumber ?? "—"}</strong>
+                      <strong>{row.paymentNumber ?? row.receiptNumber ?? row.referenceNumber ?? "—"}</strong>
                     </td>
+                    <td className="padauk-table__muted">{formatCreatedAt(row.createdAt)}</td>
+                    <td>{formatBillingMonth(row.billingMonth)}</td>
+                    <td>{tFinance(`paymentPlanLabels.${row.paymentPlan}`)}</td>
                     <td className="padauk-table__muted">{formatDate(row.paidAt)}</td>
                     <td>
                       <DirectoryMemberCell
@@ -334,13 +346,13 @@ export default function PaymentsPage() {
                       />
                     </td>
                     <td>
-                      <span className={`fees-method fees-method--${row.method}`}>
+                      <span className={`pds-type-body-s-semibold fees-method fees-method--${row.method}`}>
                         <Icon name={METHOD_ICONS[row.method] ?? "payments"} size={14} />
                         {tPay(`paymentMethods.${row.method}`)}
                       </span>
                     </td>
                     <td className="padauk-table__num">
-                      <div className="padauk-table__stack">
+                      <div className="pds-type-body-s-regular padauk-table__stack">
                         <strong className="padauk-table__amount">
                           +{fullNumber(Number(row.amount))}
                         </strong>
@@ -352,7 +364,7 @@ export default function PaymentsPage() {
                         {!row.verifiedAt ? (
                           <button
                             type="button"
-                            className="table-row-action table-row-action--primary"
+                            className="pds-type-body-s-semibold table-row-action table-row-action--primary"
                             disabled={verify.isPending}
                             onClick={() => openVerify(row)}
                           >
@@ -364,7 +376,7 @@ export default function PaymentsPage() {
                         (row.refundableAmount ?? 0) > 0 ? (
                           <button
                             type="button"
-                            className="table-row-action"
+                            className="pds-type-body-s-semibold table-row-action"
                             onClick={() => openRefund(row)}
                           >
                             {tFinance("refundPayment")}
@@ -373,7 +385,7 @@ export default function PaymentsPage() {
                         {row.invoiceId ? (
                           <Link
                             href={`/dashboard/finance/invoices/${row.invoiceId}`}
-                            className="table-row-action"
+                            className="pds-type-body-s-semibold table-row-action"
                           >
                             <Icon name="visibility" size={16} />
                             {t("viewInvoice")}
@@ -406,12 +418,12 @@ export default function PaymentsPage() {
           help={verifyTarget.invoiceNumber ?? undefined}
           footer={
             <>
-              <button type="button" className="btn-ghost" onClick={closeVerify}>
+              <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={closeVerify}>
                 {c("cancel")}
               </button>
               <button
                 type="button"
-                className="btn-primary"
+                className="pds-type-body-m-bold btn-primary"
                 disabled={verify.isPending || !verifyReason.trim()}
                 onClick={async () => {
                   if (!verifyTarget) return;
@@ -453,12 +465,12 @@ export default function PaymentsPage() {
           }
           footer={
             <>
-              <button type="button" className="btn-ghost" onClick={closeRefund}>
+              <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={closeRefund}>
                 {c("cancel")}
               </button>
               <button
                 type="button"
-                className="btn-primary"
+                className="pds-type-body-m-bold btn-primary"
                 disabled={
                   refund.isPending ||
                   !refundReason.trim() ||
@@ -488,7 +500,7 @@ export default function PaymentsPage() {
           }
         >
           <Field label={tFinance("refundAmount")}>
-            <input
+            <FormInput
               type="number"
               step="0.01"
               min={0.01}
@@ -498,7 +510,7 @@ export default function PaymentsPage() {
             />
           </Field>
           <Field label={tFinance("paidAt")}>
-            <input
+            <FormInput
               type="datetime-local"
               value={refundPaidAt}
               onChange={(e) => setRefundPaidAt(e.target.value)}
@@ -506,7 +518,7 @@ export default function PaymentsPage() {
           </Field>
           {needsTxnId ? (
             <Field label={tFinance("transactionId")}>
-              <input
+              <FormInput
                 value={refundTxnId}
                 onChange={(e) => setRefundTxnId(e.target.value)}
                 placeholder={tFinance("transactionIdPlaceholder")}
@@ -514,7 +526,7 @@ export default function PaymentsPage() {
             </Field>
           ) : null}
           <Field label={tFinance("refundReason")}>
-            <input
+            <FormInput
               value={refundReason}
               onChange={(e) => setRefundReason(e.target.value)}
               placeholder={tFinance("refundReasonPlaceholder")}
