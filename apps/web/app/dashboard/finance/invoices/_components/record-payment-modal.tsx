@@ -5,7 +5,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { paymentMethods, type PaymentMethod } from "@sms/shared";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
-import { useApiMutation } from "../../../../lib/api";
+import { useApiMutation, useApiQuery } from "../../../../lib/api";
 import { Icon } from "../../../../lib/material-icon";
 import { toastError, toastSuccess } from "../../../../lib/toast";
 import { PdsSelectField } from "../../../../../components/pds";
@@ -64,9 +64,9 @@ type RecordPaymentModalProps = {
 } & (
   | {
       variant: "roster";
-      rows: RosterRow[];
       initialStudentId: string | null;
       academicYearId: string;
+      gradeId?: string;
     }
   | {
       variant: "invoice";
@@ -81,8 +81,26 @@ export function RecordPaymentModal(props: RecordPaymentModalProps) {
   const tFinance = useTranslations("finance");
   const tPay = useTranslations("enrollments.paymentMethods");
 
+  const owingQuery = useMemo(() => {
+    if (props.variant !== "roster" || !props.academicYearId) return null;
+    const params = new URLSearchParams({
+      academicYearId: props.academicYearId,
+      owingOnly: "true",
+      limit: "500"
+    });
+    if (props.gradeId) params.set("gradeId", props.gradeId);
+    return params.toString();
+  }, [props]);
+
+  const owingRoster = useApiQuery<{ rows: RosterRow[] }>(
+    (tenant) =>
+      open && props.variant === "roster" && owingQuery
+        ? `/tenants/${tenant}/finance/billing/roster?${owingQuery}`
+        : null
+  );
+
   const owing =
-    props.variant === "roster" ? props.rows.filter((row) => row.balance > 0) : [];
+    props.variant === "roster" ? (owingRoster.data?.rows ?? []) : [];
 
   const [studentId, setStudentId] = useState("");
   const [amount, setAmount] = useState("");

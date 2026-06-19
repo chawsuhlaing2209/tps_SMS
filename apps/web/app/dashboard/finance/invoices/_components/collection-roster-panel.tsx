@@ -2,17 +2,18 @@
 import { FormInput } from "../../../../../components/shared/form-input";
 
 import { useTranslations } from "next-intl";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useApiQuery } from "../../../../lib/api";
 import { DirectoryMemberCell } from "../../../../lib/data-table";
 import { Icon } from "../../../../lib/material-icon";
+import { PaginationControls } from "../../../../lib/pagination-controls";
 import { useCurrentAcademicYear } from "../../../../lib/use-current-academic-year";
 import { Badge, type BadgeTone } from "../../../../../components/shared/badge";
 import { FinanceTableShell } from "../../finance-table-shell";
 import { PadaukSortHeader, usePadaukSort } from "../../table-sort";
 import { BillingInvoicePreviewModal } from "./invoice-preview-modal";
 import { InvoicesBillingMonthFilter } from "./invoices-actions-provider";
-import { RecordPaymentModal, type RosterRow } from "./record-payment-modal";
+import { RecordPaymentModal } from "./record-payment-modal";
 
 type Roster = {
   academicYear: { id: string; name: string };
@@ -28,13 +29,17 @@ type Roster = {
     collectionRate: number;
     totalStudents: number;
   };
-  rows: RosterRow[];
+  rows: import("./record-payment-modal").RosterRow[];
+  total: number;
+  limit: number;
+  offset: number;
 };
 
 type StatusFilter = "" | "paid" | "partial" | "due" | "overdue";
 
+const PAGE_SIZE = 50;
 const STATUS_FILTERS: StatusFilter[] = ["", "paid", "partial", "due", "overdue"];
-const STATUS_TONES: Record<RosterRow["status"], BadgeTone> = {
+const STATUS_TONES: Record<import("./record-payment-modal").RosterRow["status"], BadgeTone> = {
   paid: "success",
   partial: "warning",
   due: "info",
@@ -51,33 +56,7 @@ function fullNumber(value: number) {
   return Math.round(value).toLocaleString("en-US");
 }
 
-const STATUS_SORT_RANK: Record<RosterRow["status"], number> = {
-  overdue: 0,
-  due: 1,
-  partial: 2,
-  paid: 3
-};
-
 type CollectionSortKey = "student" | "status" | "balance";
-
-function sortCollectionRows(
-  rows: RosterRow[],
-  sortKey: CollectionSortKey,
-  sortDir: "asc" | "desc"
-) {
-  const direction = sortDir === "asc" ? 1 : -1;
-  return [...rows].sort((a, b) => {
-    let cmp = 0;
-    if (sortKey === "student") {
-      cmp = a.studentFullName.localeCompare(b.studentFullName);
-    } else if (sortKey === "status") {
-      cmp = STATUS_SORT_RANK[a.status] - STATUS_SORT_RANK[b.status];
-    } else {
-      cmp = a.balance - b.balance;
-    }
-    return cmp * direction;
-  });
-}
 
 export function CollectionRosterPanel() {
   const tFees = useTranslations("finance.feesBilling");
@@ -88,6 +67,7 @@ export function CollectionRosterPanel() {
   const [gradeId, setGradeId] = useState("");
   const [status, setStatus] = useState<StatusFilter>("");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
   const [collectStudentId, setCollectStudentId] = useState<string | null>(null);
   const [previewInvoiceId, setPreviewInvoiceId] = useState<string | null>(null);
@@ -97,33 +77,30 @@ export function CollectionRosterPanel() {
     initialDir: { balance: "desc" }
   });
 
+  useEffect(() => {
+    setPage(0);
+  }, [gradeId, status, search, sortKey, sortDir]);
+
   const rosterQuery = useMemo(() => {
-    const params = new URLSearchParams({ academicYearId });
+    const params = new URLSearchParams({
+      academicYearId,
+      limit: String(PAGE_SIZE),
+      offset: String(page * PAGE_SIZE),
+      sortBy: sortKey,
+      sortDir
+    });
     if (gradeId) params.set("gradeId", gradeId);
+    if (status) params.set("status", status);
+    if (search.trim()) params.set("search", search.trim());
     return params.toString();
-  }, [academicYearId, gradeId]);
+  }, [academicYearId, gradeId, page, search, sortDir, sortKey, status]);
 
   const roster = useApiQuery<Roster>((tenant) =>
     academicYearId ? `/tenants/${tenant}/finance/billing/roster?${rosterQuery}` : null
   );
 
   const data = roster.data;
-  const allRows = data?.rows ?? [];
-
-  const rows = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    const filtered = allRows.filter((row) => {
-      if (status && row.status !== status) return false;
-      if (!needle) return true;
-      return (
-        row.studentFullName.toLowerCase().includes(needle) ||
-        (row.guardianName?.toLowerCase().includes(needle) ?? false) ||
-        row.admissionNumber.toLowerCase().includes(needle)
-      );
-    });
-    return sortCollectionRows(filtered, sortKey, sortDir);
-  }, [allRows, search, sortDir, sortKey, status]);
-
+  const rows = data?.rows ?? [];
   const metrics = data?.metrics;
   const grades = data?.grades ?? [];
   const termName = data?.term?.name ?? null;
@@ -131,10 +108,6 @@ export function CollectionRosterPanel() {
   const openCollect = (studentId: string | null) => {
     setCollectStudentId(studentId);
     setModalOpen(true);
-  };
-
-  const refetchAll = () => {
-    void roster.refetch();
   };
 
   return (
@@ -377,13 +350,20 @@ export function CollectionRosterPanel() {
         </div>
       </FinanceTableShell>
 
+      <PaginationControls
+        page={page}
+        pageSize={PAGE_SIZE}
+        total={data?.total ?? 0}
+        onPageChange={setPage}
+      />
+
       <RecordPaymentModal
         open={modalOpen}
         onOpenChange={setModalOpen}
         variant="roster"
-        rows={allRows}
         initialStudentId={collectStudentId}
         academicYearId={academicYearId}
+        gradeId={gradeId || undefined}
         onCollected={() => void roster.refetch()}
       />
 

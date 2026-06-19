@@ -2,9 +2,10 @@
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useApiQuery } from "../../lib/api";
 import { DataTable, DirectoryMemberCell } from "../../lib/data-table";
+import { PaginationControls } from "../../lib/pagination-controls";
 import { hasAnyPermission } from "../../lib/permissions";
 import { getSession } from "../../lib/session";
 import { TablePanelBody, TablePanelHead, DataTableSection } from "../../lib/table-panel";
@@ -23,8 +24,24 @@ type TeacherOverview = {
   subjectCount: number;
 };
 
-const TEACHERS_PATH = (tenant: string) =>
-  `/tenants/${tenant}/hr/staff/overview?employmentRole=teacher`;
+type StaffOverviewPage = {
+  data: TeacherOverview[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+const PAGE_SIZE = 50;
+
+const teachersPath = (tenant: string, page: number, search: string) => {
+  const params = new URLSearchParams({
+    employmentRole: "teacher",
+    limit: String(PAGE_SIZE),
+    offset: String(page * PAGE_SIZE)
+  });
+  if (search.trim()) params.set("search", search.trim());
+  return `/tenants/${tenant}/hr/staff/overview?${params.toString()}`;
+};
 
 export function TeachersDirectory() {
   const t = useTranslations("teachers");
@@ -35,14 +52,19 @@ export function TeachersDirectory() {
   const canView = canManageHr || hasAnyPermission(permissions, ["classroom.manage"]);
 
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
 
-  const queryPath = search.trim()
-    ? (tenant: string) =>
-        `${TEACHERS_PATH(tenant)}&search=${encodeURIComponent(search.trim())}`
-    : TEACHERS_PATH;
+  useEffect(() => {
+    setPage(0);
+  }, [search]);
 
-  const teachers = useApiQuery<TeacherOverview[]>(canView ? queryPath : () => null);
+  const queryPath = useMemo(
+    () => (tenant: string) => teachersPath(tenant, page, search),
+    [page, search]
+  );
+
+  const teachers = useApiQuery<StaffOverviewPage>(canView ? queryPath : () => null);
 
   const columns: ColumnDef<TeacherOverview, unknown>[] = [
     {
@@ -106,16 +128,23 @@ export function TeachersDirectory() {
         <TablePanelBody
           loading={teachers.isLoading}
           error={teachers.isError ? c("somethingWrong") : null}
-          empty={!teachers.data?.length}
+          empty={!teachers.data?.data.length}
         >
           <DataTable
             columns={columns}
-            data={teachers.data ?? []}
+            data={teachers.data?.data ?? []}
             getRowHref={(teacher) => `/dashboard/teachers/${teacher.id}`}
             navigationFrom={{ label: nav("teachers"), href: "/dashboard/teachers" }}
           />
         </TablePanelBody>
       </DataTableSection>
+
+      <PaginationControls
+        page={page}
+        pageSize={PAGE_SIZE}
+        total={teachers.data?.total ?? 0}
+        onPageChange={setPage}
+      />
 
       <TeacherCreateSheet
         open={createOpen}

@@ -6,6 +6,7 @@ import { DB, type Database } from "../db/db.module.js";
 import { roles, sessions, tenants, userRoles, users } from "../db/schema.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
 import type { AssignRoleDto, CreateSessionDto, CreateTenantRoleDto, InviteUserDto, UpdateTenantRoleDto } from "./dto.js";
+import { AuthService } from "./auth.service.js";
 import { PasswordService } from "./password.service.js";
 
 export interface ProvisionedOwner {
@@ -20,7 +21,8 @@ export class IdentityService {
     @Inject(DB) private readonly db: Database,
     private readonly auditService: AuditService,
     private readonly passwordService: PasswordService,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    private readonly authService: AuthService
   ) {}
 
   async seedTenantRoles(tenantId: string) {
@@ -434,6 +436,16 @@ export class IdentityService {
             password: plainPassword
           });
         }
+      }
+
+      if (!dto.email && user.status === "invited") {
+        const { token, expiresAt } = await this.authService.issueActivationToken(tenantId, user.id);
+        return {
+          ...user,
+          credentialsSent: false,
+          activationToken: token,
+          activationExpiresAt: expiresAt
+        };
       }
     }
 

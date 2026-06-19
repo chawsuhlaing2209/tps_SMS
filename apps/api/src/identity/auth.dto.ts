@@ -1,8 +1,9 @@
 import { IsNotEmpty, IsOptional, IsString, IsUUID, MinLength } from "class-validator";
 
 export class ActivateAccountDto {
-  @IsUUID()
-  userId!: string;
+  @IsString()
+  @IsNotEmpty()
+  token!: string;
 
   @IsString()
   @MinLength(10)

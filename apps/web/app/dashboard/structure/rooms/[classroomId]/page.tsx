@@ -87,8 +87,8 @@ export default function StructureRoomPage() {
   const detail = useApiQuery<RoomDetail>(
     (tenant) => `/tenants/${tenant}/classrooms/${classroomId}/room-detail`
   );
-  const teachers = useApiQuery<StaffMember[]>(
-    (tenant) => `/tenants/${tenant}/hr/staff?employmentRole=teacher`
+  const teachers = useApiQuery<{ data: StaffMember[] }>(
+    (tenant) => `/tenants/${tenant}/hr/staff?employmentRole=teacher&limit=200`
   );
 
   const invalidatePaths = useMemo(() => {
@@ -322,7 +322,7 @@ export default function StructureRoomPage() {
             open={editOpen}
             onOpenChange={setEditOpen}
             mode="edit"
-            teachers={teachers.data ?? []}
+            teachers={teachers.data?.data ?? []}
             initialValues={{
               name: data.name,
               room: data.room ?? "",
@@ -362,7 +362,7 @@ export default function StructureRoomPage() {
               }
             }}
             subjectName={assigningSubject?.subjectName ?? ""}
-            teachers={teachers.data ?? []}
+            teachers={teachers.data?.data ?? []}
             initialTeacherStaffId={assigningSubject?.teacherStaffId}
             submitting={assignSubjectTeacher.isPending}
             onSubmit={async (values) => {

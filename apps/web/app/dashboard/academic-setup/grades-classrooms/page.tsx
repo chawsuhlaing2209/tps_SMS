@@ -104,8 +104,8 @@ export default function GradesClassroomsPage() {
     contextYearId ? setupGradesPath(tn, contextYearId) : null
   );
   const subjects = useApiQuery<Subject[]>((tn) => `/tenants/${tn}/academics/subjects`);
-  const teachers = useApiQuery<StaffMember[]>(
-    (tn) => `/tenants/${tn}/hr/staff?employmentRole=teacher`
+  const teachers = useApiQuery<{ data: StaffMember[] }>(
+    (tn) => `/tenants/${tn}/hr/staff?employmentRole=teacher&limit=200`
   );
 
   const activeGrades = useMemo(
@@ -538,7 +538,7 @@ export default function GradesClassroomsPage() {
               })
             }
             placeholder={t("selectGradeChief")}
-            options={(teachers.data ?? []).map((member) => ({
+            options={(teachers.data?.data ?? []).map((member) => ({
               value: member.id,
               label: member.fullName
             }))}
@@ -573,7 +573,7 @@ export default function GradesClassroomsPage() {
           if (!open) setRoomFormMode(null);
         }}
         mode={roomFormMode?.type === "edit" ? "edit" : "create"}
-        teachers={teachers.data ?? []}
+        teachers={teachers.data?.data ?? []}
         initialValues={
           roomFormMode?.type === "edit"
             ? {

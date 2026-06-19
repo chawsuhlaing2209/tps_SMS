@@ -57,7 +57,9 @@ export default function StructureSubjectClassroomPage() {
   const subjects = useApiQuery<ClassroomSubject[]>((tenant) =>
     `/tenants/${tenant}/classrooms/${classroomId}/subjects`
   );
-  const staff = useApiQuery<StaffMember[]>((tenant) => `/tenants/${tenant}/hr/staff?employmentRole=teacher`);
+  const staff = useApiQuery<{ data: StaffMember[] }>((tenant) =>
+    `/tenants/${tenant}/hr/staff?employmentRole=teacher&limit=200`
+  );
   const materials = useApiQuery<LearningMaterial[]>((tenant) =>
     `/tenants/${tenant}/lms/classrooms/${classroomId}/materials`
   );
@@ -68,7 +70,7 @@ export default function StructureSubjectClassroomPage() {
   const subjectRow = subjects.data?.find((row) => row.subjectId === subjectId);
   const grade = grades.data?.find((row) => row.id === classroom.data?.gradeId);
   const teacherName = subjectRow?.teacherStaffId
-    ? (staff.data?.find((member) => member.id === subjectRow.teacherStaffId)?.fullName ?? "—")
+    ? (staff.data?.data?.find((member) => member.id === subjectRow.teacherStaffId)?.fullName ?? "—")
     : "—";
 
   const subjectMaterials = useMemo(

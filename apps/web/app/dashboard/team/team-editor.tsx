@@ -9,6 +9,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useApiMutation, useApiQuery } from "../../lib/api";
 import { DataTable, DirectoryMemberCell } from "../../lib/data-table";
+import { PaginationControls } from "../../lib/pagination-controls";
 import { Field } from "../../lib/form";
 import { Icon } from "../../lib/material-icon";
 import { hasAnyPermission } from "../../lib/permissions";
@@ -51,8 +52,25 @@ type TeamFormValues = {
 
 type FormMode = { type: "create" } | { type: "edit"; staff: StaffOverview };
 
-const STAFF_OVERVIEW_PATH = (tenant: string) =>
-  `/tenants/${tenant}/hr/staff/overview?excludeEmploymentRole=teacher`;
+type StaffOverviewPage = {
+  data: StaffOverview[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+const PAGE_SIZE = 50;
+
+const staffOverviewPath = (tenant: string, page: number, search: string) => {
+  const params = new URLSearchParams({
+    excludeEmploymentRole: "teacher",
+    limit: String(PAGE_SIZE),
+    offset: String(page * PAGE_SIZE)
+  });
+  if (search.trim()) params.set("search", search.trim());
+  return `/tenants/${tenant}/hr/staff/overview?${params.toString()}`;
+};
+
 const ASSIGNABLE_ROLES_PATH = (tenant: string) =>
   `/tenants/${tenant}/hr/assignable-roles?scope=team`;
 const DEPARTMENTS_PATH = (tenant: string) => `/tenants/${tenant}/departments/active`;
@@ -66,15 +84,20 @@ export function TeamEditor() {
 
   const [formMode, setFormMode] = useState<FormMode | null>(null);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
   const [saved, setSaved] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const queryPath = search.trim()
-    ? (tenant: string) =>
-        `${STAFF_OVERVIEW_PATH(tenant)}&search=${encodeURIComponent(search.trim())}`
-    : STAFF_OVERVIEW_PATH;
+  useEffect(() => {
+    setPage(0);
+  }, [search]);
 
-  const staff = useApiQuery<StaffOverview[]>(canView ? queryPath : () => null);
+  const queryPath = useMemo(
+    () => (tenant: string) => staffOverviewPath(tenant, page, search),
+    [page, search]
+  );
+
+  const staff = useApiQuery<StaffOverviewPage>(canView ? queryPath : () => null);
   const roles = useApiQuery<Role[]>((tenant) =>
     canManageHr ? ASSIGNABLE_ROLES_PATH(tenant) : null
   );
@@ -87,7 +110,7 @@ export function TeamEditor() {
       path: `/tenants/${tenant}/hr/staff/provision`,
       init: { method: "POST", body: JSON.stringify(body) }
     }),
-    { invalidatePaths: (_b, tenant) => [STAFF_OVERVIEW_PATH(tenant)] }
+    { invalidatePaths: (_b, tenant) => [`/tenants/${tenant}/hr/staff/overview`] }
   );
 
   const provisionUpdate = useApiMutation(
@@ -95,7 +118,7 @@ export function TeamEditor() {
       path: `/tenants/${tenant}/hr/staff/${staffId}/provision`,
       init: { method: "PATCH", body: JSON.stringify(body) }
     }),
-    { invalidatePaths: (_b, tenant) => [STAFF_OVERVIEW_PATH(tenant)] }
+    { invalidatePaths: (_b, tenant) => [`/tenants/${tenant}/hr/staff/overview`] }
   );
 
   const roleOptions = useMemo(() => {
@@ -260,15 +283,22 @@ export function TeamEditor() {
         <TablePanelBody
           loading={staff.isLoading}
           error={staff.isError ? c("somethingWrong") : null}
-          empty={!staff.data?.length}
+          empty={!staff.data?.data.length}
         >
           <DataTable
             columns={columns}
-            data={staff.data ?? []}
+            data={staff.data?.data ?? []}
             onRowClick={canManageHr ? (member) => openEdit(member) : undefined}
           />
         </TablePanelBody>
       </DataTableSection>
+
+      <PaginationControls
+        page={page}
+        pageSize={PAGE_SIZE}
+        total={staff.data?.total ?? 0}
+        onPageChange={setPage}
+      />
 
       {canManageHr ? (
         <RecordFormSheet

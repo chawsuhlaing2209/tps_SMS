@@ -1,12 +1,18 @@
 import {
   IsString, IsNotEmpty, IsNumber, IsOptional, IsUUID,
-  IsBoolean, IsArray, ValidateNested, IsDateString, IsIn,
+  IsBoolean, IsArray, ValidateNested, IsDateString, IsIn, Min, Max,
 } from 'class-validator'
 import { Type, Transform } from 'class-transformer'
 import { paymentMethods } from '@sms/shared'
 
 function trimString({ value }: { value: unknown }) {
   return typeof value === 'string' ? value.trim() : value
+}
+
+function parseBoolean({ value }: { value: unknown }) {
+  if (value === true || value === 'true' || value === '1') return true
+  if (value === false || value === 'false' || value === '0') return false
+  return value
 }
 
 export class CreateFeeItemDto {
@@ -155,6 +161,11 @@ export class BillingRosterQueryDto {
   @IsUUID() @IsOptional() gradeId?: string
   @IsString() @IsOptional() @IsIn(['paid', 'partial', 'due', 'overdue']) status?: string
   @IsString() @Transform(trimString) @IsOptional() search?: string
+  @IsNumber() @IsOptional() @Type(() => Number) @Min(1) @Max(500) limit?: number
+  @IsNumber() @IsOptional() @Type(() => Number) @Min(0) offset?: number
+  @IsString() @IsOptional() @IsIn(['student', 'status', 'balance']) sortBy?: 'student' | 'status' | 'balance'
+  @IsString() @IsOptional() @IsIn(['asc', 'desc']) sortDir?: 'asc' | 'desc'
+  @IsBoolean() @IsOptional() @Transform(parseBoolean) owingOnly?: boolean
 }
 
 export class CollectPaymentDto {

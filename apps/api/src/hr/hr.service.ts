@@ -11,7 +11,7 @@ import {
   personTypeToRoleKey,
   type PersonType
 } from "@sms/shared";
-import { and, desc, eq, ilike, ne, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, ne, sql } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
 import { DepartmentsService } from "../departments/departments.service.js";
@@ -45,7 +45,7 @@ export class HrService {
     private readonly departmentsService: DepartmentsService
   ) {}
 
-  listStaff(tenantId: string, query: ListStaffQueryDto) {
+  private buildStaffFilters(tenantId: string, query: ListStaffQueryDto) {
     const filters = [eq(staff.tenantId, tenantId)];
 
     if (query.status) {
@@ -64,79 +64,123 @@ export class HrService {
       filters.push(ilike(staff.fullName, `%${query.search}%`));
     }
 
-    const q = this.db
+    return filters;
+  }
+
+  async listStaff(tenantId: string, query: ListStaffQueryDto) {
+    const filters = this.buildStaffFilters(tenantId, query);
+    const limit = Math.min(query.limit ?? 50, 200);
+    const offset = query.offset ?? 0;
+
+    return this.db
       .select()
       .from(staff)
       .where(and(...filters))
-      .orderBy(desc(staff.updatedAt));
+      .orderBy(desc(staff.updatedAt))
+      .limit(limit)
+      .offset(offset);
+  }
 
-    if (query.limit !== undefined) {
-      q.limit(query.limit);
-    }
-    if (query.offset !== undefined) {
-      q.offset(query.offset);
-    }
+  async countStaff(tenantId: string, query: ListStaffQueryDto) {
+    const filters = this.buildStaffFilters(tenantId, query);
+    const [row] = await this.db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(staff)
+      .where(and(...filters));
 
-    return q;
+    return row?.count ?? 0;
   }
 
   async listStaffOverview(tenantId: string, query: ListStaffQueryDto) {
-    const rows = await this.listStaff(tenantId, query);
+    const limit = Math.min(query.limit ?? 50, 200);
+    const offset = query.offset ?? 0;
+    const [rows, total] = await Promise.all([
+      this.listStaff(tenantId, { ...query, limit, offset }),
+      this.countStaff(tenantId, query)
+    ]);
 
-    const enriched = await Promise.all(
-      rows.map(async (member) => {
-        let loginEmail: string | null = null;
-        let loginStatus: string | null = null;
-        let rbacRoleKey: string | null = null;
+    const staffIds = rows.map((member) => member.id);
+    const userIds = rows.map((member) => member.userId).filter((id): id is string => Boolean(id));
 
-        if (member.userId) {
-          const [user] = await this.db
-            .select({ email: users.email, status: users.status })
-            .from(users)
-            .where(and(eq(users.tenantId, tenantId), eq(users.id, member.userId)));
+    const usersById = new Map<string, { email: string | null; status: string }>();
+    const rolesByUserId = new Map<string, string>();
+    const homeroomByStaffId = new Map<string, number>();
+    const subjectByStaffId = new Map<string, number>();
 
-          loginEmail = user?.email ?? null;
-          loginStatus = user?.status ?? null;
+    if (userIds.length > 0) {
+      const userRows = await this.db
+        .select({ id: users.id, email: users.email, status: users.status })
+        .from(users)
+        .where(and(eq(users.tenantId, tenantId), inArray(users.id, userIds)));
 
-          const [roleRow] = await this.db
-            .select({ key: roles.key })
-            .from(userRoles)
-            .innerJoin(roles, eq(userRoles.roleId, roles.id))
-            .where(and(eq(userRoles.tenantId, tenantId), eq(userRoles.userId, member.userId)))
-            .limit(1);
+      for (const user of userRows) {
+        usersById.set(user.id, { email: user.email, status: user.status });
+      }
 
-          rbacRoleKey = roleRow?.key ?? null;
+      const roleRows = await this.db
+        .select({ userId: userRoles.userId, key: roles.key })
+        .from(userRoles)
+        .innerJoin(roles, eq(userRoles.roleId, roles.id))
+        .where(and(eq(userRoles.tenantId, tenantId), inArray(userRoles.userId, userIds)));
+
+      for (const roleRow of roleRows) {
+        if (!rolesByUserId.has(roleRow.userId)) {
+          rolesByUserId.set(roleRow.userId, roleRow.key);
         }
+      }
+    }
 
-        const [homeroomCount] = await this.db
-          .select({ count: sql<number>`count(*)::int` })
-          .from(classrooms)
-          .where(
-            and(eq(classrooms.tenantId, tenantId), eq(classrooms.classTeacherStaffId, member.id))
-          );
+    if (staffIds.length > 0) {
+      const homeroomRows = await this.db
+        .select({
+          staffId: classrooms.classTeacherStaffId,
+          count: sql<number>`count(*)::int`
+        })
+        .from(classrooms)
+        .where(
+          and(
+            eq(classrooms.tenantId, tenantId),
+            inArray(classrooms.classTeacherStaffId, staffIds)
+          )
+        )
+        .groupBy(classrooms.classTeacherStaffId);
 
-        const [subjectCount] = await this.db
-          .select({ count: sql<number>`count(*)::int` })
-          .from(classroomSubjectTeachers)
-          .where(
-            and(
-              eq(classroomSubjectTeachers.tenantId, tenantId),
-              eq(classroomSubjectTeachers.teacherStaffId, member.id)
-            )
-          );
+      for (const row of homeroomRows) {
+        if (row.staffId) homeroomByStaffId.set(row.staffId, row.count);
+      }
 
-        return {
-          ...member,
-          loginEmail,
-          loginStatus,
-          rbacRoleKey,
-          homeroomCount: homeroomCount?.count ?? 0,
-          subjectCount: subjectCount?.count ?? 0
-        };
-      })
-    );
+      const subjectRows = await this.db
+        .select({
+          staffId: classroomSubjectTeachers.teacherStaffId,
+          count: sql<number>`count(*)::int`
+        })
+        .from(classroomSubjectTeachers)
+        .where(
+          and(
+            eq(classroomSubjectTeachers.tenantId, tenantId),
+            inArray(classroomSubjectTeachers.teacherStaffId, staffIds)
+          )
+        )
+        .groupBy(classroomSubjectTeachers.teacherStaffId);
 
-    return enriched;
+      for (const row of subjectRows) {
+        if (row.staffId) subjectByStaffId.set(row.staffId, row.count);
+      }
+    }
+
+    const data = rows.map((member) => {
+      const user = member.userId ? usersById.get(member.userId) : undefined;
+      return {
+        ...member,
+        loginEmail: user?.email ?? null,
+        loginStatus: user?.status ?? null,
+        rbacRoleKey: member.userId ? (rolesByUserId.get(member.userId) ?? null) : null,
+        homeroomCount: homeroomByStaffId.get(member.id) ?? 0,
+        subjectCount: subjectByStaffId.get(member.id) ?? 0
+      };
+    });
+
+    return { data, total, limit, offset };
   }
 
   async getStaff(tenantId: string, staffId: string) {

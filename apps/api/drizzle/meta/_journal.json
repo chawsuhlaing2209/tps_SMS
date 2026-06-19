@@ -141,6 +141,20 @@
       "when": 1783200000000,
       "tag": "0019_timetable_slot_optional_teacher",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1783300000000,
+      "tag": "0020_sessions_token_hash_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1783400000000,
+      "tag": "0021_account_activation_tokens",
+      "breakpoints": true
     }
   ]
 }

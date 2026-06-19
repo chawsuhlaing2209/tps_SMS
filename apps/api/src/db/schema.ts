@@ -227,17 +227,43 @@ export const userRoles = pgTable(
   })
 );
 
-export const sessions = pgTable("sessions", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  tenantId: uuid("tenant_id").references(() => tenants.id),
-  userId: uuid("user_id").references(() => users.id).notNull(),
-  tokenHash: text("token_hash").notNull(),
-  userAgent: text("user_agent"),
-  ipAddress: text("ip_address"),
-  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-  revokedAt: timestamp("revoked_at", { withTimezone: true }),
-  ...timestamps
-});
+export const sessions = pgTable(
+  "sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").references(() => tenants.id),
+    userId: uuid("user_id").references(() => users.id).notNull(),
+    tokenHash: text("token_hash").notNull(),
+    userAgent: text("user_agent"),
+    ipAddress: text("ip_address"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    ...timestamps
+  },
+  (table) => ({
+    tokenHashActiveIdx: index("sessions_token_hash_active_idx")
+      .on(table.tokenHash)
+      .where(sql`${table.revokedAt} IS NULL`)
+  })
+);
+
+export const accountActivationTokens = pgTable(
+  "account_activation_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+    userId: uuid("user_id").references(() => users.id).notNull(),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+  },
+  (table) => ({
+    lookupIdx: index("account_activation_tokens_lookup_idx")
+      .on(table.tenantId, table.tokenHash)
+      .where(sql`${table.usedAt} IS NULL`)
+  })
+);
 
 export const passwordResetTokens = pgTable("password_reset_tokens", {
   id: uuid("id").primaryKey().defaultRandom(),

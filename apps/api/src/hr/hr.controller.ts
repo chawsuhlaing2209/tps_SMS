@@ -47,8 +47,14 @@ export class HrController {
 
   @Get("staff")
   @RequireAnyPermissions("hr.manage", "classroom.manage")
-  listStaff(@Param("tenantId") tenantId: string, @Query() query: ListStaffQueryDto) {
-    return this.hrService.listStaff(tenantId, query);
+  async listStaff(@Param("tenantId") tenantId: string, @Query() query: ListStaffQueryDto) {
+    const [data, total] = await Promise.all([
+      this.hrService.listStaff(tenantId, query),
+      this.hrService.countStaff(tenantId, query)
+    ]);
+    const limit = Math.min(query.limit ?? 50, 200);
+    const offset = query.offset ?? 0;
+    return { data, total, limit, offset };
   }
 
   @Get("staff/overview")

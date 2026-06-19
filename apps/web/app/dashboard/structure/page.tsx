@@ -137,8 +137,8 @@ export default function SchoolStructurePage() {
         : null
   );
 
-  const teachers = useApiQuery<StaffMember[]>(
-    (tenant) => `/tenants/${tenant}/hr/staff?employmentRole=teacher`
+  const teachers = useApiQuery<{ data: StaffMember[] }>(
+    (tenant) => `/tenants/${tenant}/hr/staff?employmentRole=teacher&limit=200`
   );
 
   const yearOverview = years.data?.find((row) => row.id === yearId);
@@ -441,7 +441,7 @@ export default function SchoolStructurePage() {
           }
         }}
         mode={formMode === "edit" ? "edit" : "create"}
-        teachers={teachers.data ?? []}
+        teachers={teachers.data?.data ?? []}
         initialValues={
           formMode === "edit" && editingRoom
             ? {

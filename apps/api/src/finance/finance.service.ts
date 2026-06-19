@@ -1789,6 +1789,7 @@ export class FinanceService {
     const collectionRate = metrics.billed > 0 ? Math.round((metrics.collected / metrics.billed) * 100) : 0
 
     let filtered = rows
+    if (query.owingOnly) filtered = filtered.filter((row) => row.balance > 0)
     if (query.status) filtered = filtered.filter((row) => row.status === query.status)
     if (query.search) {
       const needle = query.search.toLowerCase()
@@ -1800,7 +1801,32 @@ export class FinanceService {
       )
     }
 
-    filtered.sort((a, b) => a.studentFullName.localeCompare(b.studentFullName))
+    const statusSortRank: Record<RosterRow['status'], number> = {
+      overdue: 0,
+      due: 1,
+      partial: 2,
+      paid: 3,
+    }
+    const sortBy = query.sortBy ?? 'student'
+    const sortDir = query.sortDir ?? 'asc'
+    const direction = sortDir === 'asc' ? 1 : -1
+
+    filtered.sort((a, b) => {
+      let cmp = 0
+      if (sortBy === 'student') {
+        cmp = a.studentFullName.localeCompare(b.studentFullName)
+      } else if (sortBy === 'status') {
+        cmp = statusSortRank[a.status] - statusSortRank[b.status]
+      } else {
+        cmp = a.balance - b.balance
+      }
+      return cmp * direction
+    })
+
+    const total = filtered.length
+    const limit = query.owingOnly ? Math.min(query.limit ?? 500, 500) : Math.min(query.limit ?? 50, 200)
+    const offset = query.offset ?? 0
+    const pagedRows = filtered.slice(offset, offset + limit)
 
     const gradeList = [...gradeSet.values()].sort((a, b) => a.sortOrder - b.sortOrder)
 
@@ -1809,7 +1835,10 @@ export class FinanceService {
       term: currentTerm ? { id: currentTerm.id, name: currentTerm.name } : null,
       grades: gradeList.map((grade) => ({ id: grade.id, name: grade.name })),
       metrics: { ...metrics, collectionRate, totalStudents: rows.length },
-      rows: filtered,
+      rows: pagedRows,
+      total,
+      limit,
+      offset,
     }
   }
 
