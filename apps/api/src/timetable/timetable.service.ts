@@ -48,7 +48,8 @@ export class TimetableService {
       .select()
       .from(timetablePeriods)
       .where(and(...filters))
-      .orderBy(timetablePeriods.sortOrder);
+      .orderBy(timetablePeriods.sortOrder)
+      .limit(200);
   }
 
   async createPeriod(tenantId: string, actorUserId: string, dto: CreatePeriodDto) {
@@ -194,7 +195,8 @@ export class TimetableService {
       .innerJoin(timetablePeriods, eq(timetableSlots.periodId, timetablePeriods.id))
       .leftJoin(subjects, eq(timetableSlots.subjectId, subjects.id))
       .leftJoin(staff, eq(timetableSlots.teacherStaffId, staff.id))
-      .where(and(...filters));
+      .where(and(...filters))
+      .limit(500);
   }
 
   async getClassroomOverview(tenantId: string, classroomId: string, academicYearId?: string) {

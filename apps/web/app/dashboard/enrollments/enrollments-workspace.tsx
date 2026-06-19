@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { type ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -9,9 +10,14 @@ import { useApiQuery, useReferenceApiQuery } from "../../lib/api";
 import { useCurrentAcademicYear } from "../../lib/use-current-academic-year";
 import { DataTable } from "../../lib/data-table";
 import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
-import { EnrollmentWizard } from "./enrollment-wizard";
+import { WorkspaceLoading } from "../../lib/workspace-loading";
 import { PdsSelectField } from "../../../components/pds";
 import { StatusBadge } from "../../../components/shared/badge";
+
+const EnrollmentWizard = dynamic(
+  () => import("./enrollment-wizard").then((module) => module.EnrollmentWizard),
+  { loading: () => <WorkspaceLoading /> }
+);
 
 type Grade = { id: string; name: string };
 type Classroom = { id: string; name: string; gradeId: string; academicYearId: string };

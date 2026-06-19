@@ -8,6 +8,7 @@ import { NotificationsService } from "../notifications/notifications.service.js"
 import type { AssignRoleDto, CreateSessionDto, CreateTenantRoleDto, InviteUserDto, UpdateTenantRoleDto } from "./dto.js";
 import { AuthService } from "./auth.service.js";
 import { PasswordService } from "./password.service.js";
+import { TenantContextCache } from "./tenant-context.cache.js";
 
 export interface ProvisionedOwner {
   userId: string;
@@ -22,7 +23,8 @@ export class IdentityService {
     private readonly auditService: AuditService,
     private readonly passwordService: PasswordService,
     private readonly notifications: NotificationsService,
-    private readonly authService: AuthService
+    private readonly authService: AuthService,
+    private readonly tenantContextCache: TenantContextCache
   ) {}
 
   async seedTenantRoles(tenantId: string) {
@@ -55,7 +57,7 @@ export class IdentityService {
   }
 
   listTenantUsers(tenantId: string) {
-    return this.db.select().from(users).where(eq(users.tenantId, tenantId));
+    return this.db.select().from(users).where(eq(users.tenantId, tenantId)).limit(200);
   }
 
   listTenantRoles(tenantId: string) {
@@ -257,6 +259,10 @@ export class IdentityService {
         ...(dto.status ? { status: dto.status } : {})
       }
     });
+
+    if (permissions || dto.status) {
+      this.tenantContextCache.invalidateTenant(tenantId);
+    }
 
     return this.getTenantRole(tenantId, roleId);
   }
@@ -506,6 +512,8 @@ export class IdentityService {
       recordId: `${dto.userId}:${dto.roleId}`,
       after: { userId: dto.userId, roleId: dto.roleId }
     });
+
+    this.tenantContextCache.invalidateUser(tenantId, dto.userId);
 
     return assignment ?? { tenantId, userId: dto.userId, roleId: dto.roleId };
   }

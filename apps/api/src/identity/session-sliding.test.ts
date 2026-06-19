@@ -7,6 +7,7 @@ import { sessions, tenants, users } from "../db/schema.js";
 import { PasswordService } from "./password.service.js";
 import { RequestContextService } from "./request-context.service.js";
 import { SESSION_ABSOLUTE_TTL_MS, SESSION_IDLE_TTL_MS } from "./session-cookie.js";
+import { TenantContextCache } from "./tenant-context.cache.js";
 
 // Integration test: exercises the sliding idle timeout and absolute lifetime in
 // actorFromSessionToken against a real database. Skipped without DATABASE_URL.
@@ -16,7 +17,11 @@ describe.skipIf(!databaseUrl)("session sliding timeout", () => {
   const pool = new Pool({ connectionString: databaseUrl });
   const db = drizzle(pool);
   const passwordService = new PasswordService();
-  const service = new RequestContextService(db as unknown as Database, passwordService);
+  const service = new RequestContextService(
+    db as unknown as Database,
+    passwordService,
+    new TenantContextCache()
+  );
 
   const suffix = `slide-${Date.now()}`;
   let tenantId: string;

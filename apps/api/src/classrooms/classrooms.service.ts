@@ -91,7 +91,8 @@ export class ClassroomsService {
       .innerJoin(academicYears, eq(classrooms.academicYearId, academicYears.id))
       .innerJoin(grades, eq(classrooms.gradeId, grades.id))
       .where(and(...conditions))
-      .orderBy(classrooms.name);
+      .orderBy(classrooms.name)
+      .limit(200);
   }
 
   async createClassroom(

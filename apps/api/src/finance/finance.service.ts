@@ -33,7 +33,7 @@ export class FinanceService {
   // ── Fee Items ──────────────────────────────────────────────────────────────
 
   async listFeeItems(tenantId: string) {
-    return this.db.select().from(feeItems).where(eq(feeItems.tenantId, tenantId))
+    return this.db.select().from(feeItems).where(eq(feeItems.tenantId, tenantId)).limit(200)
   }
 
   async createFeeItem(tenantId: string, actorUserId: string, dto: CreateFeeItemDto) {

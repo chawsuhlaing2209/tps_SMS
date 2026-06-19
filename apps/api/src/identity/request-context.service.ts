@@ -10,6 +10,7 @@ import { roles, sessions, userRoles, users } from "../db/schema.js";
 import type { TenantContext } from "../tenancy/tenant-context.js";
 import { PasswordService } from "./password.service.js";
 import { SESSION_ABSOLUTE_TTL_MS, SESSION_IDLE_TTL_MS } from "./session-cookie.js";
+import { TenantContextCache } from "./tenant-context.cache.js";
 
 // Avoid a database write on every request: only push the idle deadline forward
 // when it would move by at least this much.
@@ -19,7 +20,8 @@ const SLIDE_THRESHOLD_MS = 1000 * 60;
 export class RequestContextService {
   constructor(
     @Inject(DB) private readonly db: Database,
-    private readonly passwordService: PasswordService
+    private readonly passwordService: PasswordService,
+    private readonly tenantContextCache: TenantContextCache
   ) {}
 
   /**
@@ -92,6 +94,11 @@ export class RequestContextService {
       throw new UnauthorizedException("Missing actor user id.");
     }
 
+    const cached = this.tenantContextCache.get(tenantId, actorUserId);
+    if (cached) {
+      return cached;
+    }
+
     const [user] = await this.db.select().from(users).where(eq(users.id, actorUserId));
 
     if (!user) {
@@ -121,12 +128,15 @@ export class RequestContextService {
       }
     }
 
-    return {
+    const context: TenantContext = {
       tenantId,
       tenantSlug: "",
       actorUserId,
       roles: assignedRoles.map((role) => role.key),
       permissions: [...permissionSet]
     };
+
+    this.tenantContextCache.set(tenantId, actorUserId, context);
+    return context;
   }
 }

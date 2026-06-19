@@ -2,6 +2,7 @@
 import { FormInput } from "../../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
+import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { useApiMutation, useApiQuery, useReferenceApiQuery } from "../../../lib/api";
@@ -15,7 +16,12 @@ import { RecordFormSheet } from "../../../lib/record-sheet";
 import { getSession } from "../../../lib/session";
 import { TablePanelBody, TablePanelHead } from "../../../lib/table-panel";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
-import { EnrollmentWizard } from "../../enrollments/enrollment-wizard";
+import { WorkspaceLoading } from "../../../lib/workspace-loading";
+
+const EnrollmentWizard = dynamic(
+  () => import("../../enrollments/enrollment-wizard").then((module) => module.EnrollmentWizard),
+  { loading: () => <WorkspaceLoading /> }
+);
 
 type ClassroomSubject = {
   subjectId: string;
@@ -112,16 +118,26 @@ export function ClassroomOpsTabs({
   const [markingSession, setMarkingSession] = useState<AttendanceSession | null>(null);
   const [marks, setMarks] = useState<Record<string, string>>({});
 
-  const subjects = useApiQuery<ClassroomSubject[]>(
-    (tenant) => `/tenants/${tenant}/classrooms/${classroomId}/subjects`
+  const subjects = useApiQuery<ClassroomSubject[]>((tenant) =>
+    activeTab === "attendance" || takeOpen || activeTab === "lms"
+      ? `/tenants/${tenant}/classrooms/${classroomId}/subjects`
+      : null
   );
-  const roster = useApiQuery<ClassroomStudent[]>(
-    (tenant) => `/tenants/${tenant}/classrooms/${classroomId}/students`
+  const roster = useApiQuery<ClassroomStudent[]>((tenant) =>
+    activeTab === "roster" || enrollOpen
+      ? `/tenants/${tenant}/classrooms/${classroomId}/students`
+      : null
   );
-  const grades = useReferenceApiQuery<Grade[]>((tenant) => `/tenants/${tenant}/academics/grades`);
-  const classrooms = useReferenceApiQuery<Classroom[]>((tenant) => `/tenants/${tenant}/classrooms`);
-  const sessions = useApiQuery<AttendanceSession[]>(
-    (tenant) => `/tenants/${tenant}/classrooms/${classroomId}/attendance-sessions`
+  const grades = useReferenceApiQuery<Grade[]>((tenant) =>
+    enrollOpen ? `/tenants/${tenant}/academics/grades` : null
+  );
+  const classrooms = useReferenceApiQuery<Classroom[]>((tenant) =>
+    enrollOpen ? `/tenants/${tenant}/classrooms` : null
+  );
+  const sessions = useApiQuery<AttendanceSession[]>((tenant) =>
+    activeTab === "attendance" || takeOpen
+      ? `/tenants/${tenant}/classrooms/${classroomId}/attendance-sessions`
+      : null
   );
   const sessionDetail = useApiQuery<AttendanceSessionDetail>((tenant) =>
     selectedSessionId ? `/tenants/${tenant}/attendance-sessions/${selectedSessionId}` : null

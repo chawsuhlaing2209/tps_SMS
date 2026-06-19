@@ -1,10 +1,16 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 import { InvoicesBillingShell } from "./_components/invoices-billing-shell";
-import { InvoicesListPanel } from "./_components/invoices-list-panel";
+import { WorkspaceLoading } from "../../../lib/workspace-loading";
+
+const InvoicesListPanel = dynamic(
+  () => import("./_components/invoices-list-panel").then((module) => module.InvoicesListPanel),
+  { loading: () => <WorkspaceLoading /> }
+);
 
 export default function InvoicesPage() {
   const t = useTranslations("finance.invoiceList");

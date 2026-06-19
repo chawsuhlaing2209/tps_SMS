@@ -1,8 +1,14 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
-import { EnrollmentsWorkspace } from "./enrollments-workspace";
 import { PageHeader } from "../page-header-context";
+import { WorkspaceLoading } from "../../lib/workspace-loading";
+
+const EnrollmentsWorkspace = dynamic(
+  () => import("./enrollments-workspace").then((module) => module.EnrollmentsWorkspace),
+  { loading: () => <WorkspaceLoading /> }
+);
 
 export default function EnrollmentsPage() {
   const t = useTranslations("enrollments");
