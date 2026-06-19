@@ -1,4 +1,5 @@
 "use client";
+import { FormInput } from "../../../components/shared/form-input";
 
 import {
   categoryBadgeColor,
@@ -13,6 +14,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Toggle } from "../../../components/shared/toggle";
+import { EmptyState } from "../../../components/shared/empty-state";
 import { ConfirmDialog } from "../../../components/shared/confirm-dialog";
 import { ApiError, useApiMutation, useApiQuery } from "../../lib/api";
 import { Field } from "../../lib/form";
@@ -224,7 +226,7 @@ export function RolesPermissionsWorkspace() {
   });
 
   if (!canManage) {
-    return <p className="muted">{t("noAccess")}</p>;
+    return <EmptyState icon="lock" title={t("noAccess")} />;
   }
 
   return (
@@ -238,7 +240,7 @@ export function RolesPermissionsWorkspace() {
         <div />
         <button
           type="button"
-          className="btn-primary"
+          className="pds-type-body-m-bold btn-primary"
           disabled={
             !selectedRoleId ||
             !dirty ||
@@ -254,16 +256,16 @@ export function RolesPermissionsWorkspace() {
 
       <section className="roles-workspace panel">
         <aside className="roles-workspace__sidebar">
-          <div className="roles-workspace__sidebar-head">
-            <h2>{t("rolesListTitle")}</h2>
-            <button type="button" className="roles-workspace__new" onClick={() => setCreateOpen(true)}>
+          <div className="pds-type-body-m-medium roles-workspace__sidebar-head">
+            <h2 className="pds-type-title-xs-bold">{t("rolesListTitle")}</h2>
+            <button type="button" className="pds-type-body-m-medium roles-workspace__new" onClick={() => setCreateOpen(true)}>
               <Icon name="add" />
               {t("newRole")}
             </button>
           </div>
 
-          {roles.isLoading ? <p className="muted">{c("loading")}</p> : null}
-          {roles.isError ? <p className="error-text">{c("somethingWrong")}</p> : null}
+          {roles.isLoading ? <p className="pds-type-body-s-regular muted">{c("loading")}</p> : null}
+          {roles.isError ? <p className="pds-type-body-m-medium error-text">{c("somethingWrong")}</p> : null}
 
           <ul className="roles-list">
             {sortedRoles.map((role) => {
@@ -283,19 +285,19 @@ export function RolesPermissionsWorkspace() {
                     }
                     onClick={() => setSelectedRoleId(role.id)}
                   >
-                    <span className="roles-list-item__avatar" style={{ background: display.accent }}>
+                    <span className="pds-type-title-xs-bold roles-list-item__avatar" style={{ background: display.accent }}>
                       {display.initials}
                     </span>
-                    <span className="roles-list-item__text">
+                    <span className="pds-type-body-m-medium roles-list-item__text">
                       <strong>{display.label}</strong>
-                      <span className="muted">
+                      <span className="pds-type-body-s-regular muted">
                         {inactive
                           ? t("roleDisabled")
                           : t("userCount", { count: role.userCount })}
                       </span>
                     </span>
                     {inactive ? (
-                      <span className="roles-list-item__badge">{t("roleDisabled")}</span>
+                      <span className="pds-type-label-s-medium roles-list-item__badge">{t("roleDisabled")}</span>
                     ) : active ? (
                       <Icon name="chevron_right" className="roles-list-item__chevron" />
                     ) : null}
@@ -308,27 +310,25 @@ export function RolesPermissionsWorkspace() {
 
         <div className="roles-workspace__detail">
           {!selectedRole || !selectedDisplay ? (
-            <div className="roles-empty">
-              <span className="roles-empty__icon" aria-hidden>
-                <Icon name="manage_accounts" size={42} />
-              </span>
-              <h3>{t("emptyTitle")}</h3>
-              <p className="muted">{t("emptyHelp")}</p>
-            </div>
+            <EmptyState
+              icon="manage_accounts"
+              title={t("emptyTitle")}
+              description={t("emptyHelp")}
+            />
           ) : (
             <>
               <div className="roles-detail-card">
-                <div className="roles-detail-head">
+                <div className="pds-type-title-m-extrabold roles-detail-head">
                   <div className="roles-detail-head__main">
                     <span
-                      className="roles-detail-head__avatar"
+                      className="pds-type-title-s-extrabold roles-detail-head__avatar"
                       style={{ background: selectedDisplay.accent }}
                     >
                       {selectedDisplay.initials}
                     </span>
                     <div>
-                      <h2>{selectedDisplay.label}</h2>
-                      <p className="muted">
+                      <h2 className="pds-type-title-xs-bold">{selectedDisplay.label}</h2>
+                      <p className="pds-type-body-s-regular muted">
                         {selectedRole.status === "inactive"
                           ? t("roleDisabledSummary")
                           : allEnabled
@@ -338,7 +338,7 @@ export function RolesPermissionsWorkspace() {
                     </div>
                   </div>
                   <div className="roles-detail-head__actions">
-                    <label className="roles-detail-head__toggle">
+                    <label className="pds-type-body-m-medium roles-detail-head__toggle">
                       <Toggle
                         checked={selectedRole.status === "active"}
                         onCheckedChange={handleRoleEnabledChange}
@@ -346,7 +346,7 @@ export function RolesPermissionsWorkspace() {
                         aria-label={t("roleEnabled")}
                       />
                     </label>
-                    <span className="roles-detail-head__badge">
+                    <span className="pds-type-body-s-semibold roles-detail-head__badge">
                       {t("userCount", { count: selectedRole.userCount })}
                     </span>
                   </div>
@@ -358,7 +358,7 @@ export function RolesPermissionsWorkspace() {
                     return (
                       <span
                         key={category}
-                        className={`roles-category-badge ${categoryBadgeColor(category)}`}
+                        className={`pds-type-caption-s roles-category-badge ${categoryBadgeColor(category)}`}
                       >
                         <span className="roles-category-badge__dot" aria-hidden />
                         {t("categoryCount", {
@@ -372,12 +372,12 @@ export function RolesPermissionsWorkspace() {
                 </div>
 
                 {statusError ? (
-                  <p className="error-text" role="alert">
+                  <p className="pds-type-body-m-medium error-text" role="alert">
                     {statusError}
                   </p>
                 ) : null}
                 {/* {selectedRole.status === "active" && selectedRole.userCount > 0 ? (
-                  <p className="muted">{t("roleHasUsersHint", { count: selectedRole.userCount })}</p>
+                  <p className="pds-type-body-s-regular muted">{t("roleHasUsersHint", { count: selectedRole.userCount })}</p>
                 ) : null} */}
               </div>
 
@@ -387,12 +387,12 @@ export function RolesPermissionsWorkspace() {
                 <ul className="roles-permissions-list">
                   {tenantPermissionCatalog.map((group) => (
                     <li key={group.category} className="roles-permissions-list__group">
-                      <div className="roles-permission-section">
+                      <div className="pds-type-caption-s roles-permission-section">
                         {p(`categories.${group.category}`)}
                       </div>
                       <ul>
                         {group.items.map((item) => (
-                          <li key={item.permission} className="roles-permission-row">
+                          <li key={item.permission} className="pds-type-body-m-medium roles-permission-row">
                             <span>{p(`items.${item.labelKey}`)}</span>
                             <Toggle
                               checked={draftSet.has(item.permission)}
@@ -409,11 +409,11 @@ export function RolesPermissionsWorkspace() {
               </div>
 
               {formError ? (
-                <p className="error-text" role="alert">
+                <p className="pds-type-body-m-medium error-text" role="alert">
                   {formError}
                 </p>
               ) : null}
-              {saved && !dirty ? <p className="muted">{c("saved")}</p> : null}
+              {saved && !dirty ? <p className="pds-type-body-s-regular muted">{c("saved")}</p> : null}
             </>
           )}
         </div>
@@ -441,10 +441,10 @@ export function RolesPermissionsWorkspace() {
         })}
         footer={
           <>
-            <button type="button" className="btn-ghost" onClick={() => setCreateOpen(false)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setCreateOpen(false)}>
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={createRole.isPending}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={createRole.isPending}>
               <Icon name="add" />
               {createRole.isPending ? c("loading") : t("createRoleConfirm")}
             </button>
@@ -452,7 +452,7 @@ export function RolesPermissionsWorkspace() {
         }
       >
         <Field label={t("roleName")} error={createForm.formState.errors.name?.message}>
-          <input {...createForm.register("name")} placeholder={t("roleNamePlaceholder")} />
+          <FormInput {...createForm.register("name")} placeholder={t("roleNamePlaceholder")} />
         </Field>
       </RecordFormSheet>
 

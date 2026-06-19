@@ -17,7 +17,7 @@ export function WorkingYearLabel({ year, className }: Props) {
 
   return (
     <span className={className ?? "form-inline"}>
-      <span className="muted">{t("workingYear")}</span>
+      <span className="pds-type-body-s-regular muted">{t("workingYear")}</span>
       <strong>{year.name}</strong>
     </span>
   );

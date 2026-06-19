@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Toggle } from "../../../components/shared/toggle";
+import { EmptyState } from "../../../components/shared/empty-state";
 import { FormField, FormInput, FormTextarea } from "../../../components/shared/form-input";
 import { ApiError, useApiMutation, useApiQuery } from "../../lib/api";
 import { Icon } from "../../lib/material-icon";
@@ -114,7 +115,7 @@ export default function DepartmentsPage() {
   }
 
   if (!canManage) {
-    return <p className="muted">{t("noAccess")}</p>;
+    return <EmptyState icon="lock" title={t("noAccess")} />;
   }
 
   return (
@@ -142,10 +143,10 @@ export default function DepartmentsPage() {
               <li key={row.id} className={row.status === "inactive" ? "departments-list__item--inactive" : undefined}>
                 <button type="button" className="departments-list__main" onClick={() => openEdit(row)}>
                   <strong>{row.name}</strong>
-                  {row.description ? <span className="muted">{row.description}</span> : null}
-                  <span className="muted">{t("staffCount", { count: row.staffCount })}</span>
+                  {row.description ? <span className="pds-type-body-s-regular muted">{row.description}</span> : null}
+                  <span className="pds-type-body-s-regular muted">{t("staffCount", { count: row.staffCount })}</span>
                 </button>
-                <label className="departments-list__toggle">
+                <label className="pds-type-body-m-medium departments-list__toggle">
                   <span>{t("active")}</span>
                   <Toggle
                     checked={row.status === "active"}
@@ -178,12 +179,12 @@ export default function DepartmentsPage() {
         onSubmit={form.handleSubmit((values) => void onSubmit(values))}
         footer={
           <>
-            <button type="button" className="btn-ghost" onClick={() => setCreateOpen(false)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setCreateOpen(false)}>
               {c("cancel")}
             </button>
             <button
               type="submit"
-              className="btn-primary"
+              className="pds-type-body-m-bold btn-primary"
               disabled={createDepartment.isPending || updateDepartment.isPending}
             >
               {c("save")}
@@ -197,7 +198,7 @@ export default function DepartmentsPage() {
         <FormField label={t("descriptionLabel")}>
           <FormTextarea {...form.register("description")} rows={3} />
         </FormField>
-        {formError ? <p className="error-text">{formError}</p> : null}
+        {formError ? <p className="pds-type-body-m-medium error-text">{formError}</p> : null}
       </RecordFormSheet>
     </div>
   );

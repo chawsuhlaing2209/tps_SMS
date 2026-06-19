@@ -121,6 +121,8 @@ export class ListInvoicesQueryDto {
   @IsUUID() @IsOptional() academicYearId?: string
   @IsUUID() @IsOptional() gradeId?: string
   @IsString() @Transform(trimString) @IsOptional() search?: string
+  @IsString() @IsOptional() @IsIn(['createdAt']) sortBy?: string
+  @IsString() @IsOptional() @IsIn(['asc', 'desc']) sortDir?: string
   @IsNumber() @IsOptional() @Type(() => Number) limit?: number
   @IsNumber() @IsOptional() @Type(() => Number) offset?: number
 }

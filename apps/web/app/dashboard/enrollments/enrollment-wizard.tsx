@@ -1,19 +1,25 @@
 "use client";
+import { FormInput } from "../../../components/shared/form-input";
 
 import type { EnrollmentConfirmResult, EnrollmentPreviewResult } from "@sms/shared";
 import { enrollmentPaymentMethods } from "@sms/shared";
 import { useTranslations } from "next-intl";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { ApiError, useApiMutation } from "../../lib/api";
+import { ApiError, useApiMutation, useApiQuery } from "../../lib/api";
 import { Field } from "../../lib/form";
 import { Icon } from "../../lib/material-icon";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { StudentCombobox } from "../../lib/student-combobox";
 import { zodResolver } from "../../lib/zod-resolver";
-import { CheckboxList } from "../../../components/shared/checkbox-list";
+import { CheckBox, CheckboxList, PdsSelectField } from "../../../components/pds";
 import { Stepper } from "../../../components/shared/stepper";
+import { EmptyState } from "../../../components/shared/empty-state";
+import { type DiscountRuleRecord } from "../finance/discounts/discount-form";
+import { RequestDiscountSheet } from "../finance/discounts/request-discount-sheet";
+import { hasAnyPermission } from "../../lib/permissions";
+import { getSession } from "../../lib/session";
 
 type Classroom = { id: string; name: string; gradeId: string; academicYearId: string };
 
@@ -67,6 +73,7 @@ export function EnrollmentWizard({
   onSaved: () => void;
 }) {
   const t = useTranslations("enrollments");
+  const finance = useTranslations("finance");
   const c = useTranslations("common");
   const requiredMessage = c("required");
 
@@ -89,6 +96,9 @@ export function EnrollmentWizard({
   const [collectPaymentAtConfirm, setCollectPaymentAtConfirm] = useState(false);
   const [dueDate, setDueDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [formError, setFormError] = useState<string | null>(null);
+  const [requestDiscountOpen, setRequestDiscountOpen] = useState(false);
+  const [requestRuleId, setRequestRuleId] = useState<string | undefined>();
+  const canRequestDiscount = hasAnyPermission(getSession()?.permissions, ["discount.request"]);
 
   const schema = z.object({
     studentId: z.string().uuid(requiredMessage),
@@ -100,6 +110,40 @@ export function EnrollmentWizard({
     resolver: zodResolver(schema),
     defaultValues: { studentId: "", gradeId: "", classroomId: "" }
   });
+
+  const watchedStudentId = form.watch("studentId");
+
+  type StudentDiscountRow = {
+    id: string;
+    discountRuleId: string;
+    status: string;
+  };
+
+  const discountRules = useApiQuery<DiscountRuleRecord[]>(
+    open && step === 2 && canRequestDiscount
+      ? (tenant) => `/tenants/${tenant}/discounts/rules`
+      : () => null
+  );
+  const studentDiscounts = useApiQuery<StudentDiscountRow[]>(
+    open && step === 2 && canRequestDiscount && watchedStudentId
+      ? (tenant) =>
+          `/tenants/${tenant}/discounts/student-discounts?studentId=${watchedStudentId}`
+      : () => null
+  );
+
+  const requestableRules = useMemo(() => {
+    const blockedRuleIds = new Set(
+      (studentDiscounts.data ?? [])
+        .filter((row) => !["rejected", "archived"].includes(row.status))
+        .map((row) => row.discountRuleId)
+    );
+    return (discountRules.data ?? []).filter(
+      (rule) =>
+        rule.status === "active" &&
+        rule.triggerMode === "request" &&
+        !blockedRuleIds.has(rule.id)
+    );
+  }, [discountRules.data, studentDiscounts.data]);
 
   const previewMutation = useApiMutation<
     {
@@ -470,24 +514,24 @@ export function EnrollmentWizard({
       }}
       footer={
         <>
-          <button type="button" className="btn-ghost" onClick={() => onOpenChange(false)}>
+          <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => onOpenChange(false)}>
             {c("cancel")}
           </button>
           {step > 0 ? (
-            <button type="button" className="btn-ghost" onClick={goBack} disabled={busy}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={goBack} disabled={busy}>
               <Icon name="arrow_back" />
               {t("wizardBack")}
             </button>
           ) : null}
           {step === STEPS.length - 1 ? (
             <>
-              <button type="button" className="btn-ghost" disabled={busy} onClick={() => void handleSaveDraft()}>
+              <button type="button" className="pds-type-body-m-bold btn-ghost" disabled={busy} onClick={() => void handleSaveDraft()}>
                 <Icon name="save" />
                 {t("saveDraft")}
               </button>
               <button
                 type="button"
-                className="btn-primary"
+                className="pds-type-body-m-bold btn-primary"
                 disabled={busy || preview?.canConfirm === false}
                 onClick={() => void handleConfirm(false)}
               >
@@ -496,7 +540,7 @@ export function EnrollmentWizard({
               </button>
               <button
                 type="button"
-                className="btn-primary"
+                className="pds-type-body-m-bold btn-primary"
                 disabled={busy || preview?.canConfirm === false || !collectPaymentAtConfirm}
                 onClick={() => void handleConfirm(true)}
               >
@@ -505,7 +549,7 @@ export function EnrollmentWizard({
               </button>
             </>
           ) : (
-            <button type="submit" className="btn-primary" disabled={busy}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={busy}>
               <Icon name="arrow_forward" />
               {previewMutation.isPending ? c("loading") : t("wizardNext")}
             </button>
@@ -514,7 +558,7 @@ export function EnrollmentWizard({
       }
     >
       <Stepper
-        className="stepper--sheet"
+        className="pds-type-body-m-medium stepper--sheet"
         steps={STEPS.map((key) => ({ id: key, label: t(`wizardStepLabel_${key}`) }))}
         currentStep={step}
         ariaLabel={t("wizardProgress")}
@@ -524,7 +568,7 @@ export function EnrollmentWizard({
         <>
           <Field label={t("student")} error={form.formState.errors.studentId?.message}>
             {lockStudent ? (
-              <input value={studentDisplayName ?? ""} readOnly disabled className="input-readonly" />
+              <FormInput value={studentDisplayName ?? ""} readOnly disabled inputClassName="input-readonly" />
             ) : (
               <StudentCombobox
                 value={form.watch("studentId")}
@@ -536,42 +580,47 @@ export function EnrollmentWizard({
           </Field>
           <Field label={t("grade")} error={form.formState.errors.gradeId?.message}>
             {lockClassroom && initialClassroomId ? (
-              <input readOnly value={lockedGradeName} className="input-readonly" />
+              <FormInput readOnly value={lockedGradeName} inputClassName="input-readonly" />
             ) : (
-              <select
+              <PdsSelectField
+                variant="form"
                 value={selectedGradeId}
-                onChange={(event) => {
-                  form.setValue("gradeId", event.target.value, { shouldValidate: true });
+                onValueChange={(value) => {
+                  const nextGradeId = typeof value === "string" ? value : "";
+                  form.setValue("gradeId", nextGradeId, { shouldValidate: true });
                   form.setValue("classroomId", "", { shouldValidate: true });
                 }}
-              >
-                <option value="">{t("selectGrade")}</option>
-                {gradeOptions.map((grade) => (
-                  <option key={grade.id} value={grade.id}>
-                    {grade.name}
-                  </option>
-                ))}
-              </select>
+                placeholder={t("selectGrade")}
+                options={gradeOptions.map((grade) => ({
+                  value: grade.id,
+                  label: grade.name
+                }))}
+              />
             )}
           </Field>
           <Field label={t("classroom")} error={form.formState.errors.classroomId?.message}>
             {lockClassroom && initialClassroomId ? (
-              <input
+              <FormInput
                 readOnly
                 value={classroomDisplayName ?? lockedClassroom?.name ?? ""}
-                className="input-readonly"
+                inputClassName="input-readonly"
               />
             ) : (
-              <select {...form.register("classroomId")} disabled={!selectedGradeId}>
-                <option value="">
-                  {selectedGradeId ? t("selectClassroom") : t("selectGradeFirst")}
-                </option>
-                {filteredClassrooms.map((cl) => (
-                  <option key={cl.id} value={cl.id}>
-                    {cl.name}
-                  </option>
-                ))}
-              </select>
+              <PdsSelectField
+                variant="form"
+                value={form.watch("classroomId") ?? ""}
+                onValueChange={(value) =>
+                  form.setValue("classroomId", typeof value === "string" ? value : "", {
+                    shouldValidate: true
+                  })
+                }
+                disabled={!selectedGradeId}
+                placeholder={selectedGradeId ? t("selectClassroom") : t("selectGradeFirst")}
+                options={filteredClassrooms.map((cl) => ({
+                  value: cl.id,
+                  label: cl.name
+                }))}
+              />
             )}
           </Field>
         </>
@@ -579,9 +628,9 @@ export function EnrollmentWizard({
 
       {step === 1 && preview ? (
         <>
-          <p className="muted">{t("mandatoryFeesHint")}</p>
+          <p className="pds-type-body-s-regular muted">{t("mandatoryFeesHint")}</p>
           {preview.feeLines.filter((line) => line.mandatory).length === 0 ? (
-            <p className="error-text">{t("noMandatoryFees")}</p>
+            <p className="pds-type-body-m-medium error-text">{t("noMandatoryFees")}</p>
           ) : (
             <ul className="preview-line-list">
               {preview.feeLines
@@ -595,19 +644,19 @@ export function EnrollmentWizard({
             </ul>
           )}
           {preview.availableOptionalFees.length > 0 ? (
-            <>
-              <p className="field-label">{t("optionalServices")}</p>
-              <CheckboxList
-                options={preview.availableOptionalFees.map((fee) => ({
-                  id: fee.feeItemId,
-                  label: `${fee.name} (${formatAmount(fee.unitAmount)} MMK)`
-                }))}
-                selectedIds={optionalFeeItemIds}
-                onChange={(ids) => void setOptionalFees(ids)}
-              />
-            </>
+            <CheckboxList
+              title={t("optionalServices")}
+              options={preview.availableOptionalFees.map((fee) => ({
+                id: fee.feeItemId,
+                label: fee.name,
+                description: finance(`billingTypes.${fee.billingType}`),
+                amount: fee.unitAmount,
+              }))}
+              selectedIds={optionalFeeItemIds}
+              onChange={(ids) => void setOptionalFees(ids)}
+            />
           ) : (
-            <p className="muted">{t("noOptionalServices")}</p>
+            <EmptyState compact embedded icon="inventory_2" title={t("noOptionalServices")} />
           )}
         </>
       ) : null}
@@ -618,12 +667,13 @@ export function EnrollmentWizard({
             <strong>{t("siblingDiscount")}</strong>
             <p>{preview.siblingSummary.message}</p>
             {preview.siblingSummary.studentPosition ? (
-              <p className="muted">{t("siblingPosition", { position: preview.siblingSummary.studentPosition })}</p>
+              <p className="pds-type-body-s-regular muted">{t("siblingPosition", { position: preview.siblingSummary.studentPosition })}</p>
             ) : null}
           </div>
           {preview.pendingDiscounts.length > 0 ? (
             <div className="callout">
               <strong>{t("pendingDiscounts")}</strong>
+              <p className="pds-type-body-s-regular muted">{t("pendingDiscountsHelp")}</p>
               <ul className="checkbox-list">
                 {preview.pendingDiscounts.map((pending) => (
                   <li key={pending.id}>
@@ -633,8 +683,31 @@ export function EnrollmentWizard({
               </ul>
             </div>
           ) : null}
+          {canRequestDiscount && requestableRules.length > 0 ? (
+            <div className="callout">
+              <strong>{t("requestOnlyDiscounts")}</strong>
+              <p className="pds-type-body-s-regular muted">{t("requestOnlyDiscountsHelp")}</p>
+              <ul className="checkbox-list">
+                {requestableRules.map((rule) => (
+                  <li key={rule.id} className="table-row-actions">
+                    <span>{rule.name}</span>
+                    <button
+                      type="button"
+                      className="pds-type-body-s-semibold table-row-action"
+                      onClick={() => {
+                        setRequestRuleId(rule.id);
+                        setRequestDiscountOpen(true);
+                      }}
+                    >
+                      {t("requestWaiver")}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {preview.discountApprovalRequired ? (
-            <p className="muted">{t("discountApprovalRequired")}</p>
+            <p className="pds-type-body-s-regular muted">{t("discountApprovalRequired")}</p>
           ) : null}
           {preview.discounts.length > 0 ? (
             <ul className="discount-preview-list">
@@ -645,36 +718,36 @@ export function EnrollmentWizard({
                     <span className="discount-preview-card__amount">-{formatAmount(discount.amount)} MMK</span>
                   </div>
                   <div className="discount-preview-card__meta">
-                    <span className="discount-preview-card__tag">
+                    <span className="pds-type-body-s-regular discount-preview-card__tag">
                       {discount.source === "rule" ? t("discountSourceRule") : t("discountSourceApproved")}
                     </span>
                     {discount.stackable ? (
-                      <span className="discount-preview-card__tag">{t("discountStackable")}</span>
+                      <span className="pds-type-body-s-regular discount-preview-card__tag">{t("discountStackable")}</span>
                     ) : (
-                      <span className="discount-preview-card__tag">{t("discountBestWins")}</span>
+                      <span className="pds-type-body-s-regular discount-preview-card__tag">{t("discountBestWins")}</span>
                     )}
                     {discount.requiresApproval ? (
-                      <span className="discount-preview-card__tag discount-preview-card__tag--warn">
+                      <span className="pds-type-body-s-regular discount-preview-card__tag discount-preview-card__tag--warn">
                         {t("requiresApproval")}
                       </span>
                     ) : null}
                   </div>
                   {discount.eligibilityReason ? (
-                    <p className="muted discount-preview-card__reason">{discount.eligibilityReason}</p>
+                    <p className="pds-type-body-s-regular muted discount-preview-card__reason">{discount.eligibilityReason}</p>
                   ) : null}
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="muted">{t("noDiscounts")}</p>
+            <EmptyState compact embedded icon="sell" title={t("noDiscounts")} />
           )}
           {preview.confirmBlockers.map((blocker) => (
-            <p key={blocker} className="error-text">
+            <p key={blocker} className="pds-type-body-m-medium error-text">
               {blocker}
             </p>
           ))}
           {preview.warnings.map((warning) => (
-            <p key={warning} className="muted">
+            <p key={warning} className="pds-type-body-s-regular muted">
               {warning}
             </p>
           ))}
@@ -716,37 +789,35 @@ export function EnrollmentWizard({
             </div>
           </div>
           <Field label={t("dueDate")}>
-            <input
+            <FormInput
               type="date"
               value={dueDate}
               onChange={(event) => setDueDate(event.target.value)}
             />
           </Field>
-          <div className="form-inline-toggle">
-            <input
-              id="collect-payment-at-confirm"
-              type="checkbox"
-              checked={collectPaymentAtConfirm}
-              onChange={(event) => {
-                const checked = event.target.checked;
-                setCollectPaymentAtConfirm(checked);
-                void runPreview(optionalFeeItemIds, {
-                  collectPayment: checked,
-                  paymentMethod: checked ? paymentMethod : undefined
-                }).catch((error) => {
-                  setFormError(error instanceof ApiError ? error.message : c("somethingWrong"));
-                });
-              }}
-            />
-            <label htmlFor="collect-payment-at-confirm">{t("collectPaymentAtConfirm")}</label>
-          </div>
+          <CheckBox
+            id="collect-payment-at-confirm"
+            checked={collectPaymentAtConfirm}
+            showDescription={false}
+            label={t("collectPaymentAtConfirm")}
+            onCheckedChange={(checked) => {
+              setCollectPaymentAtConfirm(checked);
+              void runPreview(optionalFeeItemIds, {
+                collectPayment: checked,
+                paymentMethod: checked ? paymentMethod : undefined,
+              }).catch((error) => {
+                setFormError(error instanceof ApiError ? error.message : c("somethingWrong"));
+              });
+            }}
+          />
           {collectPaymentAtConfirm ? (
             <>
               <Field label={t("paymentMethod")}>
-                <select
+                <PdsSelectField
+                  variant="form"
                   value={paymentMethod}
-                  onChange={(event) => {
-                    const nextMethod = event.target.value;
+                  onValueChange={(value) => {
+                    const nextMethod = typeof value === "string" ? value : "";
                     setPaymentMethod(nextMethod);
                     void runPreview(optionalFeeItemIds, {
                       collectPayment: true,
@@ -755,16 +826,14 @@ export function EnrollmentWizard({
                       setFormError(error instanceof ApiError ? error.message : c("somethingWrong"));
                     });
                   }}
-                >
-                  {enrollmentPaymentMethods.map((method) => (
-                    <option key={method} value={method}>
-                      {t(`paymentMethods.${method}`)}
-                    </option>
-                  ))}
-                </select>
+                  options={enrollmentPaymentMethods.map((method) => ({
+                    value: method,
+                    label: t(`paymentMethods.${method}`)
+                  }))}
+                />
               </Field>
               <Field label={t("paymentReference")}>
-                <input
+                <FormInput
                   value={paymentReference}
                   onChange={(e) => setPaymentReference(e.target.value)}
                   placeholder={t("paymentReferencePlaceholder")}
@@ -772,18 +841,33 @@ export function EnrollmentWizard({
               </Field>
             </>
           ) : (
-            <p className="muted">{t("earlyPaymentPreviewHint")}</p>
+            <p className="pds-type-body-s-regular muted">{t("earlyPaymentPreviewHint")}</p>
           )}
-          <p className="muted">{t("confirmHelp")}</p>
+          <p className="pds-type-body-s-regular muted">{t("confirmHelp")}</p>
         </div>
       ) : step > 0 && !preview ? (
-        <p className="error-text">{t("previewRequired")}</p>
+        <p className="pds-type-body-m-medium error-text">{t("previewRequired")}</p>
       ) : null}
 
       {formError ? (
-        <p className="error-text" role="alert">
+        <p className="pds-type-body-m-medium error-text" role="alert">
           {formError}
         </p>
+      ) : null}
+
+      {canRequestDiscount && watchedStudentId ? (
+        <RequestDiscountSheet
+          open={requestDiscountOpen}
+          onOpenChange={setRequestDiscountOpen}
+          studentId={watchedStudentId}
+          studentName={studentDisplayName}
+          defaultRuleId={requestRuleId}
+          onRequested={() => {
+            void runPreview(optionalFeeItemIds).catch((error) => {
+              setFormError(error instanceof ApiError ? error.message : c("somethingWrong"));
+            });
+          }}
+        />
       ) : null}
     </RecordFormSheet>
   );

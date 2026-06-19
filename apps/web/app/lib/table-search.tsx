@@ -11,7 +11,7 @@ export function TableSearchInput({
   return (
     <div className={["table-search", className].filter(Boolean).join(" ")}>
       <Icon name="search" size={19} className="table-search__icon" aria-hidden />
-      <input type="text" className="table-search__input" {...props} />
+      <input type="text" className="pds-type-body-m-medium table-search__input" {...props} />
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { useCurrentAcademicYear } from "../../lib/use-current-academic-year";
 import { DataTable } from "../../lib/data-table";
 import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
 import { EnrollmentWizard } from "./enrollment-wizard";
+import { PdsSelectField } from "../../../components/pds";
 import { StatusBadge } from "../../../components/shared/badge";
 
 type Grade = { id: string; name: string };
@@ -124,7 +125,7 @@ export function EnrollmentsWorkspace({
       header: t("invoice"),
       cell: ({ row }) =>
         row.original.invoiceId ? (
-          <Link className="row-action" href={`/dashboard/finance/invoices/${row.original.invoiceId}`}>
+          <Link className="pds-type-body-s-regular row-action" href={`/dashboard/finance/invoices/${row.original.invoiceId}`}>
             {t("viewInvoice")}
           </Link>
         ) : (
@@ -138,14 +139,14 @@ export function EnrollmentsWorkspace({
       cell: ({ row }) => {
         if (row.original.status === "draft" && !row.original.invoiceId) {
           return (
-            <button type="button" className="row-action" onClick={() => openWizard(row.original)}>
+            <button type="button" className="pds-type-body-s-regular row-action" onClick={() => openWizard(row.original)}>
               {t("continueEnrollment")}
             </button>
           );
         }
         if (row.original.status === "approved" && !row.original.invoiceId) {
           return (
-            <button type="button" className="row-action" onClick={() => openWizard(row.original)}>
+            <button type="button" className="pds-type-body-s-regular row-action" onClick={() => openWizard(row.original)}>
               {t("continueEnrollment")}
             </button>
           );
@@ -163,13 +164,18 @@ export function EnrollmentsWorkspace({
           extra={
             showStatusFilter ? (
               <label className="form-inline">
-                <span className="muted">{t("filterStatus")}</span>
-                <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-                  <option value="">{t("allStatuses")}</option>
-                  <option value="draft">{t("status_draft")}</option>
-                  <option value="approved">{t("status_approved")}</option>
-                  <option value="archived">{t("status_archived")}</option>
-                </select>
+                <span className="pds-type-body-s-regular muted">{t("filterStatus")}</span>
+                <PdsSelectField
+                  variant="filter"
+                  value={statusFilter}
+                  onValueChange={(value) => setStatusFilter(typeof value === "string" ? value : "")}
+                  placeholder={t("allStatuses")}
+                  options={[
+                    { value: "draft", label: t("status_draft") },
+                    { value: "approved", label: t("status_approved") },
+                    { value: "archived", label: t("status_archived") }
+                  ]}
+                />
               </label>
             ) : null
           }

@@ -9,7 +9,8 @@ import { resetNavigationTrail } from "../lib/navigation-trail";
 import { type DashboardNavKey, visibleDashboardNavGroups } from "../lib/permissions";
 import { clearSession } from "../lib/session";
 import { useWorkspace } from "../lib/use-workspace";
-import { DashboardTopbar } from "./dashboard-topbar";
+import { DashboardPageChrome } from "./dashboard-page-chrome";
+import { DashboardPageTitle } from "./dashboard-page-title";
 import { PageHeaderProvider } from "./page-header-context";
 import { SidebarUserCard } from "./sidebar-user-card";
 
@@ -87,14 +88,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               <span className="dash-brand-mark__dot" />
             </span>
             <span className="dash-brand-text">
-              <span className="dash-brand-name">{session.tenantSlug}</span>
-              <span className="dash-brand-sub">{t("brandTagline")}</span>
+              <span className="pds-type-title-l-extrabold dash-brand-name">{session.tenantSlug}</span>
+              <span className="pds-type-label-s-medium dash-brand-sub">{t("brandTagline")}</span>
             </span>
           </div>
           <nav className="dash-nav">
             {navGroups.map((group) => (
               <div className="dash-nav-group" key={group.key}>
-                <span className="dash-nav-group-label">{t(`group_${group.key}`)}</span>
+                <span className="pds-type-caption-s dash-nav-group-label">{t(`group_${group.key}`)}</span>
                 {group.items.map((item) => {
                   const active =
                     item.href === "/dashboard"
@@ -129,8 +130,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </aside>
 
         <div className="dash-main">
-          <DashboardTopbar />
-          <div className="dash-content">{children}</div>
+          <div className="dash-content">
+            <DashboardPageChrome />
+            <div className="dash-content-body">
+              <DashboardPageTitle />
+              {children}
+            </div>
+          </div>
         </div>
       </div>
     </PageHeaderProvider>

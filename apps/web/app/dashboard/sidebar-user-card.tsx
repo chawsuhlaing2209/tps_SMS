@@ -45,9 +45,9 @@ export function SidebarUserCard({
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
           <button type="button" className="dash-user-card" aria-label={t("accountMenu")}>
-            <span className="dash-user-card__avatar">{initialsFrom(displayName)}</span>
+            <span className="pds-type-body-m-medium dash-user-card__avatar">{initialsFrom(displayName)}</span>
             <span className="dash-user-card__meta">
-              <span className="dash-user-card__name">{displayName}</span>
+              <span className="pds-type-body-m-medium dash-user-card__name">{displayName}</span>
               <span className="dash-user-card__role">{roleLabel}</span>
             </span>
             <Icon name="unfold_more" size={18} className="dash-user-card__chevron" />
@@ -69,7 +69,7 @@ export function SidebarUserCard({
             </div>
             <DropdownMenu.Separator className="dash-user-menu__sep" />
             <DropdownMenu.Item
-              className="dash-user-menu__item"
+              className="pds-type-body-m-medium dash-user-menu__item"
               onSelect={(event) => {
                 event.preventDefault();
                 onSignOut();

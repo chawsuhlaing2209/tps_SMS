@@ -1,4 +1,5 @@
 "use client";
+import { FormInput } from "../../../components/shared/form-input";
 
 import { useTranslations } from "next-intl";
 import { useEffect } from "react";
@@ -7,6 +8,7 @@ import { z } from "zod";
 import { Field } from "../../lib/form";
 import { Icon } from "../../lib/material-icon";
 import { RecordFormSheet } from "../../lib/record-sheet";
+import { PdsSelectField } from "../../../components/pds";
 import { zodResolver } from "../../lib/zod-resolver";
 
 type StaffMember = { id: string; fullName: string };
@@ -77,10 +79,10 @@ export function ClassroomFormSheet({
       })}
       footer={
         <>
-          <button type="button" className="btn-ghost" onClick={() => onOpenChange(false)}>
+          <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => onOpenChange(false)}>
             {c("cancel")}
           </button>
-          <button type="submit" className="btn-primary" disabled={submitting || form.formState.isSubmitting}>
+          <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={submitting || form.formState.isSubmitting}>
             <Icon name="check" />
             {form.formState.isSubmitting || submitting
               ? c("loading")
@@ -92,23 +94,29 @@ export function ClassroomFormSheet({
       }
     >
       <Field label={t("classroomName")} error={form.formState.errors.name?.message}>
-        <input placeholder={t("classroomNamePlaceholder")} {...form.register("name")} />
+        <FormInput placeholder={t("classroomNamePlaceholder")} {...form.register("name")} />
       </Field>
       <Field label={t("room")}>
-        <input placeholder={t("roomPlaceholder")} {...form.register("room")} />
+        <FormInput placeholder={t("roomPlaceholder")} {...form.register("room")} />
       </Field>
       <Field label={t("capacity")}>
-        <input type="number" min={1} {...form.register("capacity")} />
+        <FormInput type="number" min={1} {...form.register("capacity")} />
       </Field>
       <Field label={t("homeroomTeacher")}>
-        <select {...form.register("classTeacherStaffId")}>
-          <option value="">{t("selectHomeroomTeacher")}</option>
-          {teachers.map((member) => (
-            <option key={member.id} value={member.id}>
-              {member.fullName}
-            </option>
-          ))}
-        </select>
+        <PdsSelectField
+          variant="form"
+          value={form.watch("classTeacherStaffId")}
+          onValueChange={(value) =>
+            form.setValue("classTeacherStaffId", typeof value === "string" ? value : "", {
+              shouldValidate: true
+            })
+          }
+          placeholder={t("selectHomeroomTeacher")}
+          options={teachers.map((member) => ({
+            value: member.id,
+            label: member.fullName
+          }))}
+        />
       </Field>
     </RecordFormSheet>
   );

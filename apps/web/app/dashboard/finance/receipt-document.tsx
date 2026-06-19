@@ -119,12 +119,12 @@ export function PaymentReceiptDocument({
             <Icon name="check" size={22} />
           </span>
           <div>
-            <h2 className="receipt__title">{title}</h2>
-            <p className="receipt__subtitle">{subtitle}</p>
+            <h2 className="pds-type-title-xs-bold receipt__title">{title}</h2>
+            <p className="pds-type-body-s-regular receipt__subtitle">{subtitle}</p>
           </div>
         </div>
         {showBannerActions && onPrint ? (
-          <button type="button" className="receipt__print" onClick={onPrint}>
+          <button type="button" className="pds-type-body-s-semibold receipt__print" onClick={onPrint}>
             <Icon name="print" size={18} />
             {t("print")}
           </button>
@@ -138,11 +138,11 @@ export function PaymentReceiptDocument({
               <Icon name="school" size={20} filled />
             </span>
             <div>
-              <strong className="receipt__school">{receipt.schoolName}</strong>
-              <span className="receipt__doc">{documentLabel}</span>
+              <strong className="pds-type-title-xs-bold receipt__school">{receipt.schoolName}</strong>
+              <span className="pds-type-body-s-regular receipt__doc">{documentLabel}</span>
             </div>
           </div>
-          <div className="receipt__ref">
+          <div className="pds-type-title-xs-bold receipt__ref">
             <strong>#{receipt.receiptNumber}</strong>
             <span>{issuedDate}</span>
           </div>
@@ -150,7 +150,7 @@ export function PaymentReceiptDocument({
 
         <dl className="receipt__rows">
           {lines.map((line) => (
-            <div key={line.label} className="receipt__row">
+            <div key={line.label} className="pds-type-body-s-regular receipt__row">
               <dt>{line.label}</dt>
               <dd>{line.value}</dd>
             </div>
@@ -159,29 +159,29 @@ export function PaymentReceiptDocument({
 
         <div className="receipt__summary">
           <div>
-            <span className="receipt__summary-label">{t("amountPaid")}</span>
+            <span className="pds-type-caption-s receipt__summary-label">{t("amountPaid")}</span>
             <strong className="receipt__amount">
               {formatReceiptAmount(receipt.amountPaid)} {receipt.currency}
             </strong>
-            <span className="receipt__summary-foot">{t("currencyName")}</span>
+            <span className="pds-type-body-s-regular receipt__summary-foot">{t("currencyName")}</span>
           </div>
           <div className="receipt__summary-right">
-            <span className="receipt__summary-label">{t("remainingBalance")}</span>
+            <span className="pds-type-caption-s receipt__summary-label">{t("remainingBalance")}</span>
             <strong className="receipt__remaining">
               {formatReceiptAmount(receipt.remainingBalance)}
             </strong>
-            <span className="receipt__summary-foot">{receipt.currency}</span>
+            <span className="pds-type-body-s-regular receipt__summary-foot">{receipt.currency}</span>
           </div>
         </div>
 
         <footer className="receipt__paper-foot">
-          <div className="receipt__paper-foot-meta">
+          <div className="pds-type-body-s-regular receipt__paper-foot-meta">
             <span>{t("issuedBy", { name: receipt.cashier })}</span>
             <span>
               {receipt.schoolName} · AY {shortAcademicYear(receipt.academicYearName)}
             </span>
           </div>
-          <span className="receipt__verified">
+          <span className="pds-type-body-s-semibold receipt__verified">
             <Icon name="verified" size={16} />
             {t("verified")}
           </span>

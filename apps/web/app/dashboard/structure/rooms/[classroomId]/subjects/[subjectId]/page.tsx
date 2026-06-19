@@ -9,6 +9,7 @@ import { RecordList, RecordListItem, RecordListPanel } from "../../../../../../l
 import { PanelHead } from "../../../../../../lib/panel";
 import { useCurrentAcademicYear } from "../../../../../../lib/use-current-academic-year";
 import { PageHeader } from "../../../../../page-header-context";
+import { EmptyState } from "../../../../../../../components/shared/empty-state";
 import { subjectColor } from "../../../../subject-colors";
 
 type Classroom = {
@@ -81,15 +82,11 @@ export default function StructureSubjectClassroomPage() {
   );
 
   if (classroom.isLoading || subjects.isLoading) {
-    return <p className="muted">{c("loading")}</p>;
+    return <p className="pds-type-body-s-regular muted">{c("loading")}</p>;
   }
 
   if (classroom.isError || !classroom.data || !subjectRow) {
-    return (
-      <div className="structure-empty">
-        <p className="error-text">{t("subjectNotFound")}</p>
-      </div>
-    );
+    return <EmptyState icon="error" title={t("subjectNotFound")} />;
   }
 
   const colors = subjectColor(subjectRow.subjectName);
@@ -114,17 +111,17 @@ export default function StructureSubjectClassroomPage() {
 
       <section className="structure-room-hero">
         <span
-          className="structure-subject-tag structure-subject-tag--icon structure-room-card__mark--lg"
+          className="pds-type-body-m-medium structure-subject-tag structure-subject-tag--icon structure-room-card__mark--lg"
           style={{ background: colors.bg, color: colors.text }}
         >
           {subjectRow.subjectName.charAt(0)}
         </span>
         <div>
-          <p className="structure-eyebrow">
+          <p className="pds-type-caption-m structure-eyebrow">
             {currentYear.data?.name ?? "—"} · {grade?.name ?? "—"} · {classroom.data.name}
           </p>
-          <h2 className="structure-page-title">{subjectRow.subjectName}</h2>
-          <p className="muted">
+          <h2 className="pds-type-title-m-extrabold structure-page-title">{subjectRow.subjectName}</h2>
+          <p className="pds-type-body-s-regular muted">
             {t("subjectClassroomMeta", {
               teacher: teacherName,
               code: subjectRow.subjectCode ?? "—"
@@ -155,15 +152,15 @@ export default function StructureSubjectClassroomPage() {
 
         <aside className="structure-side-stack">
           <section className="panel structure-panel--accent">
-            <p className="structure-stat-card__label">{t("assignmentsTitle")}</p>
-            <strong className="structure-stat-card__value">{subjectAssignments.length}</strong>
-            <span className="muted">{t("assignmentsHelp")}</span>
+            <p className="pds-type-caption-s structure-stat-card__label">{t("assignmentsTitle")}</p>
+            <strong className="pds-type-title-l-extrabold structure-stat-card__value">{subjectAssignments.length}</strong>
+            <span className="pds-type-body-s-regular muted">{t("assignmentsHelp")}</span>
           </section>
           <section className="panel">
             <PanelHead title={t("examsTitle")} />
             <div className="panel-body">
-              <p className="muted">{t("examsHelp")}</p>
-              <Link href="/dashboard/exams" className="structure-room-card__link">
+              <p className="pds-type-body-s-regular muted">{t("examsHelp")}</p>
+              <Link href="/dashboard/exams" className="pds-type-body-s-regular structure-room-card__link">
                 {t("openExams")}
               </Link>
             </div>

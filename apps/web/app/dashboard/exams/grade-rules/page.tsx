@@ -1,4 +1,5 @@
 "use client";
+import { FormInput } from "../../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
@@ -15,6 +16,9 @@ import { getSession } from "../../../lib/session";
 import { TablePanelBody, TablePanelHead } from "../../../lib/table-panel";
 import { zodResolver } from "../../../lib/zod-resolver";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
+import { EmptyState } from "../../../../components/shared/empty-state";
+import { ModulePageHeader } from "../../module-page-header";
+import { moduleBreadcrumbs } from "../../../lib/page-header-utils";
 
 type GradeRule = {
   id: string;
@@ -30,6 +34,7 @@ const RULES_PATH = (tenant: string) => `/tenants/${tenant}/grade-rules`;
 
 export default function GradeRulesPage() {
   const t = useTranslations("exams");
+  const nav = useTranslations("nav");
   const c = useTranslations("common");
   const requiredMessage = c("required");
   const permissions = getSession()?.permissions;
@@ -74,11 +79,16 @@ export default function GradeRulesPage() {
   ];
 
   if (!canManage) {
-    return <p className="muted">{c("empty")}</p>;
+    return <EmptyState icon="rule" title={c("empty")} />;
   }
 
   return (
     <>
+      <ModulePageHeader
+        navKey="exams"
+        title={t("gradeRulesTitle")}
+        breadcrumbs={moduleBreadcrumbs("exams", nav, [{ label: t("gradeRules") }])}
+      />
       <TablePanelHead
         title={t("gradeRulesTitle")}
         onRefresh={() => void rules.refetch()}
@@ -114,10 +124,10 @@ export default function GradeRulesPage() {
         })}
         footer={
           <>
-            <button type="button" className="btn-ghost" onClick={() => setOpen(false)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setOpen(false)}>
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={form.formState.isSubmitting}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={form.formState.isSubmitting}>
               <Icon name="check" />
               {form.formState.isSubmitting ? t("creating") : c("save")}
             </button>
@@ -125,10 +135,10 @@ export default function GradeRulesPage() {
         }
       >
         <Field label={t("ruleName")} error={form.formState.errors.name?.message}>
-          <input type="text" {...form.register("name")} />
+          <FormInput type="text" {...form.register("name")} />
         </Field>
         <Field label={t("academicYear")}>
-          <input readOnly value={currentYear.data?.name ?? ""} />
+          <FormInput readOnly value={currentYear.data?.name ?? ""} />
         </Field>
       </RecordFormSheet>
     </>

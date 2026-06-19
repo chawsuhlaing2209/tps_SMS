@@ -148,6 +148,13 @@ interactive states are short (`.12–.18s`) and limited to `border-color`, `back
 - ❌ Gradient backgrounds/buttons. The only gradient allowed is the faint radial forest glow
   inside a dark hero card. Everything else is flat.
 - ❌ Emoji as icons. Use Material Symbols Rounded.
+- ❌ **Re-drawing Material Symbols in CSS** — no faux checkbox squares, radio rings, inner dots,
+  SVG checkmarks, or per-icon utility classes (`pds-check-box__icon`, `pds-btn__icon`, etc.)
+  when a native glyph exists. Use `<Icon name="…" />` with the official ligature
+  (`check_box`, `check_box_outline_blank`, `radio_button_checked`, `radio_button_unchecked`,
+  `indeterminate_check_box`, …). Size via the `size` prop; color via `color` on the wrapper
+  (`.pds-check-box__indicator--checked`, `.pds-radio-box__indicator--checked`). The font
+  includes optical padding — do not add extra inset boxes around glyphs.
 - ❌ Inter, Roboto, Arial, system-ui, or any font outside Bricolage + Hanken.
 - ❌ The "rounded box with a colored left-border accent stripe" cliché.
 - ❌ Heavy/black drop shadows, neumorphism, glassmorphism, glow rings on focus.
@@ -191,36 +198,41 @@ radii 10/12/16/24/999 · borders not shadows · entrance pkUp .3s
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ TopBar (sticky)     breadcrumb + title    search · AY · bell│
-├──────────┬──────────────────────────────────────────────────┤
-│ Sidebar  │  Page Content (max 1180px, left-aligned)         │
-│ 236px    │  padding: 26px 30px 60px                          │
+│ Sidebar  │  Utility header — breadcrumb      AY · bell      │
+│ 236px    ├──────────────────────────────────────────────────┤
+│          │  Page title (+ optional actions)                 │
+│          │  ─────────────────────────────────────────────  │
+│          │  Page body (max 1180px, left-aligned)            │
+│          │  padding: 20px 30px 28px                          │
 └──────────┴──────────────────────────────────────────────────┘
 ```
 
 - **Grid:** `.dash` — sidebar + main column
 - **Sidebar:** `.dash-sidebar` — `--shell` background, sticky full height, grouped nav, user card pinned bottom
-- **Top bar:** `.dash-topbar` — title/breadcrumbs from `PageHeader` context; global search (placeholder), working-year badge, notifications
-- **Content:** `.dash-content` — gutter tokens; direct children capped at `--layout-content-max`, **left-aligned** (not centered)
+- **Utility header:** `.dash-page-chrome` — in-body bar (not the old top nav); `PdsBreadcrumb` left, working-year badge + notifications right
+- **Title row:** `.dash-page-title` — page `h1` from `PageHeader` context; optional `actions` slot (primary/secondary CTAs)
+- **Content:** `.dash-content-body` — gutter tokens; sections capped at `--layout-content-max`, **left-aligned**
 - **Between page sections:** `--layout-section-gap` (20px) via `.page-stack`
 
 ### Page structure
 
 ```
-DashboardTopbar (reads PageHeader context)
-.dash-content
-  .page-stack
-    PageHeader (optional — publishes title; may render back link)
-    DetailHero (optional — detail pages)
-    .subnav (optional — module tabs, e.g. Finance)
-    .panel (section 1)
-    .panel (section 2)
-    …
+DashboardPageChrome (layout — breadcrumb + utilities)
+.dash-content-body
+  DashboardPageTitle (layout — reads PageHeader context)
+  {page children}
+    PageHeader (publishes title, breadcrumbs, actions — renders null)
+    .page-stack
+      DetailCard / DetailHero (optional — detail pages)
+      .subnav (optional — module tabs, e.g. Finance invoices/collection)
+      .panel (section 1)
+      …
 ```
 
-- Titles live in the **top bar**, not inside panels (unless `PanelHead` for a section title).
+- Titles and breadcrumbs live in the **body chrome**, not a separate top navigation bar.
+- Pages publish metadata via `PageHeader`; the layout renders breadcrumb + title rows automatically.
 - Empty/error/loading states belong in `.panel-body` or `TablePanelBody` — not floating between grid rows.
-- Module layouts (Finance, Salary, Exams) wrap children in `.page-stack` + `.subnav`.
+- Module layouts (Finance, Salary, Exams) wrap children in `.module-shell` + optional `.subnav` inside page content.
 
 ### Sidebar navigation
 
@@ -268,15 +280,26 @@ Implementation split:
 | shadcn/ui | `apps/web/components/ui/` | Dialog, Sheet, Button (secondary to Padauk buttons) |
 | Shared | `apps/web/components/shared/` | `ConfirmDialog`, `AppToast`, `CheckboxList` |
 
-### Page header (`PageHeader` + top bar)
+### Page header (`PageHeader` + in-body chrome)
 
-Pages publish metadata via `PageHeader` from `apps/web/app/dashboard/page-header-context.tsx`. The sticky `DashboardTopbar` renders title (25px/800 heading), optional breadcrumb trail, and optional description line.
+Pages publish metadata via `PageHeader` from `apps/web/app/dashboard/page-header-context.tsx`. The layout renders:
+
+1. **`DashboardPageChrome`** — `PdsBreadcrumb` + academic year + notifications
+2. **`DashboardPageTitle`** — page title and optional trailing actions
 
 ```tsx
-<PageHeader title={t("title")} breadcrumbs={[{ label: t("group") }]} description={t("description")} />
-// Detail pages with back navigation:
-<PageHeader title={name} backHref="/dashboard/students" backLabel={t("back")} />
+<PageHeader
+  title={t("title")}
+  breadcrumbs={[
+    { label: t("group_school"), href: "/dashboard" },
+    { label: t("teachers"), href: "/dashboard/teachers" },
+    { label: teacher.fullName },
+  ]}
+  actions={<button className="btn-primary">…</button>}
+/>
 ```
+
+Use `PdsBreadcrumb` directly only in Storybook or special cases; dashboard pages should prefer `PageHeader`.
 
 Unmigrated routes get a sensible fallback from the nav config.
 
@@ -429,7 +452,7 @@ Reuse these patterns when extending school-structure UI — do not introduce a t
 
 ### Working year badge
 
-`.working-year-badge` in top bar — links to academic year setup; warning variant when no active year.
+`.working-year-badge` in the page utility header — links to academic year setup; warning variant when no active year.
 
 ---
 
@@ -498,7 +521,7 @@ Apply changes to UI immediately, revert on error where safe (payments, attendanc
 - Use color purposefully — status, categories, CTAs; not decoration on neutral cards
 - Keep table rows compact; right-align numeric columns
 - Use monospace for IDs, codes, invoice numbers
-- Put page titles in the top bar via `PageHeader`
+- Put page titles in the body title row via `PageHeader` (not inside panels or a separate top nav)
 - Use `DetailHero` on record detail pages
 - Use `TableSearchInput` in panel toolbars instead of raw search inputs
 

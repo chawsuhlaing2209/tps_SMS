@@ -120,29 +120,29 @@ export function InvoiceDocumentBody({
           <ul className="invoice-doc__lines">
             {data.items.map((item) => (
               <li key={item.id}>
-                <span className="invoice-doc__line-label">{item.description}</span>
-                <strong className="invoice-doc__line-amount">{formatReceiptAmount(item.amount)}</strong>
+                <span className="pds-type-body-s-semibold invoice-doc__line-label">{item.description}</span>
+                <strong className="pds-type-body-s-semibold invoice-doc__line-amount">{formatReceiptAmount(item.amount)}</strong>
               </li>
             ))}
             {data.discountLines.map((line) => (
               <li key={line.id} className="invoice-doc__line--discount">
-                <span className="invoice-doc__line-label">{line.name}</span>
-                <strong className="invoice-doc__line-amount">−{formatReceiptAmount(line.amount)}</strong>
+                <span className="pds-type-body-s-semibold invoice-doc__line-label">{line.name}</span>
+                <strong className="pds-type-body-s-semibold invoice-doc__line-amount">−{formatReceiptAmount(line.amount)}</strong>
               </li>
             ))}
           </ul>
-          <div className="invoice-doc__subtotal">
+          <div className="pds-type-body-s-semibold invoice-doc__subtotal">
             <span>{t("subtotalBilled")}</span>
             <strong>{formatReceiptAmount(data.subtotal)}</strong>
           </div>
         </section>
 
         <div className="invoice-doc__summary">
-          <div className="invoice-doc__paid-row">
+          <div className="pds-type-body-s-semibold invoice-doc__paid-row">
             <span>{t("paidToDate")}</span>
             <strong>{formatPaidToDate(data.paidToDate)}</strong>
           </div>
-          <div className="invoice-doc__balance">
+          <div className="pds-type-body-s-semibold invoice-doc__balance">
             <span>{t("balanceDue")}</span>
             <strong>{formatReceiptAmount(data.balanceDue)}</strong>
           </div>

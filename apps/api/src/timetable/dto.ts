@@ -25,6 +25,15 @@ export class CreatePeriodDto {
   academicYearId?: string;
 }
 
+export class GeneratePeriodsDto {
+  @IsUUID()
+  declare academicYearId: string;
+
+  @IsBoolean()
+  @IsOptional()
+  replaceExisting?: boolean;
+}
+
 export class CreateTimetableSlotDto {
   @IsUUID()
   declare classroomId: string;
@@ -73,4 +82,28 @@ export class PublishTimetableDto {
   @IsUUID()
   @IsOptional()
   academicYearId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  classroomId?: string;
+}
+
+export class ListPeriodsQueryDto {
+  @IsUUID()
+  @IsOptional()
+  academicYearId?: string;
+}
+
+export class ClassroomOverviewQueryDto {
+  @IsUUID()
+  @IsOptional()
+  academicYearId?: string;
+}
+
+export class UpdateTimetableSlotDto {
+  @IsUUID()
+  declare subjectId: string;
+
+  @IsUUID()
+  declare staffId: string;
 }

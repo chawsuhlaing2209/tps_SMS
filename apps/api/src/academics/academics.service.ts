@@ -643,6 +643,8 @@ export class AcademicsService {
         tenantId,
         name: dto.name,
         code: dto.code,
+        colorKey: dto.colorKey ?? null,
+        iconKey: dto.iconKey ?? null,
         subjectType: dto.subjectType ?? "required",
         createdBy: actorUserId,
         updatedBy: actorUserId
@@ -688,6 +690,8 @@ export class AcademicsService {
       .set({
         name: dto.name ?? previous.name,
         code: dto.code === undefined ? previous.code : dto.code || null,
+        colorKey: dto.colorKey === undefined ? previous.colorKey : dto.colorKey || null,
+        iconKey: dto.iconKey === undefined ? previous.iconKey : dto.iconKey || null,
         subjectType: dto.subjectType ?? previous.subjectType,
         updatedBy: actorUserId,
         updatedAt: new Date()

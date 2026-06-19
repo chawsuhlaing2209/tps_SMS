@@ -10,6 +10,7 @@ import { hasAnyPermission } from "../lib/permissions";
 import { getSession } from "../lib/session";
 import { PageHeader } from "./page-header-context";
 import { StatCard, StatGrid } from "../../components/shared/stat-card";
+import { EmptyState } from "../../components/shared/empty-state";
 
 type DashboardSummary = {
   activeAcademicYear: boolean;
@@ -122,7 +123,7 @@ export default function OverviewPage() {
       cell: ({ row }) => (
         <>
           {row.original.recordType}
-          <span className="muted"> · {row.original.recordId.slice(0, 8)}</span>
+          <span className="pds-type-body-s-regular muted"> · {row.original.recordId.slice(0, 8)}</span>
         </>
       )
     }
@@ -135,11 +136,11 @@ export default function OverviewPage() {
       {canViewSetup ? (
         <section className="panel">
           <div className="panel-head">
-            <h2>{t("setupChecklist")}</h2>
+            <h2 className="pds-type-title-xs-bold">{t("setupChecklist")}</h2>
           </div>
-          <p className="muted panel-help">{t("setupChecklistHelp")}</p>
+          <p className="pds-type-body-s-regular muted panel-help">{t("setupChecklistHelp")}</p>
           {summary.isLoading ? (
-            <p className="muted">{c("loading")}</p>
+            <p className="pds-type-body-s-regular muted">{c("loading")}</p>
           ) : (
             <ul className="checklist">
               {checklist.map((item) => (
@@ -166,18 +167,18 @@ export default function OverviewPage() {
       {canViewAudit ? (
         <section className="panel">
           <div className="panel-head">
-            <h2>{t("recentActivity")}</h2>
-            <button type="button" className="btn-ghost" onClick={() => void audit.refetch()}>
+            <h2 className="pds-type-title-xs-bold">{t("recentActivity")}</h2>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => void audit.refetch()}>
               <Icon name="refresh" />
               {c("refresh")}
             </button>
           </div>
           {audit.isLoading ? (
-            <p className="muted">{t("loadingActivity")}</p>
+            <p className="pds-type-body-s-regular muted">{t("loadingActivity")}</p>
           ) : audit.isError ? (
-            <p className="error-text">{c("somethingWrong")}</p>
+            <p className="pds-type-body-m-medium error-text">{c("somethingWrong")}</p>
           ) : !audit.data?.data.length ? (
-            <p className="muted">{t("noActivity")}</p>
+            <EmptyState compact embedded icon="history" title={t("noActivity")} />
           ) : (
             <DataTable<AuditLog> columns={columns} data={audit.data.data} />
           )}

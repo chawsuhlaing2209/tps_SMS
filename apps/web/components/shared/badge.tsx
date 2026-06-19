@@ -20,7 +20,7 @@ export type BadgeProps = {
  * `<span className="badge badge--x">` duplication.
  */
 export function Badge({ tone = "neutral", children, className }: BadgeProps) {
-  return <span className={cn("badge", `badge--tone-${tone}`, className)}>{children}</span>;
+  return <span className={cn("pds-type-body-s-semibold badge", `badge--tone-${tone}`, className)}>{children}</span>;
 }
 
 /**

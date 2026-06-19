@@ -21,10 +21,14 @@ export function HeroMoreActionsMenu({
   label: string;
   items: HeroMoreActionItem[];
 }) {
+  if (!items.length) {
+    return null;
+  }
+
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
-        <button type="button" className="btn-hero-outline">
+        <button type="button" className="pds-type-body-m-medium btn-hero-outline">
           {label}
           <Icon name="expand_more" size={18} />
         </button>
@@ -36,7 +40,7 @@ export function HeroMoreActionsMenu({
               {index > 0 ? <DropdownMenu.Separator className="hero-actions-menu__sep" /> : null}
               <DropdownMenu.Item
                 className={[
-                  "hero-actions-menu__item",
+                  "pds-type-body-m-medium hero-actions-menu__item",
                   item.destructive ? "hero-actions-menu__item--destructive" : null
                 ]
                   .filter(Boolean)
@@ -68,7 +72,7 @@ export function HeroPrimaryAction({
   onClick?: () => void;
   children: ReactNode;
 }) {
-  const className = "btn-hero-primary";
+  const className = "pds-type-body-m-bold btn-hero-primary";
   if (href) {
     return (
       <a href={href} className={className}>

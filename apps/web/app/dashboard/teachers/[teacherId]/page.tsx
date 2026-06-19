@@ -1,6 +1,7 @@
 "use client";
 
 import { updateTeacherTeachingSetupSchema } from "@sms/shared";
+import { cn } from "../../../../lib/utils";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -247,11 +248,11 @@ export default function TeacherProfilePage() {
   }
 
   if (profile.isLoading) {
-    return <p className="muted">{c("loading")}</p>;
+    return <p className="pds-type-body-s-regular muted">{c("loading")}</p>;
   }
 
   if (profile.isError || !profile.data) {
-    return <p className="error-text">{c("somethingWrong")}</p>;
+    return <p className="pds-type-body-m-medium error-text">{c("somethingWrong")}</p>;
   }
 
   const teacher = profile.data;
@@ -269,18 +270,18 @@ export default function TeacherProfilePage() {
 
       <section className={styles.teacherProfileHero}>
         <div className={styles.teacherProfileHeroTop}>
-          <span className={styles.teacherProfileAvatar}>{initials(teacher.fullName)}</span>
+          <span className={cn("pds-type-display-m", styles.teacherProfileAvatar)}>{initials(teacher.fullName)}</span>
           <div>
             <div className={styles.teacherProfileTitleRow}>
-              <h1>{teacher.fullName}</h1>
-              <span className={styles.teacherProfileStatusBadge}>{teacher.status}</span>
+              <h1 className="pds-type-title-m-extrabold">{teacher.fullName}</h1>
+              <span className={cn("pds-type-body-s-semibold", styles.teacherProfileStatusBadge)}>{teacher.status}</span>
             </div>
-            {metaLine ? <p className={styles.teacherProfileMeta}>{metaLine}</p> : null}
+            {metaLine ? <p className={cn("pds-type-body-m-medium", styles.teacherProfileMeta)}>{metaLine}</p> : null}
             {teacher.qualifications.length ? (
               <ul className={styles.teacherProfileDegrees}>
                 {teacher.qualifications.map((item, index) => (
-                  <li key={`${item.title}-${index}`} className={styles.teacherProfileDegree}>
-                    <Icon name="workspace_premium" size={15} className={styles.teacherProfileDegreeIcon} />
+                  <li key={`${item.title}-${index}`} className={cn("pds-type-body-s-semibold", styles.teacherProfileDegree)}>
+                    <Icon name="workspace_premium" size={15} className={cn("pds-type-body-l-medium", styles.teacherProfileDegreeIcon)} />
                     {item.title}
                     {item.institution ? ` — ${item.institution}` : ""}
                   </li>
@@ -290,12 +291,43 @@ export default function TeacherProfilePage() {
           </div>
         </div>
         <div className={styles.teacherProfileHeroActions}>
-          <HeroMoreActionsMenu label={t("moreActions")} items={[]} />
           {canManageHr ? (
-            <button type="button" className={styles.teacherProfilePrimaryBtn} onClick={() => setEditOpen(true)}>
-              <Icon name="edit" size={18} />
-              {t("editTeacher")}
-            </button>
+            <>
+              <HeroMoreActionsMenu
+                label={t("moreActions")}
+                items={[
+                  {
+                    id: "manage-teaching",
+                    label: t("manageTeaching"),
+                    icon: "school",
+                    onSelect: () => {
+                      setFormError(null);
+                      setTeachingOpen(true);
+                    }
+                  },
+                  ...(teacher.email
+                    ? [
+                        {
+                          id: "email",
+                          label: t("email"),
+                          icon: "mail",
+                          onSelect: () => {
+                            window.location.href = `mailto:${teacher.email}`;
+                          }
+                        }
+                      ]
+                    : [])
+                ]}
+              />
+              <button
+                type="button"
+                className={cn("pds-type-body-m-medium", styles.teacherProfilePrimaryBtn)}
+                onClick={() => setEditOpen(true)}
+              >
+                <Icon name="edit" size={18} />
+                {t("editTeacher")}
+              </button>
+            </>
           ) : null}
         </div>
       </section>
@@ -305,31 +337,31 @@ export default function TeacherProfilePage() {
             <span className={`${styles.teacherProfileStatIcon} ${styles.teacherProfileStatIconBlue}`}>
               <Icon name="schedule" size={19} />
             </span>
-            <strong className={styles.teacherProfileStatValue}>{teacher.stats.periodsPerweek || "—"}</strong>
-            <span className={styles.teacherProfileStatLabel}>{t("statPeriods")}</span>
+            <strong className={cn("pds-type-title-l-extrabold", styles.teacherProfileStatValue)}>{teacher.stats.periodsPerweek || "—"}</strong>
+            <span className={cn("pds-type-body-s-regular", styles.teacherProfileStatLabel)}>{t("statPeriods")}</span>
           </article>
           <article className={styles.teacherProfileStatCard}>
             <span className={`${styles.teacherProfileStatIcon} ${styles.teacherProfileStatIconPurple}`}>
               <Icon name="meeting_room" size={19} />
             </span>
-            <strong className={styles.teacherProfileStatValue}>{teacher.stats.classesTaught}</strong>
-            <span className={styles.teacherProfileStatLabel}>{t("statClasses")}</span>
+            <strong className={cn("pds-type-title-l-extrabold", styles.teacherProfileStatValue)}>{teacher.stats.classesTaught}</strong>
+            <span className={cn("pds-type-body-s-regular", styles.teacherProfileStatLabel)}>{t("statClasses")}</span>
           </article>
           <article className={styles.teacherProfileStatCard}>
             <span className={`${styles.teacherProfileStatIcon} ${styles.teacherProfileStatIconOrange}`}>
               <Icon name="groups" size={19} />
             </span>
-            <strong className={styles.teacherProfileStatValue}>{teacher.stats.students}</strong>
-            <span className={styles.teacherProfileStatLabel}>{t("statStudents")}</span>
+            <strong className={cn("pds-type-title-l-extrabold", styles.teacherProfileStatValue)}>{teacher.stats.students}</strong>
+            <span className={cn("pds-type-body-s-regular", styles.teacherProfileStatLabel)}>{t("statStudents")}</span>
           </article>
           <article className={styles.teacherProfileStatCard}>
             <span className={`${styles.teacherProfileStatIcon} ${styles.teacherProfileStatIconGreen}`}>
               <Icon name="trending_up" size={19} />
             </span>
-            <strong className={styles.teacherProfileStatValue}>
+            <strong className={cn("pds-type-title-l-extrabold", styles.teacherProfileStatValue)}>
               {teacher.stats.avgClassScore != null ? `${teacher.stats.avgClassScore}%` : "—"}
             </strong>
-          <span className={styles.teacherProfileStatLabel}>{t("statAvgScore")}</span>
+          <span className={cn("pds-type-body-s-regular", styles.teacherProfileStatLabel)}>{t("statAvgScore")}</span>
         </article>
       </div>
 
@@ -338,15 +370,15 @@ export default function TeacherProfilePage() {
           <section className={styles.teacherProfileCard}>
             <div className={styles.teacherProfileCardHead}>
               <div>
-                <h2 className={styles.teacherProfileCardTitle}>{t("teachingAssignments")}</h2>
+                <h2 className={cn("pds-type-title-xs-bold", styles.teacherProfileCardTitle)}>{t("teachingAssignments")}</h2>
                 {assignmentRows.length ? (
-                  <p className={styles.teacherProfileCardSubtitle}>{assignmentSummary}</p>
+                  <p className={cn("pds-type-body-s-regular", styles.teacherProfileCardSubtitle)}>{assignmentSummary}</p>
                 ) : null}
               </div>
               {canManageHr ? (
                 <button
                   type="button"
-                  className={styles.teacherProfileManageBtn}
+                  className={cn("pds-type-body-m-medium", styles.teacherProfileManageBtn)}
                   onClick={() => {
                     setFormError(null);
                     setTeachingOpen(true);
@@ -358,23 +390,25 @@ export default function TeacherProfilePage() {
               ) : null}
             </div>
             {assignmentRows.length === 0 ? (
-              <p className={styles.teacherProfileEmpty}>{t("noAssignments")}</p>
+              <p className={cn("pds-type-body-s-regular", styles.teacherProfileEmpty)}>{t("noAssignments")}</p>
             ) : (
               <ul className={styles.teacherProfileRowList}>
                 {assignmentRows.map((row) => (
                   <li key={row.classroomId} className={styles.teacherProfileRow}>
                     <span
-                      className={`${styles.teacherProfileSubjectTag} ${
+                      className={cn(
+                        "pds-type-label-s-bold",
+                        styles.teacherProfileSubjectTag,
                         subjectTone(row.subjectName) === "purple"
                           ? styles.teacherProfileSubjectPurple
                           : styles.teacherProfileSubjectPink
-                      }`}
+                      )}
                     >
                       {row.subjectName}
                     </span>
                     <div className={styles.teacherProfileRowBody}>
-                      <span className={styles.teacherProfileRowTitle}>{row.classroomName}</span>
-                      <span className={styles.teacherProfileRowMeta}>
+                      <span className={cn("pds-type-body-m-bold", styles.teacherProfileRowTitle)}>{row.classroomName}</span>
+                      <span className={cn("pds-type-body-s-regular", styles.teacherProfileRowMeta)}>
                         {t("assignmentRowMeta", {
                           students: "—",
                           periods: teacher.stats.periodsPerweek || "—"
@@ -383,7 +417,7 @@ export default function TeacherProfilePage() {
                     </div>
                     <Link
                       href={`/dashboard/structure/rooms/${row.classroomId}`}
-                      className={styles.teacherProfileRowAction}
+                      className={cn("pds-type-body-m-medium", styles.teacherProfileRowAction)}
                     >
                       {t("openClass")} ›
                     </Link>
@@ -396,8 +430,8 @@ export default function TeacherProfilePage() {
           <section className={styles.teacherProfileCard}>
             <div className={styles.teacherProfileCardHead}>
               <div>
-                <h2 className={styles.teacherProfileCardTitle}>{t("todaysClasses")}</h2>
-                <p className={styles.teacherProfileCardSubtitle}>
+                <h2 className={cn("pds-type-title-xs-bold", styles.teacherProfileCardTitle)}>{t("todaysClasses")}</h2>
+                <p className={cn("pds-type-body-s-regular", styles.teacherProfileCardSubtitle)}>
                   {t("classesSummary", { count: DEMO_TODAY_CLASSES.length })}
                 </p>
               </div>
@@ -405,7 +439,7 @@ export default function TeacherProfilePage() {
             <ul className={styles.teacherProfileRowList}>
               {DEMO_TODAY_CLASSES.map((item) => (
                 <li key={item.time} className={styles.teacherProfileScheduleRow}>
-                  <span className={styles.teacherProfileScheduleTime}>{item.time}</span>
+                  <span className={cn("pds-type-body-s-semibold", styles.teacherProfileScheduleTime)}>{item.time}</span>
                   <span
                     className={`${styles.teacherProfileScheduleMark} ${
                       item.tone === "mustard"
@@ -414,8 +448,8 @@ export default function TeacherProfilePage() {
                     }`}
                   />
                   <div className={styles.teacherProfileRowBody}>
-                    <span className={styles.teacherProfileRowTitle}>{item.title}</span>
-                    <span className={styles.teacherProfileRowMeta}>
+                    <span className={cn("pds-type-body-m-bold", styles.teacherProfileRowTitle)}>{item.title}</span>
+                    <span className={cn("pds-type-body-s-regular", styles.teacherProfileRowMeta)}>
                       {"subtitle" in item
                         ? item.subtitle
                         : t(item.subtitleKey!, item.subtitleArgs!)}
@@ -431,12 +465,12 @@ export default function TeacherProfilePage() {
           <section className={styles.teacherProfileCard}>
             <div className={styles.teacherProfileCardHead}>
               <div>
-                <h2 className={styles.teacherProfileCardTitle}>{t("toGrade")}</h2>
-                <p className={styles.teacherProfileCardSubtitle}>
+                <h2 className={cn("pds-type-title-xs-bold", styles.teacherProfileCardTitle)}>{t("toGrade")}</h2>
+                <p className={cn("pds-type-body-s-regular", styles.teacherProfileCardSubtitle)}>
                   {t("assessmentsSummary", { count: DEMO_TO_GRADE.length })}
                 </p>
               </div>
-              <span className={styles.teacherProfileActionBadge}>{t("actionNeeded")}</span>
+              <span className={cn("pds-type-label-s-medium", styles.teacherProfileActionBadge)}>{t("actionNeeded")}</span>
             </div>
             <ul className={styles.teacherProfileRowList}>
               {DEMO_TO_GRADE.map((item) => (
@@ -449,12 +483,12 @@ export default function TeacherProfilePage() {
                     <Icon name="grading" size={18} />
                   </span>
                   <div className={styles.teacherProfileRowBody}>
-                    <span className={styles.teacherProfileRowTitle}>{item.title}</span>
-                    <span className={styles.teacherProfileRowMeta}>
+                    <span className={cn("pds-type-body-m-bold", styles.teacherProfileRowTitle)}>{item.title}</span>
+                    <span className={cn("pds-type-body-s-regular", styles.teacherProfileRowMeta)}>
                       {t("gradeAssessmentMeta", item.meta)}
                     </span>
                   </div>
-                  <span className={styles.teacherProfileGradeCount}>{item.count}</span>
+                  <span className={cn("pds-type-body-m-bold", styles.teacherProfileGradeCount)}>{item.count}</span>
                 </li>
               ))}
             </ul>
@@ -462,13 +496,13 @@ export default function TeacherProfilePage() {
 
           <section className={`${styles.teacherProfileCard} ${styles.teacherProfileDarkCard}`}>
             <div className={styles.teacherProfileDarkStat}>
-              <strong className={styles.teacherProfileDarkStatValueAccent}>96%</strong>
-              <span className={styles.teacherProfileDarkStatLabel}>{t("registersOnTime")}</span>
+              <strong className={cn("pds-type-title-xl-extrabold", styles.teacherProfileDarkStatValueAccent)}>96%</strong>
+              <span className={cn("pds-type-body-s-regular", styles.teacherProfileDarkStatLabel)}>{t("registersOnTime")}</span>
             </div>
             <div className={styles.teacherProfileDarkCardDivider} aria-hidden />
             <div className={styles.teacherProfileDarkStat}>
-              <strong className={styles.teacherProfileDarkStatValue}>14</strong>
-              <span className={styles.teacherProfileDarkStatLabel}>{t("leaveDaysLeft")}</span>
+              <strong className={cn("pds-type-title-xl-extrabold", styles.teacherProfileDarkStatValue)}>14</strong>
+              <span className={cn("pds-type-body-s-regular", styles.teacherProfileDarkStatLabel)}>{t("leaveDaysLeft")}</span>
             </div>
           </section>
         </div>
@@ -496,10 +530,10 @@ export default function TeacherProfilePage() {
         }}
         footer={
           <>
-            <button type="button" className="btn-ghost" onClick={() => setTeachingOpen(false)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setTeachingOpen(false)}>
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={updateTeachingSetup.isPending}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={updateTeachingSetup.isPending}>
               {updateTeachingSetup.isPending ? c("loading") : c("save")}
             </button>
           </>
@@ -512,7 +546,7 @@ export default function TeacherProfilePage() {
           currentStaffId={teacherId}
           loading={options.isLoading || existingSetup.isLoading}
         />
-        {formError ? <p className="error-text">{formError}</p> : null}
+        {formError ? <p className="pds-type-body-m-medium error-text">{formError}</p> : null}
       </RecordFormSheet>
 
       <ConfirmDialog

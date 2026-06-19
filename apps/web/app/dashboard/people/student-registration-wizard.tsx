@@ -1,4 +1,5 @@
 "use client";
+import { FormInput } from "../../../components/shared/form-input";
 
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
@@ -11,6 +12,8 @@ import { GuardianCombobox } from "../../lib/guardian-combobox";
 import { Icon } from "../../lib/material-icon";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { TableSearchInput } from "../../lib/table-search";
+import { PdsSelectField } from "../../../components/pds";
+import { EmptyState } from "../../../components/shared/empty-state";
 import { zodResolver } from "../../lib/zod-resolver";
 
 type HouseholdSearchResult = {
@@ -267,6 +270,13 @@ export function StudentRegistrationWizard({
   const guardianDisplayName =
     selectedGuardian.data?.fullName ?? `${guardianFirstName} ${guardianLastName}`.trim();
 
+  const relationshipOptions = [
+    { value: "father", label: g("relationship_father") },
+    { value: "mother", label: g("relationship_mother") },
+    { value: "guardian", label: g("relationship_guardian") },
+    { value: "other", label: g("relationship_other") }
+  ];
+
   return (
     <RecordFormSheet
       open={open}
@@ -297,7 +307,7 @@ export function StudentRegistrationWizard({
         <>
           <button
             type="button"
-            className="btn-ghost"
+            className="pds-type-body-m-bold btn-ghost"
             onClick={() => {
               resetForm();
               onOpenChange(false);
@@ -305,41 +315,61 @@ export function StudentRegistrationWizard({
           >
             {c("cancel")}
           </button>
-          <button type="submit" className="btn-primary" disabled={register.isPending}>
+          <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={register.isPending}>
             <Icon name="check" />
             {register.isPending ? c("loading") : t("registerSubmit")}
           </button>
         </>
       }
     >
-      <p className="setup-form-section-label">{t("registerSectionStudent")}</p>
+      <p className="pds-type-body-s-regular setup-form-section-label">{t("registerSectionStudent")}</p>
       <Field label={t("firstName")} error={form.formState.errors.firstName?.message}>
-        <input {...form.register("firstName")} />
+        <FormInput {...form.register("firstName")} />
       </Field>
       <Field label={t("lastName")} error={form.formState.errors.lastName?.message}>
-        <input {...form.register("lastName")} />
+        <FormInput {...form.register("lastName")} />
       </Field>
       <Field label={t("dateOfBirth")} error={form.formState.errors.dateOfBirth?.message}>
-        <input type="date" {...form.register("dateOfBirth")} />
+        <FormInput type="date" {...form.register("dateOfBirth")} />
       </Field>
       <Field label={t("gender")} error={form.formState.errors.gender?.message}>
-        <select {...form.register("gender")}>
-          <option value="M">{t("genderM")}</option>
-          <option value="F">{t("genderF")}</option>
-          <option value="other">{t("genderOther")}</option>
-        </select>
+        <PdsSelectField
+          variant="form"
+          value={form.watch("gender")}
+          onValueChange={(value) =>
+            form.setValue("gender", typeof value === "string" ? (value as FormValues["gender"]) : "M", {
+              shouldValidate: true
+            })
+          }
+          options={[
+            { value: "M", label: t("genderM") },
+            { value: "F", label: t("genderF") },
+            { value: "other", label: t("genderOther") }
+          ]}
+        />
       </Field>
       <Field label={t("admissionNumber")}>
-        <input placeholder={t("admissionOptional")} {...form.register("admissionNumber")} />
+        <FormInput placeholder={t("admissionOptional")} {...form.register("admissionNumber")} />
       </Field>
 
-      <p className="setup-form-section-label">{t("registerSectionGuardian")}</p>
+      <p className="pds-type-body-s-regular setup-form-section-label">{t("registerSectionGuardian")}</p>
       <Field label={t("registerGuardianMode")}>
-        <select {...form.register("guardianMode")}>
-          <option value="existing">{t("registerGuardianExisting")}</option>
-          <option value="new">{t("registerGuardianNew")}</option>
-          <option value="skip">{t("registerGuardianSkip")}</option>
-        </select>
+        <PdsSelectField
+          variant="form"
+          value={form.watch("guardianMode")}
+          onValueChange={(value) =>
+            form.setValue(
+              "guardianMode",
+              typeof value === "string" ? (value as FormValues["guardianMode"]) : "existing",
+              { shouldValidate: true }
+            )
+          }
+          options={[
+            { value: "existing", label: t("registerGuardianExisting") },
+            { value: "new", label: t("registerGuardianNew") },
+            { value: "skip", label: t("registerGuardianSkip") }
+          ]}
+        />
       </Field>
 
       {guardianMode === "existing" ? (
@@ -351,12 +381,18 @@ export function StudentRegistrationWizard({
             />
           </Field>
           <Field label={t("relationship")}>
-            <select {...form.register("guardianRelationship")}>
-              <option value="father">{g("relationship_father")}</option>
-              <option value="mother">{g("relationship_mother")}</option>
-              <option value="guardian">{g("relationship_guardian")}</option>
-              <option value="other">{g("relationship_other")}</option>
-            </select>
+            <PdsSelectField
+              variant="form"
+              value={form.watch("guardianRelationship")}
+              onValueChange={(value) =>
+                form.setValue(
+                  "guardianRelationship",
+                  typeof value === "string" ? (value as FormValues["guardianRelationship"]) : "guardian",
+                  { shouldValidate: true }
+                )
+              }
+              options={relationshipOptions}
+            />
           </Field>
         </>
       ) : null}
@@ -364,46 +400,63 @@ export function StudentRegistrationWizard({
       {guardianMode === "new" ? (
         <>
           <Field label={g("firstName")}>
-            <input {...form.register("guardianFirstName")} />
+            <FormInput {...form.register("guardianFirstName")} />
           </Field>
           <Field label={g("lastName")}>
-            <input {...form.register("guardianLastName")} />
+            <FormInput {...form.register("guardianLastName")} />
           </Field>
           <Field label={g("phone")}>
-            <input {...form.register("guardianPhone")} />
+            <FormInput {...form.register("guardianPhone")} />
           </Field>
           <Field label={g("email")}>
-            <input type="email" {...form.register("guardianEmail")} />
+            <FormInput type="email" {...form.register("guardianEmail")} />
           </Field>
           <Field label={t("relationship")}>
-            <select {...form.register("guardianRelationship")}>
-              <option value="father">{g("relationship_father")}</option>
-              <option value="mother">{g("relationship_mother")}</option>
-              <option value="guardian">{g("relationship_guardian")}</option>
-              <option value="other">{g("relationship_other")}</option>
-            </select>
+            <PdsSelectField
+              variant="form"
+              value={form.watch("guardianRelationship")}
+              onValueChange={(value) =>
+                form.setValue(
+                  "guardianRelationship",
+                  typeof value === "string" ? (value as FormValues["guardianRelationship"]) : "guardian",
+                  { shouldValidate: true }
+                )
+              }
+              options={relationshipOptions}
+            />
           </Field>
         </>
       ) : null}
 
-      {guardianMode === "skip" ? <p className="muted">{t("registerGuardianSkipHelp")}</p> : null}
+      {guardianMode === "skip" ? <p className="pds-type-body-s-regular muted">{t("registerGuardianSkipHelp")}</p> : null}
 
-      <p className="setup-form-section-label">{t("registerSectionHousehold")}</p>
+      <p className="pds-type-body-s-regular setup-form-section-label">{t("registerSectionHousehold")}</p>
       {guardianMode === "skip" ? (
-        <p className="muted">{t("registerHouseholdSkipGuardian")}</p>
+        <p className="pds-type-body-s-regular muted">{t("registerHouseholdSkipGuardian")}</p>
       ) : (
         <>
           <Field label={t("registerHouseholdMode")}>
-            <select {...form.register("householdMode")}>
-              <option value="guardian_default">{t("registerHouseholdGuardianDefault")}</option>
-              <option value="existing">{t("registerHouseholdExisting")}</option>
-              <option value="new">{t("registerHouseholdNew")}</option>
-              <option value="none">{t("registerHouseholdNone")}</option>
-            </select>
+            <PdsSelectField
+              variant="form"
+              value={form.watch("householdMode")}
+              onValueChange={(value) =>
+                form.setValue(
+                  "householdMode",
+                  typeof value === "string" ? (value as FormValues["householdMode"]) : "guardian_default",
+                  { shouldValidate: true }
+                )
+              }
+              options={[
+                { value: "guardian_default", label: t("registerHouseholdGuardianDefault") },
+                { value: "existing", label: t("registerHouseholdExisting") },
+                { value: "new", label: t("registerHouseholdNew") },
+                { value: "none", label: t("registerHouseholdNone") }
+              ]}
+            />
           </Field>
 
           {householdMode === "guardian_default" ? (
-            <p className="muted panel-help">
+            <p className="pds-type-body-s-regular muted panel-help">
               {guardianMode === "existing" && guardianHasHousehold
                 ? t("registerHouseholdJoinGuardian", {
                     name: selectedGuardian.data!.household!.name
@@ -425,7 +478,7 @@ export function StudentRegistrationWizard({
                 />
               </Field>
               {debouncedHouseholdSearch.length < 2 ? (
-                <p className="muted">{t("searchFamilyMin")}</p>
+                <p className="pds-type-body-s-regular muted">{t("searchFamilyMin")}</p>
               ) : null}
               {householdResults.data?.data.length ? (
                 <ul className="combobox-results" role="listbox">
@@ -441,7 +494,7 @@ export function StudentRegistrationWizard({
                         onClick={() => form.setValue("familyGroupId", household.id)}
                       >
                         {household.name}
-                        <span className="muted">
+                        <span className="pds-type-body-s-regular muted">
                           {" "}
                           · {household.memberCount} · {household.primaryGuardianName ?? "—"}
                         </span>
@@ -450,14 +503,14 @@ export function StudentRegistrationWizard({
                   ))}
                 </ul>
               ) : debouncedHouseholdSearch.length >= 2 && !householdResults.isLoading ? (
-                <p className="muted">{t("searchFamilyEmpty")}</p>
+                <EmptyState compact embedded icon="search" title={t("searchFamilyEmpty")} />
               ) : null}
             </>
           ) : null}
 
           {householdMode === "new" ? (
             <Field label={h("householdName")}>
-              <input
+              <FormInput
                 {...form.register("householdName")}
                 placeholder={h("householdNamePlaceholder")}
               />
@@ -465,13 +518,13 @@ export function StudentRegistrationWizard({
           ) : null}
 
           {householdMode === "none" ? (
-            <p className="muted">{t("registerHouseholdNoneHelp")}</p>
+            <p className="pds-type-body-s-regular muted">{t("registerHouseholdNoneHelp")}</p>
           ) : null}
         </>
       )}
 
       {formError ? (
-        <p className="error-text" role="alert">
+        <p className="pds-type-body-m-medium error-text" role="alert">
           {formError}
         </p>
       ) : null}

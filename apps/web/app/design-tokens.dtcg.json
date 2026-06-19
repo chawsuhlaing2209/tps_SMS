@@ -9,6 +9,10 @@
     "$type": "string",
     "$value": "\"Bricolage Grotesque\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif"
   },
+  "pds-gradient-highlight-blub": {
+    "$type": "string",
+    "$value": "radial-gradient(90deg, #1c4a36 0%, #1c4a36 70%)"
+  },
   "pds-gradient-shell": {
     "$type": "color",
     "$value": "linear-gradient(153.434948822922deg, #0f2f1f 0%, #1f6142 100%)"
@@ -49,9 +53,17 @@
     "$type": "color",
     "$value": "var(--pds-color-neutral-100)"
   },
+  "pds-background-primary": {
+    "$type": "color",
+    "$value": "var(--pds-color-neutral-0)"
+  },
+  "pds-background-secondary": {
+    "$type": "color",
+    "$value": "var(--pds-color-neutral-50)"
+  },
   "pds-border-color-active": {
     "$type": "color",
-    "$value": "var(--pds-color-chartreuse-green-800)"
+    "$value": "var(--pds-color-spring-green-500)"
   },
   "pds-border-color-frosted": {
     "$type": "color",
@@ -125,9 +137,13 @@
     "$type": "color",
     "$value": "var(--pds-brand-dark)"
   },
-  "pds-button-color-border-disabled": {
+  "pds-button-color-border-disabled-on-dark": {
     "$type": "color",
     "$value": "var(--pds-color-neutral-on-shell-white-35)"
+  },
+  "pds-button-color-border-disabled-on-light": {
+    "$type": "color",
+    "$value": "var(--pds-color-neutral-600)"
   },
   "pds-button-color-border-outlined-hover": {
     "$type": "color",
@@ -139,7 +155,7 @@
   },
   "pds-button-color-border-outlined-on-light": {
     "$type": "color",
-    "$value": "var(--pds-border-color-secondary)"
+    "$value": "var(--pds-primary)"
   },
   "pds-button-color-hover": {
     "$type": "color",
@@ -148,6 +164,10 @@
   "pds-button-color-text-disabled-on-dark": {
     "$type": "color",
     "$value": "var(--pds-color-neutral-on-shell-white-35)"
+  },
+  "pds-button-color-text-disabled-on-light": {
+    "$type": "color",
+    "$value": "var(--pds-text-disabled-2nd)"
   },
   "pds-button-color-text-on-dark": {
     "$type": "color",
@@ -341,7 +361,7 @@
     "$type": "color",
     "$value": "var(--pds-color-spring-green-800)"
   },
-  "pds-states-hvoer": {
+  "pds-states-hover": {
     "$type": "color",
     "$value": "var(--pds-color-neutral-on-shell-white-20)"
   },
@@ -552,6 +572,10 @@
   "pds-color-green-700": {
     "$type": "color",
     "$value": "#3a7d24"
+  },
+  "pds-color-grey-50": {
+    "$type": "color",
+    "$value": "#ffffff"
   },
   "pds-color-neutral-0": {
     "$type": "color",
@@ -935,7 +959,7 @@
   },
   "pds-type-body-m-bold-line-height": {
     "$type": "number",
-    "$value": 16.8
+    "$value": 22
   },
   "pds-type-body-m-bold-text-decoration": {
     "$type": "string",
@@ -963,7 +987,7 @@
   },
   "pds-type-body-m-medium-line-height": {
     "$type": "number",
-    "$value": 16.8
+    "$value": 22
   },
   "pds-type-body-m-medium-text-decoration": {
     "$type": "string",
@@ -991,7 +1015,7 @@
   },
   "pds-type-body-s-bold-line-height": {
     "$type": "number",
-    "$value": 14.4
+    "$value": 20
   },
   "pds-type-body-s-bold-text-decoration": {
     "$type": "string",
@@ -1019,7 +1043,7 @@
   },
   "pds-type-body-s-regular-line-height": {
     "$type": "number",
-    "$value": 14.4
+    "$value": 20
   },
   "pds-type-body-s-regular-text-decoration": {
     "$type": "string",
@@ -1047,7 +1071,7 @@
   },
   "pds-type-body-s-semibold-line-height": {
     "$type": "number",
-    "$value": 14.4
+    "$value": 20
   },
   "pds-type-body-s-semibold-text-decoration": {
     "$type": "string",
@@ -1075,7 +1099,7 @@
   },
   "pds-type-caption-m-line-height": {
     "$type": "number",
-    "$value": 14.4
+    "$value": 18
   },
   "pds-type-caption-m-text-decoration": {
     "$type": "string",
@@ -1103,7 +1127,7 @@
   },
   "pds-type-caption-s-line-height": {
     "$type": "number",
-    "$value": 12
+    "$value": 16
   },
   "pds-type-caption-s-text-decoration": {
     "$type": "string",
@@ -1131,7 +1155,7 @@
   },
   "pds-type-display-m-line-height": {
     "$type": "number",
-    "$value": 32
+    "$value": 40
   },
   "pds-type-display-m-text-decoration": {
     "$type": "string",
@@ -1159,7 +1183,7 @@
   },
   "pds-type-label-s-bold-line-height": {
     "$type": "number",
-    "$value": 12
+    "$value": 16
   },
   "pds-type-label-s-bold-text-decoration": {
     "$type": "string",
@@ -1187,7 +1211,7 @@
   },
   "pds-type-label-s-medium-line-height": {
     "$type": "number",
-    "$value": 12
+    "$value": 16
   },
   "pds-type-label-s-medium-text-decoration": {
     "$type": "string",
@@ -1215,7 +1239,7 @@
   },
   "pds-type-title-l-extrabold-line-height": {
     "$type": "number",
-    "$value": 25
+    "$value": 36
   },
   "pds-type-title-l-extrabold-text-decoration": {
     "$type": "string",
@@ -1243,7 +1267,7 @@
   },
   "pds-type-title-m-extrabold-line-height": {
     "$type": "number",
-    "$value": 22
+    "$value": 34
   },
   "pds-type-title-m-extrabold-text-decoration": {
     "$type": "string",
@@ -1271,7 +1295,7 @@
   },
   "pds-type-title-s-extrabold-line-height": {
     "$type": "number",
-    "$value": 21.6
+    "$value": 30
   },
   "pds-type-title-s-extrabold-text-decoration": {
     "$type": "string",
@@ -1299,7 +1323,7 @@
   },
   "pds-type-title-s-medium-line-height": {
     "$type": "number",
-    "$value": 21.6
+    "$value": 30
   },
   "pds-type-title-s-medium-text-decoration": {
     "$type": "string",
@@ -1327,7 +1351,7 @@
   },
   "pds-type-title-xl-extrabold-line-height": {
     "$type": "number",
-    "$value": 26
+    "$value": 38
   },
   "pds-type-title-xl-extrabold-text-decoration": {
     "$type": "string",
@@ -1355,7 +1379,7 @@
   },
   "pds-type-title-xs-bold-line-height": {
     "$type": "number",
-    "$value": 19.2
+    "$value": 28
   },
   "pds-type-title-xs-bold-text-decoration": {
     "$type": "string",
@@ -1383,7 +1407,7 @@
   },
   "pds-type-title-xxs-extrabold-line-height": {
     "$type": "number",
-    "$value": 16.8
+    "$value": 26
   },
   "pds-type-title-xxs-extrabold-text-decoration": {
     "$type": "string",

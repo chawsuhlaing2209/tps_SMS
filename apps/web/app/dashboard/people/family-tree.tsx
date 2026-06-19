@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import Link from "next/link";
+import { EmptyState } from "../../../components/shared/empty-state";
 import { Icon } from "../../lib/material-icon";
 
 export type FamilyTreeGuardian = {
@@ -40,14 +41,14 @@ export function FamilyTree({
   };
 
   if (!guardians.length && !students.length) {
-    return <p className="muted">{t("treeEmpty")}</p>;
+    return <EmptyState compact embedded icon="family_restroom" title={t("treeEmpty")} />;
   }
 
   return (
     <div className="family-tree" role="img" aria-label={t("treeAria")}>
       {guardians.length > 0 ? (
         <div className="family-tree__level family-tree__level--guardians">
-          <p className="family-tree__level-label">{t("treeGuardians")}</p>
+          <p className="pds-type-body-s-regular family-tree__level-label">{t("treeGuardians")}</p>
           <div className="family-tree__nodes">
             {guardians.map((guardian) => (
               <Link
@@ -58,12 +59,12 @@ export function FamilyTree({
                 <span className="family-tree-node__icon" aria-hidden>
                   <Icon name="supervisor_account" />
                 </span>
-                <span className="family-tree-node__name">{guardian.fullName}</span>
+                <span className="pds-type-body-m-medium family-tree-node__name">{guardian.fullName}</span>
                 {guardian.phone ? (
-                  <span className="family-tree-node__meta">{guardian.phone}</span>
+                  <span className="pds-type-body-s-regular family-tree-node__meta">{guardian.phone}</span>
                 ) : null}
                 {guardian.isPrimary ? (
-                  <span className="family-tree-node__badge">{t("primaryGuardian")}</span>
+                  <span className="pds-type-label-s-medium family-tree-node__badge">{t("primaryGuardian")}</span>
                 ) : null}
               </Link>
             ))}
@@ -80,7 +81,7 @@ export function FamilyTree({
 
       {students.length > 0 ? (
         <div className="family-tree__level family-tree__level--students">
-          <p className="family-tree__level-label">{t("treeStudents")}</p>
+          <p className="pds-type-body-s-regular family-tree__level-label">{t("treeStudents")}</p>
           <div className="family-tree__nodes">
             {students.map((student) => (
               <Link
@@ -91,12 +92,12 @@ export function FamilyTree({
                 <span className="family-tree-node__icon" aria-hidden>
                   <Icon name="school" />
                 </span>
-                <span className="family-tree-node__name">{student.fullName}</span>
-                <span className="family-tree-node__meta">
+                <span className="pds-type-body-m-medium family-tree-node__name">{student.fullName}</span>
+                <span className="pds-type-body-s-regular family-tree-node__meta">
                   {student.admissionNumber} · {student.status}
                 </span>
                 {student.guardians.length > 0 ? (
-                  <span className="family-tree-node__meta">
+                  <span className="pds-type-body-s-regular family-tree-node__meta">
                     {student.guardians.map((link) => relationshipLabel(link.relationship)).join(", ")}
                   </span>
                 ) : null}

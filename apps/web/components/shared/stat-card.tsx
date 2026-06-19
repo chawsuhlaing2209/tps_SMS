@@ -22,9 +22,9 @@ export function StatCard({ label, value, hint, icon, accent, className }: StatCa
   return (
     <article className={cn("stat-card", accent && "stat-card--accent", className)}>
       {icon ? <span className="stat-card__icon" aria-hidden>{icon}</span> : null}
-      <span className="stat-label">{label}</span>
-      <span className="stat-value">{value}</span>
-      {hint ? <span className="stat-card__hint">{hint}</span> : null}
+      <span className="pds-type-caption-s stat-label">{label}</span>
+      <span className="pds-type-title-l-extrabold stat-value">{value}</span>
+      {hint ? <span className="pds-type-label-s-bold stat-card__hint">{hint}</span> : null}
     </article>
   );
 }

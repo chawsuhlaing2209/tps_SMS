@@ -70,7 +70,7 @@ export default function ClassroomStudentsPage() {
       enableSorting: false,
       cell: ({ row }) => (
         <div style={{ display: "flex", gap: "8px" }}>
-          <Link href={`/dashboard/students/${row.original.id}`} className="row-action">
+          <Link href={`/dashboard/students/${row.original.id}`} className="pds-type-body-s-regular row-action">
             {t("viewProfile")}
           </Link>
         </div>
@@ -102,12 +102,12 @@ export default function ClassroomStudentsPage() {
           }}
           addLabel={t("assignStudent")}
           extra={
-            <Link href={`/dashboard/structure/rooms/${classroomId}`} className="btn-ghost">
+            <Link href={`/dashboard/structure/rooms/${classroomId}`} className="pds-type-body-m-bold btn-ghost">
               {t("openClassroom")}
             </Link>
           }
         />
-        <p className="muted panel-help">{t("classroomRosterSetupHelp")}</p>
+        <p className="pds-type-body-s-regular muted panel-help">{t("classroomRosterSetupHelp")}</p>
         <TablePanelBody
           loading={students.isLoading || classroom.isLoading}
           error={students.isError ? c("somethingWrong") : null}
@@ -133,15 +133,15 @@ export default function ClassroomStudentsPage() {
             setAssignOpen(false);
             form.reset({ studentId: "" });
             router.push(
-              `/dashboard/finance/billing?studentId=${values.studentId}&classroomId=${classroomId}`
+              `/dashboard/enrollments?studentId=${values.studentId}&classroomId=${classroomId}`
             );
           })}
           footer={
             <>
-              <button type="button" className="btn-ghost" onClick={() => setAssignOpen(false)}>
+              <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setAssignOpen(false)}>
                 {c("cancel")}
               </button>
-              <button type="submit" className="btn-primary" disabled={form.formState.isSubmitting}>
+              <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={form.formState.isSubmitting}>
                 <Icon name="person_add" />
                 {form.formState.isSubmitting ? t("creating") : t("assignStudent")}
               </button>

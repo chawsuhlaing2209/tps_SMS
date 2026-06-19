@@ -1,4 +1,5 @@
 "use client";
+import { FormInput } from "../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
@@ -15,6 +16,7 @@ import { RecordFormSheet } from "../../lib/record-sheet";
 import { getSession } from "../../lib/session";
 import { TablePanelBody, TablePanelHead, DataTableSection } from "../../lib/table-panel";
 import { TableSearchInput } from "../../lib/table-search";
+import { PdsSelectField } from "../../../components/pds";
 import { zodResolver } from "../../lib/zod-resolver";
 
 type GuardianOption = { id: string; fullName: string; phone: string | null };
@@ -85,7 +87,7 @@ export function HouseholdsDirectory() {
         <DirectoryNameCell
           name={row.original.name}
           avatar={
-            <span className="directory-avatar directory-avatar--household">
+            <span className="pds-type-title-xs-bold directory-avatar directory-avatar--household">
               <Icon name="family_restroom" />
             </span>
           }
@@ -148,10 +150,10 @@ export function HouseholdsDirectory() {
         })}
         footer={
           <>
-            <button type="button" className="btn-ghost" onClick={() => setCreateOpen(false)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setCreateOpen(false)}>
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={create.isPending}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={create.isPending}>
               <Icon name="add" />
               {create.isPending ? c("loading") : t("createHousehold")}
             </button>
@@ -159,18 +161,23 @@ export function HouseholdsDirectory() {
         }
       >
         <Field label={t("householdName")} error={form.formState.errors.name?.message}>
-          <input {...form.register("name")} placeholder={t("householdNamePlaceholder")} />
+          <FormInput {...form.register("name")} placeholder={t("householdNamePlaceholder")} />
         </Field>
         <Field label={t("primaryGuardian")} error={form.formState.errors.primaryGuardianId?.message}>
-          <select {...form.register("primaryGuardianId")}>
-            <option value="">{t("selectPrimaryGuardian")}</option>
-            {(guardians.data ?? []).map((guardian) => (
-              <option key={guardian.id} value={guardian.id}>
-                {guardian.fullName}
-                {guardian.phone ? ` (${guardian.phone})` : ""}
-              </option>
-            ))}
-          </select>
+          <PdsSelectField
+            variant="form"
+            value={form.watch("primaryGuardianId")}
+            onValueChange={(value) =>
+              form.setValue("primaryGuardianId", typeof value === "string" ? value : "", {
+                shouldValidate: true
+              })
+            }
+            placeholder={t("selectPrimaryGuardian")}
+            options={(guardians.data ?? []).map((guardian) => ({
+              value: guardian.id,
+              label: `${guardian.fullName}${guardian.phone ? ` (${guardian.phone})` : ""}`
+            }))}
+          />
         </Field>
       </RecordFormSheet>
     </>

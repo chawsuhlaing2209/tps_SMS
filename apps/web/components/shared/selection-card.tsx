@@ -41,12 +41,12 @@ export function SelectionCard({
         {icon}
       </span>
       <span className="selection-card__body">
-        <strong className="selection-card__title">{title}</strong>
-        <span className="selection-card__desc">{description}</span>
+        <strong className="pds-type-body-l-medium selection-card__title">{title}</strong>
+        <span className="pds-type-body-m-medium selection-card__desc">{description}</span>
       </span>
       {selected ? (
         <span className="selection-card__check" aria-hidden>
-          <Icon name="check" size={14} />
+          <Icon name="check_box" filled size={16} />
         </span>
       ) : null}
     </button>
