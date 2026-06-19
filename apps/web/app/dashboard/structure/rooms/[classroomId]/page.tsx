@@ -9,14 +9,18 @@ import { EmptyState } from "../../../../../components/shared/empty-state";
 import { useApiMutation, useApiQuery } from "../../../../lib/api";
 import { DetailHero } from "../../../../lib/detail-hero";
 import { Icon } from "../../../../lib/material-icon";
+import { appendNavigationTrail } from "../../../../lib/navigation-trail";
 import { Button, EntityList, EntityListItem, EntityListPanel } from "../../../../../components/pds";
 import { hasAnyPermission } from "../../../../lib/permissions";
 import { getSession } from "../../../../lib/session";
+import { toastSuccess } from "../../../../lib/toast";
 import { useCurrentAcademicYear } from "../../../../lib/use-current-academic-year";
 import { ClassroomFormSheet } from "../../classroom-form-sheet";
 import { roomAccentColor, roomLetter } from "../../subject-colors";
 import { PageHeader } from "../../../page-header-context";
 import { ClassroomOpsTabs } from "../classroom-ops-tabs";
+import { SubjectTeacherAssignmentSheet } from "../subject-teacher-assignment-sheet";
+import { cn } from "../../../../../lib/utils";
 
 type RoomDetail = {
   id: string;
@@ -49,6 +53,8 @@ type RoomDetail = {
 
 type StaffMember = { id: string; fullName: string };
 
+type SubjectRow = RoomDetail["subjects"][number];
+
 const CLASSROOMS_PATH = (tenant: string) => `/tenants/${tenant}/classrooms`;
 
 function staffInitials(name: string) {
@@ -74,6 +80,7 @@ export default function StructureRoomPage() {
 
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [assigningSubject, setAssigningSubject] = useState<SubjectRow | null>(null);
 
   const initialTab = searchParams.get("tab") === "attendance" ? "attendance" : "roster";
 
@@ -114,6 +121,20 @@ export default function StructureRoomPage() {
     ({ id }, tenant) => ({
       path: `${CLASSROOMS_PATH(tenant)}/${id}/archive`,
       init: { method: "POST" }
+    }),
+    { invalidatePaths }
+  );
+
+  const assignSubjectTeacher = useApiMutation<
+    { subjectId: string; teacherStaffId: string | null },
+    unknown
+  >(
+    (body, tenant) => ({
+      path: `${CLASSROOMS_PATH(tenant)}/${classroomId}/subjects/${body.subjectId}/teacher`,
+      init: {
+        method: "PATCH",
+        body: JSON.stringify({ teacherStaffId: body.teacherStaffId })
+      }
     }),
     { invalidatePaths }
   );
@@ -201,7 +222,7 @@ export default function StructureRoomPage() {
 
       <div className="structure-room-layout structure-room-layout--padauk">
         <EntityListPanel
-          title={t("subjectsAndTeachers")}
+          title={t("subjectsAndAssignments")}
           empty={!data.subjects.length ? t("noSubjectsYet") : undefined}
         >
           {data.subjects.length ? (
@@ -219,12 +240,37 @@ export default function StructureRoomPage() {
                         })
                       : t("teacherUnassigned")
                   }
-                  href={`/dashboard/structure/rooms/${classroomId}/subjects/${row.subjectId}`}
-                  actionLabel={t("openSubjectShort")}
-                  navigationFrom={{
-                    label: data.name,
-                    href: `/dashboard/structure/rooms/${classroomId}`
-                  }}
+                  trailing={
+                    <div className="pds-entity-list-item__actions">
+                      {canManage ? (
+                        <button
+                          type="button"
+                          className={cn(
+                            "pds-entity-list-item__icon-btn",
+                            assigningSubject?.subjectId === row.subjectId &&
+                              "pds-entity-list-item__icon-btn--active"
+                          )}
+                          aria-label={t("assignSubjectTeacher")}
+                          title={t("assignSubjectTeacher")}
+                          onClick={() => setAssigningSubject(row)}
+                        >
+                          <Icon name="edit" size={18} />
+                        </button>
+                      ) : null}
+                      <Link
+                        href={`/dashboard/structure/rooms/${classroomId}/subjects/${row.subjectId}`}
+                        className="pds-type-body-s-semibold pds-entity-list-item__open-link"
+                        onClick={() =>
+                          appendNavigationTrail({
+                            label: data.name,
+                            href: `/dashboard/structure/rooms/${classroomId}`
+                          })
+                        }
+                      >
+                        {t("openSubjectShort")}
+                      </Link>
+                    </div>
+                  }
                 />
               ))}
             </EntityList>
@@ -305,6 +351,30 @@ export default function StructureRoomPage() {
             onConfirm={async () => {
               await archiveRoom.mutateAsync({ id: classroomId });
               router.push(structureBackHref);
+            }}
+          />
+
+          <SubjectTeacherAssignmentSheet
+            open={Boolean(assigningSubject)}
+            onOpenChange={(open) => {
+              if (!open) {
+                setAssigningSubject(null);
+              }
+            }}
+            subjectName={assigningSubject?.subjectName ?? ""}
+            teachers={teachers.data ?? []}
+            initialTeacherStaffId={assigningSubject?.teacherStaffId}
+            submitting={assignSubjectTeacher.isPending}
+            onSubmit={async (values) => {
+              if (!assigningSubject) {
+                return;
+              }
+              await assignSubjectTeacher.mutateAsync({
+                subjectId: assigningSubject.subjectId,
+                teacherStaffId: values.teacherStaffId.trim() ? values.teacherStaffId : null
+              });
+              toastSuccess(t("subjectTeacherSaved"));
+              setAssigningSubject(null);
             }}
           />
         </>

@@ -6,9 +6,10 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { SubjectChip, SubjectChipGroup } from "../../../components/pds";
+import { Button, SubjectChip, SubjectChipGroup } from "../../../components/pds";
 import type { PdsSubjectColorKey } from "../../../components/pds/palettes";
 import { PdsSelectField } from "../../../components/pds";
+import { ConfirmDialog } from "../../../components/shared/confirm-dialog";
 import { EmptyState } from "../../../components/shared/empty-state";
 import { StatCard, StatGrid } from "../../../components/shared/stat-card";
 import { useApiMutation, useApiQuery } from "../../lib/api";
@@ -52,7 +53,7 @@ type SlotRow = {
   id: string;
   classroomId: string;
   subjectId: string;
-  teacherStaffId: string;
+  teacherStaffId: string | null;
   periodId: string;
   dayOfWeek: number;
   subjectName: string | null;
@@ -63,6 +64,16 @@ type SlotRow = {
   periodStartsAt: string | null;
   periodEndsAt: string | null;
 };
+
+type NoTeacherDialogState =
+  | {
+      subjectId: string;
+      subjectName: string;
+      pendingSubmit?: SlotFormValues;
+    }
+  | null;
+
+type SlotFormValues = { subjectId: string; staffId: string };
 
 type SlotSheetContext = {
   periodId: string;
@@ -142,8 +153,10 @@ export function TimetableWorkspace() {
 
   const [gradeId, setGradeId] = useState("");
   const [classroomId, setClassroomId] = useState("");
+  const [isEditingTimetable, setIsEditingTimetable] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<SlotRow | null>(null);
   const [slotSheet, setSlotSheet] = useState<SlotSheetContext | null>(null);
+  const [noTeacherDialog, setNoTeacherDialog] = useState<NoTeacherDialogState>(null);
 
   const grades = useApiQuery<GradeOverview[]>((tenant) =>
     yearId ? gradesPath(tenant, yearId) : null
@@ -182,6 +195,12 @@ export function TimetableWorkspace() {
     }
   }, [classroomId, classrooms.data]);
 
+  useEffect(() => {
+    setIsEditingTimetable(false);
+    setSlotSheet(null);
+    setSelectedSlot(null);
+  }, [resolvedClassroomId, resolvedGradeId]);
+
   const activeGrade = grades.data?.find((grade) => grade.id === resolvedGradeId);
   const activeClassroom = classrooms.data?.find((room) => room.id === resolvedClassroomId);
 
@@ -189,7 +208,7 @@ export function TimetableWorkspace() {
     {
       classroomId: string;
       subjectId: string;
-      staffId: string;
+      staffId?: string;
       periodId: string;
       dayOfWeek: number;
     },
@@ -205,7 +224,7 @@ export function TimetableWorkspace() {
   );
 
   const updateSlot = useApiMutation<
-    { slotId: string; subjectId: string; staffId: string },
+    { slotId: string; subjectId: string; staffId?: string },
     unknown
   >(
     ({ slotId, ...body }, tenant) => ({
@@ -245,12 +264,12 @@ export function TimetableWorkspace() {
     () =>
       z.object({
         subjectId: z.string().uuid(c("required")),
-        staffId: z.string().uuid(c("required"))
+        staffId: z.string()
       }),
     [c]
   );
 
-  const slotForm = useForm<{ subjectId: string; staffId: string }>({
+  const slotForm = useForm<SlotFormValues>({
     resolver: zodResolver(slotSchema),
     defaultValues: { subjectId: "", staffId: "" }
   });
@@ -315,16 +334,92 @@ export function TimetableWorkspace() {
     return options;
   }, [roomDetail.data?.subjects]);
 
-  function openSlotSheet(context: SlotSheetContext, values?: { subjectId: string; staffId: string }) {
+  function subjectNameFor(subjectId: string) {
+    return (
+      roomDetail.data?.subjects.find((row) => row.subjectId === subjectId)?.subjectName ??
+      activeGrade?.subjects.find((row) => row.id === subjectId)?.name ??
+      subjectId
+    );
+  }
+
+  async function persistSlot(values: SlotFormValues) {
+    if (!slotSheet || !resolvedClassroomId) {
+      return;
+    }
+    const staffId = values.staffId?.trim() ? values.staffId : undefined;
+    if (slotSheet.slotId) {
+      await updateSlot.mutateAsync({
+        slotId: slotSheet.slotId,
+        subjectId: values.subjectId,
+        staffId
+      });
+      toastSuccess(t("slotUpdated"));
+    } else {
+      await createSlot.mutateAsync({
+        classroomId: resolvedClassroomId,
+        subjectId: values.subjectId,
+        staffId,
+        periodId: slotSheet.periodId,
+        dayOfWeek: slotSheet.dayOfWeek
+      });
+      toastSuccess(t("slotSaved"));
+    }
+    setSlotSheet(null);
+    setNoTeacherDialog(null);
+  }
+
+  function openSlotSheet(context: SlotSheetContext, values?: SlotFormValues) {
     slotForm.reset(values ?? { subjectId: "", staffId: "" });
+    setNoTeacherDialog(null);
     setSlotSheet(context);
   }
 
   function handleSubjectChange(subjectId: string) {
-    slotForm.setValue("subjectId", subjectId, { shouldValidate: true });
+    if (!subjectId) {
+      slotForm.setValue("subjectId", "", { shouldValidate: true });
+      slotForm.setValue("staffId", "", { shouldValidate: true });
+      return;
+    }
+
     const match = roomDetail.data?.subjects.find((row) => row.subjectId === subjectId);
     if (match?.teacherStaffId) {
+      slotForm.setValue("subjectId", subjectId, { shouldValidate: true });
       slotForm.setValue("staffId", match.teacherStaffId, { shouldValidate: true });
+      return;
+    }
+
+    setNoTeacherDialog({
+      subjectId,
+      subjectName: subjectNameFor(subjectId)
+    });
+  }
+
+  function handleNoTeacherDialogOpenChange(open: boolean) {
+    if (open) {
+      return;
+    }
+    if (noTeacherDialog?.pendingSubmit) {
+      setNoTeacherDialog(null);
+      return;
+    }
+    setNoTeacherDialog(null);
+    setSlotSheet(null);
+  }
+
+  async function handleContinueWithoutTeacher() {
+    if (!noTeacherDialog) {
+      return;
+    }
+    const dialog = noTeacherDialog;
+    const values: SlotFormValues = dialog.pendingSubmit ?? {
+      subjectId: dialog.subjectId,
+      staffId: ""
+    };
+    slotForm.setValue("subjectId", values.subjectId, { shouldValidate: true });
+    slotForm.setValue("staffId", "", { shouldValidate: true });
+    setNoTeacherDialog(null);
+    if (dialog.pendingSubmit) {
+      await persistSlot(values);
     }
   }
 
@@ -392,16 +487,24 @@ export function TimetableWorkspace() {
                 </SubjectChipGroup>
               ) : null}
               {canManage ? (
-                <button
-                  type="button"
-                  className="pds-type-body-m-bold btn-ghost"
+                <Button
+                  buttonType={isEditingTimetable ? "filled" : "outlined"}
+                  buttonColor={isEditingTimetable ? "primary" : "secondary"}
+                  prefixIcon={isEditingTimetable ? "save" : "edit"}
                   onClick={() => {
-                    document.getElementById("timetable-weekly-grid")?.scrollIntoView({ behavior: "smooth" });
+                    if (isEditingTimetable) {
+                      setIsEditingTimetable(false);
+                      setSlotSheet(null);
+                      return;
+                    }
+                    setIsEditingTimetable(true);
+                    document
+                      .getElementById("timetable-weekly-grid")
+                      ?.scrollIntoView({ behavior: "smooth" });
                   }}
                 >
-                  <Icon name="edit" />
-                  {t("editTimetable")}
-                </button>
+                  {isEditingTimetable ? c("saveChanges") : t("editTimetable")}
+                </Button>
               ) : null}
             </div>
           </div>
@@ -469,7 +572,14 @@ export function TimetableWorkspace() {
           ) : !resolvedClassroomId ? (
             <EmptyState icon="meeting_room" title={t("selectClassroom")} />
           ) : (
-            <section id="timetable-weekly-grid" className="panel timetable-grid-panel">
+            <section
+              id="timetable-weekly-grid"
+              className={
+                isEditingTimetable
+                  ? "panel timetable-grid-panel timetable-grid-panel--editing"
+                  : "panel timetable-grid-panel"
+              }
+            >
               <div className="timetable-grid-wrap">
                 <table className="pds-type-body-m-medium timetable-board">
                   <thead>
@@ -526,7 +636,7 @@ export function TimetableWorkspace() {
 
                             return (
                               <td key={`${day}-${period.id}`}>
-                                {canManage ? (
+                                {canManage && isEditingTimetable ? (
                                   <button
                                     type="button"
                                     className="timetable-slot-empty"
@@ -560,7 +670,7 @@ export function TimetableWorkspace() {
         onClose={() => setSelectedSlot(null)}
         canManage={canManage}
         onDelete={
-          selectedSlot
+          selectedSlot && canManage && isEditingTimetable
             ? () =>
                 void deleteSlot.mutateAsync({ slotId: selectedSlot.id }).then(() => {
                   setSelectedSlot(null);
@@ -569,7 +679,7 @@ export function TimetableWorkspace() {
             : undefined
         }
         onEdit={
-          selectedSlot && canManage
+          selectedSlot && canManage && isEditingTimetable
             ? () => {
                 setSelectedSlot(null);
                 openSlotSheet(
@@ -580,7 +690,7 @@ export function TimetableWorkspace() {
                   },
                   {
                     subjectId: selectedSlot.subjectId,
-                    staffId: selectedSlot.teacherStaffId
+                    staffId: selectedSlot.teacherStaffId ?? ""
                   }
                 );
               }
@@ -595,25 +705,18 @@ export function TimetableWorkspace() {
         }}
         title={isEditingSlot ? t("editSlotTitle") : t("addSlotTitle")}
         onSubmit={slotForm.handleSubmit(async (values) => {
-          if (!slotSheet || !resolvedClassroomId) return;
-          if (slotSheet.slotId) {
-            await updateSlot.mutateAsync({
-              slotId: slotSheet.slotId,
-              subjectId: values.subjectId,
-              staffId: values.staffId
-            });
-            toastSuccess(t("slotUpdated"));
-          } else {
-            await createSlot.mutateAsync({
-              classroomId: resolvedClassroomId,
-              subjectId: values.subjectId,
-              staffId: values.staffId,
-              periodId: slotSheet.periodId,
-              dayOfWeek: slotSheet.dayOfWeek
-            });
-            toastSuccess(t("slotSaved"));
+          if (!slotSheet || !resolvedClassroomId) {
+            return;
           }
-          setSlotSheet(null);
+          if (!values.staffId?.trim()) {
+            setNoTeacherDialog({
+              subjectId: values.subjectId,
+              subjectName: subjectNameFor(values.subjectId),
+              pendingSubmit: values
+            });
+            return;
+          }
+          await persistSlot(values);
         })}
         footer={
           <>
@@ -671,6 +774,21 @@ export function TimetableWorkspace() {
           />
         </Field>
       </RecordFormSheet>
+
+      <ConfirmDialog
+        open={Boolean(noTeacherDialog)}
+        onOpenChange={handleNoTeacherDialogOpenChange}
+        title={t("noTeacherDialogTitle")}
+        description={t("noTeacherDialogDescription", {
+          subject: noTeacherDialog?.subjectName ?? ""
+        })}
+        confirmLabel={t("continueWithoutTeacher")}
+        cancelLabel={
+          noTeacherDialog?.pendingSubmit ? c("cancel") : t("cancelAddingSlot")
+        }
+        onConfirm={() => void handleContinueWithoutTeacher()}
+        loading={slotForm.formState.isSubmitting || createSlot.isPending || updateSlot.isPending}
+      />
     </div>
   );
 }

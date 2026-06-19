@@ -16,6 +16,7 @@ export default function FinanceLayout({ children }: { children: ReactNode }) {
               label: t("navReceivables"),
               items: [
                 { href: "/dashboard/finance/invoices", label: t("invoices"), icon: "description" },
+                { href: "/dashboard/finance/billing", label: t("collection"), icon: "account_balance_wallet" },
                 { href: "/dashboard/finance/payments", label: t("payments"), icon: "account_balance" },
                 { href: "/dashboard/finance/reports", label: t("reports"), icon: "bar_chart" }
               ]

@@ -219,7 +219,9 @@ export class TimetableService {
     const slots = await this.listSlots(tenantId, { classroomId, academicYearId: yearId });
 
     const subjectIds = new Set(slots.map((slot) => slot.subjectId));
-    const teacherIds = new Set(slots.map((slot) => slot.teacherStaffId));
+    const teacherIds = new Set(
+      slots.map((slot) => slot.teacherStaffId).filter((id): id is string => Boolean(id))
+    );
     const workingDays = await this.getWorkingDays(tenantId);
     const totalLessonCells = lessonPeriods.length * workingDays.length;
     const filledCells = slots.length;
@@ -285,17 +287,19 @@ export class TimetableService {
       throw new ConflictException("Classroom already has a class in this period");
     }
 
-    const [teacherConflict] = await this.db
-      .select()
-      .from(timetableSlots)
-      .where(
-        and(
-          eq(timetableSlots.tenantId, tenantId),
-          eq(timetableSlots.teacherStaffId, dto.staffId),
-          eq(timetableSlots.periodId, dto.periodId),
-          eq(timetableSlots.dayOfWeek, dto.dayOfWeek)
-        )
-      );
+    const [teacherConflict] = dto.staffId
+      ? await this.db
+          .select()
+          .from(timetableSlots)
+          .where(
+            and(
+              eq(timetableSlots.tenantId, tenantId),
+              eq(timetableSlots.teacherStaffId, dto.staffId),
+              eq(timetableSlots.periodId, dto.periodId),
+              eq(timetableSlots.dayOfWeek, dto.dayOfWeek)
+            )
+          )
+      : [undefined];
 
     if (teacherConflict) {
       throw new ConflictException("Teacher already assigned in this period");
@@ -309,7 +313,7 @@ export class TimetableService {
         tenantId,
         classroomId: dto.classroomId,
         subjectId: dto.subjectId,
-        teacherStaffId: dto.staffId,
+        teacherStaffId: dto.staffId ?? null,
         periodId: dto.periodId,
         dayOfWeek: dto.dayOfWeek,
         room: dto.roomLabel ?? null,
@@ -375,19 +379,21 @@ export class TimetableService {
       throw new ConflictException("Classroom already has a class in this period");
     }
 
-    const [teacherConflict] = await this.db
-      .select()
-      .from(timetableSlots)
-      .where(
-        and(
-          eq(timetableSlots.tenantId, tenantId),
-          eq(timetableSlots.teacherStaffId, dto.staffId),
-          eq(timetableSlots.periodId, existing.periodId),
-          eq(timetableSlots.dayOfWeek, existing.dayOfWeek),
-          ne(timetableSlots.id, slotId)
-        )
-      )
-      .limit(1);
+    const [teacherConflict] = dto.staffId
+      ? await this.db
+          .select()
+          .from(timetableSlots)
+          .where(
+            and(
+              eq(timetableSlots.tenantId, tenantId),
+              eq(timetableSlots.teacherStaffId, dto.staffId),
+              eq(timetableSlots.periodId, existing.periodId),
+              eq(timetableSlots.dayOfWeek, existing.dayOfWeek),
+              ne(timetableSlots.id, slotId)
+            )
+          )
+          .limit(1)
+      : [undefined];
 
     if (teacherConflict) {
       throw new ConflictException("Teacher already assigned in this period");
@@ -397,7 +403,7 @@ export class TimetableService {
       .update(timetableSlots)
       .set({
         subjectId: dto.subjectId,
-        teacherStaffId: dto.staffId,
+        teacherStaffId: dto.staffId ?? null,
         updatedBy: actorUserId,
         updatedAt: new Date()
       })

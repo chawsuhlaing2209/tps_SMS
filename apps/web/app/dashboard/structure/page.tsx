@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { SubjectChip, SubjectChipGroup } from "../../../components/pds";
 import { ConfirmDialog } from "../../../components/shared/confirm-dialog";
 import { EmptyState } from "../../../components/shared/empty-state";
 import { Button } from "../../../components/ui/button";
@@ -13,7 +14,7 @@ import { hasAnyPermission } from "../../lib/permissions";
 import { getSession } from "../../lib/session";
 import { useCurrentAcademicYear } from "../../lib/use-current-academic-year";
 import { ClassroomFormSheet, type ClassroomFormValues } from "./classroom-form-sheet";
-import { roomAccentColor, roomLetter, subjectColor } from "./subject-colors";
+import { roomAccentColor, roomLetter, resolveSubjectChipColorKey } from "./subject-colors";
 import { PageHeader } from "../page-header-context";
 
 type YearOverview = {
@@ -33,7 +34,7 @@ type GradeOverview = {
   status: string;
   classroomCount: number;
   studentCount: number;
-  subjects: { id: string; name: string; code: string | null }[];
+  subjects: { id: string; name: string; code: string | null; colorKey: string | null }[];
 };
 
 type ClassroomOverview = {
@@ -45,7 +46,7 @@ type ClassroomOverview = {
   classTeacherName: string | null;
   classTeacherStaffId: string | null;
   status: string;
-  subjects: { id: string; name: string; code: string | null }[];
+  subjects: { id: string; name: string; code: string | null; colorKey: string | null }[];
 };
 
 type StaffMember = { id: string; fullName: string };
@@ -389,23 +390,22 @@ export default function SchoolStructurePage() {
                           <p className="pds-type-body-m-medium structure-room-card__teacher-name">
                             {room.classTeacherName ?? "—"}
                           </p>
-                          <div className="structure-room-card__subjects">
-                            {(room.subjects ?? []).slice(0, 4).map((subject) => {
-                              const colors = subjectColor(subject.name);
-                              return (
-                                <span
+                          {room.subjects?.length ? (
+                            <SubjectChipGroup className="structure-room-card__subjects">
+                              {room.subjects.slice(0, 4).map((subject) => (
+                                <SubjectChip
                                   key={subject.id}
-                                  className="structure-subject-tag"
-                                  style={{ background: colors.bg, color: colors.text }}
+                                  colorKey={resolveSubjectChipColorKey(subject.name, subject.colorKey)}
                                 >
                                   {subject.name}
-                                </span>
-                              );
-                            })}
-                            {!room.subjects?.length ? (
-                              <span className="pds-type-body-s-regular muted">{t("noSubjectsYet")}</span>
-                            ) : null}
-                          </div>
+                                </SubjectChip>
+                              ))}
+                            </SubjectChipGroup>
+                          ) : (
+                            <p className="pds-type-body-s-regular muted structure-room-card__subjects structure-room-card__subjects--empty">
+                              {t("noSubjectsYet")}
+                            </p>
+                          )}
                           <div className="structure-room-card__footer">
                             <Link
                               href={`/dashboard/structure/rooms/${room.id}`}

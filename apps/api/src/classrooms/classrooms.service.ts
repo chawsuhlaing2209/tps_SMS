@@ -1,4 +1,4 @@
-import { Injectable, Inject, NotFoundException } from "@nestjs/common";
+import { Injectable, Inject, BadRequestException, NotFoundException } from "@nestjs/common";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
@@ -18,7 +18,7 @@ import {
 } from "../db/schema.js";
 import { TeacherAssignmentService } from "../identity/teacher-assignment.service.js";
 import type { TenantContext } from "../tenancy/tenant-context.js";
-import type { CreateClassroomDto, UpdateClassroomDto } from "./dto.js";
+import type { CreateClassroomDto, UpdateClassroomDto, AssignClassroomSubjectTeacherDto } from "./dto.js";
 
 @Injectable()
 export class ClassroomsService {
@@ -391,6 +391,7 @@ export class ClassroomsService {
         subjectId: subjects.id,
         subjectName: subjects.name,
         subjectCode: subjects.code,
+        subjectColorKey: subjects.colorKey,
         teacherStaffId: classroomSubjectTeachers.teacherStaffId,
         teacherName: staff.fullName
       })
@@ -451,6 +452,7 @@ export class ClassroomsService {
         subjectId: row.subjectId,
         subjectName: row.subjectName,
         subjectCode: row.subjectCode,
+        subjectColorKey: row.subjectColorKey,
         teacherStaffId: row.teacherStaffId,
         teacherName: row.teacherName,
         periodsPerWeek: periodsBySubject.get(row.subjectId) ?? 0
@@ -536,7 +538,8 @@ export class ClassroomsService {
       .select({
         id: subjects.id,
         name: subjects.name,
-        code: subjects.code
+        code: subjects.code,
+        colorKey: subjects.colorKey
       })
       .from(gradeSubjects)
       .innerJoin(subjects, eq(gradeSubjects.subjectId, subjects.id))
@@ -550,7 +553,7 @@ export class ClassroomsService {
       .orderBy(subjects.name);
 
     const seen = new Set<string>();
-    const unique: { id: string; name: string; code: string | null }[] = [];
+    const unique: { id: string; name: string; code: string | null; colorKey: string | null }[] = [];
 
     for (const row of rows) {
       const key = row.code?.trim().toLowerCase() || row.id;
@@ -672,5 +675,97 @@ export class ClassroomsService {
         )
       )
       .orderBy(students.fullName);
+  }
+
+  async assignSubjectTeacher(
+    tenantId: string,
+    classroomId: string,
+    subjectId: string,
+    dto: AssignClassroomSubjectTeacherDto,
+    actorUserId?: string
+  ) {
+    const classroom = await this.getClassroomOrThrow(tenantId, classroomId);
+
+    const [mapping] = await this.db
+      .select({ id: gradeSubjects.id })
+      .from(gradeSubjects)
+      .where(
+        and(
+          eq(gradeSubjects.tenantId, tenantId),
+          eq(gradeSubjects.academicYearId, classroom.academicYearId),
+          eq(gradeSubjects.gradeId, classroom.gradeId),
+          eq(gradeSubjects.subjectId, subjectId)
+        )
+      );
+
+    if (!mapping) {
+      throw new BadRequestException(
+        "Subject is not part of this classroom's grade curriculum for the academic year."
+      );
+    }
+
+    if (dto.teacherStaffId) {
+      const [member] = await this.db
+        .select({ id: staff.id })
+        .from(staff)
+        .where(and(eq(staff.tenantId, tenantId), eq(staff.id, dto.teacherStaffId)));
+
+      if (!member) {
+        throw new NotFoundException("Staff member not found.");
+      }
+    }
+
+    const [previous] = await this.db
+      .select({
+        id: classroomSubjectTeachers.id,
+        teacherStaffId: classroomSubjectTeachers.teacherStaffId
+      })
+      .from(classroomSubjectTeachers)
+      .where(
+        and(
+          eq(classroomSubjectTeachers.tenantId, tenantId),
+          eq(classroomSubjectTeachers.classroomId, classroomId),
+          eq(classroomSubjectTeachers.subjectId, subjectId)
+        )
+      );
+
+    await this.db
+      .delete(classroomSubjectTeachers)
+      .where(
+        and(
+          eq(classroomSubjectTeachers.tenantId, tenantId),
+          eq(classroomSubjectTeachers.classroomId, classroomId),
+          eq(classroomSubjectTeachers.subjectId, subjectId)
+        )
+      );
+
+    if (dto.teacherStaffId) {
+      await this.db.insert(classroomSubjectTeachers).values({
+        tenantId,
+        classroomId,
+        subjectId,
+        teacherStaffId: dto.teacherStaffId,
+        createdBy: actorUserId,
+        updatedBy: actorUserId
+      });
+    }
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "classroom_subject_teacher.assign",
+      recordType: "Classroom",
+      recordId: classroomId,
+      before: previous
+        ? { subjectId, teacherStaffId: previous.teacherStaffId }
+        : undefined,
+      after: { subjectId, teacherStaffId: dto.teacherStaffId ?? null }
+    });
+
+    return {
+      classroomId,
+      subjectId,
+      teacherStaffId: dto.teacherStaffId ?? null
+    };
   }
 }

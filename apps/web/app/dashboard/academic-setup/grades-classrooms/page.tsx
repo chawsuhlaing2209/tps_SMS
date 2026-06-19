@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { CheckboxList } from "../../../../components/pds";
+import { CheckboxList, PdsSelectField } from "../../../../components/pds";
 import { EmptyState } from "../../../../components/shared/empty-state";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { Field } from "../../../lib/form";
@@ -35,6 +35,7 @@ type GradeOverview = {
   classroomCount: number;
   studentCount: number;
   gradeChiefName: string | null;
+  gradeChiefStaffId: string | null;
 };
 type ClassroomOverview = {
   id: string;
@@ -53,6 +54,7 @@ type GradeFormValues = {
   minAge: string;
   maxAge: string;
   subjectIds: string[];
+  gradeChiefStaffId: string;
   roomName: string;
   roomCapacity: string;
 };
@@ -201,6 +203,7 @@ export default function GradesClassroomsPage() {
         minAge: z.string(),
         maxAge: z.string(),
         subjectIds: z.array(z.string()),
+        gradeChiefStaffId: z.string(),
         roomName: z.string(),
         roomCapacity: z.string()
       }),
@@ -212,6 +215,7 @@ export default function GradesClassroomsPage() {
     minAge: "",
     maxAge: "",
     subjectIds: [],
+    gradeChiefStaffId: "",
     roomName: "",
     roomCapacity: ""
   };
@@ -237,6 +241,7 @@ export default function GradesClassroomsPage() {
       minAge: selectedGrade.minAge != null ? String(selectedGrade.minAge) : "",
       maxAge: selectedGrade.maxAge != null ? String(selectedGrade.maxAge) : "",
       subjectIds: selectedGrade.subjects.map((s) => s.id),
+      gradeChiefStaffId: selectedGrade.gradeChiefStaffId ?? "",
       roomName: "",
       roomCapacity: ""
     });
@@ -250,7 +255,8 @@ export default function GradesClassroomsPage() {
       minAge: values.minAge ? Number(values.minAge) : null,
       maxAge: values.maxAge ? Number(values.maxAge) : null,
       academicYearId: contextYearId,
-      subjectIds: values.subjectIds
+      subjectIds: values.subjectIds,
+      gradeChiefStaffId: values.gradeChiefStaffId || null
     };
 
     if (gradeFormMode?.type === "edit") {
@@ -521,6 +527,23 @@ export default function GradesClassroomsPage() {
         </Field>
         <Field label={t("maxAge")}>
           <FormInput type="number" min={0} {...gradeForm.register("maxAge")} />
+        </Field>
+        <Field label={t("gradeChiefTitle")}>
+          <PdsSelectField
+            variant="form"
+            value={gradeForm.watch("gradeChiefStaffId")}
+            onValueChange={(value) =>
+              gradeForm.setValue("gradeChiefStaffId", typeof value === "string" ? value : "", {
+                shouldDirty: true
+              })
+            }
+            placeholder={t("selectGradeChief")}
+            options={(teachers.data ?? []).map((member) => ({
+              value: member.id,
+              label: member.fullName
+            }))}
+          />
+          <p className="pds-type-body-s-regular muted">{setup("gradeChiefHelp")}</p>
         </Field>
         <Field label={t("subjectsForGrade")}>
           <CheckboxList

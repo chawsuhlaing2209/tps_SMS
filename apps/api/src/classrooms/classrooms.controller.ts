@@ -15,7 +15,7 @@ import { PermissionsGuard } from "../identity/permissions.guard.js";
 import { TeacherScoped } from "../identity/teacher-scope.decorator.js";
 import type { TenantContext } from "../tenancy/tenant-context.js";
 import { ClassroomsService } from "./classrooms.service.js";
-import { CreateClassroomDto, UpdateClassroomDto } from "./dto.js";
+import { CreateClassroomDto, UpdateClassroomDto, AssignClassroomSubjectTeacherDto } from "./dto.js";
 
 interface TenantRequest extends Request {
   tenantContext: TenantContext;
@@ -114,6 +114,24 @@ export class ClassroomsController {
     return this.classroomsService.getClassroomRoomDetail(
       req.tenantContext.tenantId,
       classroomId
+    );
+  }
+
+  @Patch(":classroomId/subjects/:subjectId/teacher")
+  @RequireAnyPermissions("classroom.manage", "academic_setup.manage")
+  assignSubjectTeacher(
+    @Req() req: TenantRequest,
+    @Param("classroomId") classroomId: string,
+    @Param("subjectId") subjectId: string,
+    @Body() dto: AssignClassroomSubjectTeacherDto,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.classroomsService.assignSubjectTeacher(
+      req.tenantContext.tenantId,
+      classroomId,
+      subjectId,
+      dto,
+      actorUserId
     );
   }
 

@@ -126,6 +126,50 @@ export class AcademicsService {
     }
   }
 
+  private async syncGradeChief(
+    tenantId: string,
+    academicYearId: string,
+    gradeId: string,
+    staffId: string | null,
+    actorUserId?: string
+  ) {
+    await this.assertAcademicYearMutable(tenantId, academicYearId);
+    await this.getGradeOrThrow(tenantId, gradeId);
+
+    await this.db
+      .delete(gradeChiefAssignments)
+      .where(
+        and(
+          eq(gradeChiefAssignments.tenantId, tenantId),
+          eq(gradeChiefAssignments.academicYearId, academicYearId),
+          eq(gradeChiefAssignments.gradeId, gradeId)
+        )
+      );
+
+    if (!staffId) {
+      return;
+    }
+
+    const [teacher] = await this.db
+      .select({ id: staff.id })
+      .from(staff)
+      .where(and(eq(staff.tenantId, tenantId), eq(staff.id, staffId)))
+      .limit(1);
+
+    if (!teacher) {
+      throw new NotFoundException("Teacher not found.");
+    }
+
+    await this.db.insert(gradeChiefAssignments).values({
+      tenantId,
+      academicYearId,
+      gradeId,
+      staffId,
+      createdBy: actorUserId,
+      updatedBy: actorUserId
+    });
+  }
+
   private async syncSubjectGrades(
     tenantId: string,
     academicYearId: string,
@@ -424,6 +468,16 @@ export class AcademicsService {
       );
     }
 
+    if (dto.academicYearId && dto.gradeChiefStaffId !== undefined) {
+      await this.syncGradeChief(
+        tenantId,
+        dto.academicYearId,
+        grade.id,
+        dto.gradeChiefStaffId,
+        actorUserId
+      );
+    }
+
     await this.auditService.recordEvent({
       tenantId,
       actorUserId: actorUserId ?? null,
@@ -479,6 +533,16 @@ export class AcademicsService {
         dto.academicYearId,
         gradeId,
         dto.subjectIds,
+        actorUserId
+      );
+    }
+
+    if (dto.academicYearId && dto.gradeChiefStaffId !== undefined) {
+      await this.syncGradeChief(
+        tenantId,
+        dto.academicYearId,
+        gradeId,
+        dto.gradeChiefStaffId,
         actorUserId
       );
     }
@@ -956,7 +1020,8 @@ export class AcademicsService {
         .select({
           id: subjects.id,
           name: subjects.name,
-          code: subjects.code
+          code: subjects.code,
+          colorKey: subjects.colorKey
         })
         .from(gradeSubjects)
         .innerJoin(subjects, eq(gradeSubjects.subjectId, subjects.id))
@@ -996,7 +1061,7 @@ export class AcademicsService {
         );
 
       const [gradeChiefRow] = await this.db
-        .select({ name: staff.fullName })
+        .select({ name: staff.fullName, staffId: staff.id })
         .from(gradeChiefAssignments)
         .innerJoin(staff, eq(gradeChiefAssignments.staffId, staff.id))
         .where(
@@ -1014,7 +1079,8 @@ export class AcademicsService {
         subjects: uniqueSubjects,
         classroomCount: classroomCountRow?.count ?? 0,
         studentCount: studentCountRow?.count ?? 0,
-        gradeChiefName: gradeChiefRow?.name ?? null
+        gradeChiefName: gradeChiefRow?.name ?? null,
+        gradeChiefStaffId: gradeChiefRow?.staffId ?? null
       });
     }
 

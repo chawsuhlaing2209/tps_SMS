@@ -1,4 +1,5 @@
-/** Category palette — resolved from design tokens at runtime in the browser. */
+import type { PdsSubjectColorKey } from "../../../components/pds/palettes";
+import { PDS_SUBJECT_COLOR_KEYS } from "../../../components/pds/palettes";
 export const SUBJECT_COLOR_OPTIONS = [
   { key: "azure", bg: "var(--pds-color-azure-60)", text: "var(--pds-background-card)" },
   { key: "pomegranate", bg: "var(--pds-color-accent-pomegrate)", text: "var(--pds-background-card)" },
@@ -59,6 +60,16 @@ export function subjectColor(name: string, colorKey?: string | null) {
     hash = name.charCodeAt(i) + ((hash << 5) - hash);
   }
   return SUBJECT_COLOR_OPTIONS[Math.abs(hash) % SUBJECT_COLOR_OPTIONS.length]!;
+}
+
+export function resolveSubjectChipColorKey(
+  name: string,
+  colorKey?: string | null
+): PdsSubjectColorKey {
+  if (colorKey && (PDS_SUBJECT_COLOR_KEYS as readonly string[]).includes(colorKey)) {
+    return colorKey as PdsSubjectColorKey;
+  }
+  return subjectColor(name).key;
 }
 
 export function subjectIconByKey(iconKey: string | null | undefined): string {

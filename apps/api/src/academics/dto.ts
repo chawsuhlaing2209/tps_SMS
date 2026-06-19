@@ -9,6 +9,7 @@ import {
   IsString,
   IsUUID,
   Min,
+  ValidateIf,
   ValidateNested
 } from "class-validator";
 
@@ -82,6 +83,11 @@ export class CreateGradeDto {
   @IsArray()
   @IsUUID("4", { each: true })
   subjectIds?: string[];
+
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsUUID()
+  gradeChiefStaffId?: string | null;
 }
 
 export class UpdateGradeDto {
@@ -108,6 +114,11 @@ export class UpdateGradeDto {
   @IsArray()
   @IsUUID("4", { each: true })
   subjectIds?: string[];
+
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsUUID()
+  gradeChiefStaffId?: string | null;
 }
 
 export class CreateSectionDto {

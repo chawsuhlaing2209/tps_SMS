@@ -59,3 +59,9 @@ export class UpdateClassroomDto {
   @IsUUID()
   classTeacherStaffId?: string | null;
 }
+
+export class AssignClassroomSubjectTeacherDto {
+  @IsOptional()
+  @IsUUID()
+  teacherStaffId?: string | null;
+}

@@ -650,7 +650,7 @@ export const timetableSlots = pgTable("timetable_slots", {
   ...tenantFields,
   classroomId: uuid("classroom_id").references(() => classrooms.id).notNull(),
   subjectId: uuid("subject_id").references(() => subjects.id).notNull(),
-  teacherStaffId: uuid("teacher_staff_id").references(() => staff.id).notNull(),
+  teacherStaffId: uuid("teacher_staff_id").references(() => staff.id),
   periodId: uuid("period_id").references(() => timetablePeriods.id).notNull(),
   room: text("room"),
   dayOfWeek: integer("day_of_week").notNull(),

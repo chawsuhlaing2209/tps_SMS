@@ -134,6 +134,13 @@
       "when": 1783100000000,
       "tag": "0018_school_schedule",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1783200000000,
+      "tag": "0019_timetable_slot_optional_teacher",
+      "breakpoints": true
     }
   ]
 }

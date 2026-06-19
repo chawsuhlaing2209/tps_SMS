@@ -42,7 +42,8 @@ export class CreateTimetableSlotDto {
   declare subjectId: string;
 
   @IsUUID()
-  declare staffId: string;
+  @IsOptional()
+  staffId?: string;
 
   @IsUUID()
   declare periodId: string;
@@ -105,5 +106,6 @@ export class UpdateTimetableSlotDto {
   declare subjectId: string;
 
   @IsUUID()
-  declare staffId: string;
+  @IsOptional()
+  staffId?: string;
 }
