@@ -16,7 +16,10 @@ export function randomInvoiceSuffix(length = 3): string {
   return suffix;
 }
 
-export function buildInvoiceNumber(date = new Date(), suffix = randomInvoiceSuffix(3)): string {
+export function buildInvoiceNumber(
+  date: Date = new Date(),
+  suffix = randomInvoiceSuffix(3)
+): string {
   return `INV-${formatInvoiceDatePart(date)}-${suffix}`;
 }
 
