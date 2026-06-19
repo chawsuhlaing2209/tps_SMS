@@ -24,6 +24,9 @@ export type PageHeaderValue = {
   title: string;
   breadcrumbs: PageBreadcrumb[];
   description?: string;
+  actions?: ReactNode;
+  /** Reserve the title-row actions slot for a client portal (context-aware CTAs). */
+  actionsPortal?: boolean;
 };
 
 type StoredHeader = PageHeaderValue & { pathname: string };
@@ -50,19 +53,23 @@ function usePageHeaderContext(): PageHeaderContextType {
 }
 
 /**
- * Publishes title and breadcrumbs to the sticky top bar. Navigation is via
- * breadcrumbs only — no in-page back links.
+ * Publishes page metadata to the in-body chrome (breadcrumb bar + title row).
+ * Navigation is via breadcrumbs only — no in-page back links.
  */
 export function PageHeader({
   title,
   breadcrumbs = [],
   description,
+  actions,
+  actionsPortal,
   segment,
   resetTrail
 }: {
   title: string;
   breadcrumbs?: PageBreadcrumb[];
   description?: string;
+  actions?: ReactNode;
+  actionsPortal?: boolean;
   segment?: NavigationSegment;
   resetTrail?: NavigationSegment[];
 }) {
@@ -86,9 +93,11 @@ export function PageHeader({
       pathname,
       title,
       breadcrumbs,
-      description
+      description,
+      actions,
+      actionsPortal
     });
-  }, [pathname, title, crumbKey, description, setHeader]);
+  }, [pathname, title, crumbKey, description, actions, actionsPortal, setHeader]);
 
   return null;
 }
@@ -144,7 +153,9 @@ export function useResolvedPageHeader(): PageHeaderValue {
     return {
       title: header.title,
       breadcrumbs,
-      description: header.description
+      description: header.description,
+      actions: header.actions,
+      actionsPortal: header.actionsPortal
     };
   }
   return fallback;

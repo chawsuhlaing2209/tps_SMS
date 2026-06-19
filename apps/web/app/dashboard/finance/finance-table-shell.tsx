@@ -22,7 +22,7 @@ export function FinanceTableShell({
   if (loading) {
     return (
       <section className="table-section">
-        <p className="muted">{c("loading")}</p>
+        <p className="pds-type-body-s-regular muted">{c("loading")}</p>
       </section>
     );
   }
@@ -30,7 +30,7 @@ export function FinanceTableShell({
   if (error) {
     return (
       <section className="table-section">
-        <EmptyState compact icon="error" title={c("somethingWrong")} />
+        <EmptyState compact embedded icon="error" title={c("somethingWrong")} />
       </section>
     );
   }
@@ -38,7 +38,7 @@ export function FinanceTableShell({
   if (empty) {
     return (
       <section className="table-section">
-        <EmptyState compact icon="inbox" title={emptyMessage ?? c("empty")} />
+        <EmptyState compact embedded icon="inbox" title={emptyMessage ?? c("empty")} />
       </section>
     );
   }

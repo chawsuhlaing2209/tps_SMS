@@ -8,6 +8,8 @@ import { Field } from "../../lib/form";
 import { Icon } from "../../lib/material-icon";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
+import { RadioBox } from "../../../components/pds";
+import { EmptyState } from "../../../components/shared/empty-state";
 import { TableSearchInput } from "../../lib/table-search";
 
 type FamilyMember = {
@@ -149,7 +151,7 @@ export function StudentFamilyPanel({
                   <>
                     <button
                       type="button"
-                      className="btn-ghost"
+                      className="pds-type-body-m-bold btn-ghost"
                       disabled={!hasGuardian || busy}
                       onClick={() => void handleCreateFamily()}
                     >
@@ -158,7 +160,7 @@ export function StudentFamilyPanel({
                     </button>
                     <button
                       type="button"
-                      className="btn-ghost"
+                      className="pds-type-body-m-bold btn-ghost"
                       disabled={busy}
                       onClick={() => {
                         setFormError(null);
@@ -173,7 +175,7 @@ export function StudentFamilyPanel({
                   <>
                     <button
                       type="button"
-                      className="btn-ghost"
+                      className="pds-type-body-m-bold btn-ghost"
                       disabled={busy}
                       onClick={() => {
                         setFormError(null);
@@ -185,7 +187,7 @@ export function StudentFamilyPanel({
                     </button>
                     <button
                       type="button"
-                      className="btn-ghost"
+                      className="pds-type-body-m-bold btn-ghost"
                       disabled={busy}
                       onClick={() => void handleRemoveFromFamily()}
                     >
@@ -204,13 +206,13 @@ export function StudentFamilyPanel({
           error={family.isError ? c("somethingWrong") : null}
         >
           {!familyGroupId ? (
-            <p className="muted">{hasGuardian ? t("familyNotLinked") : t("familyNeedsGuardian")}</p>
+            <p className="pds-type-body-s-regular muted">{hasGuardian ? t("familyNotLinked") : t("familyNeedsGuardian")}</p>
           ) : family.data ? (
             <>
               <p className="student-profile-family__name">
                 <strong>{family.data.name}</strong>
                 {family.data.primaryGuardian ? (
-                  <span className="muted">
+                  <span className="pds-type-body-s-regular muted">
                     {t("familyPrimaryGuardian", {
                       name: family.data.primaryGuardian.fullName
                     })}
@@ -218,7 +220,7 @@ export function StudentFamilyPanel({
                 ) : null}
               </p>
               <p>
-                <Link className="row-action" href={`/dashboard/people/households/${familyGroupId}`}>
+                <Link className="pds-type-body-s-regular row-action" href={`/dashboard/people/households/${familyGroupId}`}>
                   {t("viewFamilyTree")}
                 </Link>
               </p>
@@ -229,21 +231,21 @@ export function StudentFamilyPanel({
                     {siblings.map((member) => (
                       <li key={member.id}>
                         <Link href={`/dashboard/students/${member.id}`}>{member.fullName}</Link>
-                        <span className="muted">
+                        <span className="pds-type-body-s-regular muted">
                           {member.admissionNumber} · {member.status}
                         </span>
                       </li>
                     ))}
                   </ul>
-                  <p className="muted panel-help">{t("familySiblingHint")}</p>
+                  <p className="pds-type-body-s-regular muted panel-help">{t("familySiblingHint")}</p>
                 </>
               ) : (
-                <p className="muted">{t("familyNoOtherMembers")}</p>
+                <EmptyState compact embedded icon="family_restroom" title={t("familyNoOtherMembers")} />
               )}
             </>
           ) : null}
           {formError && !joinOpen ? (
-            <p className="error-text" role="alert">
+            <p className="pds-type-body-m-medium error-text" role="alert">
               {formError}
             </p>
           ) : null}
@@ -267,10 +269,10 @@ export function StudentFamilyPanel({
         }}
         footer={
           <>
-            <button type="button" className="btn-ghost" onClick={() => setJoinOpen(false)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setJoinOpen(false)}>
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={busy || !selectedFamilyId}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={busy || !selectedFamilyId}>
               <Icon name="check" />
               {setFamilyGroup.isPending ? c("loading") : t("joinFamilyConfirm")}
             </button>
@@ -286,44 +288,45 @@ export function StudentFamilyPanel({
           />
         </Field>
         {debouncedSearch.length < 2 ? (
-          <p className="muted">{t("searchFamilyMin")}</p>
+          <p className="pds-type-body-s-regular muted">{t("searchFamilyMin")}</p>
         ) : searchResults.isLoading ? (
-          <p className="muted">{c("loading")}</p>
+          <p className="pds-type-body-s-regular muted">{c("loading")}</p>
         ) : !searchResults.data?.data?.length ? (
-          <p className="muted">{t("searchFamilyEmpty")}</p>
+          <EmptyState compact embedded icon="search" title={t("searchFamilyEmpty")} />
         ) : (
           <ul className="student-profile-family-search">
             {searchResults.data.data.map((result) => (
               <li key={result.id}>
-                <label className="student-profile-family-option">
-                  <input
-                    type="radio"
-                    name="familyGroup"
-                    value={result.id}
-                    checked={selectedFamilyId === result.id}
-                    onChange={() => setSelectedFamilyId(result.id)}
-                  />
-                  <span>
-                    <strong>{result.name}</strong>
-                    <span className="muted">
-                      {t("familySearchMeta", {
-                        count: result.memberCount,
-                        guardian: result.primaryGuardianName ?? "—"
-                      })}
-                    </span>
-                    {result.members.length > 0 ? (
-                      <span className="muted">
-                        {result.members.map((member) => member.fullName).join(", ")}
+                <RadioBox
+                  name="familyGroup"
+                  value={result.id}
+                  checked={selectedFamilyId === result.id}
+                  onCheckedChange={() => setSelectedFamilyId(result.id)}
+                  showDescription={false}
+                  label={
+                    <span>
+                      <strong>{result.name}</strong>
+                      <span className="pds-type-body-s-regular muted">
+                        {t("familySearchMeta", {
+                          count: result.memberCount,
+                          guardian: result.primaryGuardianName ?? "—",
+                        })}
                       </span>
-                    ) : null}
-                  </span>
-                </label>
+                      {result.members.length > 0 ? (
+                        <span className="pds-type-body-s-regular muted">
+                          {result.members.map((member) => member.fullName).join(", ")}
+                        </span>
+                      ) : null}
+                    </span>
+                  }
+                  className="student-profile-family-option"
+                />
               </li>
             ))}
           </ul>
         )}
         {formError ? (
-          <p className="error-text" role="alert">
+          <p className="pds-type-body-m-medium error-text" role="alert">
             {formError}
           </p>
         ) : null}

@@ -1,4 +1,5 @@
 "use client";
+import { FormInput } from "../../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
@@ -13,7 +14,11 @@ import { hasAnyPermission } from "../../../lib/permissions";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { getSession } from "../../../lib/session";
 import { TablePanelBody, TablePanelHead } from "../../../lib/table-panel";
+import { PdsSelectField } from "../../../../components/pds";
+import { EmptyState } from "../../../../components/shared/empty-state";
 import { zodResolver } from "../../../lib/zod-resolver";
+import { ModulePageHeader } from "../../module-page-header";
+import { moduleBreadcrumbs } from "../../../lib/page-header-utils";
 
 type ExamCycle = { id: string; name: string };
 type Classroom = { id: string; name: string };
@@ -41,6 +46,7 @@ const SCHEDULES_PATH = (tenant: string) => `/tenants/${tenant}/exam-schedules`;
 
 export default function ExamSchedulesPage() {
   const t = useTranslations("exams");
+  const nav = useTranslations("nav");
   const c = useTranslations("common");
   const requiredMessage = c("required");
   const permissions = getSession()?.permissions;
@@ -144,12 +150,12 @@ export default function ExamSchedulesPage() {
       enableSorting: false,
       cell: ({ row }) => (
         <div style={{ display: "flex", gap: "8px" }}>
-          <button type="button" className="row-action" onClick={() => openResults(row.original)}>
+          <button type="button" className="pds-type-body-s-regular row-action" onClick={() => openResults(row.original)}>
             {t("enterResults")}
           </button>
           <button
             type="button"
-            className="row-action"
+            className="pds-type-body-s-regular row-action"
             disabled={lock.isPending}
             onClick={() => void lock.mutateAsync({ id: row.original.id })}
           >
@@ -161,24 +167,30 @@ export default function ExamSchedulesPage() {
   ];
 
   if (!canManage) {
-    return <p className="muted">{c("empty")}</p>;
+    return <EmptyState icon="calendar_month" title={c("empty")} />;
   }
 
   return (
     <>
+      <ModulePageHeader
+        navKey="exams"
+        title={t("schedulesTitle")}
+        breadcrumbs={moduleBreadcrumbs("exams", nav, [{ label: t("schedules") }])}
+      />
       <TablePanelHead
         title={t("schedulesTitle")}
         extra={
           <label className="form-inline">
-            <span className="muted">{t("filterClassroom")}</span>
-            <select value={classroomFilter} onChange={(e) => setClassroomFilter(e.target.value)}>
-              <option value="">{t("allClassrooms")}</option>
-              {classrooms.data?.map((cl) => (
-                <option key={cl.id} value={cl.id}>
-                  {cl.name}
-                </option>
-              ))}
-            </select>
+            <span className="pds-type-body-s-regular muted">{t("filterClassroom")}</span>
+            <PdsSelectField
+              variant="filter"
+              value={classroomFilter}
+              onValueChange={(value) => setClassroomFilter(typeof value === "string" ? value : "")}
+              placeholder={t("allClassrooms")}
+              options={
+                classrooms.data?.map((cl) => ({ value: cl.id, label: cl.name })) ?? []
+              }
+            />
           </label>
         }
         onRefresh={() => void schedules.refetch()}
@@ -222,10 +234,10 @@ export default function ExamSchedulesPage() {
         })}
         footer={
           <>
-            <button type="button" className="btn-ghost" onClick={() => setScheduleOpen(false)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setScheduleOpen(false)}>
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={form.formState.isSubmitting}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={form.formState.isSubmitting}>
               <Icon name="check" />
               {form.formState.isSubmitting ? t("creating") : c("save")}
             </button>
@@ -233,40 +245,49 @@ export default function ExamSchedulesPage() {
         }
       >
         <Field label={t("cycle")} error={form.formState.errors.examCycleId?.message}>
-          <select {...form.register("examCycleId")}>
-            <option value="">{t("selectCycle")}</option>
-            {cycles.data?.map((cycle) => (
-              <option key={cycle.id} value={cycle.id}>
-                {cycle.name}
-              </option>
-            ))}
-          </select>
+          <PdsSelectField
+            variant="form"
+            value={form.watch("examCycleId")}
+            onValueChange={(value) =>
+              form.setValue("examCycleId", typeof value === "string" ? value : "", {
+                shouldValidate: true
+              })
+            }
+            placeholder={t("selectCycle")}
+            options={cycles.data?.map((cycle) => ({ value: cycle.id, label: cycle.name })) ?? []}
+          />
         </Field>
         <Field label={t("classroom")} error={form.formState.errors.classroomId?.message}>
-          <select {...form.register("classroomId")}>
-            <option value="">{t("selectClassroom")}</option>
-            {classrooms.data?.map((cl) => (
-              <option key={cl.id} value={cl.id}>
-                {cl.name}
-              </option>
-            ))}
-          </select>
+          <PdsSelectField
+            variant="form"
+            value={form.watch("classroomId")}
+            onValueChange={(value) =>
+              form.setValue("classroomId", typeof value === "string" ? value : "", {
+                shouldValidate: true
+              })
+            }
+            placeholder={t("selectClassroom")}
+            options={classrooms.data?.map((cl) => ({ value: cl.id, label: cl.name })) ?? []}
+          />
         </Field>
         <Field label={t("subject")} error={form.formState.errors.subjectId?.message}>
-          <select {...form.register("subjectId")}>
-            <option value="">{t("selectSubject")}</option>
-            {subjects.data?.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
+          <PdsSelectField
+            variant="form"
+            value={form.watch("subjectId")}
+            onValueChange={(value) =>
+              form.setValue("subjectId", typeof value === "string" ? value : "", {
+                shouldValidate: true
+              })
+            }
+            placeholder={t("selectSubject")}
+            options={subjects.data?.map((s) => ({ value: s.id, label: s.name })) ?? []}
+          />
         </Field>
         <Field label={t("examDate")} error={form.formState.errors.examDate?.message}>
-          <input type="date" {...form.register("examDate")} />
+          <FormInput type="date" {...form.register("examDate")} />
         </Field>
         <Field label={t("maxMarks")} error={form.formState.errors.maxMarks?.message}>
-          <input type="number" min={0} {...form.register("maxMarks")} />
+          <FormInput type="number" min={0} {...form.register("maxMarks")} />
         </Field>
       </RecordFormSheet>
 
@@ -301,7 +322,7 @@ export default function ExamSchedulesPage() {
           <>
             <button
               type="button"
-              className="btn-ghost"
+              className="pds-type-body-m-bold btn-ghost"
               onClick={() => {
                 setResultsSchedule(null);
                 setResults({});
@@ -309,7 +330,7 @@ export default function ExamSchedulesPage() {
             >
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={saveResults.isPending}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={saveResults.isPending}>
               <Icon name="check" />
               {saveResults.isPending ? t("savingResults") : t("saveResults")}
             </button>
@@ -317,9 +338,9 @@ export default function ExamSchedulesPage() {
         }
       >
         {classroomStudents.isLoading ? (
-          <p className="muted">{c("loading")}</p>
+          <p className="pds-type-body-s-regular muted">{c("loading")}</p>
         ) : !classroomStudents.data?.length ? (
-          <p className="muted">{t("noStudents")}</p>
+          <EmptyState compact embedded icon="group" title={t("noStudents")} />
         ) : (
           <div className="form-stack">
             {classroomStudents.data.map((student) => {
@@ -328,7 +349,7 @@ export default function ExamSchedulesPage() {
                 <div key={student.id} style={{ display: "grid", gap: "6px" }}>
                   <strong>{student.fullName}</strong>
                   <div style={{ display: "flex", gap: "8px" }}>
-                    <input
+                    <FormInput
                       type="number"
                       min={0}
                       placeholder={t("marks")}
@@ -340,7 +361,7 @@ export default function ExamSchedulesPage() {
                         }))
                       }
                     />
-                    <input
+                    <FormInput
                       type="text"
                       placeholder={t("remarks")}
                       value={value.remarks}

@@ -5,6 +5,7 @@ const config: Config = {
   content: [
     './app/**/*.{ts,tsx}',
     './components/**/*.{ts,tsx}',
+    './stories/**/*.{ts,tsx}',
   ],
   theme: {
     extend: {

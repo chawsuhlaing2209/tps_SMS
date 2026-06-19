@@ -3,6 +3,7 @@
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
+import { PdsSelectField } from "../../components/pds";
 
 const LOCALES = ["en", "my"] as const;
 
@@ -22,18 +23,17 @@ export function LanguageSwitcher() {
   }
 
   return (
-    <label className="lang-switch" aria-label={t("label")}>
-      <select
+    <label className="pds-type-body-m-medium lang-switch" aria-label={t("label")}>
+      <PdsSelectField
+        variant="filter"
         value={locale}
         disabled={pending}
-        onChange={(event) => change(event.target.value)}
-      >
-        {LOCALES.map((code) => (
-          <option key={code} value={code}>
-            {t(code)}
-          </option>
-        ))}
-      </select>
+        onValueChange={(value) => change(typeof value === "string" ? value : locale)}
+        options={LOCALES.map((code) => ({
+          value: code,
+          label: t(code)
+        }))}
+      />
     </label>
   );
 }

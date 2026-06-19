@@ -1,6 +1,8 @@
 "use client";
+import { FormInput } from "../../../../components/shared/form-input";
 
 import { useTranslations } from "next-intl";
+import { cn } from "../../../../lib/utils";
 import { useMemo, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { z } from "zod";
@@ -9,7 +11,9 @@ import { Field } from "../../../lib/form";
 import { Icon } from "../../../lib/material-icon";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { zodResolver } from "../../../lib/zod-resolver";
+import { PdsSelectField } from "../../../../components/pds";
 import { PageHeader } from "../../page-header-context";
+import { EmptyState } from "../../../../components/shared/empty-state";
 import styles from "./payment-plans.module.css";
 
 type Installment = {
@@ -159,16 +163,16 @@ export default function PaymentPlansPage() {
         description={t("paymentPlansHelp")}
         breadcrumbs={[
           { label: nav("group_business") },
-          { label: nav("finance"), href: "/dashboard/finance/billing" },
+          { label: nav("finance"), href: "/dashboard/finance/invoices" },
           { label: t("paymentPlansTitle") }
         ]}
       />
 
       <div className={styles.intro}>
-        <p className={styles.introText}>{t("paymentPlansIntro")}</p>
+        <p className={cn("pds-type-body-m-medium", styles.introText)}>{t("paymentPlansIntro")}</p>
         <button
           type="button"
-          className="btn-primary"
+          className="pds-type-body-m-bold btn-primary"
           onClick={() => {
             createForm.reset({ name: "", description: "", frequency: "annual" });
             setFormError(null);
@@ -181,11 +185,11 @@ export default function PaymentPlansPage() {
       </div>
 
       {plans.isLoading ? (
-        <p className="muted">{c("loading")}</p>
+        <p className="pds-type-body-s-regular muted">{c("loading")}</p>
       ) : plans.isError ? (
-        <p className="error-text">{c("somethingWrong")}</p>
+        <p className="pds-type-body-m-medium error-text">{c("somethingWrong")}</p>
       ) : !sortedPlans.length ? (
-        <p className="muted">{t("noPaymentPlans")}</p>
+        <EmptyState compact embedded icon="payments" title={t("noPaymentPlans")} />
       ) : (
         <div className={styles.planList}>
           {sortedPlans.map((plan) => {
@@ -197,18 +201,18 @@ export default function PaymentPlansPage() {
               >
                 <div className={styles.planHead}>
                   <div className={styles.planHeadLeft}>
-                    <span className={styles.planIcon}>
+                    <span className={cn("pds-type-title-xs-bold", styles.planIcon)}>
                       <Icon name={planIcon(plan.frequency)} size={20} />
                     </span>
                     <div>
-                      <h2 className={styles.planTitle}>{plan.name}</h2>
+                      <h2 className={cn("pds-type-title-m-extrabold", styles.planTitle)}>{plan.name}</h2>
                       {plan.description ? (
-                        <p className={styles.planDescription}>{plan.description}</p>
+                        <p className={cn("pds-type-body-m-medium", styles.planDescription)}>{plan.description}</p>
                       ) : null}
                     </div>
                   </div>
                   <div className={styles.planActions}>
-                    <button type="button" className={styles.editBtn} onClick={() => openSchedule(plan)}>
+                    <button type="button" className={cn("pds-type-body-m-bold", styles.editBtn)} onClick={() => openSchedule(plan)}>
                       <Icon name="edit" size={16} />
                       {t("editSchedule")}
                     </button>
@@ -223,12 +227,12 @@ export default function PaymentPlansPage() {
                   </div>
                 </div>
                 <div className={styles.schedule}>
-                  <p className={styles.scheduleLabel}>{t("paymentSchedule")}</p>
+                  <p className={cn("pds-type-label-s-medium", styles.scheduleLabel)}>{t("paymentSchedule")}</p>
                   <ul className={styles.scheduleList}>
                     {plan.installments.map((item) => (
                       <li key={item.id} className={styles.scheduleRow}>
-                        <span className={styles.scheduleLabelText}>{item.label}</span>
-                        <span className={styles.scheduleDue}>{item.dueDate}</span>
+                        <span className={cn("pds-type-body-m-medium", styles.scheduleLabelText)}>{item.label}</span>
+                        <span className={cn("pds-type-body-m-medium", styles.scheduleDue)}>{item.dueDate}</span>
                       </li>
                     ))}
                   </ul>
@@ -272,12 +276,12 @@ export default function PaymentPlansPage() {
         })}
         footer={
           <>
-            <button type="button" className="btn-ghost" onClick={() => setSchedulePlan(null)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setSchedulePlan(null)}>
               {c("cancel")}
             </button>
             <button
               type="button"
-              className="btn-ghost"
+              className="pds-type-body-m-bold btn-ghost"
               onClick={() =>
                 installmentFields.append({ label: "", dueDate: "", installmentCount: "" })
               }
@@ -285,7 +289,7 @@ export default function PaymentPlansPage() {
               <Icon name="add" />
               {t("addInstallment")}
             </button>
-            <button type="submit" className="btn-primary" disabled={scheduleForm.formState.isSubmitting}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={scheduleForm.formState.isSubmitting}>
               {scheduleForm.formState.isSubmitting ? c("loading") : c("save")}
             </button>
           </>
@@ -295,13 +299,13 @@ export default function PaymentPlansPage() {
           {installmentFields.fields.map((field, index) => (
             <div key={field.id} className={styles.installmentRow}>
               <Field label={t("installmentLabel")}>
-                <input {...scheduleForm.register(`installments.${index}.label`)} />
+                <FormInput {...scheduleForm.register(`installments.${index}.label`)} />
               </Field>
               <Field label={t("installmentDue")}>
-                <input {...scheduleForm.register(`installments.${index}.dueDate`)} />
+                <FormInput {...scheduleForm.register(`installments.${index}.dueDate`)} />
               </Field>
               <Field label={t("installmentCount")}>
-                <input
+                <FormInput
                   type="number"
                   min={1}
                   {...scheduleForm.register(`installments.${index}.installmentCount`)}
@@ -309,7 +313,7 @@ export default function PaymentPlansPage() {
               </Field>
               <button
                 type="button"
-                className="row-action"
+                className="pds-type-body-s-regular row-action"
                 disabled={installmentFields.fields.length <= 1}
                 onClick={() => installmentFields.remove(index)}
               >
@@ -318,7 +322,7 @@ export default function PaymentPlansPage() {
             </div>
           ))}
         </div>
-        {formError ? <p className="error-text">{formError}</p> : null}
+        {formError ? <p className="pds-type-body-m-medium error-text">{formError}</p> : null}
       </RecordFormSheet>
 
       <RecordFormSheet
@@ -342,31 +346,37 @@ export default function PaymentPlansPage() {
         })}
         footer={
           <>
-            <button type="button" className="btn-ghost" onClick={() => setCreateOpen(false)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setCreateOpen(false)}>
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={createForm.formState.isSubmitting}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={createForm.formState.isSubmitting}>
               {createForm.formState.isSubmitting ? c("loading") : t("createPaymentPlan")}
             </button>
           </>
         }
       >
         <Field label={c("name")} error={createForm.formState.errors.name?.message}>
-          <input {...createForm.register("name")} />
+          <FormInput {...createForm.register("name")} />
         </Field>
         <Field label={t("planDescription")}>
           <textarea rows={3} {...createForm.register("description")} />
         </Field>
         <Field label={t("planFrequency")} error={createForm.formState.errors.frequency?.message}>
-          <select {...createForm.register("frequency")}>
-            {FREQUENCIES.map((value) => (
-              <option key={value} value={value}>
-                {t(`paymentFrequencies.${value}`)}
-              </option>
-            ))}
-          </select>
+          <PdsSelectField
+            variant="form"
+            value={createForm.watch("frequency") ?? ""}
+            onValueChange={(value) =>
+              createForm.setValue("frequency", typeof value === "string" ? (value as (typeof FREQUENCIES)[number]) : "annual", {
+                shouldValidate: true
+              })
+            }
+            options={FREQUENCIES.map((value) => ({
+              value,
+              label: t(`paymentFrequencies.${value}`)
+            }))}
+          />
         </Field>
-        {formError ? <p className="error-text">{formError}</p> : null}
+        {formError ? <p className="pds-type-body-m-medium error-text">{formError}</p> : null}
       </RecordFormSheet>
     </div>
   );

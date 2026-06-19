@@ -1,4 +1,5 @@
 "use client";
+import { FormInput } from "../../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
@@ -8,6 +9,7 @@ import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
+import { EmptyState } from "../../../../components/shared/empty-state";
 import { StatusBadge } from "../../../../components/shared/badge";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { DataTable } from "../../../lib/data-table";
@@ -23,6 +25,7 @@ import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
 import { zodResolver } from "../../../lib/zod-resolver";
 import { navigateWithTrail } from "../../../lib/navigation-trail";
 import { EnrollmentWizard } from "../../enrollments/enrollment-wizard";
+import { RequestDiscountSheet } from "../../finance/discounts/request-discount-sheet";
 import { PageHeader } from "../../page-header-context";
 import { StudentFamilyPanel } from "../student-family-panel";
 
@@ -133,7 +136,9 @@ export default function StudentDetailPage() {
   const permissions = getSession()?.permissions;
   const canManage = hasAnyPermission(permissions, ["student.manage"]);
   const canViewFinance = hasAnyPermission(permissions, ["finance.manage"]);
+  const canRequestDiscount = hasAnyPermission(permissions, ["discount.request"]);
   const f = useTranslations("finance");
+  const d = useTranslations("discounts");
   const currentYear = useCurrentAcademicYear();
 
   const student = useApiQuery<StudentProfile>(
@@ -155,6 +160,7 @@ export default function StudentDetailPage() {
   const [statusConfirm, setStatusConfirm] = useState<"deactivate" | "activate" | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [resumeDraft, setResumeDraft] = useState<Enrollment | null>(null);
+  const [requestDiscountOpen, setRequestDiscountOpen] = useState(false);
 
   const update = useApiMutation<
     {
@@ -289,7 +295,7 @@ export default function StudentDetailPage() {
       header: e("invoice"),
       cell: ({ row }) =>
         row.original.invoiceId ? (
-          <Link className="row-action" href={`/dashboard/finance/invoices/${row.original.invoiceId}`}>
+          <Link className="pds-type-body-s-regular row-action" href={`/dashboard/finance/invoices/${row.original.invoiceId}`}>
             {e("viewInvoice")}
           </Link>
         ) : (
@@ -303,14 +309,14 @@ export default function StudentDetailPage() {
       cell: ({ row }) => {
         if (row.original.status === "draft" && !row.original.invoiceId) {
           return (
-            <button type="button" className="row-action" onClick={() => openEnrollmentWizard(row.original)}>
+            <button type="button" className="pds-type-body-s-regular row-action" onClick={() => openEnrollmentWizard(row.original)}>
               {e("continueEnrollment")}
             </button>
           );
         }
         if (row.original.status === "approved" && !row.original.invoiceId) {
           return (
-            <button type="button" className="row-action" onClick={() => openEnrollmentWizard(row.original)}>
+            <button type="button" className="pds-type-body-s-regular row-action" onClick={() => openEnrollmentWizard(row.original)}>
               {e("continueEnrollment")}
             </button>
           );
@@ -375,11 +381,11 @@ export default function StudentDetailPage() {
         ]}
       />
 
-      {student.isLoading ? <p className="muted">{c("loading")}</p> : null}
+      {student.isLoading ? <p className="pds-type-body-s-regular muted">{c("loading")}</p> : null}
 
       {!student.isLoading && (student.isError || !data) ? (
         <div className="page-stack">
-          <p className="error-text">{t("notFound")}</p>
+          <p className="pds-type-body-m-medium error-text">{t("notFound")}</p>
         </div>
       ) : null}
 
@@ -390,9 +396,9 @@ export default function StudentDetailPage() {
           <span className="student-profile-avatar">{studentInitials(data.fullName)}</span>
           <div>
             <h2 className="structure-room-banner__title">{data.fullName}</h2>
-            <p className="structure-room-banner__meta">{heroMeta}</p>
+            <p className="pds-type-body-s-regular structure-room-banner__meta">{heroMeta}</p>
             {!canManage ? (
-              <span className="student-profile-status-label">
+              <span className="pds-type-body-m-medium student-profile-status-label">
                 {t(`status_${data.status}` as "status_enrolled")}
               </span>
             ) : null}
@@ -453,19 +459,19 @@ export default function StudentDetailPage() {
 
       <div className="student-profile-stats">
         <article className="student-profile-stat">
-          <span className="student-profile-stat__label">{t("attendanceStat")}</span>
+          <span className="pds-type-body-s-regular student-profile-stat__label">{t("attendanceStat")}</span>
           <strong className="student-profile-stat__value">
             {profile.attendancePercent != null ? `${profile.attendancePercent}%` : "—"}
           </strong>
         </article>
         <article className="student-profile-stat">
-          <span className="student-profile-stat__label">{t("termGpaStat")}</span>
+          <span className="pds-type-body-s-regular student-profile-stat__label">{t("termGpaStat")}</span>
           <strong className="student-profile-stat__value">
             {profile.termGpa != null ? profile.termGpa.toFixed(1) : "—"}
           </strong>
         </article>
         <article className="student-profile-stat">
-          <span className="student-profile-stat__label">{t("feesStat")}</span>
+          <span className="pds-type-body-s-regular student-profile-stat__label">{t("feesStat")}</span>
           <strong
             className={
               profile.feeStatus === "paid_in_full"
@@ -477,13 +483,13 @@ export default function StudentDetailPage() {
           </strong>
         </article>
         <article className="student-profile-stat">
-          <span className="student-profile-stat__label">{t("guardianStat")}</span>
+          <span className="pds-type-body-s-regular student-profile-stat__label">{t("guardianStat")}</span>
           {profile.primaryGuardian ? (
             <>
               <strong className="student-profile-stat__value student-profile-stat__value--compact">
                 {profile.primaryGuardian.fullName}
               </strong>
-              <span className="student-profile-stat__sub">
+              <span className="pds-type-body-m-medium student-profile-stat__sub">
                 {profile.primaryGuardian.phone ?? t("noGuardianPhone")}
               </span>
             </>
@@ -513,7 +519,7 @@ export default function StudentDetailPage() {
         error={enrollments.isError ? c("somethingWrong") : null}
       >
         {data.classrooms.length > 0 ? (
-          <div className="student-profile-placements">
+          <div className="pds-type-body-m-medium student-profile-placements">
             <h4>{t("classroomPlacementsTitle")}</h4>
             <ul className="student-profile-placement-list">
               {data.classrooms.map((row) => {
@@ -526,7 +532,7 @@ export default function StudentDetailPage() {
                     {active ? (
                       <StatusBadge status="active" label={t("placementActive")} />
                     ) : (
-                      <span className="muted">
+                      <span className="pds-type-body-s-regular muted">
                         {t("placementEnded", {
                           date: new Intl.DateTimeFormat(undefined, {
                             day: "numeric",
@@ -544,7 +550,7 @@ export default function StudentDetailPage() {
         ) : null}
 
         {!enrollments.data?.length ? (
-          <p className="muted">{t("noEnrollmentsYet")}</p>
+          <EmptyState compact embedded icon="school" title={t("noEnrollmentsYet")} />
         ) : (
           <DataTable columns={enrollmentColumns} data={enrollments.data} />
         )}
@@ -555,6 +561,18 @@ export default function StudentDetailPage() {
         <TablePanelHead
           title={f("studentBilling")}
           onRefresh={() => void billing.refetch()}
+          extra={
+            canRequestDiscount ? (
+              <button
+                type="button"
+                className="pds-type-body-m-bold btn-ghost"
+                onClick={() => setRequestDiscountOpen(true)}
+              >
+                <Icon name="volunteer_activism" size={18} />
+                {d("request")}
+              </button>
+            ) : null
+          }
         />
         <TablePanelBody
           loading={billing.isLoading}
@@ -564,13 +582,13 @@ export default function StudentDetailPage() {
               <>
                 <div className="student-profile-stats">
                   <article className="student-profile-stat">
-                    <span className="student-profile-stat__label">{f("totalOutstanding")}</span>
+                    <span className="pds-type-body-s-regular student-profile-stat__label">{f("totalOutstanding")}</span>
                     <strong className="student-profile-stat__value">
                       {billing.data.totalOutstanding.toLocaleString()}
                     </strong>
                   </article>
                   <article className="student-profile-stat">
-                    <span className="student-profile-stat__label">{f("totalPaid")}</span>
+                    <span className="pds-type-body-s-regular student-profile-stat__label">{f("totalPaid")}</span>
                     <strong className="student-profile-stat__value">
                       {billing.data.totalPaid.toLocaleString()}
                     </strong>
@@ -579,7 +597,7 @@ export default function StudentDetailPage() {
 
                 <h4>{f("invoices")}</h4>
                 {!billing.data.invoices.length ? (
-                  <p className="muted">{f("noInvoices")}</p>
+                  <EmptyState compact embedded icon="receipt_long" title={f("noInvoices")} />
                 ) : (
                   <ul className="student-profile-billing-list">
                     {billing.data.invoices.map((invoice) => (
@@ -587,7 +605,7 @@ export default function StudentDetailPage() {
                         <Link href={`/dashboard/finance/invoices/${invoice.id}`}>
                           {invoice.invoiceNumber}
                         </Link>
-                        <span className="muted">
+                        <span className="pds-type-body-s-regular muted">
                           {f(`source_${invoice.source}`)} · {invoice.total} · {invoice.status}
                         </span>
                       </li>
@@ -597,13 +615,13 @@ export default function StudentDetailPage() {
 
                 <h4>{f("activeServices")}</h4>
                 {!billing.data.activeServices.length ? (
-                  <p className="muted">{f("noActiveServices")}</p>
+                  <EmptyState compact embedded icon="handshake" title={f("noActiveServices")} />
                 ) : (
                   <ul className="student-profile-billing-list">
                     {billing.data.activeServices.map((service) => (
                       <li key={service.id}>
                         {service.feeItemName}
-                        <span className="muted">{service.effectiveFrom}</span>
+                        <span className="pds-type-body-s-regular muted">{service.effectiveFrom}</span>
                       </li>
                     ))}
                   </ul>
@@ -611,13 +629,13 @@ export default function StudentDetailPage() {
 
                 <h4>{f("billingDiscounts")}</h4>
                 {!billing.data.discounts.length ? (
-                  <p className="muted">{f("noDiscounts")}</p>
+                  <EmptyState compact embedded icon="sell" title={f("noDiscounts")} />
                 ) : (
                   <ul className="student-profile-billing-list">
                     {billing.data.discounts.map((discount) => (
                       <li key={discount.id}>
                         {discount.ruleName}
-                        <span className="muted">
+                        <span className="pds-type-body-s-regular muted">
                           {discount.status} · {discount.reason}
                         </span>
                       </li>
@@ -698,12 +716,12 @@ export default function StudentDetailPage() {
             })}
             footer={
               <>
-                <button type="button" className="btn-ghost" onClick={() => setEditOpen(false)}>
+                <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setEditOpen(false)}>
                   {c("cancel")}
                 </button>
                 <button
                   type="submit"
-                  className="btn-primary"
+                  className="pds-type-body-m-bold btn-primary"
                   disabled={update.isPending || updateGuardian.isPending || createGuardian.isPending}
                 >
                   <Icon name="check" />
@@ -713,29 +731,29 @@ export default function StudentDetailPage() {
             }
           >
             <Field label={t("firstName")} error={editForm.formState.errors.firstName?.message}>
-              <input {...editForm.register("firstName")} />
+              <FormInput {...editForm.register("firstName")} />
             </Field>
             <Field label={t("lastName")} error={editForm.formState.errors.lastName?.message}>
-              <input {...editForm.register("lastName")} />
+              <FormInput {...editForm.register("lastName")} />
             </Field>
             <Field label={t("address")}>
-              <input {...editForm.register("address")} />
+              <FormInput {...editForm.register("address")} />
             </Field>
             <Field label={t("medicalNotes")}>
               <textarea {...editForm.register("medicalNotes")} rows={3} />
             </Field>
             <div className="student-profile-edit-divider">
               <h4>{t("guardianContactTitle")}</h4>
-              <p className="muted">{t("guardianContactHelp")}</p>
+              <p className="pds-type-body-s-regular muted">{t("guardianContactHelp")}</p>
             </div>
             <Field label={t("guardianFirstName")}>
-              <input {...editForm.register("guardianFirstName")} />
+              <FormInput {...editForm.register("guardianFirstName")} />
             </Field>
             <Field label={t("guardianLastName")}>
-              <input {...editForm.register("guardianLastName")} />
+              <FormInput {...editForm.register("guardianLastName")} />
             </Field>
             <Field label={t("guardianPhone")}>
-              <input {...editForm.register("guardianPhone")} />
+              <FormInput {...editForm.register("guardianPhone")} />
             </Field>
           </RecordFormSheet>
 
@@ -768,6 +786,16 @@ export default function StudentDetailPage() {
             onConfirm={() => void confirmStatusChange()}
           />
         </>
+      ) : null}
+
+      {canRequestDiscount ? (
+        <RequestDiscountSheet
+          open={requestDiscountOpen}
+          onOpenChange={setRequestDiscountOpen}
+          studentId={studentId}
+          studentName={student.data?.fullName}
+          onRequested={() => void billing.refetch()}
+        />
       ) : null}
 
       {canManage ? (

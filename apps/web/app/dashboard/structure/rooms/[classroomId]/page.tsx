@@ -5,10 +5,11 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { ConfirmDialog } from "../../../../../components/shared/confirm-dialog";
+import { EmptyState } from "../../../../../components/shared/empty-state";
 import { useApiMutation, useApiQuery } from "../../../../lib/api";
 import { DetailHero } from "../../../../lib/detail-hero";
 import { Icon } from "../../../../lib/material-icon";
-import { RecordList, RecordListItem, RecordListPanel } from "../../../../lib/record-list";
+import { Button, EntityList, EntityListItem, EntityListPanel } from "../../../../../components/pds";
 import { hasAnyPermission } from "../../../../lib/permissions";
 import { getSession } from "../../../../lib/session";
 import { useCurrentAcademicYear } from "../../../../lib/use-current-academic-year";
@@ -118,25 +119,17 @@ export default function StructureRoomPage() {
   );
 
   if (detail.isLoading || currentYear.isLoading) {
-    return <p className="muted">{c("loading")}</p>;
+    return <p className="pds-type-body-s-regular muted">{c("loading")}</p>;
   }
 
   if (detail.isError || !detail.data) {
-    return (
-      <div className="structure-empty">
-        <p className="error-text">{t("classroomNotFound")}</p>
-      </div>
-    );
+    return <EmptyState icon="error" title={t("classroomNotFound")} />;
   }
 
   const data = detail.data;
 
   if (currentYear.data && data.academicYearId !== currentYear.data.id) {
-    return (
-      <div className="structure-empty">
-        <p className="muted">{t("classroomWrongYear")}</p>
-      </div>
-    );
+    return <EmptyState icon="event_busy" title={t("classroomWrongYear")} />;
   }
 
   const accent = roomAccentColor(data.name);
@@ -178,7 +171,7 @@ export default function StructureRoomPage() {
                 title={t("editClassroom")}
                 onClick={() => setEditOpen(true)}
               >
-                <Icon name="edit" size={18} />
+                <Icon name="edit" size={20} />
               </button>
               <button
                 type="button"
@@ -187,40 +180,34 @@ export default function StructureRoomPage() {
                 title={t("deleteClassroom")}
                 onClick={() => setDeleteOpen(true)}
               >
-                <Icon name="delete" size={18} />
+                <Icon name="delete" size={20} />
               </button>
             </>
           ) : null
         }
         actions={
           <>
-            <Link
-              href={`/dashboard/structure/rooms/${classroomId}?tab=attendance`}
-              className="detail-hero__pill"
-            >
-              <Icon name="fact_check" size={18} />
-              {t("takeAttendance")}
-            </Link>
-            <Link
-              href="/dashboard/communication"
-              className="detail-hero__pill detail-hero__pill--ghost"
-            >
-              <Icon name="send" size={18} />
-              {t("messageGuardians")}
-            </Link>
+            <Button buttonType="filled" buttonColor="primary" prefixIcon="fact_check" asChild>
+              <Link href={`/dashboard/structure/rooms/${classroomId}?tab=attendance`}>
+                {t("takeAttendance")}
+              </Link>
+            </Button>
+            <Button buttonType="outlined" buttonColor="primary" prefixIcon="send" asChild>
+              <Link href="/dashboard/communication">{t("messageGuardians")}</Link>
+            </Button>
           </>
         }
       />
 
       <div className="structure-room-layout structure-room-layout--padauk">
-        <RecordListPanel
+        <EntityListPanel
           title={t("subjectsAndTeachers")}
           empty={!data.subjects.length ? t("noSubjectsYet") : undefined}
         >
           {data.subjects.length ? (
-            <RecordList>
+            <EntityList>
               {data.subjects.map((row) => (
-                <RecordListItem
+                <EntityListItem
                   key={row.subjectId}
                   nameForColor={row.subjectName}
                   title={row.subjectName}
@@ -240,18 +227,18 @@ export default function StructureRoomPage() {
                   }}
                 />
               ))}
-            </RecordList>
+            </EntityList>
           ) : null}
-        </RecordListPanel>
+        </EntityListPanel>
 
         <aside className="structure-side-stack">
-          <RecordListPanel
+          <EntityListPanel
             title={t("homeroomTeacherLabel")}
             empty={!homeroom ? t("homeroomUnassigned") : undefined}
           >
             {homeroom ? (
-              <RecordList>
-                <RecordListItem
+              <EntityList>
+                <EntityListItem
                   initials={staffInitials(homeroom.fullName)}
                   nameForColor={homeroom.fullName}
                   title={homeroom.fullName}
@@ -260,11 +247,11 @@ export default function StructureRoomPage() {
                     staffId: homeroom.employeeNumber ?? homeroom.id.slice(0, 8)
                   })}
                 />
-              </RecordList>
+              </EntityList>
             ) : null}
-          </RecordListPanel>
+          </EntityListPanel>
 
-          <section className="structure-room-stats-card">
+          <section className="pds-type-body-m-medium structure-room-stats-card">
             <div>
               <strong>{data.studentCount}</strong>
               <span>{t("students")}</span>

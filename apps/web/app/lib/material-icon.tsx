@@ -12,8 +12,11 @@ export type IconProps = {
 };
 
 /**
- * Renders a Material Symbols Rounded glyph. The font is loaded once in the
- * root layout; the ligature name is passed as text content.
+ * Renders a Material Symbols Rounded glyph.
+ * - Always uses `.ms` (+ `.fill` when `filled`).
+ * - Size via `size` prop (font-size in px), not icon-specific CSS classes.
+ * - `className` only when a parent context needs a hook (e.g. search field tint);
+ *   prefer setting `color` on the wrapper and letting the glyph inherit.
  */
 export function Icon({ name, filled, size, className, style }: IconProps) {
   const cls = ["ms", filled ? "fill" : null, className].filter(Boolean).join(" ");

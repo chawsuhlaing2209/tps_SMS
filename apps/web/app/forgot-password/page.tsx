@@ -1,4 +1,5 @@
 "use client";
+import { FormInput } from "../../components/shared/form-input";
 
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -56,8 +57,8 @@ export default function ForgotPasswordPage() {
   return (
     <main className="auth">
       <div className="auth-card">
-        <span className="eyebrow">{t("platform")}</span>
-        <h1 className="auth-title">{t("forgotPasswordTitle")}</h1>
+        <span className="pds-type-caption-m eyebrow">{t("platform")}</span>
+        <h1 className="pds-type-display-m auth-title">{t("forgotPasswordTitle")}</h1>
         <p className="auth-subtitle">{t("forgotPasswordSubtitle")}</p>
 
         {submitted ? (
@@ -66,41 +67,41 @@ export default function ForgotPasswordPage() {
           </p>
         ) : (
           <form className="auth-form" onSubmit={onSubmit} noValidate>
-            <label className="auth-field">
+            <label className="pds-type-body-m-medium auth-field">
               <span>{t("tenant")}</span>
-              <input
+              <FormInput
                 placeholder={t("tenantPlaceholder")}
                 autoComplete="organization"
                 {...register("tenant")}
               />
-              {errors.tenant ? <span className="field-error">{errors.tenant.message}</span> : null}
+              {errors.tenant ? <span className="pds-type-body-s-regular field-error">{errors.tenant.message}</span> : null}
             </label>
 
-            <label className="auth-field">
+            <label className="pds-type-body-m-medium auth-field">
               <span>{t("identifier")}</span>
-              <input
+              <FormInput
                 placeholder={t("identifierPlaceholder")}
                 autoComplete="username"
                 {...register("identifier")}
               />
               {errors.identifier ? (
-                <span className="field-error">{errors.identifier.message}</span>
+                <span className="pds-type-body-s-regular field-error">{errors.identifier.message}</span>
               ) : null}
             </label>
 
             {serverError ? (
-              <p className="auth-error" role="alert">
+              <p className="pds-type-body-m-medium auth-error" role="alert">
                 {serverError}
               </p>
             ) : null}
 
-            <button type="submit" className="auth-button" disabled={isSubmitting}>
+            <button type="submit" className="pds-type-body-m-bold auth-button" disabled={isSubmitting}>
               {isSubmitting ? t("sendingReset") : t("sendResetLink")}
             </button>
           </form>
         )}
 
-        <p className="auth-footer">
+        <p className="pds-type-body-m-medium auth-footer">
           <Link href="/">{t("backToSignIn")}</Link>
         </p>
       </div>

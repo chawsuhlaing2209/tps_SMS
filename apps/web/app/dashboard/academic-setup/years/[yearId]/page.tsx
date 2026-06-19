@@ -50,15 +50,15 @@ export default function AcademicYearDetailPage() {
       />
 
       {years.isLoading ? (
-        <p className="muted">{c("loading")}</p>
+        <p className="pds-type-body-s-regular muted">{c("loading")}</p>
       ) : !year ? (
         <section className="panel">
-          <EmptyState icon="event_busy" title={c("empty")} />
+          <EmptyState compact embedded icon="event_busy" title={c("empty")} />
         </section>
       ) : (
         <section className="panel setup-year-detail">
           <div className="setup-year-detail__head">
-            <p className="setup-year-detail__dates">
+            <p className="pds-type-title-xs-bold setup-year-detail__dates">
               {formatDateRange(year.startsOn, year.endsOn)}
             </p>
             <StatusBadge status={year.status} />
@@ -83,8 +83,8 @@ export default function AcademicYearDetailPage() {
           </StatGrid>
 
           <div className="setup-year-detail__footer">
-            <p className="setup-year-detail__hint">{setup("yearGradesMovedHelp")}</p>
-            <Link href="/dashboard/academic-setup/grades-classrooms" className="btn-primary">
+            <p className="pds-type-body-s-regular setup-year-detail__hint">{setup("yearGradesMovedHelp")}</p>
+            <Link href="/dashboard/academic-setup/grades-classrooms" className="pds-type-body-m-bold btn-primary">
               <Icon name="meeting_room" />
               {setup("gradesClassrooms")}
             </Link>

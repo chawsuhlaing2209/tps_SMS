@@ -1,4 +1,5 @@
 "use client";
+import { FormInput } from "../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
@@ -159,12 +160,12 @@ export function MasterDataPanel<T extends StatusRecord>({
         <div style={{ display: "flex", gap: "8px" }}>
           {row.original.status !== "archived" ? (
             <>
-              <button type="button" className="row-action" onClick={() => openEdit(row.original)}>
+              <button type="button" className="pds-type-body-s-regular row-action" onClick={() => openEdit(row.original)}>
                 {t("edit")}
               </button>
               <button
                 type="button"
-                className="row-action"
+                className="pds-type-body-s-regular row-action"
                 disabled={archive.isPending}
                 onClick={() => void archive.mutateAsync({ id: row.original.id })}
               >
@@ -174,7 +175,7 @@ export function MasterDataPanel<T extends StatusRecord>({
           ) : (
             <button
               type="button"
-              className="row-action"
+              className="pds-type-body-s-regular row-action"
               disabled={reactivate.isPending}
               onClick={() => void reactivate.mutateAsync({ id: row.original.id })}
             >
@@ -242,7 +243,7 @@ export function MasterDataPanel<T extends StatusRecord>({
           <>
             <button
               type="button"
-              className="btn-ghost"
+              className="pds-type-body-m-bold btn-ghost"
               onClick={() => {
                 setFormMode(null);
                 form.reset(defaultValues);
@@ -250,7 +251,7 @@ export function MasterDataPanel<T extends StatusRecord>({
             >
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={form.formState.isSubmitting}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={form.formState.isSubmitting}>
               <Icon name="check" />
               {form.formState.isSubmitting
                 ? t("creating")
@@ -267,7 +268,7 @@ export function MasterDataPanel<T extends StatusRecord>({
             label={field.label}
             error={form.formState.errors[field.key]?.message as string | undefined}
           >
-            <input
+            <FormInput
               type={field.type === "number" ? "number" : "text"}
               placeholder={field.placeholder}
               {...form.register(field.key)}

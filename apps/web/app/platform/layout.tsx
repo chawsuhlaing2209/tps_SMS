@@ -66,7 +66,7 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
       <aside className="dash-sidebar">
         <div className="dash-brand">
           <span className="dash-brand-mark">SMS</span>
-          <span className="dash-brand-name">{t("console")}</span>
+          <span className="pds-type-title-l-extrabold dash-brand-name">{t("console")}</span>
         </div>
         <nav className="dash-nav">
           <Link
@@ -92,7 +92,7 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
             <span className="dash-user-name">{session.displayName ?? t("signedIn")}</span>
             <button
               type="button"
-              className="dash-signout"
+              className="pds-type-body-m-medium dash-signout"
               onClick={() => void handleSignOut()}
             >
               {t("signOut")}

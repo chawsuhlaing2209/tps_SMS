@@ -1,4 +1,5 @@
 "use client";
+import { FormInput } from "../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
@@ -12,7 +13,9 @@ import { Icon } from "../../lib/material-icon";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
 import { zodResolver } from "../../lib/zod-resolver";
+import { PdsSelectField } from "../../../components/pds";
 import { StatusBadge } from "../../../components/shared/badge";
+import { ModulePageHeader } from "../module-page-header";
 
 type EmailTemplate = {
   id: string;
@@ -48,6 +51,7 @@ const LOGS_PATH = (tenant: string) => `/tenants/${tenant}/notification-logs`;
 
 export default function CommunicationPage() {
   const t = useTranslations("communication");
+  const nav = useTranslations("nav");
   const c = useTranslations("common");
   const requiredMessage = c("required");
 
@@ -144,7 +148,7 @@ export default function CommunicationPage() {
       header: t("actions"),
       enableSorting: false,
       cell: ({ row }) => (
-        <button type="button" className="row-action" onClick={() => openEdit(row.original)}>
+        <button type="button" className="pds-type-body-s-regular row-action" onClick={() => openEdit(row.original)}>
           {t("edit")}
         </button>
       )
@@ -170,7 +174,7 @@ export default function CommunicationPage() {
       cell: ({ row }) => (
         <button
           type="button"
-          className="row-action"
+          className="pds-type-body-s-regular row-action"
           disabled={resend.isPending}
           onClick={() => void resend.mutateAsync({ id: row.original.id })}
         >
@@ -182,6 +186,7 @@ export default function CommunicationPage() {
 
   return (
     <div className="page-stack">
+      <ModulePageHeader navKey="communication" title={nav("communication")} />
       <TablePanelHead
         title={t("templatesTitle")}
         help={t("help")}
@@ -201,13 +206,18 @@ export default function CommunicationPage() {
           title={t("logsTitle")}
           extra={
             <label className="form-inline">
-              <span className="muted">{t("filterStatus")}</span>
-              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                <option value="">{t("allStatuses")}</option>
-                <option value="queued">queued</option>
-                <option value="sent">sent</option>
-                <option value="failed">failed</option>
-              </select>
+              <span className="pds-type-body-s-regular muted">{t("filterStatus")}</span>
+              <PdsSelectField
+                variant="filter"
+                value={statusFilter}
+                onValueChange={(value) => setStatusFilter(typeof value === "string" ? value : "")}
+                placeholder={t("allStatuses")}
+                options={[
+                  { value: "queued", label: "queued" },
+                  { value: "sent", label: "sent" },
+                  { value: "failed", label: "failed" }
+                ]}
+              />
             </label>
           }
           onRefresh={() => void logs.refetch()}
@@ -252,7 +262,7 @@ export default function CommunicationPage() {
           <>
             <button
               type="button"
-              className="btn-ghost"
+              className="pds-type-body-m-bold btn-ghost"
               onClick={() => {
                 setFormMode(null);
                 form.reset(defaultValues);
@@ -260,7 +270,7 @@ export default function CommunicationPage() {
             >
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={form.formState.isSubmitting}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={form.formState.isSubmitting}>
               <Icon name="check" />
               {form.formState.isSubmitting ? t("creating") : c("save")}
             </button>
@@ -268,26 +278,47 @@ export default function CommunicationPage() {
         }
       >
         <Field label={t("key")} error={form.formState.errors.key?.message}>
-          <input type="text" disabled={formMode?.type === "edit"} {...form.register("key")} />
+          <FormInput type="text" disabled={formMode?.type === "edit"} {...form.register("key")} />
         </Field>
         <Field label={t("language")} error={form.formState.errors.language?.message}>
-          <select disabled={formMode?.type === "edit"} {...form.register("language")}>
-            <option value="en">English</option>
-            <option value="my">မြန်မာ</option>
-          </select>
+          <PdsSelectField
+            variant="form"
+            disabled={formMode?.type === "edit"}
+            value={form.watch("language")}
+            onValueChange={(value) =>
+              form.setValue(
+                "language",
+                (typeof value === "string" ? value : "en") as TemplateValues["language"],
+                { shouldValidate: true }
+              )
+            }
+            options={[
+              { value: "en", label: "English" },
+              { value: "my", label: "မြန်မာ" }
+            ]}
+          />
         </Field>
         <Field label={t("subject")} error={form.formState.errors.subject?.message}>
-          <input type="text" {...form.register("subject")} />
+          <FormInput type="text" {...form.register("subject")} />
         </Field>
         <Field label={t("body")} error={form.formState.errors.body?.message}>
           <textarea rows={6} {...form.register("body")} />
         </Field>
         {formMode?.type === "edit" ? (
           <Field label={t("status")} error={form.formState.errors.status?.message}>
-            <select {...form.register("status")}>
-              <option value="active">active</option>
-              <option value="inactive">inactive</option>
-            </select>
+            <PdsSelectField
+              variant="form"
+              value={form.watch("status")}
+              onValueChange={(value) =>
+                form.setValue("status", typeof value === "string" ? value : "active", {
+                  shouldValidate: true
+                })
+              }
+              options={[
+                { value: "active", label: "active" },
+                { value: "inactive", label: "inactive" }
+              ]}
+            />
           </Field>
         ) : null}
       </RecordFormSheet>

@@ -1,4 +1,5 @@
 "use client";
+import { FormInput } from "../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { myanmarPhoneSchema, roleDisplayFor } from "@sms/shared";
@@ -15,6 +16,8 @@ import { RecordFormSheet } from "../../lib/record-sheet";
 import { getSession } from "../../lib/session";
 import { TablePanelBody, TablePanelHead, DataTableSection } from "../../lib/table-panel";
 import { StatusBadge, Badge } from "../../../components/shared/badge";
+import { EmptyState } from "../../../components/shared/empty-state";
+import { PdsSelectField } from "../../../components/pds";
 import { TableSearchInput } from "../../lib/table-search";
 import { zodResolver } from "../../lib/zod-resolver";
 
@@ -284,10 +287,10 @@ export function TeamEditor() {
           }}
           footer={
             <>
-              <button type="button" className="btn-ghost" onClick={() => setFormMode(null)}>
+              <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setFormMode(null)}>
                 {c("cancel")}
               </button>
-              <button type="submit" className="btn-primary" disabled={form.formState.isSubmitting}>
+              <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={form.formState.isSubmitting}>
                 <Icon name="check" />
                 {form.formState.isSubmitting ? c("loading") : c("save")}
               </button>
@@ -295,49 +298,63 @@ export function TeamEditor() {
           }
         >
           <Field label={c("name")} error={form.formState.errors.fullName?.message}>
-            <input {...form.register("fullName")} />
+            <FormInput {...form.register("fullName")} />
           </Field>
           <Field label={t("role")} error={form.formState.errors.roleKey?.message}>
             {roles.isLoading ? (
-              <p className="muted">{c("loading")}</p>
+              <p className="pds-type-body-s-regular muted">{c("loading")}</p>
             ) : roleOptions.length ? (
-              <select {...form.register("roleKey")}>
-                {roleOptions.map((role) => (
-                  <option key={role.id} value={role.key}>
-                    {roleDisplayFor(role.key, role.name).label}
-                  </option>
-                ))}
-              </select>
+              <PdsSelectField
+                variant="form"
+                value={form.watch("roleKey")}
+                onValueChange={(value) =>
+                  form.setValue("roleKey", typeof value === "string" ? value : "", {
+                    shouldValidate: true
+                  })
+                }
+                options={roleOptions.map((role) => ({
+                  value: role.key,
+                  label: roleDisplayFor(role.key, role.name).label
+                }))}
+              />
             ) : (
-              <p className="muted">{t("noRolesAvailable")}</p>
+              <EmptyState compact embedded icon="badge" title={t("noRolesAvailable")} />
             )}
           </Field>
           <Field label={t("email")} error={form.formState.errors.email?.message}>
-            <input type="email" {...form.register("email")} />
+            <FormInput type="email" {...form.register("email")} />
           </Field>
           <Field label={t("phone")} error={form.formState.errors.phone?.message}>
-            <input {...form.register("phone")} placeholder="09XXXXXXXXX" />
+            <FormInput {...form.register("phone")} placeholder="09XXXXXXXXX" />
           </Field>
           <Field label={t("department")}>
-            <select {...form.register("departmentId")}>
-              <option value="">{t("departmentPlaceholder")}</option>
-              {departments.data?.map((department) => (
-                <option key={department.id} value={department.id}>
-                  {department.name}
-                </option>
-              ))}
-            </select>
+            <PdsSelectField
+              variant="form"
+              value={form.watch("departmentId")}
+              onValueChange={(value) =>
+                form.setValue("departmentId", typeof value === "string" ? value : "", {
+                  shouldValidate: true
+                })
+              }
+              placeholder={t("departmentPlaceholder")}
+              options={
+                departments.data?.map((department) => ({
+                  value: department.id,
+                  label: department.name
+                })) ?? []
+              }
+            />
           </Field>
           <Field label={t("joinDate")}>
-            <input type="date" {...form.register("joinDate")} />
+            <FormInput type="date" {...form.register("joinDate")} />
           </Field>
           {formMode?.type === "edit" && formMode.staff.userId ? (
-            <p className="muted">{t("loginLinked", { email: formMode.staff.loginEmail ?? "—" })}</p>
+            <p className="pds-type-body-s-regular muted">{t("loginLinked", { email: formMode.staff.loginEmail ?? "—" })}</p>
           ) : (
-            <p className="muted">{t("loginAutoHelp")}</p>
+            <p className="pds-type-body-s-regular muted">{t("loginAutoHelp")}</p>
           )}
           {formError ? (
-            <p className="error-text" role="alert">
+            <p className="pds-type-body-m-medium error-text" role="alert">
               {formError}
             </p>
           ) : null}
@@ -345,7 +362,7 @@ export function TeamEditor() {
       ) : null}
 
       {saved ? (
-        <p className="form-feedback form-feedback--ok" role="status">
+        <p className="pds-type-body-m-medium form-feedback form-feedback--ok" role="status">
           {saved}
         </p>
       ) : null}

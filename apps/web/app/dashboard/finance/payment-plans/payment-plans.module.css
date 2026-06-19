@@ -2,42 +2,28 @@
   display: flex;
   flex-direction: column;
   gap: var(--pds-gap-large);
-}
-
-.intro {
+}.intro {
   align-items: flex-start;
   display: flex;
   gap: var(--pds-gap-large);
   justify-content: space-between;
-}
-
-.introText {
+}.introText {
   color: var(--pds-muted);
-  font-size: var(--pds-type-body-m-medium-font-size);
-  line-height: 1.5;
   margin: 0;
   max-width: 720px;
-}
-
-.planList {
+}.planList {
   display: flex;
   flex-direction: column;
   gap: var(--pds-gap-large);
-}
-
-.planCard {
+}.planCard {
   background: var(--pds-background-card);
   border: 1px solid var(--pds-border-color-primary);
   border-radius: var(--pds-radius-base);
   overflow: hidden;
-}
-
-.planCardInactive .planHead {
+}.planCardInactive .planHead {
   background: var(--pds-background-layout-secondary);
   color: var(--pds-muted);
-}
-
-.planHead {
+}.planHead {
   align-items: center;
   background: var(--pds-shell);
   color: #fff;
@@ -45,58 +31,37 @@
   gap: var(--pds-gap-large);
   justify-content: space-between;
   padding: var(--pds-padding-large);
-}
-
-.planHeadLeft {
+}.planHeadLeft {
   align-items: flex-start;
   display: flex;
   gap: var(--pds-gap-medium);
   min-width: 0;
-}
-
-.planIcon {
+}.planIcon {
   align-items: center;
   background: var(--pds-compliment-brand);
   border-radius: 12px;
   color: var(--pds-text-primary);
   display: inline-flex;
   flex-shrink: 0;
-  font-size: var(--pds-type-title-xs-bold-font-size);
   height: 42px;
   justify-content: center;
   width: 42px;
-}
-
-.planCardInactive .planIcon {
+}.planCardInactive .planIcon {
   background: var(--pds-border-color-primary);
   color: var(--pds-muted);
-}
-
-.planTitle {
-  font-family: var(--pds-font-family-display-stack);
-  font-size: var(--pds-type-title-m-extrabold-font-size);
-  font-weight: 800;
+}.planTitle {
   margin: 0;
-}
-
-.planDescription {
+}.planDescription {
   color: var(--pds-muted-on-dark);
-  font-size: var(--pds-type-body-m-medium-font-size);
   margin: var(--pds-gap-x-small) 0 0;
-}
-
-.planCardInactive .planDescription {
+}.planCardInactive .planDescription {
   color: var(--pds-muted);
-}
-
-.planActions {
+}.planActions {
   align-items: center;
   display: flex;
   flex-shrink: 0;
   gap: var(--pds-gap-medium);
-}
-
-.editBtn {
+}.editBtn {
   align-items: center;
   background: #fff;
   border: 0;
@@ -104,18 +69,12 @@
   color: var(--pds-text-primary);
   cursor: pointer;
   display: inline-flex;
-  font-size: var(--pds-type-body-m-medium-font-size);
-  font-weight: 700;
   gap: 6px;
   padding: 10px 16px;
-}
-
-.planCardInactive .editBtn {
+}.planCardInactive .editBtn {
   background: var(--pds-background-card);
   border: 1px solid var(--pds-border-color-primary);
-}
-
-.toggle {
+}.toggle {
   appearance: none;
   background: var(--pds-border-color-secondary);
   border: 0;
@@ -124,9 +83,7 @@
   height: 24px;
   position: relative;
   width: 44px;
-}
-
-.toggle::after {
+}.toggle::after {
   background: var(--pds-color-neutral-0);
   border-radius: 50%;
   box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
@@ -137,82 +94,48 @@
   top: 2px;
   transition: transform 0.15s ease;
   width: 20px;
-}
-
-.toggleOn {
+}.toggleOn {
   background: var(--pds-compliment-brand);
-}
-
-.toggleOn::after {
+}.toggleOn::after {
   background: var(--pds-primary);
   transform: translateX(20px);
-}
-
-.schedule {
+}.schedule {
   padding: var(--pds-padding-large);
-}
-
-.scheduleLabel {
+}.scheduleLabel {
   color: var(--pds-muted);
-  font-size: var(--pds-type-label-s-medium-font-size);
-  font-weight: 700;
-  letter-spacing: 0.06em;
   margin: 0 0 var(--pds-gap-medium);
-  text-transform: uppercase;
-}
-
-.scheduleList {
+}.scheduleList {
   display: flex;
   flex-direction: column;
   gap: var(--pds-gap-small);
   list-style: none;
   margin: 0;
   padding: 0;
-}
-
-.scheduleRow {
+}.scheduleRow {
   align-items: center;
   background: var(--pds-background-layout-secondary);
   border-radius: 12px;
   display: flex;
   justify-content: space-between;
   padding: var(--pds-gap-medium) var(--pds-gap-large);
-}
-
-.scheduleLabelText {
-  font-size: var(--pds-type-body-m-medium-font-size);
-  font-weight: 600;
-}
-
-.scheduleDue {
+}.scheduleLabelText {
+}.scheduleDue {
   color: var(--pds-muted);
-  font-size: var(--pds-type-body-m-medium-font-size);
-  font-weight: 600;
-}
-
-.installmentEditor {
+}.installmentEditor {
   display: flex;
   flex-direction: column;
   gap: var(--pds-gap-medium);
-}
-
-.installmentRow {
+}.installmentRow {
   display: grid;
   gap: var(--pds-gap-small);
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 80px auto;
-}
-
-@media (max-width: 720px) {
+}@media (max-width: 720px) {
   .intro {
     flex-direction: column;
-  }
-
-  .planHead {
+  }.planHead {
     align-items: flex-start;
     flex-direction: column;
-  }
-
-  .installmentRow {
+  }.installmentRow {
     grid-template-columns: 1fr;
   }
 }

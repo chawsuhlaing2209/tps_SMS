@@ -13,9 +13,16 @@ export default function FinanceLayout({ children }: { children: ReactNode }) {
         <SecondarySideNav
           groups={[
             {
+              label: t("navReceivables"),
+              items: [
+                { href: "/dashboard/finance/invoices", label: t("invoices"), icon: "description" },
+                { href: "/dashboard/finance/payments", label: t("payments"), icon: "account_balance" },
+                { href: "/dashboard/finance/reports", label: t("reports"), icon: "bar_chart" }
+              ]
+            },
+            {
               label: t("navFinance"),
               items: [
-                { href: "/dashboard/finance/billing", label: t("billing"), icon: "receipt_long" },
                 {
                   href: "/dashboard/finance/fee-structures",
                   label: t("feeStructures"),
@@ -27,14 +34,6 @@ export default function FinanceLayout({ children }: { children: ReactNode }) {
                   icon: "payments"
                 },
                 { href: "/dashboard/finance/discounts", label: t("discounts"), icon: "percent" }
-              ]
-            },
-            {
-              label: t("navReceivables"),
-              items: [
-                { href: "/dashboard/finance/invoices", label: t("invoices"), icon: "description" },
-                { href: "/dashboard/finance/payments", label: t("payments"), icon: "account_balance" },
-                { href: "/dashboard/finance/reports", label: t("reports"), icon: "bar_chart" }
               ]
             }
           ]}

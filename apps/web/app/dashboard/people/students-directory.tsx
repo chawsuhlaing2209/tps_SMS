@@ -13,6 +13,7 @@ import { getSession } from "../../lib/session";
 import { TablePanelBody, TablePanelHead, DataTableSection } from "../../lib/table-panel";
 import { TableSearchInput } from "../../lib/table-search";
 import { StudentRegistrationWizard } from "./student-registration-wizard";
+import { PdsSelectField } from "../../../components/pds";
 import { StatusBadge } from "../../../components/shared/badge";
 
 type Student = {
@@ -81,13 +82,13 @@ export function StudentsDirectory() {
         row.original.familyGroupId && row.original.householdName ? (
           <Link
             href={`/dashboard/people/households/${row.original.familyGroupId}`}
-            className="row-action"
+            className="pds-type-body-s-regular row-action"
             data-row-stop
           >
             {row.original.householdName}
           </Link>
         ) : (
-          <span className="muted">{t("noHousehold")}</span>
+          <span className="pds-type-body-s-regular muted">{t("noHousehold")}</span>
         )
     },
     {
@@ -120,22 +121,24 @@ export function StudentsDirectory() {
                 setPage(0);
               }}
             />
-            <select
-              className="table-toolbar-select"
+            <PdsSelectField
+              variant="filter"
+              className="pds-type-body-m-medium table-toolbar-select"
               value={statusFilter}
-              onChange={(event) => {
-                setStatusFilter(event.target.value);
+              onValueChange={(value) => {
+                setStatusFilter(typeof value === "string" ? value : "");
                 setPage(0);
               }}
-            >
-              <option value="">{t("allStatuses")}</option>
-              <option value="draft">{t("status_draft")}</option>
-              <option value="enrolled">{t("status_enrolled")}</option>
-              <option value="transferred">{t("status_transferred")}</option>
-              <option value="withdrawn">{t("status_withdrawn")}</option>
-            </select>
+              placeholder={t("allStatuses")}
+              options={[
+                { value: "draft", label: t("status_draft") },
+                { value: "enrolled", label: t("status_enrolled") },
+                { value: "transferred", label: t("status_transferred") },
+                { value: "withdrawn", label: t("status_withdrawn") }
+              ]}
+            />
             {canManage ? (
-              <button type="button" className="btn-primary" onClick={() => setSheetOpen(true)}>
+              <button type="button" className="pds-type-body-m-bold btn-primary" onClick={() => setSheetOpen(true)}>
                 <Icon name="add" />
                 {t("registerTitle")}
               </button>

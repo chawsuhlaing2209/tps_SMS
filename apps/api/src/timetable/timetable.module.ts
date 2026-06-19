@@ -2,11 +2,12 @@ import { Module } from "@nestjs/common";
 import { AuditModule } from "../audit/audit.module.js";
 import { AuthzModule } from "../identity/authz.module.js";
 import { DbModule } from "../db/db.module.js";
+import { SchoolScheduleModule } from "../school-schedule/school-schedule.module.js";
 import { TimetableController } from "./timetable.controller.js";
 import { TimetableService } from "./timetable.service.js";
 
 @Module({
-  imports: [DbModule, AuditModule, AuthzModule],
+  imports: [DbModule, AuditModule, AuthzModule, SchoolScheduleModule],
   controllers: [TimetableController],
   providers: [TimetableService]
 })

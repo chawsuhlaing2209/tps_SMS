@@ -120,6 +120,20 @@
       "when": 1782900000000,
       "tag": "0016_invoice_discount_lines",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1783000000000,
+      "tag": "0017_subject_appearance",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1783100000000,
+      "tag": "0018_school_schedule",
+      "breakpoints": true
     }
   ]
 }

@@ -8,6 +8,7 @@ import { DataTable } from "../../lib/data-table";
 import { PaginationControls } from "../../lib/pagination-controls";
 import { TablePanelBody, TablePanelHead, DataTableSection } from "../../lib/table-panel";
 import { TableSearchInput } from "../../lib/table-search";
+import { ModulePageHeader } from "../module-page-header";
 
 type AuditLog = {
   id: string;
@@ -25,6 +26,7 @@ const PAGE_SIZE = 50;
 
 export default function AuditPage() {
   const t = useTranslations("audit");
+  const nav = useTranslations("nav");
   const c = useTranslations("common");
   const [recordType, setRecordType] = useState("");
   const [page, setPage] = useState(0);
@@ -52,20 +54,21 @@ export default function AuditPage() {
       id: "record",
       header: t("record"),
       accessorFn: (e) => e.recordId,
-      cell: ({ row }) => <span className="muted">{row.original.recordId.slice(0, 8)}</span>
+      cell: ({ row }) => <span className="pds-type-body-s-regular muted">{row.original.recordId.slice(0, 8)}</span>
     },
     {
       id: "actor",
       header: t("actor"),
       accessorFn: (e) => e.actorUserId ?? c("system"),
       cell: ({ row }) => (
-        <span className="muted">{row.original.actorUserId?.slice(0, 8) ?? c("system")}</span>
+        <span className="pds-type-body-s-regular muted">{row.original.actorUserId?.slice(0, 8) ?? c("system")}</span>
       )
     }
   ];
 
   return (
     <div className="page-stack">
+      <ModulePageHeader navKey="audit" title={nav("audit")} />
     <DataTableSection>
       <TablePanelHead
           title={t("events")}

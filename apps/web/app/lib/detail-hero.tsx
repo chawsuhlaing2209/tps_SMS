@@ -39,13 +39,13 @@ export function DetailHero({
     <section className="detail-hero">
       <div className="detail-hero__main">
         {markText || markIcon ? (
-          <span className="detail-hero__mark" style={markStyle}>
+          <span className="pds-type-display-m detail-hero__mark" style={markStyle}>
             {markIcon ? <Icon name={markIcon} filled size={28} /> : markText}
           </span>
         ) : null}
         <div className="detail-hero__text">
-          <h1 className="detail-hero__title">{title}</h1>
-          {meta ? <p className="detail-hero__meta">{meta}</p> : null}
+          <h1 className="pds-type-title-xl-extrabold detail-hero__title">{title}</h1>
+          {meta ? <p className="pds-type-body-m-medium detail-hero__meta">{meta}</p> : null}
         </div>
       </div>
       {utility || actions ? (

@@ -1,4 +1,5 @@
 "use client";
+import { FormInput } from "../../components/shared/form-input";
 
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -70,63 +71,63 @@ export default function ResetPasswordPage() {
   return (
     <main className="auth">
       <div className="auth-card">
-        <span className="eyebrow">{t("platform")}</span>
-        <h1 className="auth-title">{t("resetPasswordTitle")}</h1>
+        <span className="pds-type-caption-m eyebrow">{t("platform")}</span>
+        <h1 className="pds-type-display-m auth-title">{t("resetPasswordTitle")}</h1>
         <p className="auth-subtitle">{t("resetPasswordSubtitle")}</p>
 
         <form className="auth-form" onSubmit={onSubmit} noValidate>
-          <label className="auth-field">
+          <label className="pds-type-body-m-medium auth-field">
             <span>{t("tenant")}</span>
-            <input
+            <FormInput
               placeholder={t("tenantPlaceholder")}
               autoComplete="organization"
               {...register("tenant")}
             />
-            {errors.tenant ? <span className="field-error">{errors.tenant.message}</span> : null}
+            {errors.tenant ? <span className="pds-type-body-s-regular field-error">{errors.tenant.message}</span> : null}
           </label>
 
-          <label className="auth-field">
+          <label className="pds-type-body-m-medium auth-field">
             <span>{t("resetToken")}</span>
-            <input placeholder={t("resetTokenPlaceholder")} {...register("token")} />
-            {errors.token ? <span className="field-error">{errors.token.message}</span> : null}
+            <FormInput placeholder={t("resetTokenPlaceholder")} {...register("token")} />
+            {errors.token ? <span className="pds-type-body-s-regular field-error">{errors.token.message}</span> : null}
           </label>
 
-          <label className="auth-field">
+          <label className="pds-type-body-m-medium auth-field">
             <span>{t("newPassword")}</span>
-            <input
+            <FormInput
               type="password"
               placeholder={t("newPasswordPlaceholder")}
               autoComplete="new-password"
               {...register("password")}
             />
-            {errors.password ? <span className="field-error">{errors.password.message}</span> : null}
+            {errors.password ? <span className="pds-type-body-s-regular field-error">{errors.password.message}</span> : null}
           </label>
 
-          <label className="auth-field">
+          <label className="pds-type-body-m-medium auth-field">
             <span>{t("confirmPassword")}</span>
-            <input
+            <FormInput
               type="password"
               placeholder={t("confirmPasswordPlaceholder")}
               autoComplete="new-password"
               {...register("confirmPassword")}
             />
             {errors.confirmPassword ? (
-              <span className="field-error">{errors.confirmPassword.message}</span>
+              <span className="pds-type-body-s-regular field-error">{errors.confirmPassword.message}</span>
             ) : null}
           </label>
 
           {serverError ? (
-            <p className="auth-error" role="alert">
+            <p className="pds-type-body-m-medium auth-error" role="alert">
               {serverError}
             </p>
           ) : null}
 
-          <button type="submit" className="auth-button" disabled={isSubmitting}>
+          <button type="submit" className="pds-type-body-m-bold auth-button" disabled={isSubmitting}>
             {isSubmitting ? t("resettingPassword") : t("resetPasswordButton")}
           </button>
         </form>
 
-        <p className="auth-footer">
+        <p className="pds-type-body-m-medium auth-footer">
           <Link href="/">{t("backToSignIn")}</Link>
         </p>
       </div>

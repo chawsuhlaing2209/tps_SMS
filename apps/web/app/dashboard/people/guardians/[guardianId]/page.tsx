@@ -1,4 +1,5 @@
 "use client";
+import { FormInput } from "../../../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
@@ -105,13 +106,13 @@ export default function GuardianDetailPage() {
   };
 
   if (guardian.isLoading) {
-    return <p className="muted">{c("loading")}</p>;
+    return <p className="pds-type-body-s-regular muted">{c("loading")}</p>;
   }
 
   if (guardian.isError || !guardian.data) {
     return (
       <div className="page-stack">
-        <p className="error-text">{t("notFound")}</p>
+        <p className="pds-type-body-m-medium error-text">{t("notFound")}</p>
       </div>
     );
   }
@@ -127,7 +128,7 @@ export default function GuardianDetailPage() {
         <DirectoryNameCell
           name={row.original.fullName}
           avatar={
-            <span className="directory-avatar">
+            <span className="pds-type-title-xs-bold directory-avatar">
               {guardianInitials(row.original.fullName)}
             </span>
           }
@@ -177,7 +178,7 @@ export default function GuardianDetailPage() {
           <span className="student-profile-avatar">{guardianInitials(data.fullName)}</span>
           <div>
             <h2 className="structure-room-banner__title">{data.fullName}</h2>
-            <p className="structure-room-banner__meta">{heroMeta || t("profileHelp")}</p>
+            <p className="pds-type-body-s-regular structure-room-banner__meta">{heroMeta || t("profileHelp")}</p>
           </div>
         </div>
         <div className="structure-room-banner__actions student-profile-banner__actions">
@@ -216,15 +217,15 @@ export default function GuardianDetailPage() {
 
       <div className="student-profile-stats">
         <article className="student-profile-stat">
-          <span className="student-profile-stat__label">{t("phoneStat")}</span>
+          <span className="pds-type-body-s-regular student-profile-stat__label">{t("phoneStat")}</span>
           <strong className="student-profile-stat__value">{data.phone ?? "—"}</strong>
         </article>
         <article className="student-profile-stat">
-          <span className="student-profile-stat__label">{t("emailStat")}</span>
+          <span className="pds-type-body-s-regular student-profile-stat__label">{t("emailStat")}</span>
           <strong className="student-profile-stat__value">{data.email ?? "—"}</strong>
         </article>
         <article className="student-profile-stat">
-          <span className="student-profile-stat__label">{t("householdStat")}</span>
+          <span className="pds-type-body-s-regular student-profile-stat__label">{t("householdStat")}</span>
           <strong className="student-profile-stat__value">
             {data.household ? (
               <Link href={`/dashboard/people/households/${data.household.id}`}>
@@ -236,7 +237,7 @@ export default function GuardianDetailPage() {
           </strong>
         </article>
         <article className="student-profile-stat">
-          <span className="student-profile-stat__label">{t("linkedStudentsStat")}</span>
+          <span className="pds-type-body-s-regular student-profile-stat__label">{t("linkedStudentsStat")}</span>
           <strong className="student-profile-stat__value">{data.students.length}</strong>
         </article>
       </div>
@@ -277,10 +278,10 @@ export default function GuardianDetailPage() {
         })}
         footer={
           <>
-            <button type="button" className="btn-ghost" onClick={() => setEditOpen(false)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setEditOpen(false)}>
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={update.isPending}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={update.isPending}>
               <Icon name="save" />
               {update.isPending ? c("loading") : c("save")}
             </button>
@@ -288,19 +289,19 @@ export default function GuardianDetailPage() {
         }
       >
         <Field label={t("firstName")} error={form.formState.errors.firstName?.message}>
-          <input {...form.register("firstName")} />
+          <FormInput {...form.register("firstName")} />
         </Field>
         <Field label={t("lastName")} error={form.formState.errors.lastName?.message}>
-          <input {...form.register("lastName")} />
+          <FormInput {...form.register("lastName")} />
         </Field>
         <Field label={t("phone")} error={form.formState.errors.phone?.message}>
-          <input {...form.register("phone")} />
+          <FormInput {...form.register("phone")} />
         </Field>
         <Field label={t("email")} error={form.formState.errors.email?.message}>
-          <input type="email" {...form.register("email")} />
+          <FormInput type="email" {...form.register("email")} />
         </Field>
         {formError ? (
-          <p className="error-text" role="alert">
+          <p className="pds-type-body-m-medium error-text" role="alert">
             {formError}
           </p>
         ) : null}

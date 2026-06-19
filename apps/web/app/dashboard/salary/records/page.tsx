@@ -1,4 +1,5 @@
 "use client";
+import { FormDatePicker } from "../../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
@@ -9,6 +10,8 @@ import { DataTable } from "../../../lib/data-table";
 import { Icon } from "../../../lib/material-icon";
 import { TablePanelBody, TablePanelHead } from "../../../lib/table-panel";
 import { StatusBadge } from "../../../../components/shared/badge";
+import { ModulePageHeader } from "../../module-page-header";
+import { moduleBreadcrumbs } from "../../../lib/page-header-utils";
 
 type SalaryRecord = {
   id: string;
@@ -21,6 +24,7 @@ type SalaryRecord = {
 
 export default function SalaryRecordsPage() {
   const t = useTranslations("salary");
+  const nav = useTranslations("nav");
   const c = useTranslations("common");
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
 
@@ -60,22 +64,30 @@ export default function SalaryRecordsPage() {
   ];
 
   return (
-    <section className="panel">
+    <>
+      <ModulePageHeader
+        navKey="salary"
+        title={t("records")}
+        breadcrumbs={moduleBreadcrumbs("salary", nav, [{ label: t("records") }])}
+      />
+      <section className="panel">
       <TablePanelHead
         title={t("records")}
         onRefresh={() => void records.refetch()}
         extra={
           <>
-            <input
+            <FormDatePicker
               type="month"
+              variant="filter"
               className="table-toolbar-select"
-              aria-label={t("month")}
+              ariaLabel={t("month")}
+              placeholder={t("month")}
               value={month}
-              onChange={(e) => setMonth(e.target.value)}
+              onValueChange={setMonth}
             />
             <button
               type="button"
-              className="btn-primary"
+              className="pds-type-body-m-bold btn-primary"
               disabled={generate.isPending}
               onClick={() => void generate.mutateAsync({ month })}
             >
@@ -97,5 +109,6 @@ export default function SalaryRecordsPage() {
         />
       </TablePanelBody>
     </section>
+    </>
   );
 }
