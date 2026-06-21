@@ -1,42 +1,19 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
-import { Icon } from "../lib/material-icon";
-import { resetNavigationTrail } from "../lib/navigation-trail";
-import { type DashboardNavKey, visibleDashboardNavGroups } from "../lib/permissions";
 import { clearSession } from "../lib/session";
+import { TenantDataBootstrap } from "../lib/tenant-data-bootstrap";
+import { DashboardRoutePrefetch } from "../lib/dashboard-route-prefetch";
 import { useWorkspace } from "../lib/use-workspace";
 import { DashboardPageChrome } from "./dashboard-page-chrome";
 import { DashboardPageTitle } from "./dashboard-page-title";
+import { DashboardSidebar } from "./dashboard-sidebar";
 import { PageHeaderProvider } from "./page-header-context";
-import { SidebarUserCard } from "./sidebar-user-card";
-
-const NAV_ICONS: Record<DashboardNavKey, string> = {
-  overview: "grid_view",
-  students: "school",
-  teachers: "co_present",
-  structure: "account_tree",
-  academicSetup: "school",
-  admissions: "how_to_reg",
-  enrollments: "school",
-  calendar: "calendar_month",
-  timetable: "calendar_view_week",
-  exams: "grading",
-  finance: "account_balance_wallet",
-  salary: "payments",
-  communication: "forum",
-  audit: "history",
-  settings: "settings",
-  team: "groups",
-  departments: "corporate_fare"
-};
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname();
   const t = useTranslations("nav");
   const { session, ready } = useWorkspace();
 
@@ -61,8 +38,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  const navGroups = visibleDashboardNavGroups(session.permissions);
-
   async function handleSignOut() {
     try {
       if (session?.tenantId) {
@@ -81,53 +56,16 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   return (
     <PageHeaderProvider>
+      <TenantDataBootstrap permissions={session.permissions ?? []} />
+      <DashboardRoutePrefetch permissions={session.permissions ?? []} />
       <div className="dash">
-        <aside className="dash-sidebar">
-          <div className="dash-brand">
-            <span className="dash-brand-mark" aria-hidden>
-              <span className="dash-brand-mark__dot" />
-            </span>
-            <span className="dash-brand-text">
-              <span className="pds-type-title-l-extrabold dash-brand-name">{session.tenantSlug}</span>
-              <span className="pds-type-label-s-medium dash-brand-sub">{t("brandTagline")}</span>
-            </span>
-          </div>
-          <nav className="dash-nav">
-            {navGroups.map((group) => (
-              <div className="dash-nav-group" key={group.key}>
-                <span className="pds-type-caption-s dash-nav-group-label">{t(`group_${group.key}`)}</span>
-                {group.items.map((item) => {
-                  const active =
-                    item.href === "/dashboard"
-                      ? pathname === item.href
-                      : pathname.startsWith(item.href);
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={active ? "dash-nav-link dash-nav-link--active" : "dash-nav-link"}
-                      onClick={() =>
-                        resetNavigationTrail([{ label: t(item.key), href: item.href }])
-                      }
-                    >
-                      <Icon
-                        name={NAV_ICONS[item.key]}
-                        filled={active}
-                        className="dash-nav-link__icon"
-                      />
-                      <span className="dash-nav-link__label">{t(item.key)}</span>
-                    </Link>
-                  );
-                })}
-              </div>
-            ))}
-          </nav>
-          <SidebarUserCard
-            displayName={session.displayName ?? t("signedIn")}
-            roles={session.roles}
-            onSignOut={() => void handleSignOut()}
-          />
-        </aside>
+        <DashboardSidebar
+          displayName={session.displayName ?? t("signedIn")}
+          roles={session.roles}
+          tenantSlug={session.tenantSlug}
+          permissions={session.permissions ?? []}
+          onSignOut={() => void handleSignOut()}
+        />
 
         <div className="dash-main">
           <div className="dash-content">

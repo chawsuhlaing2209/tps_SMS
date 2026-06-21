@@ -4,8 +4,7 @@ import { FormInput } from "../../../../../components/shared/form-input";
 import { paymentMethods } from "@sms/shared";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useState } from "react";
+import { use, useState } from "react";
 import { useApiMutation, useApiQuery } from "../../../../lib/api";
 import { Field } from "../../../../lib/form";
 import { Icon } from "../../../../lib/material-icon";
@@ -22,9 +21,12 @@ type SalaryRecordDetail = {
   status: string;
 };
 
-export default function SalaryRecordDetailPage() {
-  const params = useParams<{ recordId: string }>();
-  const recordId = params.recordId;
+export default function SalaryRecordDetailPage({
+  params
+}: {
+  params: Promise<{ recordId: string }>;
+}) {
+  const { recordId } = use(params);
   const t = useTranslations("salary");
   const c = useTranslations("common");
   const nav = useTranslations("nav");

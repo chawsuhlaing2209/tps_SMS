@@ -8,15 +8,22 @@ import {
   InvoicesActionsProvider,
   InvoicesHeaderActionsPortal,
 } from "./invoices-actions-provider";
-import { InvoicesBillingTabs, type InvoicesBillingTab } from "./invoices-billing-tabs";
 
 type Props = {
-  activeTab: InvoicesBillingTab;
   title: string;
   children: ReactNode;
+  /** Generate + Create Invoice in the title row (invoices page only). */
+  showHeaderActions?: boolean;
+  /** Enable title-row portal for export actions (collection page). */
+  actionsPortal?: boolean;
 };
 
-export function InvoicesBillingShell({ activeTab, title, children }: Props) {
+export function InvoicesBillingShell({
+  title,
+  children,
+  showHeaderActions = false,
+  actionsPortal = showHeaderActions
+}: Props) {
   const nav = useTranslations("nav");
 
   return (
@@ -25,12 +32,10 @@ export function InvoicesBillingShell({ activeTab, title, children }: Props) {
         <PageHeader
           title={title}
           breadcrumbs={financeBreadcrumbs(nav)}
-          actionsPortal={activeTab === "invoices"}
+          actionsPortal={actionsPortal}
         />
 
-        {activeTab === "invoices" ? <InvoicesHeaderActionsPortal /> : null}
-
-        <InvoicesBillingTabs active={activeTab} />
+        {showHeaderActions ? <InvoicesHeaderActionsPortal /> : null}
 
         {children}
       </div>

@@ -5,7 +5,7 @@ import { AuditService } from '../audit/audit.service.js'
 import { DB, type Database } from '../db/db.module.js'
 import {
   academicYears, classrooms, discountRules, enrollmentFeePlans, enrollmentFeePlanGrades, enrollments, familyGroups, feeItems, grades, guardians, invoices, invoiceDiscountLines, invoiceItems,
-  payments, paymentPlanInstallments, paymentPlans, receipts, salaryRecords, studentDiscounts, studentServices, students, tenants, tenantSettings, terms, users,
+  payments, paymentPlanInstallments, paymentPlans, payrollRecords, receipts, studentDiscounts, studentServices, students, tenants, tenantSettings, terms, users,
 } from '../db/schema.js'
 import type {
   BillingRosterQueryDto, CollectPaymentDto,
@@ -13,6 +13,7 @@ import type {
   CreatePaymentPlanDto, GenerateMonthlyInvoicesDto, RecordPaymentDto, RefundPaymentDto,
   UpdatePaymentPlanInstallmentsDto, UpdatePaymentPlanDto,
   VerifyPaymentDto, ListInvoicesQueryDto, ListPaymentsQueryDto,
+  FinanceOverviewQueryDto,
   MonthlyReportQueryDto, ReceivablesQueryDto, UpdateFeeItemDto,
   UpdateEnrollmentFeePlanDto, InvoiceMetricsQueryDto, PaymentMetricsQueryDto,
 } from './dto.js'
@@ -655,16 +656,23 @@ export class FinanceService {
 
   /** Resolve enrollment for invoice rows when enrollmentId was not persisted (legacy seed). */
   private enrollmentJoinCondition(tenantId: string, academicYearId?: string) {
-    const fallbackEnrollment = and(
-      isNull(invoices.enrollmentId),
-      eq(enrollments.studentId, invoices.studentId),
-      eq(enrollments.status, 'approved'),
-      ...(academicYearId ? [eq(enrollments.academicYearId, academicYearId)] : []),
-    )
+    const fallbackEnrollmentId = sql<string>`(
+      SELECT e.id
+      FROM enrollments e
+      WHERE e.tenant_id = ${tenantId}
+        AND e.student_id = ${invoices.studentId}
+        AND e.status = 'approved'
+        ${academicYearId ? sql`AND e.academic_year_id = ${academicYearId}` : sql``}
+      ORDER BY e.created_at DESC
+      LIMIT 1
+    )`
 
     return and(
       eq(enrollments.tenantId, tenantId),
-      or(eq(invoices.enrollmentId, enrollments.id), fallbackEnrollment),
+      or(
+        eq(invoices.enrollmentId, enrollments.id),
+        and(isNull(invoices.enrollmentId), eq(enrollments.id, fallbackEnrollmentId)),
+      ),
     )
   }
 
@@ -1495,6 +1503,7 @@ export class FinanceService {
         id: studentServices.id,
         feeItemId: studentServices.feeItemId,
         feeItemName: feeItems.name,
+        billingType: feeItems.billingType,
         effectiveFrom: studentServices.effectiveFrom,
         effectiveTo: studentServices.effectiveTo,
       })
@@ -1507,6 +1516,28 @@ export class FinanceService {
           isNull(studentServices.effectiveTo),
         ),
       )
+
+    const feePlanRows = await this.db
+      .select({
+        feeItemId: enrollmentFeePlans.feeItemId,
+        amount: enrollmentFeePlans.amount,
+      })
+      .from(enrollmentFeePlans)
+      .where(eq(enrollmentFeePlans.tenantId, tenantId))
+
+    const monthlyAmountByFeeItem = new Map<string, number>()
+    for (const row of feePlanRows) {
+      const amount = Number(row.amount)
+      const existing = monthlyAmountByFeeItem.get(row.feeItemId)
+      if (existing == null || amount < existing) {
+        monthlyAmountByFeeItem.set(row.feeItemId, amount)
+      }
+    }
+
+    const activeServicesWithAmounts = activeServices.map((service) => ({
+      ...service,
+      monthlyAmount: monthlyAmountByFeeItem.get(service.feeItemId) ?? null,
+    }))
 
     const discounts = await this.db
       .select({
@@ -1527,7 +1558,7 @@ export class FinanceService {
       totalOutstanding,
       totalPaid,
       invoices: invoiceRows,
-      activeServices,
+      activeServices: activeServicesWithAmounts,
       discounts,
     }
   }
@@ -2188,15 +2219,15 @@ export class FinanceService {
         sql`${payments.verifiedAt} <= ${endDate}`,
       ))
 
-    // Salary expenses for this month
+    // Payroll expenses: sum of paid payroll records in this calendar month
     const salaryResult = await this.db
-      .select({ salaryExpenses: sum(salaryRecords.netAmount) })
-      .from(salaryRecords)
+      .select({ salaryExpenses: sum(payrollRecords.netAmount) })
+      .from(payrollRecords)
       .where(and(
-        eq(salaryRecords.tenantId, tenantId),
-        eq(salaryRecords.salaryMonth, selectedMonth),
-        eq(salaryRecords.status, "approved"),
-        isNotNull(salaryRecords.paidAt)
+        eq(payrollRecords.tenantId, tenantId),
+        eq(payrollRecords.status, "paid"),
+        sql`${payrollRecords.paidAt} >= ${startDate}`,
+        sql`${payrollRecords.paidAt} <= ${endDate}`,
       ))
 
     const rev = Number(revenueResult[0]?.revenue ?? 0)
@@ -2327,6 +2358,275 @@ export class FinanceService {
           : null,
       }
     })
+  }
+
+  async getFinanceOverview(tenantId: string, query: FinanceOverviewQueryDto) {
+    const year = await this.resolveOverviewAcademicYear(tenantId, query.academicYearId)
+    const month = query.month ?? new Date().toISOString().slice(0, 7)
+
+    if (!year) {
+      const monthly = await this.getMonthlyReport(tenantId, { month })
+      const receivableRows = await this.getReceivables(tenantId, {})
+      const aging = this.buildReceivablesAging(receivableRows)
+      const topOverdue = this.buildTopOverdue(receivableRows)
+
+      return {
+        academicYear: null,
+        term: null,
+        month,
+        profile: {
+          enrolledStudents: 0,
+          gradesWithStudents: 0,
+          averageBilledPerStudent: 0,
+          activeFeeItems: 0,
+          activeDiscountRules: 0,
+          studentsWithDiscounts: 0,
+          discountExposurePercent: 0,
+          paymentPlanMix: { enrollment: 0, monthly: 0, one_off: 0 },
+        },
+        revenue: {
+          billed: 0,
+          collected: 0,
+          outstanding: 0,
+          overdue: 0,
+          collectionRate: 0,
+          owingStudents: 0,
+          overdueStudents: 0,
+          bySource: { enrollment: 0, recurring: 0, ad_hoc: 0 },
+          byGrade: [],
+        },
+        monthly: {
+          month: monthly.month,
+          revenue: monthly.revenue,
+          salaryExpenses: monthly.salaryExpenses,
+          net: monthly.net,
+          payrollPercentOfRevenue: monthly.revenue > 0
+            ? Math.round((monthly.salaryExpenses / monthly.revenue) * 100)
+            : 0,
+        },
+        receivables: { aging, topOverdue },
+      }
+    }
+
+    const academicYearId = year.id
+    const [metrics, rosterShell, monthly, receivableRows, feeItemCount, discountRuleCount, bySource, studentsWithDiscounts] =
+      await Promise.all([
+        this.getInvoiceMetrics(tenantId, { academicYearId }),
+        this.getBillingRoster(tenantId, { academicYearId, limit: 1, offset: 0 }),
+        this.getMonthlyReport(tenantId, { month }),
+        this.getReceivables(tenantId, {}),
+        this.db
+          .select({ count: count() })
+          .from(feeItems)
+          .where(and(eq(feeItems.tenantId, tenantId), eq(feeItems.status, 'active'))),
+        this.db
+          .select({ count: count() })
+          .from(discountRules)
+          .where(and(eq(discountRules.tenantId, tenantId), eq(discountRules.status, 'active'))),
+        this.getRevenueBySourceForYear(tenantId, year.startsOn, year.endsOn),
+        this.countStudentsWithDiscountsForYear(tenantId, year.startsOn, year.endsOn),
+      ])
+
+    const enrolledStudents = rosterShell.metrics.totalStudents
+    const paymentPlanMix = { enrollment: 0, monthly: 0, one_off: 0 }
+    const byGrade: Array<{
+      gradeId: string
+      gradeName: string
+      billed: number
+      collected: number
+      outstanding: number
+      students: number
+    }> = []
+
+    await Promise.all(
+      rosterShell.grades.map(async (grade) => {
+        const gradeRoster = await this.getBillingRoster(tenantId, {
+          academicYearId,
+          gradeId: grade.id,
+          limit: 500,
+          offset: 0,
+        })
+        byGrade.push({
+          gradeId: grade.id,
+          gradeName: grade.name,
+          billed: gradeRoster.metrics.billed,
+          collected: gradeRoster.metrics.collected,
+          outstanding: gradeRoster.metrics.outstanding,
+          students: gradeRoster.metrics.totalStudents,
+        })
+        for (const row of gradeRoster.rows) {
+          const plan = row.primaryPaymentPlan ?? 'one_off'
+          if (plan in paymentPlanMix) {
+            paymentPlanMix[plan as keyof typeof paymentPlanMix] += 1
+          }
+        }
+      }),
+    )
+
+    byGrade.sort((a, b) => a.gradeName.localeCompare(b.gradeName))
+
+    const discountExposurePercent =
+      enrolledStudents > 0 ? Math.round((studentsWithDiscounts / enrolledStudents) * 100) : 0
+
+    const aging = this.buildReceivablesAging(receivableRows)
+    const topOverdue = this.buildTopOverdue(receivableRows)
+
+    return {
+      academicYear: { id: year.id, name: year.name, status: year.status },
+      term: rosterShell.term,
+      month,
+      profile: {
+        enrolledStudents,
+        gradesWithStudents: rosterShell.grades.length,
+        averageBilledPerStudent:
+          enrolledStudents > 0 ? Math.round(metrics.billed / enrolledStudents) : 0,
+        activeFeeItems: Number(feeItemCount[0]?.count ?? 0),
+        activeDiscountRules: Number(discountRuleCount[0]?.count ?? 0),
+        studentsWithDiscounts,
+        discountExposurePercent,
+        paymentPlanMix,
+      },
+      revenue: {
+        billed: metrics.billed,
+        collected: metrics.collected,
+        outstanding: metrics.outstanding,
+        overdue: metrics.overdue,
+        collectionRate: metrics.collectionRate,
+        owingStudents: metrics.owingStudents,
+        overdueStudents: metrics.overdueStudents,
+        bySource,
+        byGrade,
+      },
+      monthly: {
+        month: monthly.month,
+        revenue: monthly.revenue,
+        salaryExpenses: monthly.salaryExpenses,
+        net: monthly.net,
+        payrollPercentOfRevenue:
+          monthly.revenue > 0 ? Math.round((monthly.salaryExpenses / monthly.revenue) * 100) : 0,
+      },
+      receivables: { aging, topOverdue },
+    }
+  }
+
+  private async resolveOverviewAcademicYear(tenantId: string, academicYearId?: string) {
+    if (academicYearId) {
+      const [year] = await this.db
+        .select({
+          id: academicYears.id,
+          name: academicYears.name,
+          status: academicYears.status,
+          startsOn: academicYears.startsOn,
+          endsOn: academicYears.endsOn,
+        })
+        .from(academicYears)
+        .where(and(eq(academicYears.tenantId, tenantId), eq(academicYears.id, academicYearId)))
+      if (!year) throw new NotFoundException('Academic year not found')
+      return year
+    }
+
+    const [activeYear] = await this.db
+      .select({
+        id: academicYears.id,
+        name: academicYears.name,
+        status: academicYears.status,
+        startsOn: academicYears.startsOn,
+        endsOn: academicYears.endsOn,
+      })
+      .from(academicYears)
+      .where(and(eq(academicYears.tenantId, tenantId), eq(academicYears.status, 'active')))
+      .limit(1)
+    if (activeYear) return activeYear
+
+    const [recentYear] = await this.db
+      .select({
+        id: academicYears.id,
+        name: academicYears.name,
+        status: academicYears.status,
+        startsOn: academicYears.startsOn,
+        endsOn: academicYears.endsOn,
+      })
+      .from(academicYears)
+      .where(eq(academicYears.tenantId, tenantId))
+      .orderBy(desc(academicYears.startsOn))
+      .limit(1)
+    return recentYear ?? null
+  }
+
+  private async getRevenueBySourceForYear(tenantId: string, periodStart: string, periodEnd: string) {
+    const sourceRows = await this.db
+      .select({
+        source: invoices.source,
+        total: sum(invoices.total),
+      })
+      .from(invoices)
+      .where(
+        and(
+          eq(invoices.tenantId, tenantId),
+          gte(invoices.issueDate, periodStart),
+          lte(invoices.issueDate, periodEnd),
+        ),
+      )
+      .groupBy(invoices.source)
+
+    const bySource = { enrollment: 0, recurring: 0, ad_hoc: 0 }
+    for (const row of sourceRows) {
+      const key = row.source as keyof typeof bySource
+      if (key in bySource) {
+        bySource[key] = Number(row.total ?? 0)
+      }
+    }
+    return bySource
+  }
+
+  private async countStudentsWithDiscountsForYear(
+    tenantId: string,
+    periodStart: string,
+    periodEnd: string,
+  ) {
+    const rows = await this.db
+      .selectDistinct({ studentId: invoices.studentId })
+      .from(invoices)
+      .where(
+        and(
+          eq(invoices.tenantId, tenantId),
+          gte(invoices.issueDate, periodStart),
+          lte(invoices.issueDate, periodEnd),
+          sql`${invoices.discountTotal}::numeric > 0`,
+        ),
+      )
+    return rows.length
+  }
+
+  private buildReceivablesAging(
+    rows: Awaited<ReturnType<FinanceService['getReceivables']>>,
+  ) {
+    const aging = { current: 0, days1to30: 0, days31to60: 0, days90Plus: 0 }
+    for (const row of rows) {
+      const balance = row.balanceDue
+      if (balance <= 0) continue
+      const days = row.daysOverdue ?? 0
+      if (days <= 0) aging.current += balance
+      else if (days <= 30) aging.days1to30 += balance
+      else if (days <= 60) aging.days31to60 += balance
+      else aging.days90Plus += balance
+    }
+    return aging
+  }
+
+  private buildTopOverdue(rows: Awaited<ReturnType<FinanceService['getReceivables']>>) {
+    return rows
+      .filter((row) => (row.daysOverdue ?? 0) > 0 && row.balanceDue > 0)
+      .sort((a, b) => (b.daysOverdue ?? 0) - (a.daysOverdue ?? 0))
+      .slice(0, 10)
+      .map((row) => ({
+        id: row.id,
+        invoiceNumber: row.invoiceNumber,
+        studentFullName: row.studentFullName,
+        gradeName: row.gradeName,
+        balanceDue: row.balanceDue,
+        daysOverdue: row.daysOverdue ?? 0,
+      }))
   }
 
   async getFinanceDashboard(tenantId: string) {

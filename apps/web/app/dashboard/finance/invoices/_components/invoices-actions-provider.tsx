@@ -1,11 +1,12 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { DASH_PAGE_TITLE_ACTIONS_ID } from "../../../dashboard-page-title";
+import { useDashPageTitleActionsTarget } from "../../../dashboard-page-title";
+import { Button } from "../../../../../components/ui/button";
 import { FormInput } from "../../../../../components/shared/form-input";
 import { PdsDatePickerField } from "../../../../../components/pds";
 import { useApiMutation } from "../../../../lib/api";
@@ -56,7 +57,7 @@ type InvoicesActionsContextValue = {
 
 const InvoicesActionsContext = createContext<InvoicesActionsContextValue | null>(null);
 
-function useInvoicesActionsContext() {
+export function useInvoicesActionsContext() {
   const ctx = useContext(InvoicesActionsContext);
   if (!ctx) {
     throw new Error("Invoices actions components must be used within InvoicesActionsProvider");
@@ -204,7 +205,7 @@ export function InvoicesActionsProvider({
           if (!open) form.reset();
           setSheetOpen(open);
         }}
-        title={t("createInvoice")}
+        title={t("createAdHocInvoice")}
         help={t("createInvoiceHelp")}
         onSubmit={form.handleSubmit(async (values) => {
           await create.mutateAsync({
@@ -226,7 +227,7 @@ export function InvoicesActionsProvider({
             </button>
             <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={form.formState.isSubmitting}>
               <Icon name="check" />
-              {form.formState.isSubmitting ? c("loading") : t("createInvoiceSubmit")}
+              {form.formState.isSubmitting ? c("loading") : t("createAdHocInvoiceSubmit")}
             </button>
           </>
         }
@@ -261,7 +262,7 @@ export function InvoicesActionsProvider({
   );
 }
 
-/** Title-row CTAs — generate monthly + create invoice (Figma 76:9642). */
+/** Title-row CTAs — generate + create invoice (Figma 76:9987). */
 export function InvoicesHeaderActions() {
   const t = useTranslations("finance");
   const c = useTranslations("common");
@@ -270,30 +271,32 @@ export function InvoicesHeaderActions() {
 
   return (
     <>
-      <button
+      <Button
         type="button"
-        className="pds-type-body-m-bold btn-ghost"
+        buttonType="outlined"
+        buttonColor="secondary"
+        prefixIcon="bolt"
         disabled={generateDisabled}
         onClick={handleGenerate}
       >
-        <Icon name="bolt" />
         {generatePending ? c("loading") : t("generateMonthlyButton")}
-      </button>
-      <button type="button" className="pds-type-body-m-bold btn-primary" onClick={openCreateSheet}>
-        <Icon name="add" />
+      </Button>
+      <Button
+        type="button"
+        buttonType="filled"
+        buttonColor="primary"
+        prefixIcon="add"
+        onClick={openCreateSheet}
+      >
         {t("createInvoice")}
-      </button>
+      </Button>
     </>
   );
 }
 
 /** Portals {@link InvoicesHeaderActions} into the layout title row (inside provider context). */
 export function InvoicesHeaderActionsPortal() {
-  const [target, setTarget] = useState<HTMLElement | null>(null);
-
-  useEffect(() => {
-    setTarget(document.getElementById(DASH_PAGE_TITLE_ACTIONS_ID));
-  }, []);
+  const target = useDashPageTitleActionsTarget();
 
   if (!target) {
     return null;

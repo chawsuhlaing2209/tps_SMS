@@ -2,8 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useMemo } from "react";
+import { useMemo, use } from "react";
 import { useApiQuery } from "../../../../../../lib/api";
 import { RecordList, RecordListItem, RecordListPanel } from "../../../../../../lib/record-list";
 import { PanelHead } from "../../../../../../lib/panel";
@@ -45,9 +44,12 @@ type Assignment = {
 
 type StaffMember = { id: string; fullName: string };
 
-export default function StructureSubjectClassroomPage() {
-  const params = useParams<{ classroomId: string; subjectId: string }>();
-  const { classroomId, subjectId } = params;
+export default function StructureSubjectClassroomPage({
+  params
+}: {
+  params: Promise<{ classroomId: string; subjectId: string }>;
+}) {
+  const { classroomId, subjectId } = use(params);
   const t = useTranslations("academics");
   const c = useTranslations("common");
   const currentYear = useCurrentAcademicYear();

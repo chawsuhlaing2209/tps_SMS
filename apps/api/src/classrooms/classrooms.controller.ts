@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards
 } from "@nestjs/common";
@@ -114,6 +115,22 @@ export class ClassroomsController {
     return this.classroomsService.getClassroomRoomDetail(
       req.tenantContext.tenantId,
       classroomId
+    );
+  }
+
+  @Get(":classroomId/subjects/:subjectId/eligible-teachers")
+  @RequireAnyPermissions("classroom.manage", "academic_setup.manage", "timetable.manage")
+  listEligibleSubjectTeachers(
+    @Req() req: TenantRequest,
+    @Param("classroomId") classroomId: string,
+    @Param("subjectId") subjectId: string,
+    @Query("includeStaffId") includeStaffId?: string
+  ) {
+    return this.classroomsService.listEligibleSubjectTeachers(
+      req.tenantContext.tenantId,
+      classroomId,
+      subjectId,
+      includeStaffId
     );
   }
 

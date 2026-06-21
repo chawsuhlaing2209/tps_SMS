@@ -6,15 +6,17 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Button, SubjectChip, SubjectChipGroup } from "../../../components/pds";
+import { Button as PdsButton, SubjectChip, SubjectChipGroup } from "../../../components/pds";
 import type { PdsSubjectColorKey } from "../../../components/pds/palettes";
 import { PdsSelectField } from "../../../components/pds";
-import { ConfirmDialog } from "../../../components/shared/confirm-dialog";
+import { Button } from "../../../components/ui/button";
+import { ConfirmDialog, AppModal } from "../../../components/shared/confirm-dialog";
 import { EmptyState } from "../../../components/shared/empty-state";
 import { StatCard, StatGrid } from "../../../components/shared/stat-card";
-import { useApiMutation, useApiQuery } from "../../lib/api";
+import { useApiMutation, useApiQuery, apiFetch } from "../../lib/api";
 import { Field } from "../../lib/form";
 import { Icon } from "../../lib/material-icon";
+import { printDocument } from "../../lib/print-document";
 import { hasAnyPermission } from "../../lib/permissions";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { getSession } from "../../lib/session";
@@ -22,6 +24,7 @@ import { toastSuccess } from "../../lib/toast";
 import { useCurrentAcademicYear } from "../../lib/use-current-academic-year";
 import { zodResolver } from "../../lib/zod-resolver";
 import { ModulePageHeader } from "../module-page-header";
+import { resolveSubjectChipColorKey } from "../structure/subject-colors";
 import { TimetablePeriodModal } from "./_components/timetable-period-modal";
 
 type GradeOverview = {
@@ -29,7 +32,7 @@ type GradeOverview = {
   name: string;
   classroomCount: number;
   subjectCount: number;
-  subjects: Array<{ id: string; name: string; code: string | null }>;
+  subjects: Array<{ id: string; name: string; code: string | null; colorKey?: string | null }>;
 };
 
 type ClassroomRow = {
@@ -70,8 +73,23 @@ type NoTeacherDialogState =
       subjectId: string;
       subjectName: string;
       pendingSubmit?: SlotFormValues;
+      noEligibleTeachers?: boolean;
     }
   | null;
+
+type TeacherConflictDetails = {
+  slotId: string;
+  classroomName: string;
+  gradeName: string;
+  subjectName: string | null;
+  teacherFullName: string | null;
+  periodName: string;
+  periodStartsAt: string;
+  periodEndsAt: string;
+  dayOfWeek: number;
+};
+
+type EligibleTeacher = { id: string; fullName: string };
 
 type SlotFormValues = { subjectId: string; staffId: string };
 
@@ -115,31 +133,46 @@ const gradesPath = (tenant: string, yearId: string) =>
 const classroomsPath = (tenant: string, yearId: string, gradeId: string) =>
   `/tenants/${tenant}/academics/setup/academic-years/${yearId}/grades/${gradeId}/classrooms`;
 
+const eligibleTeachersPath = (
+  tenant: string,
+  classroomId: string,
+  subjectId: string,
+  includeStaffId?: string
+) => {
+  const params = new URLSearchParams();
+  if (includeStaffId) {
+    params.set("includeStaffId", includeStaffId);
+  }
+  const query = params.toString();
+  return `/tenants/${tenant}/timetable/classrooms/${classroomId}/subjects/${subjectId}/eligible-teachers${query ? `?${query}` : ""}`;
+};
+
+const teacherConflictPath = (
+  tenant: string,
+  input: {
+    staffId: string;
+    periodId: string;
+    dayOfWeek: number;
+    excludeSlotId?: string;
+  }
+) => {
+  const params = new URLSearchParams({
+    staffId: input.staffId,
+    periodId: input.periodId,
+    dayOfWeek: String(input.dayOfWeek)
+  });
+  if (input.excludeSlotId) {
+    params.set("excludeSlotId", input.excludeSlotId);
+  }
+  return `/tenants/${tenant}/timetable/teacher-schedule-conflict?${params.toString()}`;
+};
+
 const schoolSchedulePath = (tenant: string) => `/tenants/${tenant}/settings/school-schedule`;
 
 const timetableInvalidate = (tenant: string) => [
   `/tenants/${tenant}/timetable`,
   `/tenants/${tenant}/classrooms`
 ];
-
-const DEFAULT_COLOR: PdsSubjectColorKey = "blue";
-
-function normalizeColorKey(value: string | null | undefined): PdsSubjectColorKey {
-  const allowed: PdsSubjectColorKey[] = [
-    "azure",
-    "pomegranate",
-    "purple",
-    "yellow",
-    "green",
-    "pink",
-    "cyan",
-    "blue"
-  ];
-  if (value && allowed.includes(value as PdsSubjectColorKey)) {
-    return value as PdsSubjectColorKey;
-  }
-  return DEFAULT_COLOR;
-}
 
 export function TimetableWorkspace() {
   const t = useTranslations("timetable");
@@ -157,6 +190,10 @@ export function TimetableWorkspace() {
   const [selectedSlot, setSelectedSlot] = useState<SlotRow | null>(null);
   const [slotSheet, setSlotSheet] = useState<SlotSheetContext | null>(null);
   const [noTeacherDialog, setNoTeacherDialog] = useState<NoTeacherDialogState>(null);
+  const [teacherConflictDialog, setTeacherConflictDialog] = useState<TeacherConflictDetails | null>(
+    null
+  );
+  const [subjectJustChanged, setSubjectJustChanged] = useState(false);
 
   const grades = useApiQuery<GradeOverview[]>((tenant) =>
     yearId ? gradesPath(tenant, yearId) : null
@@ -274,6 +311,15 @@ export function TimetableWorkspace() {
     defaultValues: { subjectId: "", staffId: "" }
   });
 
+  const watchedSubjectId = slotForm.watch("subjectId");
+  const watchedStaffId = slotForm.watch("staffId");
+
+  const eligibleTeachers = useApiQuery<{ data: EligibleTeacher[] }>((tenant) =>
+    resolvedClassroomId && watchedSubjectId && slotSheet
+      ? eligibleTeachersPath(tenant, resolvedClassroomId, watchedSubjectId, watchedStaffId || undefined)
+      : null
+  );
+
   const workingDays = overviewQuery.data?.workingDays ?? [1, 2, 3, 4, 5];
   const periods = overviewQuery.data?.periods ?? [];
   const slots = overviewQuery.data?.slots ?? [];
@@ -292,12 +338,15 @@ export function TimetableWorkspace() {
     const fromRoom = roomDetail.data?.subjects ?? [];
     const merged = new Map<string, { name: string; colorKey: PdsSubjectColorKey }>();
     for (const subject of fromGrade) {
-      merged.set(subject.id, { name: subject.name, colorKey: DEFAULT_COLOR });
+      merged.set(subject.id, {
+        name: subject.name,
+        colorKey: resolveSubjectChipColorKey(subject.name, subject.colorKey)
+      });
     }
     for (const subject of fromRoom) {
       merged.set(subject.subjectId, {
         name: subject.subjectName,
-        colorKey: normalizeColorKey(subject.subjectColorKey)
+        colorKey: resolveSubjectChipColorKey(subject.subjectName, subject.subjectColorKey)
       });
     }
     return [...merged.entries()].map(([id, value]) => ({ id, ...value }));
@@ -317,29 +366,118 @@ export function TimetableWorkspace() {
 
   const canGeneratePeriods = (schoolSettings.data?.operatingHourBlocks?.length ?? 0) > 0;
 
+  const subjectOptions = useMemo(
+    () =>
+      (activeGrade?.subjects ?? []).map((subject) => ({
+        value: subject.id,
+        label: subject.name
+      })),
+    [activeGrade?.subjects]
+  );
+
   const teacherOptions = useMemo(() => {
-    const rows = roomDetail.data?.subjects ?? [];
-    const seen = new Set<string>();
-    const options: Array<{ value: string; label: string }> = [];
-    for (const row of rows) {
-      if (!row.teacherStaffId || seen.has(row.teacherStaffId)) {
-        continue;
-      }
-      seen.add(row.teacherStaffId);
-      options.push({
-        value: row.teacherStaffId,
-        label: row.teacherName ?? row.teacherStaffId
-      });
-    }
-    return options;
-  }, [roomDetail.data?.subjects]);
+    const eligible = eligibleTeachers.data?.data ?? [];
+    const options = eligible.map((teacher) => ({
+      value: teacher.id,
+      label: teacher.fullName
+    }));
+    return [{ value: "", label: t("noTeacherOption") }, ...options];
+  }, [eligibleTeachers.data?.data, t]);
 
   function subjectNameFor(subjectId: string) {
     return (
-      roomDetail.data?.subjects.find((row) => row.subjectId === subjectId)?.subjectName ??
       activeGrade?.subjects.find((row) => row.id === subjectId)?.name ??
+      roomDetail.data?.subjects.find((row) => row.subjectId === subjectId)?.subjectName ??
       subjectId
     );
+  }
+
+  useEffect(() => {
+    if (!slotSheet || !watchedSubjectId || !subjectJustChanged || eligibleTeachers.isLoading) {
+      return;
+    }
+
+    const teachers = eligibleTeachers.data?.data ?? [];
+    if (teachers.length === 0) {
+      setNoTeacherDialog({
+        subjectId: watchedSubjectId,
+        subjectName: subjectNameFor(watchedSubjectId),
+        noEligibleTeachers: true
+      });
+      slotForm.setValue("staffId", "", { shouldValidate: true });
+      setSubjectJustChanged(false);
+      return;
+    }
+
+    const assignedTeacher = roomDetail.data?.subjects.find(
+      (row) => row.subjectId === watchedSubjectId
+    )?.teacherStaffId;
+    const preferredTeacher =
+      assignedTeacher && teachers.some((teacher) => teacher.id === assignedTeacher)
+        ? assignedTeacher
+        : "";
+
+    void (async () => {
+      if (preferredTeacher && slotSheet) {
+        const tenantId = getSession()?.tenantId;
+        if (tenantId) {
+          const result = await apiFetch<{
+            hasConflict: boolean;
+            existing?: TeacherConflictDetails;
+          }>(
+            teacherConflictPath(tenantId, {
+              staffId: preferredTeacher,
+              periodId: slotSheet.periodId,
+              dayOfWeek: slotSheet.dayOfWeek,
+              excludeSlotId: slotSheet.slotId
+            })
+          );
+          if (result.hasConflict && result.existing) {
+            setTeacherConflictDialog(result.existing);
+            slotForm.setValue("staffId", "", { shouldValidate: true });
+            setSubjectJustChanged(false);
+            return;
+          }
+        }
+      }
+
+      slotForm.setValue("staffId", preferredTeacher, { shouldValidate: true });
+      setSubjectJustChanged(false);
+    })();
+  }, [
+    activeGrade?.subjects,
+    eligibleTeachers.data?.data,
+    eligibleTeachers.isLoading,
+    roomDetail.data?.subjects,
+    slotForm,
+    slotSheet,
+    subjectJustChanged,
+    watchedSubjectId
+  ]);
+
+  async function resolveTeacherConflict(staffId: string): Promise<TeacherConflictDetails | null> {
+    if (!slotSheet || !staffId.trim()) {
+      return null;
+    }
+
+    const tenantId = getSession()?.tenantId;
+    if (!tenantId) {
+      return null;
+    }
+
+    const result = await apiFetch<{
+      hasConflict: boolean;
+      existing?: TeacherConflictDetails;
+    }>(
+      teacherConflictPath(tenantId, {
+        staffId,
+        periodId: slotSheet.periodId,
+        dayOfWeek: slotSheet.dayOfWeek,
+        excludeSlotId: slotSheet.slotId
+      })
+    );
+
+    return result.hasConflict ? (result.existing ?? null) : null;
   }
 
   async function persistSlot(values: SlotFormValues) {
@@ -371,6 +509,8 @@ export function TimetableWorkspace() {
   function openSlotSheet(context: SlotSheetContext, values?: SlotFormValues) {
     slotForm.reset(values ?? { subjectId: "", staffId: "" });
     setNoTeacherDialog(null);
+    setTeacherConflictDialog(null);
+    setSubjectJustChanged(false);
     setSlotSheet(context);
   }
 
@@ -381,17 +521,27 @@ export function TimetableWorkspace() {
       return;
     }
 
-    const match = roomDetail.data?.subjects.find((row) => row.subjectId === subjectId);
-    if (match?.teacherStaffId) {
-      slotForm.setValue("subjectId", subjectId, { shouldValidate: true });
-      slotForm.setValue("staffId", match.teacherStaffId, { shouldValidate: true });
+    slotForm.setValue("subjectId", subjectId, { shouldValidate: true });
+    slotForm.setValue("staffId", "", { shouldValidate: true });
+    setNoTeacherDialog(null);
+    setTeacherConflictDialog(null);
+    setSubjectJustChanged(true);
+  }
+
+  async function handleTeacherChange(staffId: string) {
+    if (!staffId.trim()) {
+      slotForm.setValue("staffId", "", { shouldValidate: true });
       return;
     }
 
-    setNoTeacherDialog({
-      subjectId,
-      subjectName: subjectNameFor(subjectId)
-    });
+    const conflict = await resolveTeacherConflict(staffId);
+    if (conflict) {
+      setTeacherConflictDialog(conflict);
+      slotForm.setValue("staffId", "", { shouldValidate: true });
+      return;
+    }
+
+    slotForm.setValue("staffId", staffId, { shouldValidate: true });
   }
 
   function handleNoTeacherDialogOpenChange(open: boolean) {
@@ -403,7 +553,9 @@ export function TimetableWorkspace() {
       return;
     }
     setNoTeacherDialog(null);
-    setSlotSheet(null);
+    if (!noTeacherDialog?.noEligibleTeachers) {
+      setSlotSheet(null);
+    }
   }
 
   async function handleContinueWithoutTeacher() {
@@ -427,7 +579,29 @@ export function TimetableWorkspace() {
 
   return (
     <div className="page-stack timetable-workspace">
-      <ModulePageHeader navKey="timetable" title={pageTitle} />
+      <ModulePageHeader
+        navKey="timetable"
+        title={pageTitle}
+        actions={
+          resolvedClassroomId ? (
+            <Button
+              type="button"
+              buttonType="outlined"
+              buttonColor="secondary"
+              prefixIcon="print"
+              onClick={() =>
+                printDocument("#timetable-weekly-grid", {
+                  title: pageTitle,
+                  layout: "landscape",
+                  width: "wide"
+                })
+              }
+            >
+              {t("printExport")}
+            </Button>
+          ) : null
+        }
+      />
 
       {!yearId ? (
         <EmptyState icon="calendar_month" title={t("noAcademicYear")} />
@@ -477,7 +651,7 @@ export function TimetableWorkspace() {
             </div>
 
             <div className="timetable-toolbar__meta">
-              {legendSubjects.length ? (
+              {legendSubjects.length && resolvedClassroomId ? (
                 <SubjectChipGroup className="timetable-legend">
                   {legendSubjects.map((subject) => (
                     <SubjectChip key={subject.id} colorKey={subject.colorKey}>
@@ -486,8 +660,8 @@ export function TimetableWorkspace() {
                   ))}
                 </SubjectChipGroup>
               ) : null}
-              {canManage ? (
-                <Button
+              {canManage && resolvedClassroomId ? (
+                <PdsButton
                   buttonType={isEditingTimetable ? "filled" : "outlined"}
                   buttonColor={isEditingTimetable ? "primary" : "secondary"}
                   prefixIcon={isEditingTimetable ? "save" : "edit"}
@@ -504,7 +678,7 @@ export function TimetableWorkspace() {
                   }}
                 >
                   {isEditingTimetable ? c("saveChanges") : t("editTimetable")}
-                </Button>
+                </PdsButton>
               ) : null}
             </div>
           </div>
@@ -535,7 +709,24 @@ export function TimetableWorkspace() {
             </StatGrid>
           ) : null}
 
-          {!periods.length ? (
+          {classrooms.isLoading ? null : !classrooms.data?.length ? (
+            <EmptyState
+              icon="meeting_room"
+              title={t("noClassroomsInGrade")}
+              description={t("noClassroomsInGradeHelp")}
+              action={
+                canManage ? (
+                  <Link
+                    href={`/dashboard/academic-setup/grades-classrooms?grade=${resolvedGradeId}`}
+                    className="pds-type-body-m-bold btn-primary"
+                  >
+                    <Icon name="add" />
+                    {t("addClassroom")}
+                  </Link>
+                ) : undefined
+              }
+            />
+          ) : !periods.length ? (
             <EmptyState
               icon="schedule"
               title={t("noPeriodsConfigured")}
@@ -619,7 +810,13 @@ export function TimetableWorkspace() {
                           {workingDays.map((day) => {
                             const slot = slotMap.get(`${day}:${period.id}`);
                             if (slot) {
-                              const colorKey = normalizeColorKey(slot.subjectColorKey);
+                              const colorKey = resolveSubjectChipColorKey(
+                                slot.subjectName ?? "",
+                                slot.subjectColorKey ??
+                                  activeGrade?.subjects.find(
+                                    (subject) => subject.id === slot.subjectId
+                                  )?.colorKey
+                              );
                               return (
                                 <td key={`${day}-${period.id}`}>
                                   <button
@@ -641,9 +838,7 @@ export function TimetableWorkspace() {
                                     type="button"
                                     className="timetable-slot-empty"
                                     aria-label={t("addSlot")}
-                                    onClick={() => {
-                                      openSlotSheet({ periodId: period.id, dayOfWeek: day });
-                                    }}
+                                    onClick={() => openSlotSheet({ periodId: period.id, dayOfWeek: day })}
                                   >
                                     <Icon name="add" />
                                   </button>
@@ -670,7 +865,7 @@ export function TimetableWorkspace() {
         onClose={() => setSelectedSlot(null)}
         canManage={canManage}
         onDelete={
-          selectedSlot && canManage && isEditingTimetable
+          selectedSlot && canManage
             ? () =>
                 void deleteSlot.mutateAsync({ slotId: selectedSlot.id }).then(() => {
                   setSelectedSlot(null);
@@ -679,8 +874,9 @@ export function TimetableWorkspace() {
             : undefined
         }
         onEdit={
-          selectedSlot && canManage && isEditingTimetable
+          selectedSlot && canManage
             ? () => {
+                setIsEditingTimetable(true);
                 setSelectedSlot(null);
                 openSlotSheet(
                   {
@@ -708,15 +904,20 @@ export function TimetableWorkspace() {
           if (!slotSheet || !resolvedClassroomId) {
             return;
           }
-          if (!values.staffId?.trim()) {
-            setNoTeacherDialog({
-              subjectId: values.subjectId,
-              subjectName: subjectNameFor(values.subjectId),
-              pendingSubmit: values
-            });
+          if (values.staffId?.trim()) {
+            const conflict = await resolveTeacherConflict(values.staffId.trim());
+            if (conflict) {
+              setTeacherConflictDialog(conflict);
+              return;
+            }
+            await persistSlot(values);
             return;
           }
-          await persistSlot(values);
+          setNoTeacherDialog({
+            subjectId: values.subjectId,
+            subjectName: subjectNameFor(values.subjectId),
+            pendingSubmit: values
+          });
         })}
         footer={
           <>
@@ -754,10 +955,7 @@ export function TimetableWorkspace() {
               handleSubjectChange(typeof value === "string" ? value : "")
             }
             placeholder={t("selectSubject")}
-            options={(roomDetail.data?.subjects ?? []).map((subject) => ({
-              value: subject.subjectId,
-              label: subject.subjectName
-            }))}
+            options={subjectOptions}
           />
         </Field>
         <Field label={t("teacher")} error={slotForm.formState.errors.staffId?.message}>
@@ -765,11 +963,16 @@ export function TimetableWorkspace() {
             variant="form"
             value={slotForm.watch("staffId")}
             onValueChange={(value) =>
-              slotForm.setValue("staffId", typeof value === "string" ? value : "", {
-                shouldValidate: true
-              })
+              void handleTeacherChange(typeof value === "string" ? value : "")
             }
-            placeholder={t("selectTeacher")}
+            placeholder={
+              !watchedSubjectId
+                ? t("selectSubjectFirst")
+                : eligibleTeachers.isLoading
+                  ? c("loading")
+                  : t("selectTeacher")
+            }
+            disabled={!watchedSubjectId || eligibleTeachers.isLoading}
             options={teacherOptions}
           />
         </Field>
@@ -778,16 +981,59 @@ export function TimetableWorkspace() {
       <ConfirmDialog
         open={Boolean(noTeacherDialog)}
         onOpenChange={handleNoTeacherDialogOpenChange}
-        title={t("noTeacherDialogTitle")}
-        description={t("noTeacherDialogDescription", {
-          subject: noTeacherDialog?.subjectName ?? ""
-        })}
+        title={
+          noTeacherDialog?.noEligibleTeachers
+            ? t("noEligibleTeachersDialogTitle")
+            : t("noTeacherDialogTitle")
+        }
+        description={
+          noTeacherDialog?.noEligibleTeachers
+            ? t("noEligibleTeachersDialogDescription", {
+                subject: noTeacherDialog?.subjectName ?? ""
+              })
+            : t("noTeacherDialogDescription", {
+                subject: noTeacherDialog?.subjectName ?? ""
+              })
+        }
         confirmLabel={t("continueWithoutTeacher")}
         cancelLabel={
           noTeacherDialog?.pendingSubmit ? c("cancel") : t("cancelAddingSlot")
         }
         onConfirm={() => void handleContinueWithoutTeacher()}
         loading={slotForm.formState.isSubmitting || createSlot.isPending || updateSlot.isPending}
+      />
+
+      <AppModal
+        open={Boolean(teacherConflictDialog)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setTeacherConflictDialog(null);
+          }
+        }}
+        title={t("teacherConflictDialogTitle")}
+        description={
+          teacherConflictDialog
+            ? t("teacherConflictDialogDescription", {
+                teacher: teacherConflictDialog.teacherFullName ?? t("unknownTeacher"),
+                day: dayLabel(teacherConflictDialog.dayOfWeek),
+                period: teacherConflictDialog.periodName,
+                start: teacherConflictDialog.periodStartsAt,
+                end: teacherConflictDialog.periodEndsAt,
+                grade: teacherConflictDialog.gradeName,
+                classroom: teacherConflictDialog.classroomName,
+                subject: teacherConflictDialog.subjectName ?? t("unknownSubject")
+              })
+            : ""
+        }
+        footer={
+          <button
+            type="button"
+            className="pds-type-body-m-bold btn-primary"
+            onClick={() => setTeacherConflictDialog(null)}
+          >
+            {c("close")}
+          </button>
+        }
       />
     </div>
   );

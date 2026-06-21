@@ -183,6 +183,11 @@ export class ReceivablesQueryDto {
   @IsString() @IsOptional() status?: string
 }
 
+export class FinanceOverviewQueryDto {
+  @IsUUID() @IsOptional() academicYearId?: string
+  @IsString() @IsOptional() month?: string
+}
+
 export class PaymentPlanInstallmentDto {
   @IsString() @Transform(trimString) @IsNotEmpty() declare label: string
   @IsString() @Transform(trimString) @IsNotEmpty() declare dueDate: string

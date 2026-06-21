@@ -26,20 +26,7 @@ export type OptionsProps = {
   okayLabel?: string;
 };
 
-const MAX_HEIGHT: Record<number, string> = {
-  3: "126px",
-  5: "210px",
-  7: "294px",
-  9: "320px",
-  11: "320px",
-};
-
-function resolvePanelHeight(count: number) {
-  if (count <= 3) return MAX_HEIGHT[3];
-  if (count <= 5) return MAX_HEIGHT[5];
-  if (count <= 7) return MAX_HEIGHT[7];
-  return MAX_HEIGHT[9];
-}
+export const OPTIONS_MAX_PANEL_HEIGHT = 320;
 
 /** Dropdown list panel — Figma node 35:13598.
  *  Standalone reusable: popovers, filter menus, action sheets, or inside PdsSelect.
@@ -56,8 +43,24 @@ export function Options({
   clearLabel = "Clear",
   okayLabel = "Okay",
 }: OptionsProps) {
-  const scrollable = items.length > 5;
+  const listRef = React.useRef<HTMLDivElement>(null);
+  const [scrollable, setScrollable] = React.useState(false);
   const showFooter = hasFooter && items.length >= 7;
+
+  React.useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+
+    const measure = () => {
+      setScrollable(list.scrollHeight > OPTIONS_MAX_PANEL_HEIGHT);
+    };
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(list);
+    measure();
+
+    return () => observer.disconnect();
+  }, [items]);
 
   return (
     <div
@@ -69,10 +72,10 @@ export function Options({
         className
       )}
       data-figma-node="35:13598"
-      style={{ maxHeight: resolvePanelHeight(items.length) }}
+      style={scrollable ? { maxHeight: `${OPTIONS_MAX_PANEL_HEIGHT}px` } : undefined}
       role="listbox"
     >
-      <div className="pds-options__list">
+      <div ref={listRef} className="pds-options__list">
         {items.map((item, index) => (
           <OptionItem
             key={item.id}

@@ -1,14 +1,18 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   Param,
   Patch,
   Post,
   Query,
-  UseGuards
+  UploadedFile,
+  UseGuards,
+  UseInterceptors
 } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import { RequireAnyPermissions, RequirePermissions } from "../identity/permissions.decorator.js";
 import { PermissionsGuard } from "../identity/permissions.guard.js";
 import {
@@ -25,12 +29,16 @@ import {
   UpdateStudentDto,
   WithdrawStudentDto
 } from "./dto.js";
+import { StudentDocumentsService } from "./student-documents.service.js";
 import { StudentsService } from "./students.service.js";
 
 @Controller("tenants/:tenantId/students")
 @UseGuards(PermissionsGuard)
 export class StudentsController {
-  constructor(private readonly studentsService: StudentsService) {}
+  constructor(
+    private readonly studentsService: StudentsService,
+    private readonly studentDocumentsService: StudentDocumentsService
+  ) {}
 
   @Get()
   @RequireAnyPermissions("student.manage", "student.view")
@@ -50,6 +58,12 @@ export class StudentsController {
     return this.studentsService.listGuardians(tenantId, query);
   }
 
+  @Get("directory-counts")
+  @RequireAnyPermissions("student.manage", "student.view")
+  directoryCounts(@Param("tenantId") tenantId: string) {
+    return this.studentsService.getPeopleDirectoryCounts(tenantId);
+  }
+
   @Get("guardians/:guardianId")
   @RequireAnyPermissions("student.manage", "student.view")
   getGuardian(
@@ -59,15 +73,6 @@ export class StudentsController {
     return this.studentsService.getGuardian(tenantId, guardianId);
   }
 
-  @Get(":studentId")
-  @RequireAnyPermissions("student.manage", "student.view")
-  getById(
-    @Param("tenantId") tenantId: string,
-    @Param("studentId") studentId: string
-  ) {
-    return this.studentsService.getById(tenantId, studentId);
-  }
-
   @Get(":studentId/profile")
   @RequireAnyPermissions("student.manage", "student.view")
   getProfile(
@@ -75,6 +80,63 @@ export class StudentsController {
     @Param("studentId") studentId: string
   ) {
     return this.studentsService.getProfile(tenantId, studentId);
+  }
+
+  @Get(":studentId/documents")
+  @RequireAnyPermissions("student.manage", "student.view")
+  listDocuments(
+    @Param("tenantId") tenantId: string,
+    @Param("studentId") studentId: string
+  ) {
+    return this.studentDocumentsService.list(tenantId, studentId);
+  }
+
+  @Post(":studentId/documents")
+  @RequirePermissions("student.manage")
+  @UseInterceptors(
+    FileInterceptor("file", {
+      limits: { fileSize: 5 * 1024 * 1024 }
+    })
+  )
+  uploadDocument(
+    @Param("tenantId") tenantId: string,
+    @Param("studentId") studentId: string,
+    @UploadedFile()
+    file: {
+      buffer: Buffer;
+      originalname: string;
+      mimetype: string;
+      size: number;
+    },
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.studentDocumentsService.upload(tenantId, studentId, actorUserId, {
+      buffer: file.buffer,
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size
+    });
+  }
+
+  @Get(":studentId/documents/:documentId/file")
+  @RequireAnyPermissions("student.manage", "student.view")
+  downloadDocument(
+    @Param("tenantId") tenantId: string,
+    @Param("studentId") studentId: string,
+    @Param("documentId") documentId: string
+  ) {
+    return this.studentDocumentsService.download(tenantId, studentId, documentId);
+  }
+
+  @Delete(":studentId/documents/:documentId")
+  @RequirePermissions("student.manage")
+  deleteDocument(
+    @Param("tenantId") tenantId: string,
+    @Param("studentId") studentId: string,
+    @Param("documentId") documentId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.studentDocumentsService.delete(tenantId, studentId, documentId, actorUserId);
   }
 
   @Get(":studentId/timeline")
@@ -193,5 +255,14 @@ export class StudentsController {
     @Headers("x-user-id") actorUserId?: string
   ) {
     return this.studentsService.withdraw(tenantId, studentId, actorUserId, dto);
+  }
+
+  @Get(":studentId")
+  @RequireAnyPermissions("student.manage", "student.view")
+  getById(
+    @Param("tenantId") tenantId: string,
+    @Param("studentId") studentId: string
+  ) {
+    return this.studentsService.getById(tenantId, studentId);
   }
 }

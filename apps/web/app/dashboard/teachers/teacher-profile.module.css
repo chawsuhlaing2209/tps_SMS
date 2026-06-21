@@ -16,7 +16,7 @@
     var(--pds-color-spring-green-950, #0f2f1f) 0%,
     var(--pds-color-spring-green-800, #1b3a2b) 100%
   );
-  border-radius: var(--radius-24, 24px);
+  border-radius: var(--pds-border-radius-16);
   display: flex;
   gap: 50px;
   justify-content: space-between;
@@ -45,11 +45,6 @@
 }.teacherProfileTitleRow h1 {
   color: var(--pds-text-invert-primary, #fff);
   margin: 0;
-}.teacherProfileStatusBadge {
-  background: var(--pds-color-green-150, #e7f6d8);
-  border-radius: var(--radius-pill, 999px);
-  color: var(--pds-color-green-700, #3a7d24);
-  padding: 3px 9px;
 }.teacherProfileMeta {
   color: var(--pds-text-secondary, var(--pds-foreground-contrast-low));
   margin: var(--item-spacing-xs, 8px) 0 0;
@@ -103,7 +98,7 @@
 }.teacherProfileStatCard {
   background: var(--pds-background-card);
   border: var(--pds-border-weight-1) solid var(--pds-border-color-primary);
-  border-radius: var(--radius-16, 16px);
+  border-radius: var(--pds-border-radius-16);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -138,7 +133,7 @@
 }.teacherProfileCard {
   background: var(--pds-background-card);
   border: var(--pds-border-weight-1) solid var(--pds-border-color-primary);
-  border-radius: var(--radius-24, 24px);
+  border-radius: var(--pds-border-radius-16);
   display: flex;
   flex-direction: column;
   gap: var(--item-spacing-14, 14px);
@@ -256,7 +251,7 @@
   align-items: center;
   background: var(--pds-background-layout-primary);
   border: var(--pds-border-weight-1) solid var(--pds-border-color-primary);
-  border-radius: 14px;
+  border-radius: var(--pds-border-radius-16);
   display: flex;
   gap: var(--pds-gap-medium, 12px);
   min-height: 56px;
@@ -264,7 +259,7 @@
 }.teacherProfileDarkCard {
   background: var(--pds-primary, #0a2a1d);
   border: 0;
-  border-radius: var(--radius-24, 24px);
+  border-radius: var(--pds-border-radius-16);
   color: var(--pds-text-invert-primary, #fff);
   display: flex;
   gap: var(--line-height-20, 20px);
@@ -295,6 +290,54 @@
 }.teacherProfileEmpty {
   color: var(--pds-text-secondary, var(--pds-foreground-contrast-low));
   margin: 0;
+}.teacherProfileTaughtList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--item-spacing-10, 10px);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}.teacherProfileTaughtRow {
+  align-items: center;
+  background: var(--pds-background-layout-primary);
+  border: var(--pds-border-weight-1) solid var(--pds-border-color-primary);
+  border-radius: 15px;
+  display: flex;
+  gap: var(--pds-gap-medium, 12px);
+  min-height: 56px;
+  padding: var(--pds-padding-small, 13px) var(--pds-padding-medium, 17px);
+}.teacherProfileTaughtRowClickable {
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}.teacherProfileTaughtRowClickable:hover,
+.teacherProfileTaughtRowClickable:focus-visible {
+  background: var(--pds-notification-background-success-hover);
+  outline: none;
+}.teacherProfileTaughtActions {
+  align-items: center;
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: var(--pds-gap-x-small, 4px);
+}.teacherProfileTaughtIconBtn {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--pds-border-color-primary);
+  border-radius: var(--radius-pill, 999px);
+  color: var(--pds-text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}.teacherProfileTaughtIconBtn:hover:not(:disabled) {
+  background: var(--pds-background-layout-secondary);
+  color: var(--pds-text-primary);
+}.teacherProfileTaughtIconBtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}.teacherProfileTaughtIconBtnDanger:hover:not(:disabled) {
+  border-color: var(--pds-status-error-border, #f5c2c7);
+  color: var(--pds-status-error-text, #b42318);
 }@media (max-width: 960px) {
   .teacherProfileHero {
     align-items: flex-start;

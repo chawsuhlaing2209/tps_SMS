@@ -4,8 +4,7 @@ import { FormInput } from "../../../../../components/shared/form-input";
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useState, use } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ApiError, useApiMutation, useApiQuery } from "../../../../lib/api";
@@ -44,9 +43,12 @@ function guardianInitials(fullName: string) {
   return fullName.slice(0, 2).toUpperCase();
 }
 
-export default function GuardianDetailPage() {
-  const params = useParams<{ guardianId: string }>();
-  const guardianId = params.guardianId;
+export default function GuardianDetailPage({
+  params
+}: {
+  params: Promise<{ guardianId: string }>;
+}) {
+  const { guardianId } = use(params);
   const t = useTranslations("guardians");
   const s = useTranslations("students");
   const c = useTranslations("common");
@@ -242,7 +244,7 @@ export default function GuardianDetailPage() {
         </article>
       </div>
 
-      <TablePanelBody loading={false} error={null} empty={!data.students.length}>
+      <TablePanelBody variant="card-plain" loading={false} error={null} empty={!data.students.length}>
         <DataTable
           columns={studentColumns}
           data={data.students}

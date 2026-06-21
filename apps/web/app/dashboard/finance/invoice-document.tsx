@@ -3,6 +3,7 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useTranslations } from "next-intl";
 import { Icon } from "../../lib/material-icon";
+import { printDocument } from "../../lib/print-document";
 import { formatReceiptAmount } from "./receipt-document";
 import {
   InvoiceVerifyPayments,
@@ -210,7 +211,7 @@ export function InvoicePreviewModal({
 
 export function printInvoiceDocument(
   data: InvoiceDocumentData,
-  labels: {
+  _labels?: {
     billedTo: string;
     title: string;
     subtotalBilled: string;
@@ -219,70 +220,10 @@ export function printInvoiceDocument(
     dueOn: (date: string) => string;
   }
 ) {
-  const dueLabel = data.dueDate
-    ? labels.dueOn(formatInvoiceDate(data.dueDate) ?? data.dueDate)
-    : "";
-  const contact = schoolContactLine(data.schoolAddress, data.schoolContactPhone);
-  const billedMeta = billedToMeta(data);
-
-  const line = (left: string, right: string) =>
-    `<tr><td>${escapeHtml(left)}</td><td style="text-align:right;font-weight:700">${escapeHtml(right)}</td></tr>`;
-
-  const html = `<!doctype html><html><head><meta charset="utf-8" />
-<title>${escapeHtml(data.invoiceNumber)}</title>
-<style>
-  * { box-sizing: border-box; }
-  body { font-family: ui-sans-serif, system-ui, "Segoe UI", sans-serif; color: #0a2a1d; margin: 0; padding: 32px; }
-  .wrap { max-width: 520px; margin: 0 auto; border-radius: 24px; overflow: hidden; box-shadow: 0 40px 80px -30px rgba(0,0,0,0.5); }
-  .head { background: #0a2a1d; color: #fff; padding: 22px 26px; }
-  .school { font-size: 16px; font-weight: 800; }
-  .contact { color: #9fb3a6; font-size: 11px; margin-top: 8px; display: block; }
-  .body { padding: 24px 26px; }
-  .meta { display: flex; justify-content: space-between; gap: 24px; margin-bottom: 14px; }
-  .eyebrow { text-transform: uppercase; letter-spacing: .055em; font-size: 11px; color: #9fb3a6; font-weight: 700; }
-  .title { font-size: 20px; font-weight: 800; display: block; text-align: right; }
-  table { width: 100%; border-collapse: collapse; border: 1px solid #eef3ea; border-radius: 14px; overflow: hidden; }
-  td { padding: 12px 16px; border-bottom: 1px solid #f4f7f1; font-size: 13px; }
-  .subtotal td { background: #f7faf4; font-weight: 700; }
-  .paid { display: flex; justify-content: space-between; margin-top: 14px; font-size: 13px; color: #7c917f; }
-  .paid strong { color: #3a7d24; }
-  .balance { margin-top: 12px; padding-top: 12px; border-top: 1px solid #eef3ea; display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; }
-  .balance strong { color: #c0392b; font-size: 22px; }
-</style></head>
-<body><div class="wrap">
-  <div class="head">
-    <div class="school">${escapeHtml(data.schoolName)}</div>
-    ${contact ? `<span class="contact">${escapeHtml(contact)}</span>` : ""}
-  </div>
-  <div class="body">
-    <div class="meta">
-      <div>
-        <div class="eyebrow">${escapeHtml(labels.billedTo)}</div>
-        <strong style="font-size:15px">${escapeHtml(data.studentFullName)}</strong>
-        <div style="color:#7c917f;font-size:12px">${escapeHtml(billedMeta || "—")}</div>
-      </div>
-      <div>
-        <span class="title">${escapeHtml(labels.title)}</span>
-        <div style="color:#7c917f;font-size:12px;text-align:right">${escapeHtml(data.invoiceNumber)}</div>
-        ${dueLabel ? `<div style="color:#7c917f;font-size:12px;text-align:right">${escapeHtml(dueLabel)}</div>` : ""}
-      </div>
-    </div>
-    <table>
-      ${data.items.map((item) => line(item.description, formatReceiptAmount(item.amount))).join("")}
-      <tr class="subtotal"><td>${escapeHtml(labels.subtotalBilled)}</td><td style="text-align:right;font-weight:800">${formatReceiptAmount(data.subtotal)}</td></tr>
-    </table>
-    <div class="paid"><span>${escapeHtml(labels.paidToDate)}</span><strong>−${formatReceiptAmount(data.paidToDate)}</strong></div>
-    <div class="balance"><span>${escapeHtml(labels.balanceDue)}</span><strong>${formatReceiptAmount(data.balanceDue)}</strong></div>
-  </div>
-</div>
-<script>window.onload = function () { window.focus(); window.print(); };</script>
-</body></html>`;
-
-  const printWindow = window.open("", "_blank", "width=720,height=900");
-  if (!printWindow) return;
-  printWindow.document.open();
-  printWindow.document.write(html);
-  printWindow.document.close();
+  printDocument(".invoice-doc", {
+    title: data.invoiceNumber,
+    width: "narrow"
+  });
 }
 
 export function mapInvoiceDetailToDocument(
@@ -360,12 +301,4 @@ export function mapInvoiceDetailToDocument(
       verifiedAt: payment.verifiedAt ?? null
     }))
   };
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }

@@ -13,6 +13,8 @@ export type TenantStaffRoleKey = (typeof tenantStaffRoleKeys)[number];
 
 export type RoleDisplayMeta = {
   label: string;
+  /** Key under settings.roles.names for localized UI labels. */
+  labelKey?: string;
   initials: string;
   accent: string;
   summaryKey: string;
@@ -21,45 +23,66 @@ export type RoleDisplayMeta = {
 export const roleDisplayMeta: Record<string, RoleDisplayMeta> = {
   principal: {
     label: "Principal",
+    labelKey: "principal",
     initials: "P",
     accent: "#36B37E",
     summaryKey: "principalSummary"
   },
   academic_coordinator: {
     label: "Vice Principal",
+    labelKey: "academic_coordinator",
     initials: "VP",
     accent: "#4C6EF5",
     summaryKey: "vicePrincipalSummary"
   },
   teacher: {
     label: "Teacher",
+    labelKey: "teacher",
     initials: "T",
     accent: "#7950F2",
     summaryKey: "teacherSummary"
   },
   accountant: {
     label: "Finance Officer",
+    labelKey: "accountant",
     initials: "FO",
     accent: "#2F9E44",
     summaryKey: "financeOfficerSummary"
   },
   school_admin: {
     label: "Admin Staff",
+    labelKey: "school_admin",
     initials: "AS",
     accent: "#F76707",
     summaryKey: "adminStaffSummary"
   },
   hr_staff: {
     label: "HR Staff",
+    labelKey: "hr_staff",
     initials: "HR",
     accent: "#495057",
     summaryKey: "hrStaffSummary"
   },
   school_owner: {
     label: "School Owner",
+    labelKey: "school_owner",
     initials: "SO",
     accent: "#087F5B",
     summaryKey: "schoolOwnerSummary"
+  },
+  parent_guardian: {
+    label: "Parent / Guardian",
+    labelKey: "parent_guardian",
+    initials: "PG",
+    accent: "#868E96",
+    summaryKey: "customRoleSummary"
+  },
+  student: {
+    label: "Student",
+    labelKey: "student",
+    initials: "ST",
+    accent: "#868E96",
+    summaryKey: "customRoleSummary"
   }
 };
 

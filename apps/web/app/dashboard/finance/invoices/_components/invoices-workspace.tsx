@@ -53,7 +53,7 @@ type InvoicesTableProps = {
 export function InvoicesTable({ gradeId, academicYearId }: InvoicesTableProps) {
   const t = useTranslations("finance");
   const c = useTranslations("common");
-  const [sourceFilter, setSourceFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState<"all" | InvoiceSource>("all");
   const [page, setPage] = useState(0);
 
   const invoicesQuery = useMemo(() => {
@@ -63,7 +63,7 @@ export function InvoicesTable({ gradeId, academicYearId }: InvoicesTableProps) {
       academicYearId,
       gradeId,
     });
-    if (sourceFilter) {
+    if (sourceFilter !== "all") {
       params.set("source", sourceFilter);
     }
     return `?${params.toString()}`;
@@ -109,11 +109,12 @@ export function InvoicesTable({ gradeId, academicYearId }: InvoicesTableProps) {
             variant="filter"
             value={sourceFilter}
             onValueChange={(value) => {
-              setSourceFilter(typeof value === "string" ? value : "");
+              setSourceFilter((typeof value === "string" ? value : "all") as "all" | InvoiceSource);
               setPage(0);
             }}
             placeholder={t("allSources")}
             options={[
+              { value: "all", label: t("allSources") },
               { value: "enrollment", label: t("sourceEnrollment") },
               { value: "recurring", label: t("sourceRecurring") },
               { value: "ad_hoc", label: t("sourceOther") },

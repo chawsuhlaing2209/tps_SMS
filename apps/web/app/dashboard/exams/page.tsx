@@ -13,7 +13,7 @@ import { Icon } from "../../lib/material-icon";
 import { hasAnyPermission } from "../../lib/permissions";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { getSession } from "../../lib/session";
-import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
+import { TablePanelBody } from "../../lib/table-panel";
 import { zodResolver } from "../../lib/zod-resolver";
 import { PdsSelectField } from "../../../components/pds";
 import { EmptyState } from "../../../components/shared/empty-state";
@@ -100,20 +100,23 @@ export default function ExamCyclesPage() {
       <ModulePageHeader
         navKey="exams"
         title={t("cyclesTitle")}
+        description={t("description")}
         breadcrumbs={moduleBreadcrumbs("exams", nav, [{ label: t("cycles") }])}
-      />
-      <TablePanelHead
-        title={t("cyclesTitle")}
-        onRefresh={() => void cycles.refetch()}
-        onAdd={
-          workingYearId
-            ? () => {
+        actions={
+          workingYearId ? (
+            <button
+              type="button"
+              className="pds-type-body-m-bold btn-primary"
+              onClick={() => {
                 form.reset({ name: "", examType: "term", academicYearId: workingYearId });
                 setOpen(true);
-              }
-            : undefined
+              }}
+            >
+              <Icon name="add" />
+              {t("addCycle")}
+            </button>
+          ) : null
         }
-        addLabel={t("addCycle")}
       />
       <TablePanelBody
         loading={cycles.isLoading || currentYear.isLoading}

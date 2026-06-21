@@ -164,7 +164,7 @@ export const PDS_COMPONENT_REGISTRY: FigmaComponentRegistryEntry[] = [
     codePath: "apps/web/components/pds/subcomponents/status-pill.tsx",
     status: "active",
     introducedIn: "2026-06-19",
-    notes: "Semantic finance/roster status pills — paid, partial, overdue, due, scholarship.",
+    notes: "Semantic status pills — paid, partial, overdue, due, scholarship, active, inactive.",
   },
   {
     id: "attendance-toggle",
@@ -219,12 +219,12 @@ export const PDS_COMPONENT_REGISTRY: FigmaComponentRegistryEntry[] = [
   {
     id: "segmented-control",
     name: "SegmentedControl",
-    figmaNodeId: "composite",
+    figmaNodeId: "67:13138",
     figmaFileKey: FIGMA_FILE_KEY,
     codePath: "apps/web/components/pds/composites/segmented-control.tsx",
     status: "active",
     introducedIn: "2026-06-19",
-    notes: "Mutually exclusive segmented toggle — forest pill on active option.",
+    notes: "Canvas track, soft border, 12px radius; active segment primary pill with invert text.",
   },
   {
     id: "search-bar",
@@ -257,6 +257,17 @@ export const PDS_COMPONENT_REGISTRY: FigmaComponentRegistryEntry[] = [
     dependsOn: ["breadcrumb-item"],
     introducedIn: "2026-06-19",
     notes: "2–5 item trail; previous items linkable, current item terminal.",
+  },
+  {
+    id: "top-nav-bar",
+    name: "TopNavBar",
+    figmaNodeId: "119:9730",
+    figmaFileKey: FIGMA_FILE_KEY,
+    codePath: "apps/web/components/pds/composites/top-nav-bar.tsx",
+    status: "active",
+    dependsOn: ["breadcrumb", "segmented-control"],
+    introducedIn: "2026-06-21",
+    notes: "Dashboard top bar — breadcrumb left; locale segmented control, academic year, notifications right.",
   },
   {
     id: "breadcrumb-item",
@@ -505,6 +516,17 @@ export const PDS_COMPONENT_REGISTRY: FigmaComponentRegistryEntry[] = [
     dependsOn: ["select"],
     introducedIn: "2026-06-19",
     notes: "Options-array wrapper for forms and filters. Replaces FormSelect and native select.",
+  },
+  {
+    id: "empty-state",
+    name: "EmptyState",
+    figmaNodeId: "54:2584",
+    figmaFileKey: FIGMA_FILE_KEY,
+    codePath: "apps/web/components/shared/empty-state.tsx",
+    status: "active",
+    dependsOn: ["button"],
+    introducedIn: "2026-06-21",
+    notes: "Comfort (default) and compact variants. Use embedded when nested in table-card body.",
   },
 ];
 

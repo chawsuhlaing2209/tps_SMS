@@ -1,8 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, use } from "react";
 import { useApiMutation, useApiQuery } from "../../../../lib/api";
 import { Icon } from "../../../../lib/material-icon";
 import { toastSuccess } from "../../../../lib/toast";
@@ -71,9 +70,12 @@ function formatDateTime(value: string | null) {
   return new Date(value).toLocaleString();
 }
 
-export default function InvoiceDetailPage() {
-  const params = useParams<{ invoiceId: string }>();
-  const invoiceId = params.invoiceId;
+export default function InvoiceDetailPage({
+  params
+}: {
+  params: Promise<{ invoiceId: string }>;
+}) {
+  const { invoiceId } = use(params);
   const t = useTranslations("finance");
   const tDoc = useTranslations("finance.invoiceDocument");
   const tPay = useTranslations("enrollments");

@@ -16,10 +16,19 @@ import { toastError, toastSuccess } from "./toast";
 // (see next.config.ts), so there is never a cross-origin/CORS request.
 const API_PREFIX = "/api";
 
-/** Master data (years, grades, subjects) — safe to cache briefly between navigations. */
-export const REFERENCE_DATA_STALE_MS = 60_000;
+/**
+ * Query cache tiers (see also query-cache.ts for bootstrap / nav prefetch).
+ *
+ * - REFERENCE: academic master data — long-lived between module hops.
+ * - LIST (QueryClient default): directory / setup lists — instant back-nav, refetch when stale.
+ * - LIVE: money, attendance, audit — always refetch on mount.
+ */
+export const REFERENCE_DATA_STALE_MS = 5 * 60_000;
 
-/** Finance, roster, and operational lists — always refetch on mount. */
+/** Default for {@link useApiQuery} when callers do not override staleTime. */
+export const LIST_DATA_STALE_MS = 30_000;
+
+/** Finance, roster, and operational reads that must stay fresh. */
 export const LIVE_DATA_STALE_MS = 0;
 
 export type ApiQueryOptions = {
@@ -70,6 +79,38 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 
   if (response.status === 204) {
     return undefined as T;
+  }
+
+  return (await response.json()) as T;
+}
+
+/** Multipart upload (does not set Content-Type — browser sets boundary). */
+export async function apiUpload<T>(path: string, file: File): Promise<T> {
+  const headers = new Headers();
+  const session = getSession();
+  if (session?.userId) {
+    headers.set("x-user-id", session.userId);
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`${API_PREFIX}${path}`, {
+    method: "POST",
+    body: formData,
+    headers,
+    credentials: "include"
+  });
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as {
+      message?: string | string[];
+    } | null;
+    const rawMessage = body?.message;
+    const message = Array.isArray(rawMessage)
+      ? rawMessage.join(" ")
+      : rawMessage ?? `Request failed (${response.status})`;
+    throw new ApiError(message, response.status);
   }
 
   return (await response.json()) as T;
@@ -133,8 +174,8 @@ export function useApiQuery<T>(
     queryKey: tenantId && path ? tenantQueryKey(tenantId, path) : ["tenant", "anonymous"],
     queryFn: () => apiFetch<T>(path as string),
     enabled: Boolean(tenantId && path),
-    staleTime: options.staleTime,
-    gcTime: options.gcTime
+    staleTime: options.staleTime ?? LIST_DATA_STALE_MS,
+    ...(options.gcTime !== undefined ? { gcTime: options.gcTime } : {})
   });
 
   return { ...query, tenantId };
@@ -145,6 +186,13 @@ export function useReferenceApiQuery<T>(
   buildPath: (tenantId: string) => string | null
 ): UseQueryResult<T> & { tenantId: string | null } {
   return useApiQuery<T>(buildPath, { staleTime: REFERENCE_DATA_STALE_MS });
+}
+
+/** Operational reads (payments, attendance, audit) that should refetch on every mount. */
+export function useLiveApiQuery<T>(
+  buildPath: (tenantId: string) => string | null
+): UseQueryResult<T> & { tenantId: string | null } {
+  return useApiQuery<T>(buildPath, { staleTime: LIVE_DATA_STALE_MS });
 }
 
 /**

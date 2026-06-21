@@ -7,6 +7,29 @@
   gap: var(--pds-gap-medium);
 }
 
+.pds-entity-list--two-col,
+.record-list--two-col {
+  display: grid;
+  gap: var(--pds-gap-medium);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.pds-entity-list--two-col .pds-entity-list-item,
+.pds-entity-list--two-col .record-list-item,
+.record-list--two-col .pds-entity-list-item,
+.record-list--two-col .record-list-item {
+  background: var(--pds-background-frame);
+  min-height: var(--pds-size-xx-large);
+  padding: var(--pds-padding-small) var(--pds-padding-medium);
+}
+
+@media (max-width: 720px) {
+  .pds-entity-list--two-col,
+  .record-list--two-col {
+    grid-template-columns: 1fr;
+  }
+}
+
 .pds-entity-list-item,
 a.pds-entity-list-item,
 button.pds-entity-list-item,
@@ -16,7 +39,7 @@ button.record-list-item {
   align-items: center;
   background: var(--pds-background-card);
   border: 1px solid var(--pds-border-color-primary);
-  border-radius: var(--pds-radius-14);
+  border-radius: var(--pds-border-radius-16);
   color: inherit;
   cursor: default;
   display: flex;
@@ -164,7 +187,41 @@ button.record-list-item:hover {
   white-space: nowrap;
 }
 
-.pds-entity-list-panel .panel-body,
+.pds-entity-list-section {
+  display: grid;
+  gap: 0;
+  height: fit-content;
+}
+
+.pds-entity-list-panel.panel {
+  gap: var(--pds-gap-small);
+  padding-top: var(--pds-padding-medium);
+}
+
+.pds-entity-list-panel .section-title {
+  margin: 0;
+}
+
+.pds-entity-list-panel--bare.panel {
+  background: transparent;
+  border: none;
+  gap: var(--pds-gap-medium);
+  padding: 0;
+}
+
+.pds-entity-list-panel--bare .panel-body {
+  padding: 0;
+}
+
+.pds-entity-list-panel .structure-side-label {
+  margin: 0 0 var(--pds-gap-medium);
+}
+
+.pds-entity-list-panel .panel-body {
+  gap: var(--pds-gap-medium);
+  padding: 0;
+}
+
 .record-list-panel .panel-body {
   gap: var(--pds-gap-medium);
   padding: var(--pds-gap-medium);

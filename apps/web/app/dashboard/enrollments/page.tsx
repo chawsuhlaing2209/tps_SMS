@@ -20,6 +20,7 @@ export default function EnrollmentsPage() {
         title={t("title")}
         description={t("description")}
         breadcrumbs={[{ label: nav("group_business") }, { label: nav("enrollments") }]}
+        actionsPortal
       />
       <EnrollmentsWorkspace />
     </div>

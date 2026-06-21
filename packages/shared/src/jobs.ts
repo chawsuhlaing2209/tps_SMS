@@ -35,10 +35,24 @@ export type SmsJob =
       };
     }
   | {
+      name: "render-payslip-pdf";
+      data: {
+        tenantId: string;
+        payrollRecordId: string;
+      };
+    }
+  | {
       name: "import-students";
       data: {
         tenantId: string;
         fileId: string;
         requestedByUserId: string;
+      };
+    }
+  | {
+      name: "render-payslip-pdf";
+      data: {
+        tenantId: string;
+        payrollRecordId: string;
       };
     };

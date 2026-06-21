@@ -20,6 +20,7 @@ export * from "./composites/segmented-control";
 export * from "./composites/search-bar";
 export * from "./composites/search-filters-row";
 export * from "./composites/breadcrumb";
+export * from "./composites/top-nav-bar";
 export * from "./composites/date-calendar";
 export * from "./composites/filter-range-calendar";
 export * from "./composites/date-picker";

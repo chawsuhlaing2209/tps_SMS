@@ -9,16 +9,16 @@ export type EmptyStateProps = {
   description?: ReactNode;
   /** Optional call-to-action (e.g. PDS `<Button>`). */
   action?: ReactNode;
-  /** Smaller icon and tighter padding for table/modal contexts. */
+  /** Figma `type=compact` — tighter gap and smaller icon badge. */
   compact?: boolean;
-  /** Strip card chrome when nested inside `.table-card`, `.panel`, etc. */
+  /** Strip card chrome when nested inside `.table-card__body`. */
   embedded?: boolean;
   className?: string;
 };
 
 /**
  * PDS empty state (Figma EmptyState / node 54:2584).
- * Centered card with chartreuse icon badge, title, optional description, and CTA.
+ * Variants: comfort (default) and compact (`compact` prop).
  */
 export function EmptyState({
   icon = "inbox",
@@ -41,11 +41,11 @@ export function EmptyState({
     >
       {icon ? (
         <div className="empty-state__icon" aria-hidden>
-          <Icon name={icon} size={compact ? 24 : 36} />
+          <Icon name={icon} size={compact ? 24 : 32} />
         </div>
       ) : null}
       <div className="empty-state__content">
-        <p className="pds-type-title-s-extrabold empty-state__title">{title}</p>
+        <p className="pds-type-title-xs-bold empty-state__title">{title}</p>
         {description ? (
           <p className="pds-type-body-s-regular empty-state__desc">{description}</p>
         ) : null}

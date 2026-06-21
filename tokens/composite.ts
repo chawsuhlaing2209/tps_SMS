@@ -160,11 +160,24 @@ function normalizeGradient(raw: {
   stops?: Array<{ position: number; color: string }>;
 }): string {
   const stops = raw.stops ?? [];
-  const colors = stops.map(
-    (stop) => `${stop.color.slice(0, 7)} ${Math.round(stop.position * 100)}%`,
-  );
+  const colors = stops.map((stop) => {
+    const hex = stop.color.length >= 7 ? stop.color.slice(0, 7) : stop.color;
+    return `${hex} ${Math.round(stop.position * 100)}%`;
+  });
+
+  if (raw.gradientType === "radial") {
+    const angle = raw.rotation ?? 0;
+    return `radial-gradient(${angle}deg, ${colors.join(", ")})`;
+  }
+
   const angle = raw.rotation ?? 180;
   return `linear-gradient(${angle}deg, ${colors.join(", ")})`;
+}
+
+function gradientTokenKey(name: string): string {
+  const slug = slugSegment(name);
+  if (slug === "shell-gradient") return "gradient.shell";
+  return `gradient.${slug}`;
 }
 
 export function loadCompositeExport(): StudioNode {
@@ -194,11 +207,21 @@ export function buildCompositeTokenMap(): Map<string, string> {
     out.set(`type.${style.path}.text-decoration`, style.textDecoration);
   }
 
-  const gradient = (root.gradient as StudioNode | undefined)?.["shell gradient"] as
-    | { type?: string; value?: { gradientType?: string; rotation?: number; stops?: Array<{ position: number; color: string }> } }
-    | undefined;
-  if (gradient?.value) {
-    out.set("gradient.shell", normalizeGradient(gradient.value));
+  const gradientRoot = root.gradient as StudioNode | undefined;
+  if (gradientRoot && typeof gradientRoot === "object") {
+    for (const [name, node] of Object.entries(gradientRoot)) {
+      const gradient = node as {
+        type?: string;
+        value?: {
+          gradientType?: string;
+          rotation?: number;
+          stops?: Array<{ position: number; color: string }>;
+        };
+      };
+      if (gradient?.value) {
+        out.set(gradientTokenKey(name), normalizeGradient(gradient.value));
+      }
+    }
   }
 
   return out;

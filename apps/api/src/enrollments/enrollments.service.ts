@@ -12,8 +12,10 @@ import {
 import type {
   CreateEnrollmentDto,
   CreateStudentServiceDto,
+  ListAvailableStudentServicesQueryDto,
   ListEnrollmentsQueryDto,
   ListStudentServicesQueryDto,
+  PreviewAddStudentServiceDto,
   PreviewEnrollmentDto,
   UpdateEnrollmentDto,
   ConfirmEnrollmentDto
@@ -388,30 +390,24 @@ export class EnrollmentsService {
     actorUserId: string | undefined,
     dto: CreateStudentServiceDto
   ) {
-    const rows = await this.db
-      .insert(studentServices)
-      .values({
-        tenantId,
-        studentId: dto.studentId,
-        feeItemId: dto.feeItemId,
-        effectiveFrom: dto.startDate,
-        effectiveTo: dto.endDate,
-        createdBy: actorUserId,
-        updatedBy: actorUserId
-      })
-      .returning();
-    const row = rows[0]!;
+    if (!actorUserId) {
+      throw new UnauthorizedException("Actor user id is required.");
+    }
 
-    await this.auditService.recordEvent({
-      tenantId,
-      actorUserId: actorUserId ?? null,
-      action: "student_service.create",
-      recordType: "StudentService",
-      recordId: row.id,
-      after: row as Record<string, unknown>
+    return this.enrollmentBillingService.confirmAddStudentService(tenantId, actorUserId, {
+      studentId: dto.studentId,
+      feeItemId: dto.feeItemId,
+      startDate: dto.startDate,
+      dueDate: dto.dueDate
     });
+  }
 
-    return row;
+  listAvailableOptionalServices(tenantId: string, studentId: string) {
+    return this.enrollmentBillingService.listAvailableOptionalServices(tenantId, studentId);
+  }
+
+  previewAddStudentService(tenantId: string, dto: PreviewAddStudentServiceDto) {
+    return this.enrollmentBillingService.previewAddStudentService(tenantId, dto);
   }
 
   async removeStudentService(

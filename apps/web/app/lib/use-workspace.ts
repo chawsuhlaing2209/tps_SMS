@@ -1,9 +1,12 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { apiFetch, ApiError } from "./api";
+import { useEffect, useMemo } from "react";
+import { apiFetch, ApiError, tenantQueryKey } from "./api";
 import { clearSession, getSession, setSession, type Session } from "./session";
+
+const WORKSPACE_STALE_MS = 5 * 60_000;
 
 type MeResponse = {
   userId: string;
@@ -15,63 +18,63 @@ type MeResponse = {
 
 export function useWorkspace() {
   const router = useRouter();
-  const [session, setSessionState] = useState<Session | null>(null);
-  const [ready, setReady] = useState(false);
+  const localSession = getSession();
+  const tenantId = localSession?.tenantId ?? null;
+  const skipRemote =
+    !localSession || !tenantId || localSession.isPlatform || localSession.tenantId === null;
+
+  const meQuery = useQuery({
+    queryKey:
+      tenantId && !skipRemote
+        ? tenantQueryKey(tenantId, `/tenants/${tenantId}/auth/me`)
+        : ["workspace", "anonymous"],
+    queryFn: () => apiFetch<MeResponse>(`/tenants/${tenantId}/auth/me`),
+    enabled: !skipRemote,
+    staleTime: WORKSPACE_STALE_MS,
+    retry: false
+  });
 
   useEffect(() => {
-    const current = getSession();
-    if (!current) {
-      setSessionState(null);
-      setReady(true);
+    if (skipRemote) {
       return;
     }
-
-    if (!current.tenantId || current.isPlatform) {
-      setSessionState(current);
-      setReady(true);
+    if (!meQuery.isError) {
       return;
     }
-
-    let cancelled = false;
-
-    async function load() {
-      try {
-        const me = await apiFetch<MeResponse>(`/tenants/${current!.tenantId}/auth/me`);
-        if (cancelled) {
-          return;
-        }
-        const merged: Session = {
-          ...current!,
-          tenantId: me.tenantId,
-          displayName: me.displayName ?? current!.displayName,
-          roles: me.roles,
-          permissions: me.permissions
-        };
-        setSession(merged);
-        setSessionState(merged);
-      } catch (error) {
-        if (!cancelled) {
-          if (error instanceof ApiError && [401, 403, 404].includes(error.status)) {
-            clearSession();
-            setSessionState(null);
-            router.replace("/");
-            return;
-          }
-          setSessionState(current);
-        }
-      } finally {
-        if (!cancelled) {
-          setReady(true);
-        }
-      }
+    const error = meQuery.error;
+    if (error instanceof ApiError && [401, 403, 404].includes(error.status)) {
+      clearSession();
+      router.replace("/");
     }
+  }, [meQuery.error, meQuery.isError, router, skipRemote]);
 
-    void load();
+  const session = useMemo<Session | null>(() => {
+    if (!localSession) {
+      return null;
+    }
+    if (skipRemote) {
+      return localSession;
+    }
+    if (meQuery.data) {
+      return {
+        ...localSession,
+        tenantId: meQuery.data.tenantId,
+        displayName: meQuery.data.displayName ?? localSession.displayName,
+        roles: meQuery.data.roles,
+        permissions: meQuery.data.permissions
+      };
+    }
+    return localSession;
+  }, [localSession, meQuery.data, skipRemote]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [router]);
+  useEffect(() => {
+    if (!session || skipRemote || !meQuery.data) {
+      return;
+    }
+    setSession(session);
+  }, [session, meQuery.data, skipRemote]);
+
+  const ready = skipRemote ? true : meQuery.isFetched || meQuery.isError;
 
   return { session, ready };
 }

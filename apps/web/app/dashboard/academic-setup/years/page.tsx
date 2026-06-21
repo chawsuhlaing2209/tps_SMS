@@ -1,5 +1,5 @@
 "use client";
-import { FormInput } from "../../../../components/shared/form-input";
+import { FormDatePicker, FormInput } from "../../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
@@ -153,20 +153,22 @@ export default function AcademicYearsPage() {
       id: "actions",
       header: t("actions"),
       enableSorting: false,
-      cell: ({ row }) => (
-        <div style={{ display: "flex", gap: "8px" }}>
-          {row.original.status !== "archived" ? (
-            <>
-              <button type="button" className="pds-type-body-s-regular row-action" onClick={() => openEdit(row.original)}>
-                {t("edit")}
-              </button>
-              <Link href={`/dashboard/academic-setup/years/${row.original.id}`} className="pds-type-body-s-regular row-action">
-                {t("view")}
-              </Link>
-            </>
-          ) : null}
-        </div>
-      )
+      cell: ({ row }) =>
+        row.original.status !== "archived" ? (
+          <span data-row-stop className="row-more-actions">
+            <button
+              type="button"
+              className="row-more-actions__trigger"
+              aria-label={c("edit")}
+              onClick={(event) => {
+                event.stopPropagation();
+                openEdit(row.original);
+              }}
+            >
+              <Icon name="edit" size={20} />
+            </button>
+          </span>
+        ) : null
     }
   ];
 
@@ -189,6 +191,14 @@ export default function AcademicYearsPage() {
         navKey="academicSetup"
         title={setup("years")}
         breadcrumbs={moduleBreadcrumbs("academicSetup", nav, [{ label: setup("years") }])}
+        actions={
+          <>
+            <button type="button" className="pds-type-body-m-bold btn-primary" onClick={openCreate}>
+              <Icon name="add" />
+              {t("addYear")}
+            </button>
+          </>
+        }
       />
       <TablePanelHead
         banner={
@@ -201,10 +211,6 @@ export default function AcademicYearsPage() {
           )
         }
         bannerVariant={activeYear ? "default" : "warning"}
-        title={t("years")}
-        onRefresh={() => void years.refetch()}
-        onAdd={openCreate}
-        addLabel={t("addYear")}
       />
       <TablePanelBody
           loading={years.isLoading}
@@ -257,10 +263,24 @@ export default function AcademicYearsPage() {
           <FormInput placeholder={t("yearNamePlaceholder")} {...form.register("name")} />
         </Field>
         <Field label={t("starts")} error={form.formState.errors.startsOn?.message}>
-          <FormInput type="date" {...form.register("startsOn")} />
+          <FormDatePicker
+            type="day"
+            variant="form"
+            value={form.watch("startsOn")}
+            onValueChange={(next) => form.setValue("startsOn", next, { shouldValidate: true })}
+            placeholder={t("starts")}
+            ariaLabel={t("starts")}
+          />
         </Field>
         <Field label={t("ends")} error={form.formState.errors.endsOn?.message}>
-          <FormInput type="date" {...form.register("endsOn")} />
+          <FormDatePicker
+            type="day"
+            variant="form"
+            value={form.watch("endsOn")}
+            onValueChange={(next) => form.setValue("endsOn", next, { shouldValidate: true })}
+            placeholder={t("ends")}
+            ariaLabel={t("ends")}
+          />
         </Field>
       </RecordFormSheet>
 

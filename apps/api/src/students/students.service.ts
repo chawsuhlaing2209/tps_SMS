@@ -88,6 +88,29 @@ export class StudentsService {
     return { data: rows, total: countRow?.count ?? 0 };
   }
 
+  async getPeopleDirectoryCounts(tenantId: string) {
+    const [[studentRow], [guardianRow], [householdRow]] = await Promise.all([
+      this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(students)
+        .where(eq(students.tenantId, tenantId)),
+      this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(guardians)
+        .where(eq(guardians.tenantId, tenantId)),
+      this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(familyGroups)
+        .where(eq(familyGroups.tenantId, tenantId))
+    ]);
+
+    return {
+      students: studentRow?.count ?? 0,
+      guardians: guardianRow?.count ?? 0,
+      households: householdRow?.count ?? 0
+    };
+  }
+
   async getById(tenantId: string, studentId: string) {
     const [student] = await this.db
       .select()

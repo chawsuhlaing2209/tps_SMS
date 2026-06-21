@@ -23,6 +23,7 @@ import { hasAnyPermission } from "../../lib/permissions";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { getSession } from "../../lib/session";
 import { zodResolver } from "../../lib/zod-resolver";
+import { localizedRoleLabel } from "../../lib/role-label";
 import { PageHeader } from "../page-header-context";
 
 type RoleRow = {
@@ -63,6 +64,7 @@ function countCategory(rolePermissions: Set<string>, category: PermissionCategor
 
 export function RolesPermissionsWorkspace() {
   const t = useTranslations("settings.roles");
+  const tNames = useTranslations("settings.roles.names");
   const p = useTranslations("settings.permissions");
   const c = useTranslations("common");
   const permissions = getSession()?.permissions;
@@ -289,7 +291,7 @@ export function RolesPermissionsWorkspace() {
                       {display.initials}
                     </span>
                     <span className="pds-type-body-m-medium roles-list-item__text">
-                      <strong>{display.label}</strong>
+                      <strong>{localizedRoleLabel(display, tNames, role.name)}</strong>
                       <span className="pds-type-body-s-regular muted">
                         {inactive
                           ? t("roleDisabled")
@@ -327,7 +329,9 @@ export function RolesPermissionsWorkspace() {
                       {selectedDisplay.initials}
                     </span>
                     <div>
-                      <h2 className="pds-type-title-xs-bold">{selectedDisplay.label}</h2>
+                      <h2 className="pds-type-title-xs-bold">
+                        {localizedRoleLabel(selectedDisplay, tNames, selectedRole.name)}
+                      </h2>
                       <p className="pds-type-body-s-regular muted">
                         {selectedRole.status === "inactive"
                           ? t("roleDisabledSummary")

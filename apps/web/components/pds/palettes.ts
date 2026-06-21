@@ -30,6 +30,8 @@ export const PDS_STATUS_PILL_TONES = [
   "overdue",
   "due",
   "scholarship",
+  "active",
+  "inactive",
   "neutral",
 ] as const;
 

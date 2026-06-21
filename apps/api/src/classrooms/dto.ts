@@ -29,6 +29,10 @@ export class CreateClassroomDto {
 
   @IsOptional()
   @IsUUID()
+  facilityRoomId?: string;
+
+  @IsOptional()
+  @IsUUID()
   classTeacherStaffId?: string;
 }
 
@@ -54,6 +58,10 @@ export class UpdateClassroomDto {
   @IsOptional()
   @IsString()
   room?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  facilityRoomId?: string | null;
 
   @IsOptional()
   @IsUUID()

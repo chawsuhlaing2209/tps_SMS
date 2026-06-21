@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { Icon } from "../../lib/material-icon";
+import { printDocument } from "../../lib/print-document";
 
 export type PaymentReceiptPayload = {
   id: string;
@@ -195,7 +196,7 @@ export function PaymentReceiptDocument({
 
 export function printPaymentReceipt(
   receipt: PaymentReceiptPayload,
-  labels: {
+  _labels?: {
     header: string;
     receiptLabel: string;
     student: string;
@@ -211,72 +212,8 @@ export function printPaymentReceipt(
     methodName: string;
   }
 ) {
-  const issuedDate = receipt.issuedAt ? receipt.issuedAt.slice(0, 10) : "";
-  const lines = buildReceiptDetailLines(
-    receipt,
-    {
-      student: labels.student,
-      gradeRoom: labels.gradeRoom,
-      guardian: labels.guardian,
-      contact: labels.contact,
-      method: labels.methodLabel,
-      appliedTo: labels.appliedTo,
-      reference: labels.reference,
-      cashier: labels.cashier
-    },
-    labels.methodName
-  );
-
-  const row = (label: string, value: string) =>
-    `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`;
-
-  const html = `<!doctype html><html><head><meta charset="utf-8" />
-<title>${escapeHtml(receipt.receiptNumber)}</title>
-<style>
-  * { box-sizing: border-box; }
-  body { font-family: ui-sans-serif, system-ui, "Segoe UI", sans-serif; color: #14241b; margin: 0; padding: 32px; }
-  .wrap { max-width: 640px; margin: 0 auto; }
-  .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #14241b; padding-bottom: 16px; }
-  .school { font-size: 20px; font-weight: 800; }
-  .doc { color: #5b6b62; font-size: 13px; }
-  .ref { text-align: right; }
-  .ref strong { font-size: 18px; font-weight: 800; }
-  .ref span { display: block; color: #8a958e; font-size: 12px; }
-  table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-  th, td { text-align: left; padding: 12px 8px; border-bottom: 1px solid #e6eae7; font-size: 14px; }
-  th { color: #5b6b62; font-weight: 600; width: 38%; }
-  .summary { margin-top: 24px; background: #14241b; color: #fff; border-radius: 16px; padding: 24px; display: flex; justify-content: space-between; align-items: flex-end; }
-  .summary .label { text-transform: uppercase; letter-spacing: .08em; font-size: 11px; color: #b9c6bd; }
-  .amount { font-size: 32px; font-weight: 800; color: #c8f25d; }
-  .remaining { font-size: 24px; font-weight: 800; text-align: right; }
-</style></head>
-<body><div class="wrap">
-  <div class="head">
-    <div><div class="school">${escapeHtml(receipt.schoolName)}</div><div class="doc">${escapeHtml(labels.header)}</div></div>
-    <div class="ref"><strong>#${escapeHtml(receipt.receiptNumber)}</strong><span>${escapeHtml(issuedDate)}</span></div>
-  </div>
-  <table>
-    ${lines.map((line) => row(line.label, line.value)).join("")}
-  </table>
-  <div class="summary">
-    <div><div class="label">${escapeHtml(labels.amountPaid)}</div><div class="amount">${formatReceiptAmount(receipt.amountPaid)} ${escapeHtml(receipt.currency)}</div></div>
-    <div><div class="label">${escapeHtml(labels.remaining)}</div><div class="remaining">${formatReceiptAmount(receipt.remainingBalance)} ${escapeHtml(receipt.currency)}</div></div>
-  </div>
-</div>
-<script>window.onload = function () { window.focus(); window.print(); };</script>
-</body></html>`;
-
-  const printWindow = window.open("", "_blank", "width=720,height=900");
-  if (!printWindow) return;
-  printWindow.document.open();
-  printWindow.document.write(html);
-  printWindow.document.close();
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  printDocument(".receipt", {
+    title: receipt.receiptNumber,
+    width: "narrow"
+  });
 }

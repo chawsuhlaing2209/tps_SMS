@@ -10,6 +10,10 @@ export type StatCardProps = {
   icon?: ReactNode;
   /** Lime brand emphasis for the single most important metric in a grid. */
   accent?: boolean;
+  /** Frame surface with link-green hero value (e.g. outstanding balance). */
+  layout?: boolean;
+  /** Ink-green shell for high-contrast totals (e.g. collected / paid). */
+  dark?: boolean;
   className?: string;
 };
 
@@ -18,9 +22,17 @@ export type StatCardProps = {
  * `.stat-card > .stat-label + .stat-value` markup in finance, admissions,
  * dashboard, etc. Compose multiples inside `StatGrid`.
  */
-export function StatCard({ label, value, hint, icon, accent, className }: StatCardProps) {
+export function StatCard({ label, value, hint, icon, accent, layout, dark, className }: StatCardProps) {
   return (
-    <article className={cn("stat-card", accent && "stat-card--accent", className)}>
+    <article
+      className={cn(
+        "stat-card",
+        accent && "stat-card--accent",
+        layout && "stat-card--layout",
+        dark && "stat-card--dark",
+        className,
+      )}
+    >
       {icon ? <span className="stat-card__icon" aria-hidden>{icon}</span> : null}
       <span className="pds-type-caption-s stat-label">{label}</span>
       <span className="pds-type-title-l-extrabold stat-value">{value}</span>

@@ -155,6 +155,41 @@
       "when": 1783400000000,
       "tag": "0021_account_activation_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1783500000000,
+      "tag": "0022_facility_rooms",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1783600000000,
+      "tag": "0023_classroom_facility_room",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1783700000000,
+      "tag": "0024_payroll_module",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1783800000000,
+      "tag": "0025_student_document_metadata",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1783900000000,
+      "tag": "0026_departments_actor_columns",
+      "breakpoints": true
     }
   ]
 }

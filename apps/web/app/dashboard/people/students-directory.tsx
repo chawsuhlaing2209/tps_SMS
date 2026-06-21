@@ -3,18 +3,21 @@
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { type ColumnDef } from "@tanstack/react-table";
+import { PdsSearchBar, PdsSearchFiltersRow, PdsSelectField } from "../../../components/pds";
+import { StatusBadge } from "../../../components/shared/badge";
+import { ExportCsvButton } from "../../../components/shared/export-csv-button";
 import { useApiQuery } from "../../lib/api";
+import { useDashPageTitleActionsTarget } from "../dashboard-page-title";
+import { fetchAllPaginated } from "../../lib/export-csv";
 import { DataTable, DirectoryMemberCell } from "../../lib/data-table";
-import { Icon } from "../../lib/material-icon";
 import { PaginationControls } from "../../lib/pagination-controls";
 import { hasAnyPermission } from "../../lib/permissions";
 import { getSession } from "../../lib/session";
-import { TablePanelBody, TablePanelHead, DataTableSection } from "../../lib/table-panel";
-import { TableSearchInput } from "../../lib/table-search";
+import { TablePanelBody, DataTableSection } from "../../lib/table-panel";
+import { usePeopleDirectoryActions } from "./people-directory-actions";
 import { StudentRegistrationWizard } from "./student-registration-wizard";
-import { PdsSelectField } from "../../../components/pds";
-import { StatusBadge } from "../../../components/shared/badge";
 
 type Student = {
   id: string;
@@ -33,6 +36,18 @@ type StudentList = { data: Student[]; total: number };
 const STUDENTS_PATH = (tenant: string) => `/tenants/${tenant}/students`;
 const PAGE_SIZE = 50;
 
+function formatDateOfBirth(value: string | null) {
+  if (!value) {
+    return "—";
+  }
+
+  return new Date(value).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+  });
+}
+
 export function StudentsDirectory() {
   const t = useTranslations("students");
   const p = useTranslations("people");
@@ -40,10 +55,10 @@ export function StudentsDirectory() {
   const c = useTranslations("common");
   const permissions = getSession()?.permissions;
   const canManage = hasAnyPermission(permissions, ["student.manage"]);
+  const { studentsRegisterOpen, setStudentsRegisterOpen } = usePeopleDirectoryActions();
   const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
-  const [sheetOpen, setSheetOpen] = useState(false);
 
   const queryPath = (tenant: string) => {
     const params = new URLSearchParams({
@@ -82,7 +97,7 @@ export function StudentsDirectory() {
         row.original.familyGroupId && row.original.householdName ? (
           <Link
             href={`/dashboard/people/households/${row.original.familyGroupId}`}
-            className="pds-type-body-s-regular row-action"
+            className="directory-tag"
             data-row-stop
           >
             {row.original.householdName}
@@ -102,51 +117,57 @@ export function StudentsDirectory() {
         />
       )
     },
-    { id: "dateOfBirth", header: t("dateOfBirth"), accessorFn: (row) => row.dateOfBirth ?? "—" }
+    {
+      id: "dateOfBirth",
+      header: t("dateOfBirth"),
+      accessorFn: (row) => row.dateOfBirth ?? "",
+      cell: ({ row }) => formatDateOfBirth(row.original.dateOfBirth)
+    }
   ];
 
   return (
     <DataTableSection>
-      <TablePanelHead
-        title={p("studentsTab")}
-        help={p("studentsTabHelp")}
-        extra={
+      <StudentsExportPortal
+        statusFilter={statusFilter}
+        search={search}
+        loading={students.isLoading}
+        formatDateOfBirth={formatDateOfBirth}
+      />
+      <PdsSearchFiltersRow
+        filters={
           <>
-            <TableSearchInput
-              placeholder={p("searchStudents")}
-              aria-label={p("searchStudents")}
+            <PdsSearchBar
               value={search}
               onChange={(event) => {
                 setSearch(event.target.value);
                 setPage(0);
               }}
+              placeholder={p("searchStudents")}
+              aria-label={p("searchStudents")}
             />
-            <PdsSelectField
-              variant="filter"
-              className="pds-type-body-m-medium table-toolbar-select"
-              value={statusFilter}
-              onValueChange={(value) => {
-                setStatusFilter(typeof value === "string" ? value : "");
-                setPage(0);
-              }}
-              placeholder={t("allStatuses")}
-              options={[
-                { value: "draft", label: t("status_draft") },
-                { value: "enrolled", label: t("status_enrolled") },
-                { value: "transferred", label: t("status_transferred") },
-                { value: "withdrawn", label: t("status_withdrawn") }
-              ]}
-            />
-            {canManage ? (
-              <button type="button" className="pds-type-body-m-bold btn-primary" onClick={() => setSheetOpen(true)}>
-                <Icon name="add" />
-                {t("registerTitle")}
-              </button>
-            ) : null}
+            <div className="pds-search-filters-row__filter--160">
+              <PdsSelectField
+                variant="filter"
+                value={statusFilter}
+                onValueChange={(value) => {
+                  setStatusFilter(typeof value === "string" ? value : "");
+                  setPage(0);
+                }}
+                placeholder={t("allStatuses")}
+                options={[
+                  { value: "draft", label: t("status_draft") },
+                  { value: "enrolled", label: t("status_enrolled") },
+                  { value: "transferred", label: t("status_transferred") },
+                  { value: "withdrawn", label: t("status_withdrawn") }
+                ]}
+              />
+            </div>
           </>
         }
       />
+
       <TablePanelBody
+        variant="card-plain"
         loading={students.isLoading}
         error={students.isError ? c("somethingWrong") : null}
         empty={!students.data?.data.length}
@@ -168,11 +189,76 @@ export function StudentsDirectory() {
 
       {canManage ? (
         <StudentRegistrationWizard
-          open={sheetOpen}
-          onOpenChange={setSheetOpen}
+          open={studentsRegisterOpen}
+          onOpenChange={setStudentsRegisterOpen}
           onSaved={() => void students.refetch()}
         />
       ) : null}
     </DataTableSection>
+  );
+}
+
+function StudentsExportPortal({
+  statusFilter,
+  search,
+  loading,
+  formatDateOfBirth
+}: {
+  statusFilter: string;
+  search: string;
+  loading: boolean;
+  formatDateOfBirth: (value: string | null) => string;
+}) {
+  const t = useTranslations("students");
+  const c = useTranslations("common");
+  const target = useDashPageTitleActionsTarget();
+
+  if (!target) {
+    return null;
+  }
+
+  return createPortal(
+    <ExportCsvButton
+      disabled={loading}
+      onExport={async () => {
+        const tenantId = getSession()?.tenantId;
+        if (!tenantId) {
+          throw new Error(c("notSignedIn"));
+        }
+        const rows = await fetchAllPaginated<Student>(
+          (limit, offset) => {
+            const params = new URLSearchParams({
+              limit: String(limit),
+              offset: String(offset)
+            });
+            if (statusFilter) params.set("status", statusFilter);
+            if (search.trim()) params.set("search", search.trim());
+            return `/tenants/${tenantId}/students?${params.toString()}`;
+          },
+          (json) => {
+            const payload = json as StudentList;
+            return { rows: payload.data, total: payload.total };
+          }
+        );
+        return {
+          filename: "students.csv",
+          columns: [
+            { key: "fullName", header: c("name") },
+            { key: "admissionNumber", header: t("admissionNumber") },
+            { key: "household", header: t("household") },
+            { key: "status", header: c("status") },
+            { key: "dateOfBirth", header: t("dateOfBirth") }
+          ],
+          rows: rows.map((row) => ({
+            fullName: row.fullName,
+            admissionNumber: row.admissionNumber,
+            household: row.householdName ?? "",
+            status: row.status,
+            dateOfBirth: formatDateOfBirth(row.dateOfBirth)
+          }))
+        };
+      }}
+    />,
+    target
   );
 }

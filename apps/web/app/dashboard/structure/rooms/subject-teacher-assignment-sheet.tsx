@@ -75,6 +75,9 @@ export function SubjectTeacherAssignmentSheet({
       }
     >
       <p className="pds-type-body-s-regular muted">{t("assignSubjectTeacherHelp", { subject: subjectName })}</p>
+      {teachers.length === 0 ? (
+        <p className="pds-type-body-s-regular muted">{t("noEligibleSubjectTeachers")}</p>
+      ) : null}
       <Field label={t("subjectTeacherLabel")}>
         <PdsSelectField
           variant="form"

@@ -2,15 +2,21 @@
 
 import { useTranslations } from "next-intl";
 import type { PdsSubjectColorKey } from "../../../../components/pds/palettes";
+import { Button } from "../../../../components/ui/button";
+import {
+  Modal,
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalDescription,
+  ModalFooter,
+  ModalFooterActions,
+  ModalFooterStart,
+  ModalHeader,
+  ModalTitle
+} from "../../../../components/pds/composites/modal";
 import { Icon } from "../../../lib/material-icon";
 import { subjectIcon } from "../../structure/subject-colors";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from "../../../../components/ui/dialog";
 
 type SlotPreview = {
   subjectName: string | null;
@@ -69,59 +75,77 @@ export function TimetablePeriodModal({
     slot.periodStartsAt && slot.periodEndsAt
       ? `${slot.periodName} · ${slot.periodStartsAt}–${slot.periodEndsAt}`
       : slot.periodName ?? "";
+  const dayTimeLabel =
+    slot.periodStartsAt && slot.periodEndsAt
+      ? `${dayLabel} · ${slot.periodStartsAt}–${slot.periodEndsAt}`
+      : dayLabel;
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent className="timetable-period-modal">
-        <DialogHeader>
-          <div className="timetable-period-modal__hero">
-            <span className={`timetable-period-modal__icon timetable-period-modal__icon--${colorKey}`}>
+    <Modal
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+    >
+      <ModalContent className="timetable-slot-modal">
+        <ModalHeader>
+          <div className="timetable-slot-modal__head">
+            <span className={`timetable-slot-modal__icon timetable-slot-modal__icon--${colorKey}`}>
               <Icon name={iconName} size={22} />
             </span>
-            <div>
-              <DialogTitle className="pds-type-title-xs-bold">{slot.subjectName}</DialogTitle>
-              <p className="pds-type-body-s-regular muted">{timeLabel}</p>
+            <div className="timetable-slot-modal__titles">
+              <ModalTitle>{slot.subjectName ?? t("subject")}</ModalTitle>
+              <ModalDescription>{timeLabel}</ModalDescription>
             </div>
           </div>
-        </DialogHeader>
+          <ModalCloseButton />
+        </ModalHeader>
 
-        <div className="timetable-period-modal__cards">
-          <article className="timetable-period-modal__card">
-            <span className="timetable-period-modal__card-label">{t("teacher")}</span>
-            <div className="timetable-period-modal__card-row">
-              <Icon name="person" size={18} />
-              <span className="pds-type-body-m-bold">{slot.teacherFullName}</span>
+        <ModalBody>
+          <dl className="timetable-slot-modal__meta">
+            <div className="timetable-slot-modal__meta-row">
+              <dt className="pds-type-label-s-medium">{t("teacher")}</dt>
+              <dd className="pds-type-body-m-medium timetable-slot-modal__meta-value">
+                <Icon name="person" size={18} />
+                <span>{slot.teacherFullName ?? "—"}</span>
+              </dd>
             </div>
-          </article>
-          <article className="timetable-period-modal__card">
-            <span className="timetable-period-modal__card-label">{t("dayAndTime")}</span>
-            <div className="timetable-period-modal__card-row">
-              <Icon name="calendar_month" size={18} />
-              <span className="pds-type-body-m-bold">
-                {dayLabel} · {slot.periodStartsAt}–{slot.periodEndsAt}
-              </span>
+            <div className="timetable-slot-modal__meta-row">
+              <dt className="pds-type-label-s-medium">{t("dayAndTime")}</dt>
+              <dd className="pds-type-body-m-medium timetable-slot-modal__meta-value">
+                <Icon name="calendar_month" size={18} />
+                <span>{dayTimeLabel}</span>
+              </dd>
             </div>
-          </article>
-        </div>
+          </dl>
+        </ModalBody>
 
-        <DialogFooter className="timetable-period-modal__footer">
-          <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={onClose}>
-            {c("close")}
-          </button>
-          {canManage && onDelete ? (
-            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={onDelete}>
-              <Icon name="delete" />
-              {t("delete")}
-            </button>
-          ) : null}
-          {canManage && onEdit ? (
-            <button type="button" className="pds-type-body-m-bold btn-primary" onClick={onEdit}>
-              <Icon name="edit" />
-              {t("editPeriod")}
-            </button>
-          ) : null}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <ModalFooter>
+          <ModalFooterStart>
+            {canManage && onDelete ? (
+              <Button
+                type="button"
+                buttonType="ghost"
+                buttonColor="secondary"
+                prefixIcon="delete"
+                onClick={onDelete}
+              >
+                {t("delete")}
+              </Button>
+            ) : null}
+          </ModalFooterStart>
+          <ModalFooterActions>
+            <Button type="button" buttonType="outlined" buttonColor="secondary" onClick={onClose}>
+              {c("close")}
+            </Button>
+            {canManage && onEdit ? (
+              <Button type="button" buttonType="filled" buttonColor="primary" prefixIcon="edit" onClick={onEdit}>
+                {t("editSlot")}
+              </Button>
+            ) : null}
+          </ModalFooterActions>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
   );
 }

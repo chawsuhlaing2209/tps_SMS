@@ -1,5 +1,5 @@
 "use client";
-import { FormInput } from "../../../components/shared/form-input";
+import { FormDatePicker, FormInput } from "../../../components/shared/form-input";
 
 import type { EnrollmentConfirmResult, EnrollmentPreviewResult } from "@sms/shared";
 import { enrollmentPaymentMethods } from "@sms/shared";
@@ -10,7 +10,7 @@ import { z } from "zod";
 import { ApiError, useApiMutation, useApiQuery } from "../../lib/api";
 import { Field } from "../../lib/form";
 import { Icon } from "../../lib/material-icon";
-import { RecordFormSheet } from "../../lib/record-sheet";
+import { RecordFormModal } from "../../lib/record-modal";
 import { StudentCombobox } from "../../lib/student-combobox";
 import { zodResolver } from "../../lib/zod-resolver";
 import { CheckBox, CheckboxList, PdsSelectField } from "../../../components/pds";
@@ -499,8 +499,9 @@ export function EnrollmentWizard({
     form.formState.isSubmitting;
 
   return (
-    <RecordFormSheet
+    <RecordFormModal
       open={open}
+      size="wide"
       onOpenChange={(next) => {
         if (!next) resetWizard();
         onOpenChange(next);
@@ -789,10 +790,13 @@ export function EnrollmentWizard({
             </div>
           </div>
           <Field label={t("dueDate")}>
-            <FormInput
-              type="date"
+            <FormDatePicker
+              type="day"
+              variant="form"
               value={dueDate}
-              onChange={(event) => setDueDate(event.target.value)}
+              onValueChange={setDueDate}
+              placeholder={t("dueDate")}
+              ariaLabel={t("dueDate")}
             />
           </Field>
           <CheckBox
@@ -869,6 +873,6 @@ export function EnrollmentWizard({
           }}
         />
       ) : null}
-    </RecordFormSheet>
+    </RecordFormModal>
   );
 }

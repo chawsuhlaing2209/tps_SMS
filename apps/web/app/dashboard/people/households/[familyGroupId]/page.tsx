@@ -4,19 +4,22 @@ import { FormInput } from "../../../../../components/shared/form-input";
 import type { FamilyTreeGuardian, FamilyTreeStudent } from "../../family-tree";
 import { FamilyTree } from "../../family-tree";
 import { useTranslations } from "next-intl";
-import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useState, use } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { ConfirmDialog } from "../../../../../components/shared/confirm-dialog";
 import { ApiError, useApiMutation, useApiQuery } from "../../../../lib/api";
 import { Field } from "../../../../lib/form";
+import {
+  HeroMoreActionsMenu,
+  HeroPrimaryAction
+} from "../../../../lib/hero-more-actions";
 import { Icon } from "../../../../lib/material-icon";
 import { hasAnyPermission } from "../../../../lib/permissions";
 import { RecordFormSheet } from "../../../../lib/record-sheet";
 import { getSession } from "../../../../lib/session";
 import { StudentCombobox } from "../../../../lib/student-combobox";
-import { TablePanelBody, TablePanelHead } from "../../../../lib/table-panel";
+import { TablePanelBody } from "../../../../lib/table-panel";
 import { PdsSelectField } from "../../../../../components/pds";
 import { zodResolver } from "../../../../lib/zod-resolver";
 import { PageHeader } from "../../../page-header-context";
@@ -31,9 +34,20 @@ type HouseholdTree = {
 
 type GuardianOption = { id: string; fullName: string };
 
-export default function HouseholdDetailPage() {
-  const params = useParams<{ familyGroupId: string }>();
-  const familyGroupId = params.familyGroupId;
+function householdInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0]!.charAt(0)}${parts[parts.length - 1]!.charAt(0)}`.toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
+}
+
+export default function HouseholdDetailPage({
+  params
+}: {
+  params: Promise<{ familyGroupId: string }>;
+}) {
+  const { familyGroupId } = use(params);
   const t = useTranslations("households");
   const c = useTranslations("common");
   const nav = useTranslations("nav");
@@ -43,6 +57,7 @@ export default function HouseholdDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [addStudentOpen, setAddStudentOpen] = useState(false);
   const [addStudentId, setAddStudentId] = useState("");
+  const [removeStudent, setRemoveStudent] = useState<FamilyTreeStudent | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
   const household = useApiQuery<HouseholdTree>(
@@ -82,6 +97,20 @@ export default function HouseholdDetailPage() {
     }
   );
 
+  const unlinkStudent = useApiMutation<{ studentId: string }, unknown>(
+    ({ studentId }, tenant) => ({
+      path: `/tenants/${tenant}/students/${studentId}/family-group`,
+      init: { method: "PATCH", body: JSON.stringify({ familyGroupId: null }) }
+    }),
+    {
+      invalidatePaths: (_b, tenant) => [
+        `/tenants/${tenant}/family-groups/${familyGroupId}`,
+        `/tenants/${tenant}/students`,
+        `/tenants/${tenant}/family-groups`
+      ]
+    }
+  );
+
   const schema = z.object({
     name: z.string().trim().min(1, c("required")),
     primaryGuardianId: z
@@ -111,12 +140,33 @@ export default function HouseholdDetailPage() {
 
   const data = household.data;
   const memberIds = data.students.map((student) => student.id);
+  const heroMeta = [
+    data.primaryGuardian
+      ? t("primaryGuardianLine", { name: data.primaryGuardian.fullName })
+      : null,
+    t("memberCountMeta", { count: data.students.length })
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const handleRemoveStudent = async () => {
+    if (!removeStudent) {
+      return;
+    }
+    setFormError(null);
+    try {
+      await unlinkStudent.mutateAsync({ studentId: removeStudent.id });
+      setRemoveStudent(null);
+      void household.refetch();
+    } catch (error) {
+      setFormError(error instanceof ApiError ? error.message : c("somethingWrong"));
+    }
+  };
 
   return (
-    <div className="page-stack">
+    <div className="student-profile-page">
       <PageHeader
         title={data.name}
-        description={t("detailDescription")}
         breadcrumbs={[
           { label: nav("group_school") },
           { label: p("directoryTitle"), href: "/dashboard/people" },
@@ -124,34 +174,56 @@ export default function HouseholdDetailPage() {
         ]}
       />
 
-      <TablePanelHead
-        title={t("treeTitle")}
-        help={t("treeHelp")}
-        onRefresh={() => void household.refetch()}
-        extra={
-          canManage ? (
-            <div className="form-actions form-actions--inline">
-              <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setEditOpen(true)}>
-                <Icon name="edit" />
-                {t("editHousehold")}
-              </button>
-              <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setAddStudentOpen(true)}>
-                <Icon name="person_add" />
-                {t("addStudent")}
-              </button>
-            </div>
-          ) : null
-        }
-      />
-      <TablePanelBody loading={false} error={null}>
-          {data.primaryGuardian ? (
-            <p className="pds-type-body-s-regular muted panel-help">
-              {t("primaryGuardianLine", { name: data.primaryGuardian.fullName })}
-            </p>
+      <section className="structure-room-banner student-profile-banner">
+        <div className="structure-room-banner__main student-profile-banner__main">
+          <span className="pds-type-title-xs-bold directory-avatar directory-avatar--household">
+            {householdInitials(data.name)}
+          </span>
+          <div>
+            <h2 className="structure-room-banner__title">{data.name}</h2>
+            <p className="pds-type-body-s-regular structure-room-banner__meta">{heroMeta}</p>
+          </div>
+        </div>
+        <div className="structure-room-banner__actions student-profile-banner__actions">
+          {canManage ? (
+            <HeroMoreActionsMenu
+              label={t("manageHousehold")}
+              items={[
+                {
+                  id: "edit",
+                  label: t("editHousehold"),
+                  icon: "edit",
+                  onSelect: () => setEditOpen(true)
+                }
+              ]}
+            />
           ) : null}
-          <FamilyTree guardians={data.guardians} students={data.students} />
-          <p className="pds-type-body-s-regular muted panel-help">{t("siblingHint")}</p>
+          {canManage ? (
+            <HeroPrimaryAction onClick={() => setAddStudentOpen(true)}>
+              <Icon name="person_add" />
+              {t("addStudent")}
+            </HeroPrimaryAction>
+          ) : null}
+        </div>
+      </section>
+
+      <TablePanelBody variant="card-plain" loading={false} error={null}>
+        <div className="household-tree-content">
+          <FamilyTree
+            guardians={data.guardians}
+            students={data.students}
+            canManage={canManage}
+            onRemoveStudent={(student) => setRemoveStudent(student)}
+          />
+          <p className="pds-type-body-s-regular muted household-tree-content__hint">{t("siblingHint")}</p>
+        </div>
       </TablePanelBody>
+
+      {formError && !editOpen && !addStudentOpen && !removeStudent ? (
+        <p className="pds-type-body-m-medium error-text" role="alert">
+          {formError}
+        </p>
+      ) : null}
 
       <RecordFormSheet
         open={editOpen}
@@ -268,6 +340,27 @@ export default function HouseholdDetailPage() {
           </p>
         ) : null}
       </RecordFormSheet>
+
+      <ConfirmDialog
+        open={Boolean(removeStudent)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRemoveStudent(null);
+            setFormError(null);
+          }
+        }}
+        title={t("removeStudentTitle")}
+        description={
+          removeStudent
+            ? t("removeStudentDescription", { name: removeStudent.fullName })
+            : ""
+        }
+        confirmLabel={t("removeStudentConfirm")}
+        cancelLabel={c("cancel")}
+        destructive
+        loading={unlinkStudent.isPending}
+        onConfirm={() => void handleRemoveStudent()}
+      />
     </div>
   );
 }

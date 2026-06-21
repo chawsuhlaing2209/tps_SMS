@@ -1,9 +1,13 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { use } from "react";
 import { DiscountSetupWorkspace } from "../discount-setup-workspace";
 
-export default function EditDiscountPage() {
-  const params = useParams<{ ruleId: string }>();
-  return <DiscountSetupWorkspace mode="edit" ruleId={params.ruleId} />;
+export default function EditDiscountPage({
+  params
+}: {
+  params: Promise<{ ruleId: string }>;
+}) {
+  const { ruleId } = use(params);
+  return <DiscountSetupWorkspace mode="edit" ruleId={ruleId} />;
 }

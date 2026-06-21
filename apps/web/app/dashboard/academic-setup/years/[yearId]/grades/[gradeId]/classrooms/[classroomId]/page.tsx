@@ -3,8 +3,8 @@
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useState, use } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useApiQuery } from "../../../../../../../../lib/api";
@@ -13,7 +13,7 @@ import { DataTable } from "../../../../../../../../lib/data-table";
 import { Field } from "../../../../../../../../lib/form";
 import { Icon } from "../../../../../../../../lib/material-icon";
 import { RecordFormSheet } from "../../../../../../../../lib/record-sheet";
-import { TablePanelBody, TablePanelHead } from "../../../../../../../../lib/table-panel";
+import { TablePanelBody } from "../../../../../../../../lib/table-panel";
 import { zodResolver } from "../../../../../../../../lib/zod-resolver";
 import { PageHeader } from "../../../../../../../page-header-context";
 
@@ -31,10 +31,13 @@ type StudentOption = { id: string; fullName: string; admissionNumber: string };
 const studentsPath = (tenant: string, classroomId: string) =>
   `/tenants/${tenant}/classrooms/${classroomId}/students`;
 
-export default function ClassroomStudentsPage() {
-  const params = useParams<{ yearId: string; gradeId: string; classroomId: string }>();
+export default function ClassroomStudentsPage({
+  params
+}: {
+  params: Promise<{ yearId: string; gradeId: string; classroomId: string }>;
+}) {
+  const { yearId, gradeId, classroomId } = use(params);
   const router = useRouter();
-  const { yearId, gradeId, classroomId } = params;
   const t = useTranslations("academics");
   const c = useTranslations("common");
   const [assignOpen, setAssignOpen] = useState(false);
@@ -90,23 +93,27 @@ export default function ClassroomStudentsPage() {
           },
           { label: classroom.data?.name ?? t("classroom") }
         ]}
-      />
-
-      <section className="panel">
-        <TablePanelHead
-          title={t("students")}
-          onRefresh={() => void students.refetch()}
-          onAdd={() => {
-            form.reset({ studentId: "" });
-            setAssignOpen(true);
-          }}
-          addLabel={t("assignStudent")}
-          extra={
+        actions={
+          <>
             <Link href={`/dashboard/structure/rooms/${classroomId}`} className="pds-type-body-m-bold btn-ghost">
               {t("openClassroom")}
             </Link>
-          }
-        />
+            <button
+              type="button"
+              className="pds-type-body-m-bold btn-primary"
+              onClick={() => {
+                form.reset({ studentId: "" });
+                setAssignOpen(true);
+              }}
+            >
+              <Icon name="add" />
+              {t("assignStudent")}
+            </button>
+          </>
+        }
+      />
+
+      <section className="panel">
         <p className="pds-type-body-s-regular muted panel-help">{t("classroomRosterSetupHelp")}</p>
         <TablePanelBody
           loading={students.isLoading || classroom.isLoading}

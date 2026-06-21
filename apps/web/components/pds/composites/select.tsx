@@ -5,6 +5,7 @@ import { Icon } from "../../../app/lib/material-icon";
 import { cn } from "../../../lib/utils";
 import { Options, type OptionsItem, type OptionsProps } from "./options";
 import { SelectItemPosition } from "./select-item-position";
+import { registerOpenSelect, unregisterOpenSelect } from "./select-open-coordinator";
 import type { OptionItemVariant } from "./option-item";
 
 export type PdsSelectVariant = "form" | "filter";
@@ -38,23 +39,29 @@ function displayValue(
   placeholder: string,
   multiple: boolean
 ) {
-  if (!value || (Array.isArray(value) && value.length === 0)) return placeholder;
+  if (value === undefined || (Array.isArray(value) && value.length === 0)) return placeholder;
   if (multiple && Array.isArray(value)) {
     const labels = items
       .filter((item) => value.includes(item.id))
       .map((item) => item.label);
     return labels.join(", ") || placeholder;
   }
-  const selected = items.find((item) => item.id === value);
-  return selected?.label ?? placeholder;
+  if (typeof value === "string") {
+    const selected = items.find((item) => item.id === value);
+    if (selected) return selected.label;
+  }
+  return placeholder;
 }
 
 function hasSelection(
   value: string | string[] | undefined,
-  multiple: boolean
+  multiple: boolean,
+  items: OptionsItem[]
 ) {
   if (multiple) return Array.isArray(value) && value.length > 0;
-  return typeof value === "string" && value.length > 0;
+  if (typeof value !== "string") return false;
+  if (value.length > 0) return true;
+  return items.some((item) => item.id === "");
 }
 
 /** Full select field — Figma node 35:12158.
@@ -78,6 +85,7 @@ export function PdsSelect({
   onClear,
   onOkay,
 }: PdsSelectProps) {
+  const selectId = React.useId();
   const isControlled = value !== undefined;
   const [uncontrolledValue, setUncontrolledValue] = React.useState<string | string[]>(
     defaultValue ?? (multiple ? [] : "")
@@ -87,7 +95,31 @@ export function PdsSelect({
   const [open, setOpen] = React.useState(state === "focus");
   const [search, setSearch] = React.useState("");
   const disabled = state === "disabled";
-  const selected = hasSelection(currentValue, multiple);
+  const selected = hasSelection(currentValue, multiple, items);
+
+  const closePanel = React.useCallback(() => {
+    unregisterOpenSelect(selectId);
+    setOpen(false);
+    setSearch("");
+  }, [selectId]);
+
+  const openPanel = React.useCallback(() => {
+    registerOpenSelect(selectId, closePanel);
+    setOpen(true);
+  }, [selectId, closePanel]);
+
+  React.useEffect(() => {
+    return () => unregisterOpenSelect(selectId);
+  }, [selectId]);
+
+  const togglePanel = React.useCallback(() => {
+    if (disabled) return;
+    if (open) {
+      closePanel();
+    } else {
+      openPanel();
+    }
+  }, [disabled, open, closePanel, openPanel]);
 
   const visualState: PdsSelectState =
     state === "disabled" || state === "error"
@@ -131,7 +163,7 @@ export function PdsSelect({
       return;
     }
     commitValue(id);
-    setOpen(false);
+    closePanel();
   };
 
   const optionsProps: OptionsProps = {
@@ -145,7 +177,7 @@ export function PdsSelect({
     },
     onOkay: () => {
       onOkay?.();
-      setOpen(false);
+      closePanel();
     },
   };
 
@@ -179,7 +211,7 @@ export function PdsSelect({
           visualState === "disabled" && "pds-select__trigger--disabled",
           visualState === "selected" && "pds-select__trigger--selected"
         )}
-        onClick={() => !disabled && setOpen((current) => !current)}
+        onClick={togglePanel}
       >
         {searchable && open ? (
           <input

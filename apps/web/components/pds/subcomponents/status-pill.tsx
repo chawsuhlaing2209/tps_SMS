@@ -10,7 +10,7 @@ export type StatusPillProps = {
   className?: string;
 };
 
-/** Semantic status pill — paid, partial, overdue, due, scholarship. */
+/** Semantic status pill — paid, partial, overdue, due, scholarship, active, inactive. */
 export function StatusPill({ tone = "neutral", children, className }: StatusPillProps) {
   return (
     <span
@@ -31,12 +31,13 @@ const STATUS_PILL_TONE: Record<string, PdsStatusPillTone> = {
   overdue: "overdue",
   due: "due",
   scholarship: "scholarship",
-  active: "paid",
+  active: "active",
+  inactive: "inactive",
   enrolled: "paid",
   approved: "paid",
   pending: "partial",
   draft: "partial",
-  unpaid: "due",
+  unpaid: "overdue",
   invited: "due",
   archived: "overdue",
   suspended: "overdue",

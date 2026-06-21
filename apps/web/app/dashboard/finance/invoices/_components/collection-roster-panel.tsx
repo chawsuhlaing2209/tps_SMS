@@ -1,15 +1,20 @@
 "use client";
-import { FormInput } from "../../../../../components/shared/form-input";
 
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
-import { useApiQuery, LIVE_DATA_STALE_MS } from "../../../../lib/api";
+import { createPortal } from "react-dom";
+import { useLiveApiQuery } from "../../../../lib/api";
+import { useDashPageTitleActionsTarget } from "../../../dashboard-page-title";
+import { fetchAllPaginated } from "../../../../lib/export-csv";
+import { getSession } from "../../../../lib/session";
 import { DirectoryMemberCell } from "../../../../lib/data-table";
 import { Icon } from "../../../../lib/material-icon";
 import { PaginationControls } from "../../../../lib/pagination-controls";
 import { useCurrentAcademicYear } from "../../../../lib/use-current-academic-year";
 import { Badge, type BadgeTone } from "../../../../../components/shared/badge";
+import { PdsSearchBar, PdsSearchFiltersRow, PdsSelectField } from "../../../../../components/pds";
 import { FinanceTableShell } from "../../finance-table-shell";
+import { ExportCsvButton } from "../../../../../components/shared/export-csv-button";
 import { PadaukSortHeader, usePadaukSort } from "../../table-sort";
 import { BillingInvoicePreviewModal } from "./invoice-preview-modal";
 import { InvoicesBillingMonthFilter } from "./invoices-actions-provider";
@@ -35,10 +40,10 @@ type Roster = {
   offset: number;
 };
 
-type StatusFilter = "" | "paid" | "partial" | "due" | "overdue";
+type StatusFilter = "all" | "paid" | "partial" | "due" | "overdue";
 
 const PAGE_SIZE = 50;
-const STATUS_FILTERS: StatusFilter[] = ["", "paid", "partial", "due", "overdue"];
+const STATUS_FILTER_OPTIONS: StatusFilter[] = ["all", "paid", "partial", "due", "overdue"];
 const STATUS_TONES: Record<import("./record-payment-modal").RosterRow["status"], BadgeTone> = {
   paid: "success",
   partial: "warning",
@@ -58,6 +63,85 @@ function fullNumber(value: number) {
 
 type CollectionSortKey = "student" | "status" | "balance";
 
+type RosterRow = import("./record-payment-modal").RosterRow;
+
+function CollectionRosterExportPortal({
+  academicYearId,
+  gradeId,
+  status,
+  search,
+  sortKey,
+  sortDir,
+  loading
+}: {
+  academicYearId: string;
+  gradeId: string;
+  status: StatusFilter;
+  search: string;
+  sortKey: CollectionSortKey;
+  sortDir: string;
+  loading: boolean;
+}) {
+  const tFees = useTranslations("finance.feesBilling");
+  const target = useDashPageTitleActionsTarget();
+
+  if (!target) {
+    return null;
+  }
+
+  return createPortal(
+    <ExportCsvButton
+      disabled={loading || !academicYearId}
+      onExport={async () => {
+        const tenantId = getSession()?.tenantId;
+        if (!tenantId) {
+          throw new Error("Not signed in.");
+        }
+        const rows = await fetchAllPaginated<RosterRow>(
+          (limit, offset) => {
+            const params = new URLSearchParams({
+              academicYearId,
+              limit: String(limit),
+              offset: String(offset),
+              sortBy: sortKey,
+              sortDir
+            });
+            if (gradeId) params.set("gradeId", gradeId);
+            if (status !== "all") params.set("status", status);
+            if (search.trim()) params.set("search", search.trim());
+            return `/tenants/${tenantId}/finance/billing/roster?${params.toString()}`;
+          },
+          (json) => {
+            const payload = json as Roster;
+            return { rows: payload.rows, total: payload.total };
+          },
+          500
+        );
+        return {
+          filename: "collection-roster.csv",
+          columns: [
+            { key: "student", header: tFees("student") },
+            { key: "gradeRoom", header: tFees("gradeRoom") },
+            { key: "billed", header: tFees("billed") },
+            { key: "collected", header: tFees("collected") },
+            { key: "balance", header: tFees("outstanding") },
+            { key: "status", header: tFees("status") }
+          ],
+          rows: rows.map((row) => ({
+            student: row.studentFullName ?? "",
+            gradeRoom: [row.gradeName, row.classroomName].filter(Boolean).join(" · "),
+            billed: row.billed,
+            collected: row.paid,
+            balance: row.balance,
+            status: row.status
+          }))
+        };
+      }}
+    />,
+    target
+  );
+}
+
 export function CollectionRosterPanel() {
   const tFees = useTranslations("finance.feesBilling");
 
@@ -65,7 +149,7 @@ export function CollectionRosterPanel() {
   const academicYearId = currentYear.data?.id ?? "";
 
   const [gradeId, setGradeId] = useState("");
-  const [status, setStatus] = useState<StatusFilter>("");
+  const [status, setStatus] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
@@ -90,15 +174,14 @@ export function CollectionRosterPanel() {
       sortDir
     });
     if (gradeId) params.set("gradeId", gradeId);
-    if (status) params.set("status", status);
+    if (status !== "all") params.set("status", status);
     if (search.trim()) params.set("search", search.trim());
     return params.toString();
   }, [academicYearId, gradeId, page, search, sortDir, sortKey, status]);
 
-  const roster = useApiQuery<Roster>(
+  const roster = useLiveApiQuery<Roster>(
     (tenant) =>
-      academicYearId ? `/tenants/${tenant}/finance/billing/roster?${rosterQuery}` : null,
-    { staleTime: LIVE_DATA_STALE_MS }
+      academicYearId ? `/tenants/${tenant}/finance/billing/roster?${rosterQuery}` : null
   );
 
   const data = roster.data;
@@ -114,6 +197,15 @@ export function CollectionRosterPanel() {
 
   return (
     <>
+      <CollectionRosterExportPortal
+        academicYearId={academicYearId}
+        gradeId={gradeId}
+        status={status}
+        search={search}
+        sortKey={sortKey}
+        sortDir={sortDir}
+        loading={currentYear.isLoading || roster.isLoading}
+      />
       <p className="pds-type-body-s-regular muted panel-help">{tFees("collectionViewHelp")}</p>
 
       <section className="fees-metrics" aria-label={tFees("collectionRate")}>
@@ -206,32 +298,35 @@ export function CollectionRosterPanel() {
         </div>
       </section>
 
-      <section className="fees-toolbar">
-        <div className="pds-type-body-m-medium fees-search">
-          <Icon name="search" size={18} className="fees-search__icon" />
-          <FormInput
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder={tFees("searchPlaceholder")}
-            aria-label={tFees("searchPlaceholder")}
-          />
-        </div>
-        <div className="fees-segmented" role="tablist" aria-label={tFees("status")}>
-          {STATUS_FILTERS.map((value) => (
-            <button
-              key={value || "all"}
-              type="button"
-              role="tab"
-              aria-selected={status === value}
-              className={status === value ? "fees-segment fees-segment--active" : "fees-segment"}
-              onClick={() => setStatus(value)}
-            >
-              {value ? tFees(`statusFilters.${value}`) : tFees("statusFilters.all")}
-            </button>
-          ))}
-        </div>
-        <div className="fees-toolbar__actions">
+      <PdsSearchFiltersRow
+        filters={
+          <>
+            <PdsSearchBar
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={tFees("searchPlaceholder")}
+              aria-label={tFees("searchPlaceholder")}
+            />
+            <div className="pds-search-filters-row__filter--160">
+              <PdsSelectField
+                variant="filter"
+                value={status}
+                onValueChange={(value) => {
+                  setStatus((typeof value === "string" ? value : "all") as StatusFilter);
+                }}
+                placeholder={tFees("statusFilters.all")}
+                options={STATUS_FILTER_OPTIONS.map((value) => ({
+                  value,
+                  label: tFees(`statusFilters.${value}`),
+                }))}
+              />
+            </div>
+            <div className="pds-search-filters-row__filter--160">
+              <InvoicesBillingMonthFilter />
+            </div>
+          </>
+        }
+        statusControl={
           <button
             type="button"
             className="pds-type-body-m-bold btn-primary fees-record-btn"
@@ -241,9 +336,8 @@ export function CollectionRosterPanel() {
             <Icon name="point_of_sale" size={18} />
             {tFees("recordPayment")}
           </button>
-          <InvoicesBillingMonthFilter />
-        </div>
-      </section>
+        }
+      />
 
       <FinanceTableShell
         loading={currentYear.isLoading || roster.isLoading}

@@ -6,6 +6,8 @@ import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { ConfirmDialog } from "../../../components/shared/confirm-dialog";
+import { RowMoreActionsMenu } from "../../../components/shared/row-more-actions";
 import { useApiMutation, useApiQuery } from "../../lib/api";
 import { DataTable } from "../../lib/data-table";
 import { Field } from "../../lib/form";
@@ -13,10 +15,10 @@ import { Icon } from "../../lib/material-icon";
 import { hasAnyPermission } from "../../lib/permissions";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { getSession } from "../../lib/session";
-import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
+import { TablePanelBody } from "../../lib/table-panel";
 import { zodResolver } from "../../lib/zod-resolver";
 import { ModulePageHeader } from "../module-page-header";
-import { PdsSelectField } from "../../../components/pds";
+import { PdsSearchFiltersRow, PdsSelectField } from "../../../components/pds";
 import { useCurrentAcademicYear } from "../../lib/use-current-academic-year";
 
 type CalendarEvent = {
@@ -54,6 +56,7 @@ export default function CalendarPage() {
   const canManage = hasAnyPermission(permissions, ["calendar.manage"]);
 
   const [formMode, setFormMode] = useState<FormMode | null>(null);
+  const [deletingEvent, setDeletingEvent] = useState<CalendarEvent | null>(null);
   const [month, setMonth] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
 
@@ -168,65 +171,83 @@ export default function CalendarPage() {
       enableSorting: false,
       cell: ({ row }) =>
         canManage ? (
-          <div style={{ display: "flex", gap: "8px" }}>
-            <button type="button" className="pds-type-body-s-regular row-action" onClick={() => openEdit(row.original)}>
-              {t("edit")}
-            </button>
-            <button
-              type="button"
-              className="pds-type-body-s-regular row-action"
-              disabled={remove.isPending}
-              onClick={() => void remove.mutateAsync({ id: row.original.id })}
-            >
-              {remove.isPending ? t("deleting") : t("delete")}
-            </button>
-          </div>
+          <RowMoreActionsMenu
+            ariaLabel={c("moreActions")}
+            items={[
+              {
+                id: "view",
+                label: c("view"),
+                icon: "visibility",
+                onSelect: () => openEdit(row.original)
+              },
+              {
+                id: "edit",
+                label: c("edit"),
+                icon: "edit",
+                onSelect: () => openEdit(row.original)
+              },
+              {
+                id: "delete",
+                label: c("delete"),
+                icon: "delete",
+                destructive: true,
+                onSelect: () => setDeletingEvent(row.original)
+              }
+            ]}
+          />
         ) : null
     }
   ];
 
   return (
     <div className="page-stack">
-      <ModulePageHeader navKey="calendar" title={nav("calendar")} />
-      <TablePanelHead
-          title={t("listTitle")}
-          extra={
-            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-              <label className="form-inline">
-                <FormDatePicker
-                  type="month"
-                  variant="filter"
-                  ariaLabel={t("month")}
-                  placeholder={t("month")}
-                  value={month}
-                  onValueChange={setMonth}
-                />
-              </label>
-              <label className="form-inline">
-                <span className="pds-type-body-s-regular muted">{t("filterType")}</span>
-                <PdsSelectField
-                  variant="filter"
-                  value={typeFilter}
-                  onValueChange={(value) => setTypeFilter(typeof value === "string" ? value : "")}
-                  placeholder={t("allTypes")}
-                  options={EVENT_TYPES.map((type) => ({
-                    value: type,
-                    label: eventTypeLabel(type)
-                  }))}
-                />
-              </label>
+      <ModulePageHeader
+        navKey="calendar"
+        title={nav("calendar")}
+        description={t("description")}
+        actions={
+          canManage ? (
+            <button type="button" className="pds-type-body-m-bold btn-primary" onClick={openCreate}>
+              <Icon name="add" />
+              {t("addEvent")}
+            </button>
+          ) : null
+        }
+      />
+      <PdsSearchFiltersRow
+        filters={
+          <>
+            <div className="pds-search-filters-row__filter--160">
+              <FormDatePicker
+                type="month"
+                variant="filter"
+                ariaLabel={t("month")}
+                placeholder={t("month")}
+                value={month}
+                onValueChange={setMonth}
+              />
             </div>
-          }
-          onRefresh={() => void events.refetch()}
-          onAdd={canManage ? openCreate : undefined}
-          addLabel={t("addEvent")}
-        />
+            <div className="pds-search-filters-row__filter--160">
+              <PdsSelectField
+                variant="filter"
+                value={typeFilter}
+                onValueChange={(value) => setTypeFilter(typeof value === "string" ? value : "")}
+                placeholder={t("allTypes")}
+                options={EVENT_TYPES.map((type) => ({
+                  value: type,
+                  label: eventTypeLabel(type)
+                }))}
+              />
+            </div>
+          </>
+        }
+      />
         <TablePanelBody
           loading={events.isLoading}
           error={events.isError ? c("somethingWrong") : null}
           empty={!events.data?.length}
         >
-          <DataTable columns={columns} data={events.data ?? []} />
+          <DataTable columns={columns} data={events.data ?? []} onRowClick={(event) => openEdit(event)} />
         </TablePanelBody>
 
       <RecordFormSheet
@@ -294,10 +315,24 @@ export default function CalendarPage() {
           />
         </Field>
         <Field label={t("startDate")} error={form.formState.errors.startDate?.message}>
-          <FormInput type="date" {...form.register("startDate")} />
+          <FormDatePicker
+            type="day"
+            variant="form"
+            value={form.watch("startDate")}
+            onValueChange={(next) => form.setValue("startDate", next, { shouldValidate: true })}
+            placeholder={t("startDate")}
+            ariaLabel={t("startDate")}
+          />
         </Field>
         <Field label={t("endDate")} error={form.formState.errors.endDate?.message}>
-          <FormInput type="date" {...form.register("endDate")} />
+          <FormDatePicker
+            type="day"
+            variant="form"
+            value={form.watch("endDate")}
+            onValueChange={(next) => form.setValue("endDate", next, { shouldValidate: true })}
+            placeholder={t("endDate")}
+            ariaLabel={t("endDate")}
+          />
         </Field>
         <Field label={t("academicYear")}>
           <FormInput readOnly value={currentYear.data?.name ?? ""} />
@@ -306,6 +341,23 @@ export default function CalendarPage() {
           <textarea rows={3} {...form.register("description")} />
         </Field>
       </RecordFormSheet>
+
+      <ConfirmDialog
+        open={deletingEvent !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeletingEvent(null);
+        }}
+        title={t("deleteEventTitle")}
+        description={t("deleteEventHelp", { title: deletingEvent?.title ?? "" })}
+        confirmLabel={c("delete")}
+        destructive
+        loading={remove.isPending}
+        onConfirm={async () => {
+          if (!deletingEvent) return;
+          await remove.mutateAsync({ id: deletingEvent.id });
+          setDeletingEvent(null);
+        }}
+      />
     </div>
   );
 }

@@ -109,3 +109,25 @@ export class UpdateTimetableSlotDto {
   @IsOptional()
   staffId?: string;
 }
+
+export class TeacherScheduleConflictQueryDto {
+  @IsUUID()
+  declare staffId: string;
+
+  @IsUUID()
+  declare periodId: string;
+
+  @IsNumber()
+  @Type(() => Number)
+  declare dayOfWeek: number;
+
+  @IsUUID()
+  @IsOptional()
+  excludeSlotId?: string;
+}
+
+export class EligibleTeachersQueryDto {
+  @IsUUID()
+  @IsOptional()
+  includeStaffId?: string;
+}

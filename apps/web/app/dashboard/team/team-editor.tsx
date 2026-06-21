@@ -1,5 +1,5 @@
 "use client";
-import { FormInput } from "../../../components/shared/form-input";
+import { FormDatePicker, FormInput } from "../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { myanmarPhoneSchema, roleDisplayFor } from "@sms/shared";
@@ -15,12 +15,14 @@ import { Icon } from "../../lib/material-icon";
 import { hasAnyPermission } from "../../lib/permissions";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { getSession } from "../../lib/session";
-import { TablePanelBody, TablePanelHead, DataTableSection } from "../../lib/table-panel";
+import { TablePanelBody, DataTableSection } from "../../lib/table-panel";
+import { useDashPageTitleActionsTarget } from "../dashboard-page-title";
 import { StatusBadge, Badge } from "../../../components/shared/badge";
 import { EmptyState } from "../../../components/shared/empty-state";
-import { PdsSelectField } from "../../../components/pds";
-import { TableSearchInput } from "../../lib/table-search";
+import { createPortal } from "react-dom";
+import { PdsSearchBar, PdsSearchFiltersRow, PdsSelectField } from "../../../components/pds";
 import { zodResolver } from "../../lib/zod-resolver";
+import { localizedRoleLabel } from "../../lib/role-label";
 
 type StaffOverview = {
   id: string;
@@ -77,6 +79,7 @@ const DEPARTMENTS_PATH = (tenant: string) => `/tenants/${tenant}/departments/act
 
 export function TeamEditor() {
   const t = useTranslations("team");
+  const tNames = useTranslations("settings.roles.names");
   const c = useTranslations("common");
   const permissions = getSession()?.permissions;
   const canManageHr = hasAnyPermission(permissions, ["hr.manage"]);
@@ -121,13 +124,16 @@ export function TeamEditor() {
     { invalidatePaths: (_b, tenant) => [`/tenants/${tenant}/hr/staff/overview`] }
   );
 
+  const roleLabel = (key: string, name?: string) =>
+    localizedRoleLabel(roleDisplayFor(key, name), tNames, name);
+
   const roleOptions = useMemo(() => {
     const base = roles.data ?? [];
     if (formMode?.type === "edit" && formMode.staff.rbacRoleKey) {
       const currentKey = formMode.staff.rbacRoleKey;
       if (!base.some((role) => role.key === currentKey)) {
         return [
-          { id: currentKey, key: currentKey, name: roleDisplayFor(currentKey).label },
+          { id: currentKey, key: currentKey, name: roleLabel(currentKey) },
           ...base
         ];
       }
@@ -206,10 +212,9 @@ export function TeamEditor() {
       id: "role",
       header: t("role"),
       cell: ({ row }) => {
-        const label = roleDisplayFor(
-          row.original.rbacRoleKey ?? "",
-          roles.data?.find((r) => r.key === row.original.rbacRoleKey)?.name
-        ).label;
+        const roleKey = row.original.rbacRoleKey ?? "";
+        const roleName = roles.data?.find((r) => r.key === roleKey)?.name;
+        const label = roleLabel(roleKey, roleName);
         return <Badge tone="neutral">{label}</Badge>;
       }
     },
@@ -265,18 +270,14 @@ export function TeamEditor() {
   return (
     <>
       <DataTableSection>
-        <TablePanelHead
-          title={t("listTitle")}
-          help={t("listHelp")}
-          onRefresh={() => void staff.refetch()}
-          onAdd={canManageHr ? openCreate : undefined}
-          addLabel={t("addMember")}
-          extra={
-            <TableSearchInput
-              placeholder={t("search")}
+        <TeamHeaderActionsPortal onAdd={canManageHr ? openCreate : undefined} />
+        <PdsSearchFiltersRow
+          filters={
+            <PdsSearchBar
               value={search}
-              aria-label={t("search")}
               onChange={(event) => setSearch(event.target.value)}
+              placeholder={t("search")}
+              aria-label={t("search")}
             />
           }
         />
@@ -344,7 +345,7 @@ export function TeamEditor() {
                 }
                 options={roleOptions.map((role) => ({
                   value: role.key,
-                  label: roleDisplayFor(role.key, role.name).label
+                  label: roleLabel(role.key, role.name)
                 }))}
               />
             ) : (
@@ -376,7 +377,14 @@ export function TeamEditor() {
             />
           </Field>
           <Field label={t("joinDate")}>
-            <FormInput type="date" {...form.register("joinDate")} />
+            <FormDatePicker
+              type="day"
+              variant="form"
+              value={form.watch("joinDate")}
+              onValueChange={(next) => form.setValue("joinDate", next, { shouldValidate: true })}
+              placeholder={t("joinDate")}
+              ariaLabel={t("joinDate")}
+            />
           </Field>
           {formMode?.type === "edit" && formMode.staff.userId ? (
             <p className="pds-type-body-s-regular muted">{t("loginLinked", { email: formMode.staff.loginEmail ?? "—" })}</p>
@@ -397,5 +405,26 @@ export function TeamEditor() {
         </p>
       ) : null}
     </>
+  );
+}
+
+function TeamHeaderActionsPortal({ onAdd }: { onAdd?: () => void }) {
+  const t = useTranslations("team");
+  const target = useDashPageTitleActionsTarget();
+
+  if (!target) {
+    return null;
+  }
+
+  return createPortal(
+    <>
+      {onAdd ? (
+        <button type="button" className="pds-type-body-m-bold btn-primary" onClick={onAdd}>
+          <Icon name="add" />
+          {t("addMember")}
+        </button>
+      ) : null}
+    </>,
+    target
   );
 }

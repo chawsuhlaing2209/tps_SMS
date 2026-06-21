@@ -11,9 +11,9 @@ import { DataTable } from "../../lib/data-table";
 import { Field } from "../../lib/form";
 import { Icon } from "../../lib/material-icon";
 import { RecordFormSheet } from "../../lib/record-sheet";
-import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
+import { TablePanelBody } from "../../lib/table-panel";
 import { zodResolver } from "../../lib/zod-resolver";
-import { PdsSelectField } from "../../../components/pds";
+import { PdsSearchBar, PdsSearchFiltersRow, PdsSelectField } from "../../../components/pds";
 import { StatusBadge } from "../../../components/shared/badge";
 import { ModulePageHeader } from "../module-page-header";
 
@@ -186,13 +186,18 @@ export default function CommunicationPage() {
 
   return (
     <div className="page-stack">
-      <ModulePageHeader navKey="communication" title={nav("communication")} />
-      <TablePanelHead
-        title={t("templatesTitle")}
-        help={t("help")}
-        onRefresh={() => void templates.refetch()}
-        onAdd={openCreate}
-        addLabel={t("addTemplate")}
+      <ModulePageHeader
+        navKey="communication"
+        title={nav("communication")}
+        description={t("description")}
+        actions={
+          <>
+            <button type="button" className="pds-type-body-m-bold btn-primary" onClick={openCreate}>
+              <Icon name="add" />
+              {t("addTemplate")}
+            </button>
+          </>
+        }
       />
       <TablePanelBody
         loading={templates.isLoading}
@@ -202,26 +207,24 @@ export default function CommunicationPage() {
         <DataTable columns={templateColumns} data={templates.data ?? []} />
       </TablePanelBody>
 
-      <TablePanelHead
-          title={t("logsTitle")}
-          extra={
-            <label className="form-inline">
-              <span className="pds-type-body-s-regular muted">{t("filterStatus")}</span>
-              <PdsSelectField
-                variant="filter"
-                value={statusFilter}
-                onValueChange={(value) => setStatusFilter(typeof value === "string" ? value : "")}
-                placeholder={t("allStatuses")}
-                options={[
-                  { value: "queued", label: "queued" },
-                  { value: "sent", label: "sent" },
-                  { value: "failed", label: "failed" }
-                ]}
-              />
-            </label>
-          }
-          onRefresh={() => void logs.refetch()}
-        />
+      <h2 className="pds-type-title-xs-bold">{t("logsTitle")}</h2>
+      <PdsSearchFiltersRow
+        filters={
+          <div className="pds-search-filters-row__filter--160">
+            <PdsSelectField
+              variant="filter"
+              value={statusFilter}
+              onValueChange={(value) => setStatusFilter(typeof value === "string" ? value : "")}
+              placeholder={t("allStatuses")}
+              options={[
+                { value: "queued", label: "queued" },
+                { value: "sent", label: "sent" },
+                { value: "failed", label: "failed" }
+              ]}
+            />
+          </div>
+        }
+      />
         <TablePanelBody
           loading={logs.isLoading}
           error={logs.isError ? c("somethingWrong") : null}

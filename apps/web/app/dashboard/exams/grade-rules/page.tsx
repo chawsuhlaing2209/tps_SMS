@@ -13,7 +13,7 @@ import { Icon } from "../../../lib/material-icon";
 import { hasAnyPermission } from "../../../lib/permissions";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { getSession } from "../../../lib/session";
-import { TablePanelBody, TablePanelHead } from "../../../lib/table-panel";
+import { TablePanelBody } from "../../../lib/table-panel";
 import { zodResolver } from "../../../lib/zod-resolver";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
 import { EmptyState } from "../../../../components/shared/empty-state";
@@ -88,19 +88,21 @@ export default function GradeRulesPage() {
         navKey="exams"
         title={t("gradeRulesTitle")}
         breadcrumbs={moduleBreadcrumbs("exams", nav, [{ label: t("gradeRules") }])}
-      />
-      <TablePanelHead
-        title={t("gradeRulesTitle")}
-        onRefresh={() => void rules.refetch()}
-        onAdd={
-          workingYearId
-            ? () => {
+        actions={
+          workingYearId ? (
+            <button
+              type="button"
+              className="pds-type-body-m-bold btn-primary"
+              onClick={() => {
                 form.reset({ name: "", academicYearId: workingYearId });
                 setOpen(true);
-              }
-            : undefined
+              }}
+            >
+              <Icon name="add" />
+              {t("addGradeRule")}
+            </button>
+          ) : null
         }
-        addLabel={t("addGradeRule")}
       />
       <TablePanelBody
         loading={rules.isLoading || currentYear.isLoading}

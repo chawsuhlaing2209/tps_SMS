@@ -20,6 +20,8 @@ export const AllTones: Story = {
       <StatusPill tone="overdue">Overdue</StatusPill>
       <StatusPill tone="due">Due</StatusPill>
       <StatusPill tone="scholarship">Scholarship</StatusPill>
+      <StatusPill tone="active">Active</StatusPill>
+      <StatusPill tone="inactive">Inactive</StatusPill>
       <StatusPill tone="neutral">Neutral</StatusPill>
     </div>
   ),

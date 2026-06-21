@@ -4,9 +4,11 @@ import { updateTeacherTeachingSetupSchema } from "@sms/shared";
 import { cn } from "../../../../lib/utils";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, use } from "react";
+import { StatusPill } from "../../../../components/pds/subcomponents/status-pill";
 import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
+import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
+import { isPadaukRowInteractiveTarget } from "../../../lib/table-row-interaction";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { HeroMoreActionsMenu } from "../../../lib/hero-more-actions";
 import { Icon } from "../../../lib/material-icon";
@@ -19,12 +21,14 @@ import {
   chiefConflicts,
   draftToTeachingSetup,
   emptyTeachingSetupDraft,
+  homeroomConflicts,
   TeacherTeachingSetupFields,
   teachingSetupToDraft,
   type TeachingSetupDraft,
   type TeachingSetupOptions
 } from "../teacher-teaching-setup";
 import styles from "../teacher-profile.module.css";
+import { StaffCompensationSection } from "../../salary/staff-compensation-section";
 
 type TeacherProfile = {
   id: string;
@@ -57,6 +61,7 @@ type TeacherProfile = {
     subjectTeaching: Array<{
       classroomName: string;
       subjectName: string;
+      subjectCode: string | null;
       classroomId: string;
       subjectId: string;
       gradeId: string;
@@ -64,7 +69,7 @@ type TeacherProfile = {
     }>;
   };
   stats: {
-    periodsPerweek: number;
+    periodsPerWeek: number;
     classesTaught: number;
     students: number;
     avgClassScore: number | null;
@@ -110,6 +115,46 @@ const DEMO_TO_GRADE = [
   { title: "Chemistry — Midterm scripts", meta: { room: "Room 10-A", due: "22 Jun" }, count: 5, tone: "pink" as const }
 ];
 
+type TaughtSubjectRow = {
+  subjectId: string;
+  subjectName: string;
+  classroomCount: number;
+};
+
+function aggregateTaughtSubjects(
+  teacher: TeacherProfile,
+  options: TeachingSetupOptions | undefined
+): TaughtSubjectRow[] {
+  const assignmentCounts = new Map<string, number>();
+  for (const row of teacher.assignments.subjectTeaching) {
+    assignmentCounts.set(row.subjectId, (assignmentCounts.get(row.subjectId) ?? 0) + 1);
+  }
+
+  const subjectById = new Map(
+    (options?.subjects ?? []).map((subject) => [subject.id, subject])
+  );
+  for (const row of teacher.assignments.subjectTeaching) {
+    if (!subjectById.has(row.subjectId)) {
+      subjectById.set(row.subjectId, {
+        id: row.subjectId,
+        name: row.subjectName,
+        code: row.subjectCode
+      });
+    }
+  }
+
+  return teacher.capability.competentSubjectIds
+    .map((subjectId) => {
+      const subject = subjectById.get(subjectId);
+      return {
+        subjectId,
+        subjectName: subject?.name ?? subjectId,
+        classroomCount: assignmentCounts.get(subjectId) ?? 0
+      };
+    })
+    .sort((a, b) => a.subjectName.localeCompare(b.subjectName));
+}
+
 function subjectTone(subject: string): "purple" | "pink" {
   const hash = subject.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
   return hash % 2 === 0 ? "purple" : "pink";
@@ -146,24 +191,29 @@ function flattenAssignments(teacher: TeacherProfile): AssignmentRow[] {
   return [...rows.values()];
 }
 
-export default function TeacherProfilePage() {
+export default function TeacherProfilePage({
+  params
+}: {
+  params: Promise<{ teacherId: string }>;
+}) {
   const t = useTranslations("teachers");
   const c = useTranslations("common");
   const nav = useTranslations("nav");
-  const params = useParams<{ teacherId: string }>();
-  const teacherId = params.teacherId;
+  const { teacherId } = use(params);
   const permissions = getSession()?.permissions;
   const canManageHr = hasAnyPermission(permissions, ["hr.manage"]);
+  const canViewTeacher = canManageHr || hasAnyPermission(permissions, ["classroom.manage"]);
 
   const [editOpen, setEditOpen] = useState(false);
   const [teachingOpen, setTeachingOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [draft, setDraft] = useState<TeachingSetupDraft>(emptyTeachingSetupDraft);
   const [formError, setFormError] = useState<string | null>(null);
+  const [removingSubjectId, setRemovingSubjectId] = useState<string | null>(null);
 
   const profile = useApiQuery<TeacherProfile>((tenant) => profilePath(tenant, teacherId));
   const options = useApiQuery<TeachingSetupOptions>((tenant) =>
-    teachingOpen ? optionsPath(tenant) : null
+    canViewTeacher ? optionsPath(tenant) : null
   );
   const existingSetup = useApiQuery<{
     capability: TeacherProfile["capability"];
@@ -172,7 +222,7 @@ export default function TeacherProfilePage() {
       homeroom: { classroomId: string }[];
       subjectTeaching: { classroomId: string; subjectId: string; gradeId?: string }[];
     };
-  }>((tenant) => (teachingOpen ? teachingSetupPath(tenant, teacherId) : null));
+  }>((tenant) => (canManageHr ? teachingSetupPath(tenant, teacherId) : null));
 
   const updateTeachingSetup = useApiMutation(
     (body: unknown, tenant) => ({
@@ -197,6 +247,11 @@ export default function TeacherProfilePage() {
   const assignmentRows = useMemo(
     () => (profile.data ? flattenAssignments(profile.data) : []),
     [profile.data]
+  );
+
+  const taughtSubjects = useMemo(
+    () => (profile.data ? aggregateTaughtSubjects(profile.data, options.data) : []),
+    [profile.data, options.data]
   );
 
   const assignmentSummary = useMemo(() => {
@@ -226,7 +281,9 @@ export default function TeacherProfilePage() {
     return parts.join(" · ");
   }, [profile.data, t]);
 
-  const conflicts = chiefConflicts(draft, options.data, teacherId);
+  const chiefConflictRows = chiefConflicts(draft, options.data, teacherId);
+  const homeroomConflictRows = homeroomConflicts(draft, options.data, teacherId);
+  const hasRoleConflicts = chiefConflictRows.length > 0 || homeroomConflictRows.length > 0;
 
   async function saveTeachingSetup() {
     setFormError(null);
@@ -247,6 +304,42 @@ export default function TeacherProfilePage() {
     }
   }
 
+  async function removeTaughtSubject(subjectId: string) {
+    if (!existingSetup.data) {
+      return;
+    }
+    setRemovingSubjectId(subjectId);
+    setFormError(null);
+    try {
+      const nextDraft = teachingSetupToDraft(existingSetup.data, options.data);
+      nextDraft.competentSubjectIds = nextDraft.competentSubjectIds.filter(
+        (id) => id !== subjectId
+      );
+      nextDraft.classroomRows = nextDraft.classroomRows.filter((row) => row.subjectId !== subjectId);
+      const parsed = updateTeacherTeachingSetupSchema.safeParse(
+        draftToTeachingSetup(nextDraft, options.data)
+      );
+      if (!parsed.success) {
+        setFormError(c("somethingWrong"));
+        return;
+      }
+      await updateTeachingSetup.mutateAsync(parsed.data);
+      void profile.refetch();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : c("somethingWrong"));
+    } finally {
+      setRemovingSubjectId(null);
+    }
+  }
+
+  function openTeachingSetup() {
+    setFormError(null);
+    if (existingSetup.data) {
+      setDraft(teachingSetupToDraft(existingSetup.data, options.data));
+    }
+    setTeachingOpen(true);
+  }
+
   if (profile.isLoading) {
     return <p className="pds-type-body-s-regular muted">{c("loading")}</p>;
   }
@@ -256,6 +349,7 @@ export default function TeacherProfilePage() {
   }
 
   const teacher = profile.data;
+  const isTeacherActive = teacher.status === "active" || teacher.status === "probation";
 
   return (
     <div className={styles.teacherProfilePage}>
@@ -274,7 +368,9 @@ export default function TeacherProfilePage() {
           <div>
             <div className={styles.teacherProfileTitleRow}>
               <h1 className="pds-type-title-m-extrabold">{teacher.fullName}</h1>
-              <span className={cn("pds-type-body-s-semibold", styles.teacherProfileStatusBadge)}>{teacher.status}</span>
+              <StatusPill tone={isTeacherActive ? "active" : "inactive"}>
+                {isTeacherActive ? t("statusActive") : t("statusInactive")}
+              </StatusPill>
             </div>
             {metaLine ? <p className={cn("pds-type-body-m-medium", styles.teacherProfileMeta)}>{metaLine}</p> : null}
             {teacher.qualifications.length ? (
@@ -300,10 +396,7 @@ export default function TeacherProfilePage() {
                     id: "manage-teaching",
                     label: t("manageTeaching"),
                     icon: "school",
-                    onSelect: () => {
-                      setFormError(null);
-                      setTeachingOpen(true);
-                    }
+                    onSelect: () => openTeachingSetup()
                   },
                   ...(teacher.email
                     ? [
@@ -337,7 +430,7 @@ export default function TeacherProfilePage() {
             <span className={`${styles.teacherProfileStatIcon} ${styles.teacherProfileStatIconBlue}`}>
               <Icon name="schedule" size={19} />
             </span>
-            <strong className={cn("pds-type-title-l-extrabold", styles.teacherProfileStatValue)}>{teacher.stats.periodsPerweek || "—"}</strong>
+            <strong className={cn("pds-type-title-l-extrabold", styles.teacherProfileStatValue)}>{teacher.stats.periodsPerWeek || "—"}</strong>
             <span className={cn("pds-type-body-s-regular", styles.teacherProfileStatLabel)}>{t("statPeriods")}</span>
           </article>
           <article className={styles.teacherProfileStatCard}>
@@ -370,6 +463,106 @@ export default function TeacherProfilePage() {
           <section className={styles.teacherProfileCard}>
             <div className={styles.teacherProfileCardHead}>
               <div>
+                <h2 className={cn("pds-type-title-xs-bold", styles.teacherProfileCardTitle)}>
+                  {t("subjectsAndLanguagesTaught")}
+                </h2>
+                {taughtSubjects.length ? (
+                  <p className={cn("pds-type-body-s-regular", styles.teacherProfileCardSubtitle)}>
+                    {t("taughtSubjectSummary", { count: taughtSubjects.length })}
+                  </p>
+                ) : null}
+              </div>
+              {canManageHr ? (
+                <button
+                  type="button"
+                  className={cn("pds-type-body-m-medium", styles.teacherProfileManageBtn)}
+                  onClick={openTeachingSetup}
+                >
+                  <Icon name="edit" size={18} />
+                  {t("editTaughtSubject")}
+                </button>
+              ) : null}
+            </div>
+
+            {taughtSubjects.length === 0 ? (
+              <p className={cn("pds-type-body-s-regular", styles.teacherProfileEmpty)}>{t("noTaughtSubjects")}</p>
+            ) : (
+              <ul className={styles.teacherProfileTaughtList}>
+                {taughtSubjects.map((row) => (
+                  <li
+                    key={row.subjectId}
+                    className={cn(styles.teacherProfileTaughtRow, canManageHr && styles.teacherProfileTaughtRowClickable)}
+                    tabIndex={canManageHr ? 0 : undefined}
+                    onClick={
+                      canManageHr
+                        ? (event) => {
+                            if (isPadaukRowInteractiveTarget(event.target)) return;
+                            openTeachingSetup();
+                          }
+                        : undefined
+                    }
+                    onKeyDown={
+                      canManageHr
+                        ? (event) => {
+                            if (event.key !== "Enter" && event.key !== " ") return;
+                            event.preventDefault();
+                            openTeachingSetup();
+                          }
+                        : undefined
+                    }
+                  >
+                    <span
+                      className={cn(
+                        "pds-type-label-s-bold",
+                        styles.teacherProfileSubjectTag,
+                        subjectTone(row.subjectName) === "purple"
+                          ? styles.teacherProfileSubjectPurple
+                          : styles.teacherProfileSubjectPink
+                      )}
+                    >
+                      {row.subjectName}
+                    </span>
+                    <div className={styles.teacherProfileRowBody}>
+                      <span className={cn("pds-type-body-m-bold", styles.teacherProfileRowTitle)}>
+                        {row.subjectName}
+                      </span>
+                      <span className={cn("pds-type-body-s-regular", styles.teacherProfileRowMeta)}>
+                        {t("taughtClassroomCount", { count: row.classroomCount })}
+                      </span>
+                    </div>
+                    {canManageHr ? (
+                      <RowMoreActionsMenu
+                        ariaLabel={c("moreActions")}
+                        items={[
+                          {
+                            id: "edit",
+                            label: c("edit"),
+                            icon: "edit",
+                            onSelect: openTeachingSetup
+                          },
+                          {
+                            id: "remove",
+                            label: c("remove"),
+                            icon: "delete",
+                            destructive: true,
+                            disabled: removingSubjectId === row.subjectId || updateTeachingSetup.isPending,
+                            onSelect: () => void removeTaughtSubject(row.subjectId)
+                          }
+                        ]}
+                      />
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {formError && !teachingOpen ? (
+              <p className="pds-type-body-m-medium error-text">{formError}</p>
+            ) : null}
+          </section>
+
+          <section className={styles.teacherProfileCard}>
+            <div className={styles.teacherProfileCardHead}>
+              <div>
                 <h2 className={cn("pds-type-title-xs-bold", styles.teacherProfileCardTitle)}>{t("teachingAssignments")}</h2>
                 {assignmentRows.length ? (
                   <p className={cn("pds-type-body-s-regular", styles.teacherProfileCardSubtitle)}>{assignmentSummary}</p>
@@ -379,10 +572,7 @@ export default function TeacherProfilePage() {
                 <button
                   type="button"
                   className={cn("pds-type-body-m-medium", styles.teacherProfileManageBtn)}
-                  onClick={() => {
-                    setFormError(null);
-                    setTeachingOpen(true);
-                  }}
+                  onClick={openTeachingSetup}
                 >
                   <Icon name="edit" size={18} />
                   {t("manageTeaching")}
@@ -411,7 +601,7 @@ export default function TeacherProfilePage() {
                       <span className={cn("pds-type-body-s-regular", styles.teacherProfileRowMeta)}>
                         {t("assignmentRowMeta", {
                           students: "—",
-                          periods: teacher.stats.periodsPerweek || "—"
+                          periods: teacher.stats.periodsPerWeek || "—"
                         })}
                       </span>
                     </div>
@@ -462,6 +652,7 @@ export default function TeacherProfilePage() {
         </div>
 
         <div className={styles.teacherProfileStack}>
+          <StaffCompensationSection staffId={teacherId} />
           <section className={styles.teacherProfileCard}>
             <div className={styles.teacherProfileCardHead}>
               <div>
@@ -522,7 +713,7 @@ export default function TeacherProfilePage() {
         help={t("manageTeachingHelp")}
         onSubmit={(event) => {
           event.preventDefault();
-          if (conflicts.length > 0) {
+          if (hasRoleConflicts) {
             setConfirmOpen(true);
             return;
           }
@@ -552,11 +743,24 @@ export default function TeacherProfilePage() {
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title={t("chiefConflictTitle")}
-        description={t("chiefConflictConfirm", {
-          items: conflicts.map((item) => `${item.gradeName} (${item.staffName})`).join(", ")
-        })}
-        confirmLabel={t("chiefConflictOverride")}
+        title={t("roleConflictTitle")}
+        description={[
+          chiefConflictRows.length
+            ? t("chiefConflictConfirm", {
+                items: chiefConflictRows
+                  .map((item) => `${item.gradeName} (${item.staffName})`)
+                  .join(", ")
+              })
+            : null,
+          homeroomConflictRows.length
+            ? t("homeroomConflictConfirm", {
+                items: homeroomConflictRows.map((item) => item.classroomName).join(", ")
+              })
+            : null
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        confirmLabel={t("roleConflictOverride")}
         cancelLabel={c("cancel")}
         loading={updateTeachingSetup.isPending}
         onConfirm={() => void saveTeachingSetup()}

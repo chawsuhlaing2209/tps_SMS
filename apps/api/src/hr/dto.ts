@@ -118,6 +118,14 @@ export class ListStaffQueryDto {
   @IsOptional()
   search?: string;
 
+  @IsUUID()
+  @IsOptional()
+  eligibleGradeId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  includeStaffId?: string;
+
   @IsNumber()
   @IsOptional()
   @Type(() => Number)

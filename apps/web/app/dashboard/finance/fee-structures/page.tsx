@@ -13,8 +13,13 @@ import { Icon } from "../../../lib/material-icon";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { zodResolver } from "../../../lib/zod-resolver";
 import { PageHeader } from "../../page-header-context";
+import { hasAnyPermission } from "../../../lib/permissions";
+import { getSession } from "../../../lib/session";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
 import { CheckBox } from "../../../../components/pds";
+import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
+import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
+import { isPadaukRowInteractiveTarget } from "../../../lib/table-row-interaction";
 import { EmptyState } from "../../../../components/shared/empty-state";
 import styles from "./fee-structures.module.css";
 
@@ -103,12 +108,20 @@ export default function FeeStructuresPage() {
   const nav = useTranslations("nav");
   const a = useTranslations("academics");
   const c = useTranslations("common");
+  const permissions = getSession()?.permissions;
+  const canManage = hasAnyPermission(permissions, ["finance.manage"]);
   const currentYear = useCurrentAcademicYear();
 
   const workingYearId = currentYear.data?.id ?? "";
   const [selectedGradeId, setSelectedGradeId] = useState<string | null>(null);
   const [formMode, setFormMode] = useState<FormMode | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [deletingComponent, setDeletingComponent] = useState<{
+    planId: string;
+    feeItemId: string;
+    name: string;
+    gradeOnly: boolean;
+  } | null>(null);
 
   const grades = useApiQuery<Grade[]>((tenant) => `/tenants/${tenant}/academics/grades`);
   const feeItems = useApiQuery<FeeItem[]>(FEE_ITEMS_PATH);
@@ -221,9 +234,32 @@ export default function FeeStructuresPage() {
     {
       invalidatePaths: (_b, tenant) => [
         PLANS_PATH(tenant),
+        FEE_ITEMS_PATH(tenant),
         workingYearId ? SUMMARY_PATH(tenant, workingYearId) : PLANS_PATH(tenant)
       ]
     }
+  );
+
+  const deletePlan = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({
+      path: `${PLANS_PATH(tenant)}/${id}`,
+      init: { method: "DELETE" }
+    }),
+    {
+      invalidatePaths: (_b, tenant) => [
+        PLANS_PATH(tenant),
+        FEE_ITEMS_PATH(tenant),
+        workingYearId ? SUMMARY_PATH(tenant, workingYearId) : PLANS_PATH(tenant)
+      ]
+    }
+  );
+
+  const archiveFeeItem = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({
+      path: `${FEE_ITEMS_PATH(tenant)}/${id}/archive`,
+      init: { method: "POST" }
+    }),
+    { invalidatePaths: (_b, tenant) => [FEE_ITEMS_PATH(tenant), PLANS_PATH(tenant)] }
   );
 
   const schema = useMemo(
@@ -299,6 +335,37 @@ export default function FeeStructuresPage() {
       activeGrades.map((grade) => grade.id),
       { shouldValidate: true, shouldDirty: true }
     );
+  };
+
+  const confirmRemoveComponent = async () => {
+    if (!deletingComponent || !selectedGradeId) return;
+
+    const plan = yearPlans.find((row) => row.id === deletingComponent.planId);
+    if (!plan) {
+      setDeletingComponent(null);
+      return;
+    }
+
+    try {
+      if (deletingComponent.gradeOnly) {
+        await updatePlan.mutateAsync({
+          id: plan.id,
+          gradeIds: plan.gradeIds.filter((gradeId) => gradeId !== selectedGradeId),
+          amount: Number(plan.amount)
+        });
+      } else {
+        await deletePlan.mutateAsync({ id: plan.id });
+        const hasOtherPlans = yearPlans.some(
+          (row) => row.feeItemId === deletingComponent.feeItemId && row.id !== plan.id
+        );
+        if (!hasOtherPlans) {
+          await archiveFeeItem.mutateAsync({ id: deletingComponent.feeItemId });
+        }
+      }
+      setDeletingComponent(null);
+    } catch {
+      // Keep dialog open; mutation error surfaces via query invalidation / toast if configured.
+    }
   };
 
   const summaryByGrade = new Map(
@@ -381,10 +448,12 @@ export default function FeeStructuresPage() {
                 <section className={styles.componentsPanel}>
                   <div className={styles.componentsHead}>
                     <h2 className={cn("pds-type-title-xs-bold", styles.componentsTitle)}>{t("feeComponents")}</h2>
-                    <button type="button" className={cn("pds-type-body-m-bold", styles.componentsAdd)} onClick={openCreate}>
-                      <Icon name="add" />
-                      {t("addComponent")}
-                    </button>
+                    {canManage ? (
+                      <button type="button" className={cn("pds-type-body-m-bold", styles.componentsAdd)} onClick={openCreate}>
+                        <Icon name="add" />
+                        {t("addComponent")}
+                      </button>
+                    ) : null}
                   </div>
 
                   {!gradeComponents.length ? (
@@ -404,7 +473,28 @@ export default function FeeStructuresPage() {
                           mandatoryEnrollmentFeeTypes as readonly string[]
                         ).includes(row.feeType);
                         return (
-                        <div key={row.planId} className={styles.componentRow}>
+                        <div
+                          key={row.planId}
+                          className={cn(styles.componentRow, canManage && styles.componentRowClickable)}
+                          tabIndex={canManage ? 0 : undefined}
+                          onClick={
+                            canManage
+                              ? (event) => {
+                                  if (isPadaukRowInteractiveTarget(event.target)) return;
+                                  openEdit(row.planId, row.feeItemId);
+                                }
+                              : undefined
+                          }
+                          onKeyDown={
+                            canManage
+                              ? (event) => {
+                                  if (event.key !== "Enter" && event.key !== " ") return;
+                                  event.preventDefault();
+                                  openEdit(row.planId, row.feeItemId);
+                                }
+                              : undefined
+                          }
+                        >
                           <div className={styles.componentName}>
                             <span
                               className={styles.componentDot}
@@ -433,13 +523,49 @@ export default function FeeStructuresPage() {
                             </div>
                             <span className={cn("pds-type-body-s-semibold", styles.sharePct)}>{row.share}%</span>
                           </div>
-                          <button
-                            type="button"
-                            className={cn("pds-type-body-s-semibold", "btn-outline", styles.componentEdit)}
-                            onClick={() => openEdit(row.planId, row.feeItemId)}
-                          >
-                            {a("edit")}
-                          </button>
+                          {canManage ? (
+                            <RowMoreActionsMenu
+                              ariaLabel={c("moreActions")}
+                              items={[
+                                {
+                                  id: "view",
+                                  label: c("view"),
+                                  icon: "visibility",
+                                  onSelect: () => openEdit(row.planId, row.feeItemId)
+                                },
+                                {
+                                  id: "edit",
+                                  label: c("edit"),
+                                  icon: "edit",
+                                  onSelect: () => openEdit(row.planId, row.feeItemId)
+                                },
+                                ...(!isRequired
+                                  ? [
+                                      {
+                                        id: "delete",
+                                        label: c("delete"),
+                                        icon: "delete",
+                                        destructive: true,
+                                        onSelect: () => {
+                                          const plan = yearPlans.find((entry) => entry.id === row.planId);
+                                          setDeletingComponent({
+                                            planId: row.planId,
+                                            feeItemId: row.feeItemId,
+                                            name: row.name,
+                                            gradeOnly: Boolean(
+                                              plan &&
+                                                selectedGradeId &&
+                                                plan.gradeIds.length > 1 &&
+                                                plan.gradeIds.includes(selectedGradeId)
+                                            )
+                                          });
+                                        }
+                                      }
+                                    ]
+                                  : [])
+                              ]}
+                            />
+                          ) : null}
                         </div>
                         );
                       })}
@@ -608,6 +734,26 @@ export default function FeeStructuresPage() {
           </p>
         ) : null}
       </RecordFormSheet>
+
+      <ConfirmDialog
+        open={deletingComponent !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeletingComponent(null);
+        }}
+        title={t("deleteComponentTitle")}
+        description={
+          deletingComponent?.gradeOnly
+            ? t("deleteComponentGradeHelp", {
+                name: deletingComponent.name,
+                grade: selectedGrade?.name ?? ""
+              })
+            : t("deleteComponentHelp", { name: deletingComponent?.name ?? "" })
+        }
+        confirmLabel={c("delete")}
+        destructive
+        loading={deletePlan.isPending || updatePlan.isPending || archiveFeeItem.isPending}
+        onConfirm={() => void confirmRemoveComponent()}
+      />
     </div>
   );
 }

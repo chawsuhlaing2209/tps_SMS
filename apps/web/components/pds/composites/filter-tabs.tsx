@@ -29,7 +29,9 @@ export function FilterTab({ label, count, active, disabled, onClick, className }
     >
       <span className="pds-type-body-m-bold pds-filter-tab__label">{label}</span>
       {count != null ? (
-        <span className="pds-type-body-s-bold pds-filter-tab__count">{count}</span>
+        <span className="pds-type-body-s-bold pds-filter-tab__count">
+          {typeof count === "number" ? count.toLocaleString() : count}
+        </span>
       ) : null}
     </button>
   );

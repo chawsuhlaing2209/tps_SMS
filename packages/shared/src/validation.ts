@@ -66,11 +66,28 @@ export const subjectAssignmentItemSchema = z.object({
   subjectId: z.string().uuid()
 });
 
-export const updateTeacherAssignmentsSchema = z.object({
-  gradeChief: z.array(gradeChiefAssignmentItemSchema).default([]),
-  homeroom: z.array(homeroomAssignmentItemSchema).default([]),
-  subjectTeaching: z.array(subjectAssignmentItemSchema).default([])
-});
+export const updateTeacherAssignmentsSchema = z
+  .object({
+    gradeChief: z.array(gradeChiefAssignmentItemSchema).default([]),
+    homeroom: z.array(homeroomAssignmentItemSchema).default([]),
+    subjectTeaching: z.array(subjectAssignmentItemSchema).default([])
+  })
+  .superRefine((data, ctx) => {
+    if (data.homeroom.length > 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "A teacher can only be homeroom teacher for one classroom.",
+        path: ["homeroom"]
+      });
+    }
+    if (data.gradeChief.length > 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "A teacher can only be grade chief for one grade.",
+        path: ["gradeChief"]
+      });
+    }
+  });
 
 export type UpdateTeacherAssignmentsInput = z.infer<typeof updateTeacherAssignmentsSchema>;
 

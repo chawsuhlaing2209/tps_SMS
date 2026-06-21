@@ -1,5 +1,5 @@
 "use client";
-import { FormInput } from "../../../../components/shared/form-input";
+import { FormDatePicker, FormInput } from "../../../../components/shared/form-input";
 
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
@@ -177,17 +177,23 @@ export function RequestDiscountSheet({
             />
           </Field>
           <Field label={t("effectiveFrom")}>
-            <FormInput
-              type="date"
+            <FormDatePicker
+              type="day"
+              variant="form"
               value={effectiveFrom}
-              onChange={(event) => setEffectiveFrom(event.target.value)}
+              onValueChange={setEffectiveFrom}
+              placeholder={t("effectiveFrom")}
+              ariaLabel={t("effectiveFrom")}
             />
           </Field>
           <Field label={t("effectiveTo")}>
-            <FormInput
-              type="date"
+            <FormDatePicker
+              type="day"
+              variant="form"
               value={effectiveTo}
-              onChange={(event) => setEffectiveTo(event.target.value)}
+              onValueChange={setEffectiveTo}
+              placeholder={t("effectiveTo")}
+              ariaLabel={t("effectiveTo")}
             />
           </Field>
         </>

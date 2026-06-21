@@ -6,13 +6,18 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { useApiQuery, useReferenceApiQuery } from "../../lib/api";
+import { createPortal } from "react-dom";
+import { apiFetch, useApiQuery, useReferenceApiQuery } from "../../lib/api";
 import { useCurrentAcademicYear } from "../../lib/use-current-academic-year";
+import { getSession } from "../../lib/session";
 import { DataTable } from "../../lib/data-table";
-import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
+import { Icon } from "../../lib/material-icon";
+import { TablePanelBody } from "../../lib/table-panel";
+import { useDashPageTitleActionsTarget } from "../dashboard-page-title";
 import { WorkspaceLoading } from "../../lib/workspace-loading";
-import { PdsSelectField } from "../../../components/pds";
+import { PdsSearchFiltersRow, PdsSelectField } from "../../../components/pds";
 import { StatusBadge } from "../../../components/shared/badge";
+import { ExportCsvButton } from "../../../components/shared/export-csv-button";
 
 const EnrollmentWizard = dynamic(
   () => import("./enrollment-wizard").then((module) => module.EnrollmentWizard),
@@ -164,31 +169,35 @@ export function EnrollmentsWorkspace({
 
   return (
     <>
-      <TablePanelHead
-          title={compactTitle ? t("listTitle") : t("title")}
-          help={t("help")}
-          extra={
-            showStatusFilter ? (
-              <label className="form-inline">
-                <span className="pds-type-body-s-regular muted">{t("filterStatus")}</span>
-                <PdsSelectField
-                  variant="filter"
-                  value={statusFilter}
-                  onValueChange={(value) => setStatusFilter(typeof value === "string" ? value : "")}
-                  placeholder={t("allStatuses")}
-                  options={[
-                    { value: "draft", label: t("status_draft") },
-                    { value: "approved", label: t("status_approved") },
-                    { value: "archived", label: t("status_archived") }
-                  ]}
-                />
-              </label>
-            ) : null
+      <EnrollmentsHeaderActionsPortal
+        onAdd={() => openWizard(null)}
+        statusFilter={statusFilter}
+        workingYearId={workingYearId}
+        gradeName={gradeName}
+        classroomName={classroomName}
+        yearName={yearName}
+        loading={enrollments.isLoading}
+      />
+      <p className="pds-type-body-s-regular muted">{t("help")}</p>
+      {showStatusFilter ? (
+        <PdsSearchFiltersRow
+          filters={
+            <div className="pds-search-filters-row__filter--160">
+              <PdsSelectField
+                variant="filter"
+                value={statusFilter}
+                onValueChange={(value) => setStatusFilter(typeof value === "string" ? value : "")}
+                placeholder={t("allStatuses")}
+                options={[
+                  { value: "draft", label: t("status_draft") },
+                  { value: "approved", label: t("status_approved") },
+                  { value: "archived", label: t("status_archived") }
+                ]}
+              />
+            </div>
           }
-          onRefresh={() => void enrollments.refetch()}
-          onAdd={() => openWizard(null)}
-          addLabel={t("addEnrollment")}
         />
+      ) : null}
       <TablePanelBody
           loading={enrollments.isLoading}
           error={enrollments.isError ? c("somethingWrong") : null}
@@ -217,5 +226,72 @@ export function EnrollmentsWorkspace({
         onSaved={() => void enrollments.refetch()}
       />
     </>
+  );
+}
+
+function EnrollmentsHeaderActionsPortal({
+  onAdd,
+  statusFilter,
+  workingYearId,
+  gradeName,
+  classroomName,
+  yearName,
+  loading
+}: {
+  onAdd: () => void;
+  statusFilter: string;
+  workingYearId: string;
+  gradeName: (id: string) => string;
+  classroomName: (id: string | null) => string;
+  yearName: (id: string) => string;
+  loading: boolean;
+}) {
+  const t = useTranslations("enrollments");
+  const c = useTranslations("common");
+  const target = useDashPageTitleActionsTarget();
+
+  if (!target) {
+    return null;
+  }
+
+  return createPortal(
+    <>
+      <ExportCsvButton
+        disabled={loading}
+        onExport={async () => {
+          const params = new URLSearchParams();
+          if (workingYearId) params.set("academicYearId", workingYearId);
+          if (statusFilter) params.set("status", statusFilter);
+          const qs = params.toString();
+          const rows = await apiFetch<EnrollmentRow[]>(
+            `/tenants/${getSession()?.tenantId}/enrollments${qs ? `?${qs}` : ""}`
+          );
+          return {
+            filename: "enrollments.csv",
+            columns: [
+              { key: "student", header: t("student") },
+              { key: "classroom", header: t("classroom") },
+              { key: "grade", header: t("grade") },
+              { key: "year", header: t("academicYear") },
+              { key: "status", header: t("status") },
+              { key: "invoiceId", header: t("invoice") }
+            ],
+            rows: rows.map((row) => ({
+              student: row.studentFullName ?? row.studentId,
+              classroom: classroomName(row.classroomId),
+              grade: gradeName(row.gradeId),
+              year: yearName(row.academicYearId),
+              status: row.status,
+              invoiceId: row.invoiceId ?? ""
+            }))
+          };
+        }}
+      />
+      <button type="button" className="pds-type-body-m-bold btn-primary" onClick={onAdd}>
+        <Icon name="add" />
+        {t("addEnrollment")}
+      </button>
+    </>,
+    target
   );
 }

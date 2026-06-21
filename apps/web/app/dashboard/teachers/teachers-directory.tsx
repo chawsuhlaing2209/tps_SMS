@@ -3,15 +3,25 @@
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { PdsSearchBar, PdsSearchFiltersRow, PdsSelectField } from "../../../components/pds";
+import { StatusBadge } from "../../../components/shared/badge";
+import { Chip, ChipGroup } from "../../../components/shared/chip";
+import { ExportCsvButton } from "../../../components/shared/export-csv-button";
 import { useApiQuery } from "../../lib/api";
+import { useDashPageTitleActionsTarget } from "../dashboard-page-title";
+import { fetchAllPaginated } from "../../lib/export-csv";
 import { DataTable, DirectoryMemberCell } from "../../lib/data-table";
 import { PaginationControls } from "../../lib/pagination-controls";
 import { hasAnyPermission } from "../../lib/permissions";
 import { getSession } from "../../lib/session";
-import { TablePanelBody, TablePanelHead, DataTableSection } from "../../lib/table-panel";
-import { TableSearchInput } from "../../lib/table-search";
+import { TablePanelBody, DataTableSection } from "../../lib/table-panel";
 import { TeacherCreateSheet } from "./teacher-create-sheet";
-import { StatusBadge, Badge } from "../../../components/shared/badge";
+import { useTeachersActions } from "./teachers-actions-provider";
+
+type TeacherProfile = {
+  eligibleGradeIds?: string[];
+};
 
 type TeacherOverview = {
   id: string;
@@ -21,7 +31,11 @@ type TeacherOverview = {
   department: string | null;
   status: string;
   homeroomCount: number;
+  classroomCount: number;
   subjectCount: number;
+  teacherProfile?: TeacherProfile;
+  updatedAt?: string;
+  createdAt?: string;
 };
 
 type StaffOverviewPage = {
@@ -31,17 +45,36 @@ type StaffOverviewPage = {
   offset: number;
 };
 
+type GradeOption = { id: string; name: string };
+
 const PAGE_SIZE = 50;
 
-const teachersPath = (tenant: string, page: number, search: string) => {
+const teachersPath = (
+  tenant: string,
+  page: number,
+  search: string,
+  status: string,
+  gradeId: string
+) => {
   const params = new URLSearchParams({
     employmentRole: "teacher",
     limit: String(PAGE_SIZE),
     offset: String(page * PAGE_SIZE)
   });
   if (search.trim()) params.set("search", search.trim());
+  if (status) params.set("status", status);
+  if (gradeId) params.set("eligibleGradeId", gradeId);
   return `/tenants/${tenant}/hr/staff/overview?${params.toString()}`;
 };
+
+function gradeShortLabel(name: string) {
+  const match = name.match(/\bG?\d{1,2}\b/i);
+  if (match) {
+    const digits = match[0].replace(/^G/i, "");
+    return `G${digits}`;
+  }
+  return name.length > 8 ? name.slice(0, 8) : name;
+}
 
 export function TeachersDirectory() {
   const t = useTranslations("teachers");
@@ -50,21 +83,34 @@ export function TeachersDirectory() {
   const permissions = getSession()?.permissions;
   const canManageHr = hasAnyPermission(permissions, ["hr.manage"]);
   const canView = canManageHr || hasAnyPermission(permissions, ["classroom.manage"]);
+  const { createOpen, setCreateOpen } = useTeachersActions();
 
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [gradeFilter, setGradeFilter] = useState("");
   const [page, setPage] = useState(0);
-  const [createOpen, setCreateOpen] = useState(false);
 
   useEffect(() => {
     setPage(0);
-  }, [search]);
+  }, [search, statusFilter, gradeFilter]);
 
   const queryPath = useMemo(
-    () => (tenant: string) => teachersPath(tenant, page, search),
-    [page, search]
+    () => (tenant: string) => teachersPath(tenant, page, search, statusFilter, gradeFilter),
+    [page, search, statusFilter, gradeFilter]
   );
 
   const teachers = useApiQuery<StaffOverviewPage>(canView ? queryPath : () => null);
+  const grades = useApiQuery<GradeOption[]>((tenant) =>
+    canView ? `/tenants/${tenant}/academics/grades` : null
+  );
+
+  const gradeNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const grade of grades.data ?? []) {
+      map.set(grade.id, grade.name);
+    }
+    return map;
+  }, [grades.data]);
 
   const columns: ColumnDef<TeacherOverview, unknown>[] = [
     {
@@ -75,25 +121,37 @@ export function TeachersDirectory() {
       )
     },
     {
-      id: "role",
-      header: t("role"),
-      cell: () => <Badge tone="neutral">{t("teacherRole")}</Badge>
+      id: "grades",
+      header: t("gradesColumn"),
+      accessorFn: (row) => row.teacherProfile?.eligibleGradeIds?.join(",") ?? "",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const gradeIds = row.original.teacherProfile?.eligibleGradeIds ?? [];
+        if (gradeIds.length === 0) {
+          return <span className="pds-type-body-s-regular muted">—</span>;
+        }
+
+        return (
+          <ChipGroup>
+            {gradeIds.map((gradeId) => (
+              <Chip key={gradeId}>{gradeShortLabel(gradeNameById.get(gradeId) ?? gradeId)}</Chip>
+            ))}
+          </ChipGroup>
+        );
+      }
     },
     {
-      id: "assignments",
-      header: c("subjectGrade"),
-      accessorFn: (row) =>
-        [
-          row.department,
-          [
-            row.homeroomCount > 0 ? t("homeroomCount", { count: row.homeroomCount }) : null,
-            row.subjectCount > 0 ? t("subjectCount", { count: row.subjectCount }) : null
-          ]
-            .filter(Boolean)
-            .join(" · ")
-        ]
-          .filter(Boolean)
-          .join(" · ") || "—"
+      id: "classrooms",
+      header: t("teachingClassrooms"),
+      accessorKey: "classroomCount",
+      cell: ({ row }) =>
+        row.original.classroomCount > 0 ? String(row.original.classroomCount) : "—"
+    },
+    {
+      id: "subjects",
+      header: t("teachingSubjects"),
+      accessorKey: "subjectCount",
+      cell: ({ row }) => (row.original.subjectCount > 0 ? String(row.original.subjectCount) : "—")
     },
     {
       id: "status",
@@ -109,22 +167,55 @@ export function TeachersDirectory() {
 
   return (
     <>
+      <TeachersExportPortal
+        search={search}
+        statusFilter={statusFilter}
+        gradeFilter={gradeFilter}
+        gradeNameById={gradeNameById}
+        loading={teachers.isLoading}
+        canView={canView}
+      />
       <DataTableSection>
-        <TablePanelHead
-          title={t("listTitle")}
-          help={t("listHelp")}
-          onRefresh={() => void teachers.refetch()}
-          onAdd={canManageHr ? () => setCreateOpen(true) : undefined}
-          addLabel={t("addTeacher")}
-          extra={
-            <TableSearchInput
-              placeholder={t("search")}
-              value={search}
-              aria-label={t("search")}
-              onChange={(event) => setSearch(event.target.value)}
-            />
+        <PdsSearchFiltersRow
+          filters={
+            <>
+              <PdsSearchBar
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder={t("search")}
+                aria-label={t("search")}
+              />
+              <div className="pds-search-filters-row__filter--160">
+                <PdsSelectField
+                  variant="filter"
+                  value={gradeFilter}
+                  onValueChange={(value) => setGradeFilter(typeof value === "string" ? value : "")}
+                  placeholder={t("allGrades")}
+                  options={(grades.data ?? []).map((grade) => ({
+                    value: grade.id,
+                    label: grade.name
+                  }))}
+                />
+              </div>
+              <div className="pds-search-filters-row__filter--160">
+                <PdsSelectField
+                  variant="filter"
+                  value={statusFilter}
+                  onValueChange={(value) => setStatusFilter(typeof value === "string" ? value : "")}
+                  placeholder={t("allStatuses")}
+                  options={[
+                    { value: "active", label: t("statusActive") },
+                    { value: "probation", label: t("statusProbation") },
+                    { value: "resigned", label: t("statusResigned") },
+                    { value: "terminated", label: t("statusTerminated") },
+                    { value: "archived", label: t("statusArchived") }
+                  ]}
+                />
+              </div>
+            </>
           }
         />
+
         <TablePanelBody
           loading={teachers.isLoading}
           error={teachers.isError ? c("somethingWrong") : null}
@@ -152,5 +243,80 @@ export function TeachersDirectory() {
         onCreated={() => void teachers.refetch()}
       />
     </>
+  );
+}
+
+function TeachersExportPortal({
+  search,
+  statusFilter,
+  gradeFilter,
+  gradeNameById,
+  loading,
+  canView
+}: {
+  search: string;
+  statusFilter: string;
+  gradeFilter: string;
+  gradeNameById: Map<string, string>;
+  loading: boolean;
+  canView: boolean;
+}) {
+  const t = useTranslations("teachers");
+  const c = useTranslations("common");
+  const target = useDashPageTitleActionsTarget();
+
+  if (!target || !canView) {
+    return null;
+  }
+
+  return createPortal(
+    <ExportCsvButton
+      disabled={loading}
+      onExport={async () => {
+        const tenantId = getSession()?.tenantId;
+        if (!tenantId) {
+          throw new Error(c("notSignedIn"));
+        }
+        const rows = await fetchAllPaginated<TeacherOverview>(
+          (limit, offset) => {
+            const params = new URLSearchParams({
+              employmentRole: "teacher",
+              limit: String(limit),
+              offset: String(offset)
+            });
+            if (search.trim()) params.set("search", search.trim());
+            if (statusFilter) params.set("status", statusFilter);
+            if (gradeFilter) params.set("eligibleGradeId", gradeFilter);
+            return `/tenants/${tenantId}/hr/staff/overview?${params.toString()}`;
+          },
+          (json) => {
+            const payload = json as StaffOverviewPage;
+            return { rows: payload.data, total: payload.total };
+          }
+        );
+        return {
+          filename: "teachers.csv",
+          columns: [
+            { key: "name", header: c("staffMember") },
+            { key: "email", header: t("email") },
+            { key: "grades", header: t("gradesColumn") },
+            { key: "classrooms", header: t("teachingClassrooms") },
+            { key: "subjects", header: t("teachingSubjects") },
+            { key: "status", header: c("status") }
+          ],
+          rows: rows.map((row) => ({
+            name: row.fullName,
+            email: row.email ?? "",
+            grades: (row.teacherProfile?.eligibleGradeIds ?? [])
+              .map((id) => gradeNameById.get(id) ?? id)
+              .join(", "),
+            classrooms: row.classroomCount > 0 ? row.classroomCount : "",
+            subjects: row.subjectCount > 0 ? row.subjectCount : "",
+            status: row.status
+          }))
+        };
+      }}
+    />,
+    target
   );
 }

@@ -13,6 +13,7 @@ import { SelectionCard, SelectionCardGrid } from "../../../../components/shared/
 import { Stepper } from "../../../../components/shared/stepper";
 import { Toggle } from "../../../../components/shared/toggle";
 import { EmptyState } from "../../../../components/shared/empty-state";
+import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { Icon } from "../../../lib/material-icon";
 import { hasAnyPermission } from "../../../lib/permissions";
@@ -68,6 +69,7 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<DiscountRuleFormValues>(emptyDiscountForm());
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof DiscountRuleFormValues, string>>>({});
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const rules = useApiQuery<DiscountRuleRecord[]>(canManage ? RULES_PATH : () => null);
   const feeItems = useApiQuery<FeeItemOption[]>((tenant) => `/tenants/${tenant}/finance/fee-items`);
@@ -97,6 +99,14 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
     ({ id, ...body }, tenant) => ({
       path: `${RULES_PATH(tenant)}/${id}`,
       init: { method: "PATCH", body: JSON.stringify(body) }
+    }),
+    { invalidatePaths: (_b, tenant) => [RULES_PATH(tenant)] }
+  );
+
+  const deactivateRule = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({
+      path: `${RULES_PATH(tenant)}/${id}/archive`,
+      init: { method: "POST" }
     }),
     { invalidatePaths: (_b, tenant) => [RULES_PATH(tenant)] }
   );
@@ -692,10 +702,22 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
             ) : null}
 
             <footer className="discount-setup-footer">
-              <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={goBack}>
-                <Icon name="arrow_back" />
-                {step === 0 ? c("cancel") : c("previous")}
-              </button>
+              <div className="discount-setup-footer__start">
+                <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={goBack}>
+                  <Icon name="arrow_back" />
+                  {step === 0 ? c("cancel") : c("previous")}
+                </button>
+                {mode === "edit" && editingRule && editingRule.status === "active" && canManage ? (
+                  <button
+                    type="button"
+                    className="pds-type-body-m-bold btn-ghost discount-setup-footer__delete"
+                    onClick={() => setDeleteOpen(true)}
+                  >
+                    <Icon name="delete" />
+                    {c("delete")}
+                  </button>
+                ) : null}
+              </div>
               <span className="pds-type-body-m-medium discount-setup-footer__meta">
                 {t("setupStepMeta", {
                   current: step + 1,
@@ -719,6 +741,22 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
 
         <DiscountLivePreview form={form} sample={previewSample} feeTypesByItemId={feeTypesByItemId} />
       </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title={t("deleteDiscountTitle")}
+        description={t("deleteDiscountHelp", { name: editingRule?.name ?? "" })}
+        confirmLabel={c("delete")}
+        destructive
+        loading={deactivateRule.isPending}
+        onConfirm={async () => {
+          if (!editingRule) return;
+          await deactivateRule.mutateAsync({ id: editingRule.id });
+          setDeleteOpen(false);
+          router.push("/dashboard/finance/discounts");
+        }}
+      />
     </div>
   );
 }

@@ -8,13 +8,17 @@ import {
 } from "@sms/shared";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Badge } from "../../../../components/shared/badge";
 import { Toggle } from "../../../../components/shared/toggle";
 import { EmptyState } from "../../../../components/shared/empty-state";
 import { Button } from "../../../../components/ui/button";
+import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
+import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
 import { StatCard, StatGrid } from "../../../../components/shared/stat-card";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
+import { isPadaukRowInteractiveTarget } from "../../../lib/table-row-interaction";
 import { Icon } from "../../../lib/material-icon";
 import { hasAnyPermission } from "../../../lib/permissions";
 import { getSession } from "../../../lib/session";
@@ -106,6 +110,7 @@ function valueTypeBadge(rule: DiscountRuleRecord, t: (key: string) => string) {
 }
 
 export function DiscountsWorkspace() {
+  const router = useRouter();
   const t = useTranslations("discounts");
   const nav = useTranslations("nav");
   const c = useTranslations("common");
@@ -113,6 +118,7 @@ export function DiscountsWorkspace() {
   const canView = hasAnyPermission(permissions, ["discount.request", "discount.approve"]);
   const canManage = hasAnyPermission(permissions, ["discount.approve"]);
   const [view, setView] = useState<"rules" | "requests">("rules");
+  const [deletingRule, setDeletingRule] = useState<DiscountRuleRecord | null>(null);
 
   const currentYear = useCurrentAcademicYear();
   const academicYearId = currentYear.data?.id ?? "";
@@ -177,7 +183,25 @@ export function DiscountsWorkspace() {
     const isEnabled = rule.status === "active";
 
     return (
-      <tr key={rule.id} className={isEnabled ? undefined : "discount-table__row--inactive"}>
+      <tr
+        key={rule.id}
+        className={[
+          isEnabled ? undefined : "discount-table__row--inactive",
+          "table-row--clickable"
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        tabIndex={0}
+        onClick={(event) => {
+          if (isPadaukRowInteractiveTarget(event.target)) return;
+          router.push(`/dashboard/finance/discounts/${rule.id}`);
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          router.push(`/dashboard/finance/discounts/${rule.id}`);
+        }}
+      >
         <td>
           <div className="discount-table__discount">
             <span className={`discount-table__icon discount-table__icon--${iconTone}`} aria-hidden>
@@ -212,10 +236,30 @@ export function DiscountsWorkspace() {
         </td>
         <td className="padauk-table__actions">
           {canManage ? (
-            <Link href={`/dashboard/finance/discounts/${rule.id}`} className="discount-table__configure">
-              {t("configure")}
-              <Icon name="tune" size={16} />
-            </Link>
+            <RowMoreActionsMenu
+              ariaLabel={c("moreActions")}
+              items={[
+                {
+                  id: "view",
+                  label: c("view"),
+                  icon: "visibility",
+                  onSelect: () => router.push(`/dashboard/finance/discounts/${rule.id}`)
+                },
+                {
+                  id: "edit",
+                  label: c("edit"),
+                  icon: "edit",
+                  onSelect: () => router.push(`/dashboard/finance/discounts/${rule.id}`)
+                },
+                {
+                  id: "delete",
+                  label: c("delete"),
+                  icon: "delete",
+                  destructive: true,
+                  onSelect: () => setDeletingRule(rule)
+                }
+              ]}
+            />
           ) : null}
         </td>
       </tr>
@@ -280,34 +324,7 @@ export function DiscountsWorkspace() {
         </div>
       ) : null}
 
-      {canView ? (
-        <nav className="fees-view-toggle" aria-label={t("viewToggleLabel")}>
-          <button
-            type="button"
-            className={
-              view === "rules"
-                ? "fees-view-toggle__link fees-view-toggle__link--active"
-                : "fees-view-toggle__link"
-            }
-            aria-current={view === "rules" ? "page" : undefined}
-            onClick={() => setView("rules")}
-          >
-            {t("viewRules")}
-          </button>
-          <button
-            type="button"
-            className={
-              view === "requests"
-                ? "fees-view-toggle__link fees-view-toggle__link--active"
-                : "fees-view-toggle__link"
-            }
-            aria-current={view === "requests" ? "page" : undefined}
-            onClick={() => setView("requests")}
-          >
-            {t("viewRequests")}
-          </button>
-        </nav>
-      ) : null}
+      
 
       {view === "requests" && canView ? <DiscountRequestsPanel /> : null}
 
@@ -377,6 +394,23 @@ export function DiscountsWorkspace() {
       {view === "rules" ? GROUP_ORDER.map((group) => renderGroup(group, groupedRules[group])) : null}
 
       {view === "rules" ? <p className="discounts-config-footnote">{t("infoCallout")}</p> : null}
+
+      <ConfirmDialog
+        open={deletingRule !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeletingRule(null);
+        }}
+        title={t("deleteDiscountTitle")}
+        description={t("deleteDiscountHelp", { name: deletingRule?.name ?? "" })}
+        confirmLabel={c("delete")}
+        destructive
+        loading={deactivateRule.isPending}
+        onConfirm={async () => {
+          if (!deletingRule) return;
+          await deactivateRule.mutateAsync({ id: deletingRule.id });
+          setDeletingRule(null);
+        }}
+      />
     </div>
   );
 }

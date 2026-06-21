@@ -133,6 +133,22 @@ export class ListStudentServicesQueryDto {
   declare studentId?: string;
 }
 
+export class ListAvailableStudentServicesQueryDto {
+  @IsUUID()
+  declare studentId: string;
+}
+
+export class PreviewAddStudentServiceDto {
+  @IsUUID()
+  declare studentId: string;
+
+  @IsUUID()
+  declare feeItemId: string;
+
+  @IsString()
+  declare effectiveFrom: string;
+}
+
 export class CreateStudentServiceDto {
   @IsUUID()
   declare studentId: string;
@@ -146,4 +162,8 @@ export class CreateStudentServiceDto {
   @IsOptional()
   @IsString()
   declare endDate?: string;
+
+  @IsOptional()
+  @IsString()
+  declare dueDate?: string;
 }

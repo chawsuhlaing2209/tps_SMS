@@ -188,6 +188,32 @@ export function draftToTeachingSetup(
   };
 }
 
+export function homeroomConflicts(
+  draft: TeachingSetupDraft,
+  options: TeachingSetupOptions | undefined,
+  currentStaffId: string | undefined
+): { classroomId: string; classroomName: string }[] {
+  const homeroomRow = draft.classroomRows.find((row) => row.homeroom && row.classroomId);
+  if (!homeroomRow?.classroomId || !options) {
+    return [];
+  }
+
+  const classroom = options.classrooms.find((row) => row.id === homeroomRow.classroomId);
+  if (
+    !classroom?.classTeacherStaffId ||
+    classroom.classTeacherStaffId === currentStaffId
+  ) {
+    return [];
+  }
+
+  return [
+    {
+      classroomId: classroom.id,
+      classroomName: classroom.name
+    }
+  ];
+}
+
 export function chiefConflicts(
   draft: TeachingSetupDraft,
   options: TeachingSetupOptions | undefined,
@@ -289,6 +315,9 @@ export function TeacherTeachingSetupFields({
   };
 
   const conflicts = chiefConflicts(draft, options, currentStaffId);
+  const homeroomConflictRows = homeroomConflicts(draft, options, currentStaffId);
+
+  const selectSingleId = (ids: string[]) => (ids.length <= 1 ? ids : [ids[ids.length - 1]!]);
 
   return (
     <div className="assign-step teaching-setup">
@@ -381,8 +410,10 @@ export function TeacherTeachingSetupFields({
                       showDescription={false}
                       label={t("homeroomColumn")}
                       onCheckedChange={(checked) => {
-                        const nextRows = [...draft.classroomRows];
-                        nextRows[index] = { ...row, homeroom: checked };
+                        const nextRows = draft.classroomRows.map((item, rowIndex) => ({
+                          ...item,
+                          homeroom: checked && rowIndex === index
+                        }));
                         onChange({ ...draft, classroomRows: nextRows });
                       }}
                       className="pds-type-body-s-regular teaching-setup__homeroom"
@@ -423,6 +454,12 @@ export function TeacherTeachingSetupFields({
                 ))}
               </div>
             )}
+            {homeroomConflictRows.map((conflict) => (
+              <p key={conflict.classroomId} className="pds-type-body-s-regular assign-warning" role="alert">
+                <Icon name="warning" size={16} />
+                {t("homeroomConflictWarning", { classroom: conflict.classroomName })}
+              </p>
+            ))}
           </section>
 
           <section className="assign-block">
@@ -448,7 +485,7 @@ export function TeacherTeachingSetupFields({
                 <CheckboxList
                   options={eligibleGrades.map((grade) => ({ id: grade.id, label: grade.name }))}
                   selectedIds={draft.chiefGradeIds}
-                  onChange={(ids) => onChange({ ...draft, chiefGradeIds: ids })}
+                  onChange={(ids) => onChange({ ...draft, chiefGradeIds: selectSingleId(ids) })}
                 />
                 {conflicts.map((conflict) => (
                   <p key={conflict.gradeId} className="pds-type-body-s-regular assign-warning" role="alert">

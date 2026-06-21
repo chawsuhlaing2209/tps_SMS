@@ -1,9 +1,11 @@
 "use client";
 
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import * as Tooltip from "@radix-ui/react-tooltip";
 import { useTranslations } from "next-intl";
 import { Icon } from "../lib/material-icon";
-import { LanguageSwitcher } from "../lib/language-switcher";
+import { roleDisplayFor } from "@sms/shared";
+import { localizedRoleLabel } from "../lib/role-label";
 
 function initialsFrom(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -16,43 +18,65 @@ function initialsFrom(name: string): string {
   return `${parts[0]!.charAt(0)}${parts[parts.length - 1]!.charAt(0)}`.toUpperCase();
 }
 
-function humanizeRole(roles: string[] | undefined, fallback: string): string {
-  const first = roles?.[0];
-  if (!first) {
-    return fallback;
-  }
-  return first
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/\b\w/g, (ch) => ch.toUpperCase());
-}
-
 export function SidebarUserCard({
   displayName,
   roles,
+  collapsed = false,
   onSignOut
 }: {
   displayName: string;
   roles?: string[];
+  collapsed?: boolean;
   onSignOut: () => void;
 }) {
   const t = useTranslations("nav");
-  const roleLabel = humanizeRole(roles, t("signedIn"));
+  const tNames = useTranslations("settings.roles.names");
+  const roleKey = roles?.[0];
+  const roleLabel = roleKey
+    ? localizedRoleLabel(roleDisplayFor(roleKey), tNames)
+    : t("signedIn");
+
+  const trigger = (
+    <button
+      type="button"
+      className={collapsed ? "dash-user-card dash-user-card--collapsed" : "dash-user-card"}
+      aria-label={t("accountMenu")}
+    >
+      <span className="pds-type-body-m-medium dash-user-card__avatar">{initialsFrom(displayName)}</span>
+      {!collapsed ? (
+        <>
+          <span className="dash-user-card__meta">
+            <span className="pds-type-body-m-medium dash-user-card__name">{displayName}</span>
+            <span className="dash-user-card__role">{roleLabel}</span>
+          </span>
+          <Icon name="unfold_more" size={18} className="dash-user-card__chevron" />
+        </>
+      ) : null}
+    </button>
+  );
 
   return (
-    <div className="dash-user-card-wrap">
+    <div className={collapsed ? "dash-user-card-wrap dash-user-card-wrap--collapsed" : "dash-user-card-wrap"}>
       <DropdownMenu.Root>
-        <DropdownMenu.Trigger asChild>
-          <button type="button" className="dash-user-card" aria-label={t("accountMenu")}>
-            <span className="pds-type-body-m-medium dash-user-card__avatar">{initialsFrom(displayName)}</span>
-            <span className="dash-user-card__meta">
-              <span className="pds-type-body-m-medium dash-user-card__name">{displayName}</span>
-              <span className="dash-user-card__role">{roleLabel}</span>
-            </span>
-            <Icon name="unfold_more" size={18} className="dash-user-card__chevron" />
-          </button>
-        </DropdownMenu.Trigger>
+        {collapsed ? (
+          <Tooltip.Root delayDuration={200}>
+            <Tooltip.Trigger asChild>
+              <DropdownMenu.Trigger asChild>{trigger}</DropdownMenu.Trigger>
+            </Tooltip.Trigger>
+            <Tooltip.Portal>
+              <Tooltip.Content
+                className="dash-nav-tooltip"
+                side="right"
+                sideOffset={8}
+                collisionPadding={12}
+              >
+                {displayName}
+              </Tooltip.Content>
+            </Tooltip.Portal>
+          </Tooltip.Root>
+        ) : (
+          <DropdownMenu.Trigger asChild>{trigger}</DropdownMenu.Trigger>
+        )}
         <DropdownMenu.Portal>
           <DropdownMenu.Content
             className="dash-user-menu"
@@ -60,14 +84,6 @@ export function SidebarUserCard({
             align="start"
             sideOffset={8}
           >
-            <div className="dash-user-menu__section">
-              <span className="dash-user-menu__label">
-                <Icon name="language" size={16} />
-                {t("language")}
-              </span>
-              <LanguageSwitcher />
-            </div>
-            <DropdownMenu.Separator className="dash-user-menu__sep" />
             <DropdownMenu.Item
               className="pds-type-body-m-medium dash-user-menu__item"
               onSelect={(event) => {

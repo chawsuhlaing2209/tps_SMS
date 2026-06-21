@@ -3,22 +3,37 @@ import { FormInput } from "../../../../components/shared/form-input";
 
 import { useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
+import { isPadaukRowInteractiveTarget } from "../../../lib/table-row-interaction";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { CheckboxList, PdsSelectField } from "../../../../components/pds";
+import { CheckboxList, PdsSearchFiltersRow, PdsSelectField } from "../../../../components/pds";
+import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
+import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
 import { EmptyState } from "../../../../components/shared/empty-state";
+import { StatusBadge } from "../../../../components/shared/badge";
+import { ArchiveVisibilityFilter } from "../../../../components/shared/archive-visibility-filter";
 import { useApiMutation, useReferenceApiQuery } from "../../../lib/api";
+import {
+  filterByArchiveVisibility,
+  isArchivedRecord,
+  type ArchiveVisibility
+} from "../../../lib/archive-filter";
+import { hasAnyPermission } from "../../../lib/permissions";
+import { getSession } from "../../../lib/session";
 import { Field } from "../../../lib/form";
 import { Icon } from "../../../lib/material-icon";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { zodResolver } from "../../../lib/zod-resolver";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
+import { toastSuccess } from "../../../lib/toast";
+import { cn } from "../../../../lib/utils";
 import { PageHeader } from "../../page-header-context";
 import { gradeStreamLabel } from "../grade-label";
 import {
   ClassroomFormSheet,
-  type ClassroomFormValues
+  type ClassroomFormValues,
+  type FacilityRoomOption
 } from "../../structure/classroom-form-sheet";
 import { roomLetter, subjectColor, subjectIcon } from "../../structure/subject-colors";
 import { useAcademicYearContext } from "../use-academic-year-context";
@@ -42,6 +57,7 @@ type ClassroomOverview = {
   name: string;
   room: string | null;
   capacity: number | null;
+  facilityRoomId: string | null;
   studentCount: number;
   classTeacherName: string | null;
   classTeacherStaffId: string | null;
@@ -56,7 +72,7 @@ type GradeFormValues = {
   subjectIds: string[];
   gradeChiefStaffId: string;
   roomName: string;
-  roomCapacity: string;
+  facilityRoomId: string;
 };
 
 type GradeFormMode = { type: "create" } | { type: "edit"; grade: GradeOverview };
@@ -90,6 +106,8 @@ export default function GradesClassroomsPage() {
   const setup = useTranslations("academicSetup");
   const nav = useTranslations("nav");
   const c = useTranslations("common");
+  const permissions = getSession()?.permissions;
+  const canManage = hasAnyPermission(permissions, ["classroom.manage", "academic_setup.manage"]);
   const router = useRouter();
   const searchParams = useSearchParams();
   const requiredMessage = c("required");
@@ -99,41 +117,62 @@ export default function GradesClassroomsPage() {
   const [selectedGradeId, setSelectedGradeId] = useState<string | null>(null);
   const [gradeFormMode, setGradeFormMode] = useState<GradeFormMode | null>(null);
   const [roomFormMode, setRoomFormMode] = useState<RoomFormMode | null>(null);
+  const [deletingGrade, setDeletingGrade] = useState<GradeOverview | null>(null);
+  const [deletingRoom, setDeletingRoom] = useState<ClassroomOverview | null>(null);
+  const [archiveVisibility, setArchiveVisibility] = useState<ArchiveVisibility>("active");
 
   const grades = useReferenceApiQuery<GradeOverview[]>((tn) =>
     contextYearId ? setupGradesPath(tn, contextYearId) : null
   );
   const subjects = useReferenceApiQuery<Subject[]>((tn) => `/tenants/${tn}/academics/subjects`);
-  const teachers = useReferenceApiQuery<{ data: StaffMember[] }>(
-    (tn) => `/tenants/${tn}/hr/staff?employmentRole=teacher&limit=200`
+  const homeroomIncludeStaffId =
+    roomFormMode?.type === "edit" ? roomFormMode.room.classTeacherStaffId ?? undefined : undefined;
+
+  const teachers = useReferenceApiQuery<{ data: StaffMember[] }>((tn) => {
+    if (!selectedGradeId) {
+      return null;
+    }
+    const params = new URLSearchParams({
+      employmentRole: "teacher",
+      eligibleGradeId: selectedGradeId,
+      limit: "200"
+    });
+    if (homeroomIncludeStaffId) {
+      params.set("includeStaffId", homeroomIncludeStaffId);
+    }
+    return `/tenants/${tn}/hr/staff?${params.toString()}`;
+  });
+  const facilityRooms = useReferenceApiQuery<FacilityRoomOption[]>((tn) =>
+    `/tenants/${tn}/facility-rooms/active`
   );
 
-  const activeGrades = useMemo(
-    () => (grades.data ?? []).filter((grade) => grade.status !== "archived"),
-    [grades.data]
+  const visibleGrades = useMemo(
+    () => filterByArchiveVisibility(grades.data ?? [], archiveVisibility),
+    [grades.data, archiveVisibility]
   );
 
   useEffect(() => {
-    if (!activeGrades.length) {
+    if (!visibleGrades.length) {
       setSelectedGradeId(null);
       return;
     }
     const fromUrl = searchParams.get("grade");
-    if (fromUrl && activeGrades.some((g) => g.id === fromUrl)) {
+    if (fromUrl && visibleGrades.some((g) => g.id === fromUrl)) {
       setSelectedGradeId(fromUrl);
       return;
     }
-    if (!selectedGradeId || !activeGrades.some((g) => g.id === selectedGradeId)) {
-      setSelectedGradeId(activeGrades[0]!.id);
+    if (!selectedGradeId || !visibleGrades.some((g) => g.id === selectedGradeId)) {
+      setSelectedGradeId(visibleGrades[0]!.id);
     }
-  }, [activeGrades, searchParams, selectedGradeId]);
+  }, [visibleGrades, searchParams, selectedGradeId]);
 
   const selectGrade = (gradeId: string) => {
     setSelectedGradeId(gradeId);
     router.replace(`/dashboard/academic-setup/grades-classrooms?grade=${gradeId}`);
   };
 
-  const selectedGrade = activeGrades.find((g) => g.id === selectedGradeId) ?? null;
+  const selectedGrade = visibleGrades.find((g) => g.id === selectedGradeId) ?? null;
+  const selectedGradeArchived = selectedGrade ? isArchivedRecord(selectedGrade.status) : false;
 
   const classrooms = useReferenceApiQuery<ClassroomOverview[]>(
     (tn) =>
@@ -196,6 +235,54 @@ export default function GradesClassroomsPage() {
     }
   );
 
+  const archiveGrade = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({
+      path: `${GRADES_PATH(tenant)}/${id}/archive`,
+      init: { method: "POST" }
+    }),
+    {
+      invalidatePaths: (_b, tenant) =>
+        contextYearId ? invalidatePaths(tenant, contextYearId) : [GRADES_PATH(tenant)]
+    }
+  );
+
+  const archiveRoom = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({
+      path: `${CLASSROOMS_PATH(tenant)}/${id}/archive`,
+      init: { method: "POST" }
+    }),
+    {
+      invalidatePaths: (_b, tenant) =>
+        contextYearId && selectedGradeId
+          ? invalidatePaths(tenant, contextYearId, selectedGradeId)
+          : []
+    }
+  );
+
+  const reactivateGrade = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({
+      path: `${GRADES_PATH(tenant)}/${id}/reactivate`,
+      init: { method: "POST" }
+    }),
+    {
+      invalidatePaths: (_b, tenant) =>
+        contextYearId ? invalidatePaths(tenant, contextYearId) : [GRADES_PATH(tenant)]
+    }
+  );
+
+  const reactivateRoom = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({
+      path: `${CLASSROOMS_PATH(tenant)}/${id}/reactivate`,
+      init: { method: "POST" }
+    }),
+    {
+      invalidatePaths: (_b, tenant) =>
+        contextYearId && selectedGradeId
+          ? invalidatePaths(tenant, contextYearId, selectedGradeId)
+          : []
+    }
+  );
+
   const gradeSchema = useMemo(
     () =>
       z.object({
@@ -205,7 +292,7 @@ export default function GradesClassroomsPage() {
         subjectIds: z.array(z.string()),
         gradeChiefStaffId: z.string(),
         roomName: z.string(),
-        roomCapacity: z.string()
+        facilityRoomId: z.string()
       }),
     [requiredMessage]
   );
@@ -217,7 +304,7 @@ export default function GradesClassroomsPage() {
     subjectIds: [],
     gradeChiefStaffId: "",
     roomName: "",
-    roomCapacity: ""
+    facilityRoomId: ""
   };
 
   const gradeForm = useForm<GradeFormValues>({
@@ -227,7 +314,10 @@ export default function GradesClassroomsPage() {
 
   const activeSubjects = subjects.data?.filter((s) => s.status !== "archived") ?? [];
   const selectedSubjectIds = gradeForm.watch("subjectIds");
-  const activeRooms = (classrooms.data ?? []).filter((r) => r.status !== "archived");
+  const visibleRooms = useMemo(
+    () => filterByArchiveVisibility(classrooms.data ?? [], archiveVisibility),
+    [classrooms.data, archiveVisibility]
+  );
 
   const openCreateGrade = () => {
     gradeForm.reset(gradeDefaultValues);
@@ -243,7 +333,7 @@ export default function GradesClassroomsPage() {
       subjectIds: selectedGrade.subjects.map((s) => s.id),
       gradeChiefStaffId: selectedGrade.gradeChiefStaffId ?? "",
       roomName: "",
-      roomCapacity: ""
+      facilityRoomId: ""
     });
     setGradeFormMode({ type: "edit", grade: selectedGrade });
   };
@@ -269,7 +359,7 @@ export default function GradesClassroomsPage() {
           name: values.roomName.trim(),
           academicYearId: contextYearId,
           gradeId,
-          capacity: values.roomCapacity ? Number(values.roomCapacity) : undefined
+          facilityRoomId: values.facilityRoomId || undefined
         });
       }
       selectGrade(gradeId);
@@ -287,8 +377,7 @@ export default function GradesClassroomsPage() {
       await updateRoom.mutateAsync({
         id: roomFormMode.room.id,
         name: values.name,
-        room: values.room || null,
-        capacity: values.capacity ? Number(values.capacity) : null,
+        facilityRoomId: values.facilityRoomId || null,
         classTeacherStaffId: values.classTeacherStaffId || null
       });
     } else {
@@ -296,8 +385,7 @@ export default function GradesClassroomsPage() {
         name: values.name,
         academicYearId: contextYearId,
         gradeId: selectedGradeId,
-        room: values.room || undefined,
-        capacity: values.capacity ? Number(values.capacity) : undefined,
+        facilityRoomId: values.facilityRoomId || undefined,
         classTeacherStaffId: values.classTeacherStaffId || undefined
       });
     }
@@ -332,36 +420,110 @@ export default function GradesClassroomsPage() {
         ]}
       />
 
-      <section className="module-strip module-strip--stack setup-grade-selector">
-        <p className="pds-type-label-s-medium module-strip__label">{setup("selectGradeLevel")}</p>
-        <div className="setup-grade-rail" aria-label={setup("selectGradeLevel")}>
-          {activeGrades.map((grade) => {
-            const active = grade.id === selectedGradeId;
-            return (
-              <button
-                key={grade.id}
-                type="button"
-                className={active ? "pds-type-body-s-semibold setup-grade-chip setup-grade-chip--active" : "pds-type-body-s-semibold setup-grade-chip"}
-                onClick={() => selectGrade(grade.id)}
-              >
-                {grade.name}
+      <section className="setup-grade-selector">
+        <div className="setup-grade-selector__head">
+          <p className="pds-type-label-s-medium setup-grade-selector__label">{setup("selectGradeLevel")}</p>
+          <ArchiveVisibilityFilter value={archiveVisibility} onChange={setArchiveVisibility} />
+        </div>
+        <div className="setup-grade-row">
+          <div className="setup-grade-scroll">
+            <div className="setup-grade-rail" aria-label={setup("selectGradeLevel")}>
+              {visibleGrades.map((grade) => {
+                const active = grade.id === selectedGradeId;
+                const archived = isArchivedRecord(grade.status);
+                return (
+                  <button
+                    key={grade.id}
+                    type="button"
+                    className={cn(
+                      "pds-type-body-s-semibold setup-grade-chip",
+                      active && "setup-grade-chip--active",
+                      archived && "setup-grade-chip--archived"
+                    )}
+                    onClick={() => selectGrade(grade.id)}
+                  >
+                    {grade.name}
+                    {archived ? (
+                      <StatusBadge
+                        status="archived"
+                        label={c("archivedBadge")}
+                        className="setup-grade-chip__badge"
+                      />
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {canManage && archiveVisibility !== "archived" ? (
+            <div className="setup-grade-add-wrap">
+              <button type="button" className="pds-type-body-s-semibold setup-grade-add" onClick={openCreateGrade}>
+                <Icon name="add" />
+                {setup("newGrade")}
               </button>
-            );
-          })}
-          <button type="button" className="pds-type-body-s-semibold setup-grade-add" onClick={openCreateGrade}>
-            <Icon name="add" />
-            {setup("newGrade")}
-          </button>
+            </div>
+          ) : null}
         </div>
       </section>
 
-      {!selectedGrade ? (
+      {!visibleGrades.length ? (
+        <EmptyState
+          compact
+          embedded
+          icon="school"
+          title={
+            archiveVisibility === "archived" ? t("archivedGradesEmpty") : t("structureNoGrades")
+          }
+        />
+      ) : !selectedGrade ? (
         <EmptyState compact embedded icon="school" title={t("structureNoGrades")} />
       ) : (
         <div className="setup-grade-layout">
           <aside className="setup-grade-sidebar">
             <div className="pds-type-title-xl-extrabold setup-grade-summary">
-              <h3 className="pds-type-title-xxs-extrabold">{selectedGrade.name}</h3>
+              <div className="setup-grade-summary__head">
+                <div className="setup-grade-summary__title-row">
+                  <h3 className="pds-type-title-xxs-extrabold">{selectedGrade.name}</h3>
+                  {selectedGradeArchived ? (
+                    <StatusBadge status="archived" label={c("archivedBadge")} />
+                  ) : null}
+                </div>
+                {canManage ? (
+                  <RowMoreActionsMenu
+                    ariaLabel={c("moreActions")}
+                    tone="inverse"
+                    items={
+                      selectedGradeArchived
+                        ? [
+                            {
+                              id: "reactivate",
+                              label: c("reactivate"),
+                              icon: "unarchive",
+                              onSelect: async () => {
+                                await reactivateGrade.mutateAsync({ id: selectedGrade.id });
+                                toastSuccess(t("gradeReactivated"));
+                              }
+                            }
+                          ]
+                        : [
+                            {
+                              id: "edit",
+                              label: c("edit"),
+                              icon: "edit",
+                              onSelect: openEditGrade
+                            },
+                            {
+                              id: "archive",
+                              label: c("archive"),
+                              icon: "inventory_2",
+                              destructive: true,
+                              onSelect: () => setDeletingGrade(selectedGrade)
+                            }
+                          ]
+                    }
+                  />
+                ) : null}
+              </div>
               {/* {stream ? <p className="pds-type-body-m-medium setup-grade-summary__stream">{stream}</p> : null} */}
               <div className="setup-grade-summary__chief">
                 <span className="pds-type-label-s-medium setup-grade-summary__chief-label">{t("gradeChiefTitle")}</span>
@@ -383,9 +545,6 @@ export default function GradesClassroomsPage() {
                   </strong>
                 </div>
               </div>
-              <button type="button" className="pds-type-body-s-regular setup-grade-summary__edit" onClick={openEditGrade}>
-                {t("editGradeTitle")}
-              </button>
             </div>
 
             <div className="setup-subjects-offered">
@@ -415,42 +574,120 @@ export default function GradesClassroomsPage() {
           <section className="setup-classrooms-main">
             <div className="pds-type-title-xs-bold setup-classrooms-panel__head">
               <h3 className="pds-type-title-xxs-extrabold">{setup("classroomsInGrade", { grade: selectedGrade.name })}</h3>
-              <button type="button" className="pds-type-body-m-bold btn-hero-primary" onClick={openCreateRoom}>
-                <Icon name="add" />
-                {setup("addRoom")}
-              </button>
+              {canManage && !selectedGradeArchived && archiveVisibility !== "archived" ? (
+                <button type="button" className="pds-type-body-m-bold btn-hero-primary" onClick={openCreateRoom}>
+                  <Icon name="add" />
+                  {setup("addRoom")}
+                </button>
+              ) : null}
             </div>
+
+            {selectedGradeArchived ? (
+              <p className="pds-type-body-s-regular muted setup-classrooms-panel__archived-note">
+                {c("archivedViewOnly")}
+              </p>
+            ) : null}
 
             {classrooms.isLoading ? (
               <p className="pds-type-body-s-regular muted">{c("loading")}</p>
-            ) : !activeRooms.length ? (
-              <EmptyState compact embedded icon="meeting_room" title={t("structureNoRooms")} />
+            ) : !visibleRooms.length ? (
+              <EmptyState
+                compact
+                embedded
+                icon="meeting_room"
+                title={
+                  archiveVisibility === "archived"
+                    ? t("archivedClassroomsEmpty")
+                    : t("structureNoRooms")
+                }
+              />
             ) : (
               <ul className="setup-classroom-list">
-                {activeRooms.map((room) => {
+                {visibleRooms.map((room) => {
+                  const roomArchived = isArchivedRecord(room.status);
                   const capacityLabel =
                     room.capacity != null
                       ? t("roomCapacityStudents", { capacity: room.capacity })
                       : t("roomStudentCount", { count: room.studentCount });
                   return (
-                    <li key={room.id} className="setup-classroom-card">
+                    <li
+                      key={room.id}
+                      className={cn(
+                        "setup-classroom-card setup-classroom-card--clickable",
+                        roomArchived && "setup-classroom-card--archived"
+                      )}
+                      tabIndex={0}
+                      onClick={(event) => {
+                        if (isPadaukRowInteractiveTarget(event.target)) return;
+                        router.push(`/dashboard/structure/rooms/${room.id}`);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" && event.key !== " ") return;
+                        event.preventDefault();
+                        router.push(`/dashboard/structure/rooms/${room.id}`);
+                      }}
+                    >
                       <div className="setup-classroom-card__top">
                         <div className="pds-type-title-s-extrabold setup-classroom-card__identity">
                           <span className="pds-type-title-s-extrabold setup-classroom-card__mark" aria-hidden>
                             {roomLetter(room.name)}
                           </span>
                           <div>
-                            <h4>{room.name}</h4>
+                            <div className="setup-classroom-card__title-row">
+                              <h4>{room.name}</h4>
+                              {roomArchived ? (
+                                <StatusBadge status="archived" label={c("archivedBadge")} />
+                              ) : null}
+                            </div>
                             <p className="pds-type-body-s-semibold setup-classroom-card__meta">{capacityLabel}</p>
                           </div>
                         </div>
-                        <button
-                          type="button"
-                          className="pds-type-body-m-medium btn-outline setup-classroom-card__edit"
-                          onClick={() => openEditRoom(room)}
-                        >
-                          {t("edit")}
-                        </button>
+                        {canManage ? (
+                          <RowMoreActionsMenu
+                            ariaLabel={c("moreActions")}
+                            items={
+                              roomArchived
+                                ? [
+                                    {
+                                      id: "view",
+                                      label: c("view"),
+                                      icon: "visibility",
+                                      onSelect: () => router.push(`/dashboard/structure/rooms/${room.id}`)
+                                    },
+                                    {
+                                      id: "reactivate",
+                                      label: c("reactivate"),
+                                      icon: "unarchive",
+                                      onSelect: async () => {
+                                        await reactivateRoom.mutateAsync({ id: room.id });
+                                        toastSuccess(t("classroomReactivated"));
+                                      }
+                                    }
+                                  ]
+                                : [
+                                    {
+                                      id: "view",
+                                      label: c("view"),
+                                      icon: "visibility",
+                                      onSelect: () => router.push(`/dashboard/structure/rooms/${room.id}`)
+                                    },
+                                    {
+                                      id: "edit",
+                                      label: c("edit"),
+                                      icon: "edit",
+                                      onSelect: () => openEditRoom(room)
+                                    },
+                                    {
+                                      id: "archive",
+                                      label: c("archive"),
+                                      icon: "inventory_2",
+                                      destructive: true,
+                                      onSelect: () => setDeletingRoom(room)
+                                    }
+                                  ]
+                            }
+                          />
+                        ) : null}
                       </div>
                       <div className="pds-type-body-m-medium setup-classroom-card__homeroom">
                         <Icon name="person" />
@@ -462,14 +699,16 @@ export default function GradesClassroomsPage() {
                             {room.classTeacherName ?? t("homeroomUnassigned")}
                           </p>
                         </div>
-                        <button
-                          type="button"
-                          className="pds-type-body-m-bold btn-ghost"
-                          onClick={() => openEditRoom(room)}
-                        >
-                          {setup("changeHomeroom")}
-                          <Icon name="chevron_right" className="pds-type-body-m-medium ms" />
-                        </button>
+                        {canManage && !roomArchived ? (
+                          <button
+                            type="button"
+                            className="pds-type-body-m-bold btn-ghost"
+                            onClick={() => openEditRoom(room)}
+                          >
+                            {setup("changeHomeroom")}
+                            <Icon name="chevron_right" className="pds-type-body-m-medium ms" />
+                          </button>
+                        ) : null}
                       </div>
                     </li>
                   );
@@ -560,8 +799,25 @@ export default function GradesClassroomsPage() {
             <Field label={t("classroomName")}>
               <FormInput type="text" placeholder={t("classroomNamePlaceholder")} {...gradeForm.register("roomName")} />
             </Field>
-            <Field label={t("capacity")}>
-              <FormInput type="number" min={1} {...gradeForm.register("roomCapacity")} />
+            <Field label={t("facilityRoom")}>
+              <p className="pds-type-body-s-regular form-field-block__hint muted">{t("facilityRoomHint")}</p>
+              <PdsSelectField
+                variant="form"
+                value={gradeForm.watch("facilityRoomId")}
+                onValueChange={(value) =>
+                  gradeForm.setValue("facilityRoomId", typeof value === "string" ? value : "", {
+                    shouldDirty: true
+                  })
+                }
+                placeholder={t("selectFacilityRoom")}
+                options={(facilityRooms.data ?? []).map((room) => ({
+                  value: room.id,
+                  label:
+                    room.capacity != null
+                      ? t("facilityRoomOption", { name: room.name, capacity: room.capacity })
+                      : room.name
+                }))}
+              />
             </Field>
           </>
         ) : null}
@@ -574,20 +830,54 @@ export default function GradesClassroomsPage() {
         }}
         mode={roomFormMode?.type === "edit" ? "edit" : "create"}
         teachers={teachers.data?.data ?? []}
+        facilityRooms={facilityRooms.data ?? []}
         initialValues={
           roomFormMode?.type === "edit"
             ? {
                 name: roomFormMode.room.name,
-                room: roomFormMode.room.room ?? "",
-                capacity:
-                  roomFormMode.room.capacity != null
-                    ? String(roomFormMode.room.capacity)
-                    : "",
+                facilityRoomId: roomFormMode.room.facilityRoomId ?? "",
                 classTeacherStaffId: roomFormMode.room.classTeacherStaffId ?? ""
               }
             : undefined
         }
         onSubmit={submitRoom}
+      />
+
+      <ConfirmDialog
+        open={deletingGrade !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeletingGrade(null);
+        }}
+        title={t("archiveGradeTitle")}
+        description={t("archiveGradeHelp", { name: deletingGrade?.name ?? "" })}
+        confirmLabel={t("archive")}
+        destructive
+        loading={archiveGrade.isPending}
+        onConfirm={async () => {
+          if (!deletingGrade) return;
+          await archiveGrade.mutateAsync({ id: deletingGrade.id });
+          setDeletingGrade(null);
+          if (selectedGradeId === deletingGrade.id) {
+            setSelectedGradeId(null);
+          }
+        }}
+      />
+
+      <ConfirmDialog
+        open={deletingRoom !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeletingRoom(null);
+        }}
+        title={t("archiveClassroomTitle")}
+        description={t("archiveClassroomHelp")}
+        confirmLabel={t("archiveClassroom")}
+        destructive
+        loading={archiveRoom.isPending}
+        onConfirm={async () => {
+          if (!deletingRoom) return;
+          await archiveRoom.mutateAsync({ id: deletingRoom.id });
+          setDeletingRoom(null);
+        }}
       />
     </>
   );

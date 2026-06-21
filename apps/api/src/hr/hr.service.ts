@@ -11,7 +11,7 @@ import {
   personTypeToRoleKey,
   type PersonType
 } from "@sms/shared";
-import { and, desc, eq, ilike, inArray, ne, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, ne, or, sql } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
 import { DepartmentsService } from "../departments/departments.service.js";
@@ -63,6 +63,17 @@ export class HrService {
     if (query.search) {
       filters.push(ilike(staff.fullName, `%${query.search}%`));
     }
+    if (query.eligibleGradeId) {
+      const gradeFilter = sql`${staff.teacherProfile}->'eligibleGradeIds' @> ${JSON.stringify([query.eligibleGradeId])}::jsonb`;
+      if (query.includeStaffId) {
+        const eligibleOrCurrent = or(gradeFilter, eq(staff.id, query.includeStaffId));
+        if (eligibleOrCurrent) {
+          filters.push(eligibleOrCurrent);
+        }
+      } else {
+        filters.push(gradeFilter);
+      }
+    }
 
     return filters;
   }
@@ -105,7 +116,8 @@ export class HrService {
     const usersById = new Map<string, { email: string | null; status: string }>();
     const rolesByUserId = new Map<string, string>();
     const homeroomByStaffId = new Map<string, number>();
-    const subjectByStaffId = new Map<string, number>();
+    const classroomsByStaffId = new Map<string, Set<string>>();
+    const subjectsByStaffId = new Map<string, Set<string>>();
 
     if (userIds.length > 0) {
       const userRows = await this.db
@@ -149,10 +161,31 @@ export class HrService {
         if (row.staffId) homeroomByStaffId.set(row.staffId, row.count);
       }
 
-      const subjectRows = await this.db
+      const homeroomClassroomRows = await this.db
+        .select({
+          staffId: classrooms.classTeacherStaffId,
+          classroomId: classrooms.id
+        })
+        .from(classrooms)
+        .where(
+          and(
+            eq(classrooms.tenantId, tenantId),
+            inArray(classrooms.classTeacherStaffId, staffIds)
+          )
+        );
+
+      for (const row of homeroomClassroomRows) {
+        if (!row.staffId) continue;
+        const classrooms = classroomsByStaffId.get(row.staffId) ?? new Set<string>();
+        classrooms.add(row.classroomId);
+        classroomsByStaffId.set(row.staffId, classrooms);
+      }
+
+      const assignmentRows = await this.db
         .select({
           staffId: classroomSubjectTeachers.teacherStaffId,
-          count: sql<number>`count(*)::int`
+          classroomId: classroomSubjectTeachers.classroomId,
+          subjectId: classroomSubjectTeachers.subjectId
         })
         .from(classroomSubjectTeachers)
         .where(
@@ -160,11 +193,17 @@ export class HrService {
             eq(classroomSubjectTeachers.tenantId, tenantId),
             inArray(classroomSubjectTeachers.teacherStaffId, staffIds)
           )
-        )
-        .groupBy(classroomSubjectTeachers.teacherStaffId);
+        );
 
-      for (const row of subjectRows) {
-        if (row.staffId) subjectByStaffId.set(row.staffId, row.count);
+      for (const row of assignmentRows) {
+        if (!row.staffId) continue;
+        const classrooms = classroomsByStaffId.get(row.staffId) ?? new Set<string>();
+        classrooms.add(row.classroomId);
+        classroomsByStaffId.set(row.staffId, classrooms);
+
+        const subjects = subjectsByStaffId.get(row.staffId) ?? new Set<string>();
+        subjects.add(row.subjectId);
+        subjectsByStaffId.set(row.staffId, subjects);
       }
     }
 
@@ -176,7 +215,8 @@ export class HrService {
         loginStatus: user?.status ?? null,
         rbacRoleKey: member.userId ? (rolesByUserId.get(member.userId) ?? null) : null,
         homeroomCount: homeroomByStaffId.get(member.id) ?? 0,
-        subjectCount: subjectByStaffId.get(member.id) ?? 0
+        classroomCount: classroomsByStaffId.get(member.id)?.size ?? 0,
+        subjectCount: subjectsByStaffId.get(member.id)?.size ?? 0
       };
     });
 
