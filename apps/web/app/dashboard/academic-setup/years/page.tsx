@@ -213,16 +213,17 @@ export default function AcademicYearsPage() {
         bannerVariant={activeYear ? "default" : "warning"}
       />
       <TablePanelBody
-          loading={years.isLoading}
-          error={years.isError ? c("somethingWrong") : null}
-          empty={!years.data?.length}
-        >
-          <DataTable
-            columns={columns}
-            data={years.data ?? []}
-            getRowHref={(year) => `/dashboard/academic-setup/years/${year.id}`}
-          />
-        </TablePanelBody>
+        variant="plain"
+        loading={years.isLoading}
+        error={years.isError ? c("somethingWrong") : null}
+        empty={!years.data?.length}
+      >
+        <DataTable
+          columns={columns}
+          data={years.data ?? []}
+          getRowHref={(year) => `/dashboard/academic-setup/years/${year.id}`}
+        />
+      </TablePanelBody>
 
       <RecordFormSheet
         open={formMode !== null}

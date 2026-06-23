@@ -11,7 +11,7 @@ export type EmptyStateProps = {
   action?: ReactNode;
   /** Figma `type=compact` — tighter gap and smaller icon badge. */
   compact?: boolean;
-  /** Strip card chrome when nested inside `.table-card__body`. */
+  /** Strip card chrome when nested inside `.table-card` (or legacy `.table-card__body`). */
   embedded?: boolean;
   className?: string;
 };

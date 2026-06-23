@@ -112,6 +112,10 @@ export function ClassroomOpsTabs({
   const canLms = hasAnyPermission(permissions, ["lms.manage"]);
   const canEnroll = hasAnyPermission(permissions, ["student.manage"]);
   const currentYear = useCurrentAcademicYear();
+  const roomTrailFrom = {
+    label: classroomName ?? t("structureTitle"),
+    href: `/dashboard/structure/rooms/${classroomId}`
+  };
 
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"roster" | "attendance" | "lms">(initialTab);
@@ -318,6 +322,7 @@ export function ClassroomOpsTabs({
                   initials={personInitials(student.fullName)}
                   nameForColor={student.fullName}
                   href={`/dashboard/students/${student.id}`}
+                  navigationFrom={roomTrailFrom}
                 />
               ))}
             </EntityList>
@@ -367,6 +372,7 @@ export function ClassroomOpsTabs({
                   columns={recordColumns}
                   data={sessionDetail.data?.records ?? []}
                   getRowHref={(record) => `/dashboard/students/${record.studentId}`}
+                  navigationFrom={roomTrailFrom}
                 />
               </TablePanelBody>
             </div>

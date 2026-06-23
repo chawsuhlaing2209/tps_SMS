@@ -166,6 +166,7 @@ export default function TermsPage() {
         }
       />
       <TablePanelBody
+        variant="plain"
         loading={terms.isLoading || currentYear.isLoading}
         error={terms.isError ? c("somethingWrong") : null}
         empty={!visibleTerms.length}

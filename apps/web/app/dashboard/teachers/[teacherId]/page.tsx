@@ -3,14 +3,16 @@
 import { updateTeacherTeachingSetupSchema } from "@sms/shared";
 import { cn } from "../../../../lib/utils";
 import { useTranslations } from "next-intl";
-import Link from "next/link";
+import { NavigationBackLink } from "../../../../components/shared/navigation-back-link";
+import { TrailLink } from "../../../../components/shared/trail-link";
 import { useEffect, useMemo, useState, use } from "react";
-import { StatusPill } from "../../../../components/pds/subcomponents/status-pill";
+import { DetailCard } from "../../../../components/pds";
+import { SegmentedControl } from "../../../../components/pds/composites/segmented-control";
+import { Button } from "../../../../components/ui/button";
 import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
 import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
-import { isPadaukRowInteractiveTarget } from "../../../lib/table-row-interaction";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
-import { HeroMoreActionsMenu } from "../../../lib/hero-more-actions";
+import { HeroMoreActionsMenu, HeroPrimaryAction } from "../../../lib/hero-more-actions";
 import { Icon } from "../../../lib/material-icon";
 import { hasAnyPermission } from "../../../lib/permissions";
 import { RecordFormSheet } from "../../../lib/record-sheet";
@@ -84,6 +86,46 @@ type AssignmentRow = {
   gradeName: string;
 };
 
+type ProfileTab = "overview" | "teaching" | "salary";
+
+function subjectIconName(subject: string): string {
+  const name = subject.toLowerCase();
+  if (name.includes("math")) return "calculate";
+  if (name.includes("english")) return "menu_book";
+  if (name.includes("physics")) return "science";
+  if (name.includes("chem")) return "biotech";
+  return "school";
+}
+
+function classroomBadgeLabel(classroomName: string): string {
+  const trimmed = classroomName.trim();
+  const segment = trimmed.split(/[\s·-]+/).pop() ?? trimmed;
+  return segment.charAt(0).toUpperCase();
+}
+
+function buildHeroMeta(
+  teacher: TeacherProfile,
+  subjectNames: string[],
+  t: (key: string, values?: Record<string, string | number>) => string
+): string {
+  const parts: string[] = [];
+  if (teacher.promotionTitle) {
+    parts.push(teacher.promotionTitle);
+  } else if (teacher.assignments.gradeChief[0]?.gradeName) {
+    parts.push(`${teacher.assignments.gradeChief[0]!.gradeName} ${t("gradeChiefBadge")}`);
+  }
+  if (subjectNames.length) {
+    parts.push(subjectNames.slice(0, 4).join(" & "));
+  }
+  if (teacher.department) {
+    parts.push(teacher.department);
+  }
+  if (teacher.yearsExperience != null) {
+    parts.push(t("yearsExperience", { count: teacher.yearsExperience }));
+  }
+  return parts.join(" · ");
+}
+
 const profilePath = (tenant: string, teacherId: string) =>
   `/tenants/${tenant}/hr/staff/${teacherId}/teacher-profile`;
 const optionsPath = (tenant: string) => `/tenants/${tenant}/hr/teacher-assignment-options`;
@@ -155,11 +197,6 @@ function aggregateTaughtSubjects(
     .sort((a, b) => a.subjectName.localeCompare(b.subjectName));
 }
 
-function subjectTone(subject: string): "purple" | "pink" {
-  const hash = subject.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  return hash % 2 === 0 ? "purple" : "pink";
-}
-
 function flattenAssignments(teacher: TeacherProfile): AssignmentRow[] {
   const rows = new Map<string, AssignmentRow>();
 
@@ -207,6 +244,7 @@ export default function TeacherProfilePage({
   const [editOpen, setEditOpen] = useState(false);
   const [teachingOpen, setTeachingOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<ProfileTab>("overview");
   const [draft, setDraft] = useState<TeachingSetupDraft>(emptyTeachingSetupDraft);
   const [formError, setFormError] = useState<string | null>(null);
   const [removingSubjectId, setRemovingSubjectId] = useState<string | null>(null);
@@ -267,19 +305,26 @@ export default function TeacherProfilePage({
 
   const metaLine = useMemo(() => {
     if (!profile.data) return "";
-    const parts: string[] = [];
-    parts.push(t("staffId", { id: profile.data.employeeNumber ?? profile.data.id.slice(0, 13) }));
-    if (profile.data.assignments.gradeChief[0]?.gradeName) {
-      parts.push(profile.data.assignments.gradeChief[0]!.gradeName);
+    const subjectNames = aggregateTaughtSubjects(profile.data, options.data).map(
+      (row) => row.subjectName
+    );
+    return buildHeroMeta(profile.data, subjectNames, t);
+  }, [profile.data, options.data, t]);
+
+  const tabOptions = useMemo(
+    () => [
+      { id: "overview", label: t("tabOverview") },
+      { id: "teaching", label: t("tabTeachingAssignments") },
+      ...(canManageHr ? [{ id: "salary", label: t("tabSalaryCompensation") }] : [])
+    ],
+    [canManageHr, t]
+  );
+
+  useEffect(() => {
+    if (activeTab === "salary" && !canManageHr) {
+      setActiveTab("overview");
     }
-    if (profile.data.assignments.homeroom[0]?.room) {
-      parts.push(t("roomLabel", { room: profile.data.assignments.homeroom[0]!.room! }));
-    }
-    if (profile.data.joinDate) {
-      parts.push(t("enrolledLabel", { date: profile.data.joinDate }));
-    }
-    return parts.join(" · ");
-  }, [profile.data, t]);
+  }, [activeTab, canManageHr]);
 
   const chiefConflictRows = chiefConflicts(draft, options.data, teacherId);
   const homeroomConflictRows = homeroomConflicts(draft, options.data, teacherId);
@@ -350,11 +395,18 @@ export default function TeacherProfilePage({
 
   const teacher = profile.data;
   const isTeacherActive = teacher.status === "active" || teacher.status === "probation";
+  const teacherHref = `/dashboard/teachers/${teacherId}`;
+  const qualificationTags = teacher.qualifications.map((item, index) => ({
+    id: `${item.title}-${index}`,
+    label: `${item.title}${item.institution ? ` — ${item.institution}` : ""}`,
+    icon: "workspace_premium" as const
+  }));
 
   return (
     <div className={styles.teacherProfilePage}>
       <PageHeader
         title={t("profileTitle")}
+        segment={{ label: teacher.fullName, href: teacherHref }}
         breadcrumbs={[
           { label: nav("group_school") },
           { label: nav("teachers"), href: "/dashboard/teachers" },
@@ -362,32 +414,26 @@ export default function TeacherProfilePage({
         ]}
       />
 
-      <section className={styles.teacherProfileHero}>
-        <div className={styles.teacherProfileHeroTop}>
-          <span className={cn("pds-type-display-m", styles.teacherProfileAvatar)}>{initials(teacher.fullName)}</span>
-          <div>
-            <div className={styles.teacherProfileTitleRow}>
-              <h1 className="pds-type-title-m-extrabold">{teacher.fullName}</h1>
-              <StatusPill tone={isTeacherActive ? "active" : "inactive"}>
-                {isTeacherActive ? t("statusActive") : t("statusInactive")}
-              </StatusPill>
-            </div>
-            {metaLine ? <p className={cn("pds-type-body-m-medium", styles.teacherProfileMeta)}>{metaLine}</p> : null}
-            {teacher.qualifications.length ? (
-              <ul className={styles.teacherProfileDegrees}>
-                {teacher.qualifications.map((item, index) => (
-                  <li key={`${item.title}-${index}`} className={cn("pds-type-body-s-semibold", styles.teacherProfileDegree)}>
-                    <Icon name="workspace_premium" size={15} className={cn("pds-type-body-l-medium", styles.teacherProfileDegreeIcon)} />
-                    {item.title}
-                    {item.institution ? ` — ${item.institution}` : ""}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
-        </div>
-        <div className={styles.teacherProfileHeroActions}>
-          {canManageHr ? (
+      <NavigationBackLink fallback={{ label: nav("teachers"), href: "/dashboard/teachers" }} />
+
+      <DetailCard
+        className={styles.teacherProfileDetailCard}
+        avatar={{ initials: initials(teacher.fullName), tone: "teacher" }}
+        title={teacher.fullName}
+        status={
+          <span
+            className={cn(
+              "pds-detail-card-status",
+              isTeacherActive && styles.teacherProfileStatusActive
+            )}
+          >
+            {isTeacherActive ? t("statusActive") : t("statusInactive")}
+          </span>
+        }
+        meta={metaLine || undefined}
+        tags={qualificationTags.length ? qualificationTags : undefined}
+        actions={
+          canManageHr ? (
             <>
               <HeroMoreActionsMenu
                 label={t("moreActions")}
@@ -412,18 +458,14 @@ export default function TeacherProfilePage({
                     : [])
                 ]}
               />
-              <button
-                type="button"
-                className={cn("pds-type-body-m-medium", styles.teacherProfilePrimaryBtn)}
-                onClick={() => setEditOpen(true)}
-              >
+              <HeroPrimaryAction onClick={() => setEditOpen(true)}>
                 <Icon name="edit" size={18} />
                 {t("editTeacher")}
-              </button>
+              </HeroPrimaryAction>
             </>
-          ) : null}
-        </div>
-      </section>
+          ) : null
+        }
+      />
 
       <div className={styles.teacherProfileStats}>
           <article className={styles.teacherProfileStatCard}>
@@ -458,8 +500,111 @@ export default function TeacherProfilePage({
         </article>
       </div>
 
-      <div className={styles.teacherProfileLayout}>
-        <div className={styles.teacherProfileStack}>
+      <SegmentedControl
+        className={styles.teacherProfileTabs}
+        ariaLabel={t("profileTabsAria")}
+        options={tabOptions}
+        value={activeTab}
+        onChange={(id) => setActiveTab(id as ProfileTab)}
+      />
+
+      {activeTab === "overview" ? (
+        <div className={styles.teacherProfileTabGrid}>
+          <section className={styles.teacherProfileCard}>
+            <div className={styles.teacherProfileCardHead}>
+              <div>
+                <h2 className={cn("pds-type-title-xs-bold", styles.teacherProfileCardTitle)}>{t("todaysClasses")}</h2>
+                <p className={cn("pds-type-body-s-regular", styles.teacherProfileCardSubtitle)}>
+                  {t("classesSummary", { count: DEMO_TODAY_CLASSES.length })}
+                </p>
+              </div>
+            </div>
+            <ul className={styles.teacherProfileRowList}>
+              {DEMO_TODAY_CLASSES.map((item) => (
+                <li key={item.time} className={styles.teacherProfileScheduleRow}>
+                  <span className={cn("pds-type-body-s-semibold", styles.teacherProfileScheduleTime)}>{item.time}</span>
+                  <span
+                    className={cn(
+                      styles.teacherProfileScheduleMark,
+                      item.tone === "mustard"
+                        ? styles.teacherProfileScheduleMarkMustard
+                        : styles.teacherProfileScheduleMarkPurple
+                    )}
+                  />
+                  <div className={styles.teacherProfileRowBody}>
+                    <span className={cn("pds-type-body-m-bold", styles.teacherProfileRowTitle)}>{item.title}</span>
+                    <span className={cn("pds-type-body-s-regular", styles.teacherProfileRowMeta)}>
+                      {"subtitle" in item
+                        ? item.subtitle
+                        : t(item.subtitleKey!, item.subtitleArgs!)}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <div className={styles.teacherProfileStack}>
+            <section className={styles.teacherProfileCard}>
+              <div className={styles.teacherProfileCardHead}>
+                <div>
+                  <h2 className={cn("pds-type-title-xs-bold", styles.teacherProfileCardTitle)}>{t("toGrade")}</h2>
+                  <p className={cn("pds-type-body-s-regular", styles.teacherProfileCardSubtitle)}>
+                    {t("assessmentsSummary", { count: DEMO_TO_GRADE.length })}
+                  </p>
+                </div>
+                <span className={cn("pds-type-label-s-medium", styles.teacherProfileActionBadge)}>
+                  {t("actionNeeded")}
+                </span>
+              </div>
+              <ul className={styles.teacherProfileRowList}>
+                {DEMO_TO_GRADE.map((item) => (
+                  <li key={item.title} className={styles.teacherProfileGradeRow}>
+                    <span
+                      className={cn(
+                        styles.teacherProfileGradeIcon,
+                        item.tone === "pink"
+                          ? styles.teacherProfileSubjectPink
+                          : styles.teacherProfileSubjectPurple
+                      )}
+                    >
+                      <Icon name="grading" size={18} />
+                    </span>
+                    <div className={styles.teacherProfileRowBody}>
+                      <span className={cn("pds-type-body-m-bold", styles.teacherProfileRowTitle)}>{item.title}</span>
+                      <span className={cn("pds-type-body-s-regular", styles.teacherProfileRowMeta)}>
+                        {t("gradeAssessmentMeta", item.meta)}
+                      </span>
+                    </div>
+                    <span className={cn("pds-type-body-m-bold", styles.teacherProfileGradeCount)}>{item.count}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <section className={cn(styles.teacherProfileCard, styles.teacherProfileDarkCard)}>
+              <div className={styles.teacherProfileDarkStat}>
+                <strong className={cn("pds-type-title-xl-extrabold", styles.teacherProfileDarkStatValueAccent)}>
+                  96%
+                </strong>
+                <span className={cn("pds-type-body-s-regular", styles.teacherProfileDarkStatLabel)}>
+                  {t("registersOnTime")}
+                </span>
+              </div>
+              <div className={styles.teacherProfileDarkCardDivider} aria-hidden />
+              <div className={styles.teacherProfileDarkStat}>
+                <strong className={cn("pds-type-title-xl-extrabold", styles.teacherProfileDarkStatValue)}>14</strong>
+                <span className={cn("pds-type-body-s-regular", styles.teacherProfileDarkStatLabel)}>
+                  {t("leaveDaysLeft")}
+                </span>
+              </div>
+            </section>
+          </div>
+        </div>
+      ) : null}
+
+      {activeTab === "teaching" ? (
+        <div className={styles.teacherProfileTabGrid}>
           <section className={styles.teacherProfileCard}>
             <div className={styles.teacherProfileCardHead}>
               <div>
@@ -473,63 +618,30 @@ export default function TeacherProfilePage({
                 ) : null}
               </div>
               {canManageHr ? (
-                <button
+                <Button
                   type="button"
-                  className={cn("pds-type-body-m-medium", styles.teacherProfileManageBtn)}
+                  buttonType="filled"
+                  buttonColor="secondary"
+                  prefixIcon="add"
                   onClick={openTeachingSetup}
                 >
-                  <Icon name="edit" size={18} />
-                  {t("editTaughtSubject")}
-                </button>
+                  {t("addSubjectCompetency")}
+                </Button>
               ) : null}
             </div>
 
             {taughtSubjects.length === 0 ? (
               <p className={cn("pds-type-body-s-regular", styles.teacherProfileEmpty)}>{t("noTaughtSubjects")}</p>
             ) : (
-              <ul className={styles.teacherProfileTaughtList}>
+              <ul className={styles.teacherProfileSubjectList}>
                 {taughtSubjects.map((row) => (
-                  <li
-                    key={row.subjectId}
-                    className={cn(styles.teacherProfileTaughtRow, canManageHr && styles.teacherProfileTaughtRowClickable)}
-                    tabIndex={canManageHr ? 0 : undefined}
-                    onClick={
-                      canManageHr
-                        ? (event) => {
-                            if (isPadaukRowInteractiveTarget(event.target)) return;
-                            openTeachingSetup();
-                          }
-                        : undefined
-                    }
-                    onKeyDown={
-                      canManageHr
-                        ? (event) => {
-                            if (event.key !== "Enter" && event.key !== " ") return;
-                            event.preventDefault();
-                            openTeachingSetup();
-                          }
-                        : undefined
-                    }
-                  >
-                    <span
-                      className={cn(
-                        "pds-type-label-s-bold",
-                        styles.teacherProfileSubjectTag,
-                        subjectTone(row.subjectName) === "purple"
-                          ? styles.teacherProfileSubjectPurple
-                          : styles.teacherProfileSubjectPink
-                      )}
-                    >
+                  <li key={row.subjectId} className={styles.teacherProfileSubjectRow}>
+                    <span className={styles.teacherProfileSubjectIcon} aria-hidden>
+                      <Icon name={subjectIconName(row.subjectName)} size={18} />
+                    </span>
+                    <span className={cn("pds-type-body-m-bold", styles.teacherProfileSubjectName)}>
                       {row.subjectName}
                     </span>
-                    <div className={styles.teacherProfileRowBody}>
-                      <span className={cn("pds-type-body-m-bold", styles.teacherProfileRowTitle)}>
-                        {row.subjectName}
-                      </span>
-                      <span className={cn("pds-type-body-s-regular", styles.teacherProfileRowMeta)}>
-                        {t("taughtClassroomCount", { count: row.classroomCount })}
-                      </span>
-                    </div>
                     {canManageHr ? (
                       <RowMoreActionsMenu
                         ariaLabel={c("moreActions")}
@@ -563,9 +675,13 @@ export default function TeacherProfilePage({
           <section className={styles.teacherProfileCard}>
             <div className={styles.teacherProfileCardHead}>
               <div>
-                <h2 className={cn("pds-type-title-xs-bold", styles.teacherProfileCardTitle)}>{t("teachingAssignments")}</h2>
+                <h2 className={cn("pds-type-title-xs-bold", styles.teacherProfileCardTitle)}>
+                  {t("teachingAssignments")}
+                </h2>
                 {assignmentRows.length ? (
-                  <p className={cn("pds-type-body-s-regular", styles.teacherProfileCardSubtitle)}>{assignmentSummary}</p>
+                  <p className={cn("pds-type-body-s-regular", styles.teacherProfileCardSubtitle)}>
+                    {assignmentSummary}
+                  </p>
                 ) : null}
               </div>
               {canManageHr ? (
@@ -584,120 +700,61 @@ export default function TeacherProfilePage({
             ) : (
               <ul className={styles.teacherProfileRowList}>
                 {assignmentRows.map((row) => (
-                  <li key={row.classroomId} className={styles.teacherProfileRow}>
-                    <span
-                      className={cn(
-                        "pds-type-label-s-bold",
-                        styles.teacherProfileSubjectTag,
-                        subjectTone(row.subjectName) === "purple"
-                          ? styles.teacherProfileSubjectPurple
-                          : styles.teacherProfileSubjectPink
-                      )}
-                    >
-                      {row.subjectName}
+                  <li key={row.classroomId} className={styles.teacherProfileAssignmentRow}>
+                    <span className={styles.teacherProfileClassBadge} aria-hidden>
+                      {classroomBadgeLabel(row.classroomName)}
                     </span>
                     <div className={styles.teacherProfileRowBody}>
-                      <span className={cn("pds-type-body-m-bold", styles.teacherProfileRowTitle)}>{row.classroomName}</span>
+                      <span className={cn("pds-type-body-m-bold", styles.teacherProfileRowTitle)}>
+                        {row.gradeName} · {row.classroomName}
+                      </span>
                       <span className={cn("pds-type-body-s-regular", styles.teacherProfileRowMeta)}>
                         {t("assignmentRowMeta", {
-                          students: "—",
+                          students: teacher.stats.students || "—",
                           periods: teacher.stats.periodsPerWeek || "—"
                         })}
                       </span>
                     </div>
-                    <Link
-                      href={`/dashboard/structure/rooms/${row.classroomId}`}
-                      className={cn("pds-type-body-m-medium", styles.teacherProfileRowAction)}
-                    >
-                      {t("openClass")} ›
-                    </Link>
+                    {canManageHr ? (
+                      <RowMoreActionsMenu
+                        ariaLabel={c("moreActions")}
+                        items={[
+                          {
+                            id: "edit",
+                            label: c("edit"),
+                            icon: "edit",
+                            onSelect: openTeachingSetup
+                          },
+                          {
+                            id: "open",
+                            label: t("openClass"),
+                            icon: "open_in_new",
+                            onSelect: () => {
+                              window.location.href = `/dashboard/structure/rooms/${row.classroomId}`;
+                            }
+                          }
+                        ]}
+                      />
+                    ) : (
+                      <TrailLink
+                        href={`/dashboard/structure/rooms/${row.classroomId}`}
+                        className={cn("pds-type-body-m-medium", styles.teacherProfileRowAction)}
+                        from={{ label: teacher.fullName, href: teacherHref }}
+                      >
+                        {t("openClass")} ›
+                      </TrailLink>
+                    )}
                   </li>
                 ))}
               </ul>
             )}
           </section>
-
-          <section className={styles.teacherProfileCard}>
-            <div className={styles.teacherProfileCardHead}>
-              <div>
-                <h2 className={cn("pds-type-title-xs-bold", styles.teacherProfileCardTitle)}>{t("todaysClasses")}</h2>
-                <p className={cn("pds-type-body-s-regular", styles.teacherProfileCardSubtitle)}>
-                  {t("classesSummary", { count: DEMO_TODAY_CLASSES.length })}
-                </p>
-              </div>
-            </div>
-            <ul className={styles.teacherProfileRowList}>
-              {DEMO_TODAY_CLASSES.map((item) => (
-                <li key={item.time} className={styles.teacherProfileScheduleRow}>
-                  <span className={cn("pds-type-body-s-semibold", styles.teacherProfileScheduleTime)}>{item.time}</span>
-                  <span
-                    className={`${styles.teacherProfileScheduleMark} ${
-                      item.tone === "mustard"
-                        ? styles.teacherProfileScheduleMarkMustard
-                        : styles.teacherProfileScheduleMarkPurple
-                    }`}
-                  />
-                  <div className={styles.teacherProfileRowBody}>
-                    <span className={cn("pds-type-body-m-bold", styles.teacherProfileRowTitle)}>{item.title}</span>
-                    <span className={cn("pds-type-body-s-regular", styles.teacherProfileRowMeta)}>
-                      {"subtitle" in item
-                        ? item.subtitle
-                        : t(item.subtitleKey!, item.subtitleArgs!)}
-                    </span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </section>
         </div>
+      ) : null}
 
-        <div className={styles.teacherProfileStack}>
-          <StaffCompensationSection staffId={teacherId} />
-          <section className={styles.teacherProfileCard}>
-            <div className={styles.teacherProfileCardHead}>
-              <div>
-                <h2 className={cn("pds-type-title-xs-bold", styles.teacherProfileCardTitle)}>{t("toGrade")}</h2>
-                <p className={cn("pds-type-body-s-regular", styles.teacherProfileCardSubtitle)}>
-                  {t("assessmentsSummary", { count: DEMO_TO_GRADE.length })}
-                </p>
-              </div>
-              <span className={cn("pds-type-label-s-medium", styles.teacherProfileActionBadge)}>{t("actionNeeded")}</span>
-            </div>
-            <ul className={styles.teacherProfileRowList}>
-              {DEMO_TO_GRADE.map((item) => (
-                <li key={item.title} className={styles.teacherProfileGradeRow}>
-                  <span
-                    className={`${styles.teacherProfileGradeIcon} ${
-                      item.tone === "pink" ? styles.teacherProfileSubjectPink : styles.teacherProfileSubjectPurple
-                    }`}
-                  >
-                    <Icon name="grading" size={18} />
-                  </span>
-                  <div className={styles.teacherProfileRowBody}>
-                    <span className={cn("pds-type-body-m-bold", styles.teacherProfileRowTitle)}>{item.title}</span>
-                    <span className={cn("pds-type-body-s-regular", styles.teacherProfileRowMeta)}>
-                      {t("gradeAssessmentMeta", item.meta)}
-                    </span>
-                  </div>
-                  <span className={cn("pds-type-body-m-bold", styles.teacherProfileGradeCount)}>{item.count}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <section className={`${styles.teacherProfileCard} ${styles.teacherProfileDarkCard}`}>
-            <div className={styles.teacherProfileDarkStat}>
-              <strong className={cn("pds-type-title-xl-extrabold", styles.teacherProfileDarkStatValueAccent)}>96%</strong>
-              <span className={cn("pds-type-body-s-regular", styles.teacherProfileDarkStatLabel)}>{t("registersOnTime")}</span>
-            </div>
-            <div className={styles.teacherProfileDarkCardDivider} aria-hidden />
-            <div className={styles.teacherProfileDarkStat}>
-              <strong className={cn("pds-type-title-xl-extrabold", styles.teacherProfileDarkStatValue)}>14</strong>
-              <span className={cn("pds-type-body-s-regular", styles.teacherProfileDarkStatLabel)}>{t("leaveDaysLeft")}</span>
-            </div>
-          </section>
-        </div>
-      </div>
+      {activeTab === "salary" && canManageHr ? (
+        <StaffCompensationSection staffId={teacherId} className={styles.teacherProfileSalaryPanel} />
+      ) : null}
 
       <TeacherEditSheet
         open={editOpen}

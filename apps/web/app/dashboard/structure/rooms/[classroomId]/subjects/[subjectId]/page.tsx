@@ -9,6 +9,7 @@ import { PanelHead } from "../../../../../../lib/panel";
 import { useCurrentAcademicYear } from "../../../../../../lib/use-current-academic-year";
 import { PageHeader } from "../../../../../page-header-context";
 import { EmptyState } from "../../../../../../../components/shared/empty-state";
+import { NavigationBackLink } from "../../../../../../../components/shared/navigation-back-link";
 import { subjectColor } from "../../../../subject-colors";
 
 type Classroom = {
@@ -111,6 +112,13 @@ export default function StructureSubjectClassroomPage({
           },
           { label: subjectRow.subjectName }
         ]}
+      />
+
+      <NavigationBackLink
+        fallback={{
+          label: classroom.data.name,
+          href: `/dashboard/structure/rooms/${classroomId}`
+        }}
       />
 
       <section className="structure-room-hero">

@@ -217,6 +217,16 @@ export const PDS_COMPONENT_REGISTRY: FigmaComponentRegistryEntry[] = [
     notes: "FilterTab (count pill), SubjectTab (categorical fill), DayPickerTab (emphasis lime).",
   },
   {
+    id: "icon-tag",
+    name: "IconTag",
+    figmaNodeId: "97:28876",
+    figmaFileKey: FIGMA_FILE_KEY,
+    codePath: "apps/web/components/pds/composites/icon-tag.tsx",
+    status: "active",
+    introducedIn: "2026-06-21",
+    notes: "Pill tag with leading icon — sage tint at rest, forest fill when active.",
+  },
+  {
     id: "segmented-control",
     name: "SegmentedControl",
     figmaNodeId: "67:13138",

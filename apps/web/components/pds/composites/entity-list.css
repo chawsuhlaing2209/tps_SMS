@@ -227,6 +227,8 @@ button.record-list-item:hover {
   padding: var(--pds-gap-medium);
 }
 
+.table-card > .pds-entity-list,
+.table-card > .record-list,
 .table-card__body > .pds-entity-list,
 .table-card__body > .record-list {
   box-sizing: border-box;

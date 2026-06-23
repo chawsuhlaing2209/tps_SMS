@@ -92,6 +92,7 @@ export function PdsDatePicker({
   presetLabels,
 }: PdsDatePickerProps) {
   const rootRef = React.useRef<HTMLDivElement>(null);
+  const panelContainerRef = React.useRef<HTMLDivElement>(null);
   const isDisabled = disabled || inputState === "disabled";
   const [open, setOpen] = React.useState(false);
 
@@ -159,9 +160,10 @@ export function PdsDatePicker({
   React.useEffect(() => {
     if (!open) return;
     const handlePointerDown = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target)) return;
+      if (panelContainerRef.current?.contains(target)) return;
+      setOpen(false);
     };
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
@@ -272,7 +274,12 @@ export function PdsDatePicker({
           setOpen((current) => !current);
         }}
       />
-      <DatePickerPosition open={open} panelClassName={panelClassName}>
+      <DatePickerPosition
+        open={open}
+        anchorRef={rootRef}
+        containerRef={panelContainerRef}
+        panelClassName={panelClassName}
+      >
         {type === "month" ? (
           <MonthCalendar
             year={viewYear}

@@ -3,8 +3,9 @@
 import { useTranslations } from "next-intl";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
+import { addPercentStringIssue } from "@sms/shared";
 import { z } from "zod";
-import { FormInput } from "../../../../components/shared/form-input";
+import { FormInput, PercentInput } from "../../../../components/shared/form-input";
 import { PdsSelectField } from "../../../../components/pds";
 import { Field } from "../../../lib/form";
 import { Icon } from "../../../lib/material-icon";
@@ -65,13 +66,19 @@ export function PayComponentFormSheet({
   const t = useTranslations("salary");
   const c = useTranslations("common");
 
-  const schema = z.object({
-    code: mode === "create" ? z.string().trim().min(1, c("required")) : z.string(),
-    name: z.string().trim().min(1, c("required")),
-    kind: mode === "create" ? z.string().trim().min(1, c("required")) : z.string(),
-    calculation: z.string().trim().min(1, c("required")),
-    defaultAmount: z.string().trim().min(1, c("required"))
-  });
+  const schema = z
+    .object({
+      code: mode === "create" ? z.string().trim().min(1, c("required")) : z.string(),
+      name: z.string().trim().min(1, c("required")),
+      kind: mode === "create" ? z.string().trim().min(1, c("required")) : z.string(),
+      calculation: z.string().trim().min(1, c("required")),
+      defaultAmount: z.string().trim().min(1, c("required"))
+    })
+    .superRefine((data, ctx) => {
+      if (data.calculation === "percent_of_basic") {
+        addPercentStringIssue(ctx, data.defaultAmount, ["defaultAmount"], c("percentRangeError"));
+      }
+    });
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -222,12 +229,21 @@ export function PayComponentFormSheet({
         }
         error={form.formState.errors.defaultAmount?.message}
       >
-        <FormInput
-          type="number"
-          placeholder={calculation === "percent_of_basic" ? "5" : "0"}
-          disabled={isArchived}
-          {...form.register("defaultAmount")}
-        />
+        {calculation === "percent_of_basic" ? (
+          <PercentInput
+            step={1}
+            placeholder="5"
+            disabled={isArchived}
+            {...form.register("defaultAmount")}
+          />
+        ) : (
+          <FormInput
+            type="number"
+            placeholder="0"
+            disabled={isArchived}
+            {...form.register("defaultAmount")}
+          />
+        )}
       </Field>
       {isArchived ? (
         <p className="pds-type-body-s-regular muted">{c("archivedViewOnly")}</p>

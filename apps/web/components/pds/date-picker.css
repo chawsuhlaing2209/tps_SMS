@@ -89,6 +89,13 @@
   z-index: 40;
 }
 
+.pds-date-picker-position--fixed {
+  left: auto;
+  position: fixed;
+  top: auto;
+  width: auto;
+}
+
 .pds-date-picker-position__panel {
   background: var(--pds-background-card);
   border-radius: var(--pds-radius-12);
@@ -97,6 +104,12 @@
   overflow: hidden;
   padding-top: var(--pds-gap-small);
   width: var(--pds-date-picker-panel-width);
+}
+
+.pds-date-picker-position__panel--constrained {
+  max-width: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .pds-date-picker-position__panel--day {
@@ -305,12 +318,38 @@
 
 .pds-date-picker-position__panel--filter-range {
   padding-top: 0;
-  width: var(--pds-date-picker-filter-range-panel-width);
+  width: min(var(--pds-date-picker-filter-range-panel-width), calc(100vw - var(--pds-padding-medium) * 2));
 }
 
 .pds-filter-range-calendar {
   display: flex;
   width: 100%;
+}
+
+@media (max-width: 48rem) {
+  .pds-filter-range-calendar {
+    flex-direction: column;
+  }
+
+  .pds-date-calendar-presets {
+    border-bottom: 0.5px solid var(--pds-border-color-primary);
+    border-right: 0;
+    padding: var(--pds-padding-medium);
+  }
+
+  .pds-date-calendar-presets__list {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .pds-filter-range-calendar__months {
+    flex-direction: column;
+  }
+
+  .pds-filter-range-calendar__month {
+    padding-top: var(--pds-padding-medium);
+    width: 100%;
+  }
 }
 
 .pds-date-calendar-presets {

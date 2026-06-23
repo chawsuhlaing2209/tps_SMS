@@ -86,6 +86,37 @@ inline tag styles. For a **selectable** pill use `OptionChip` instead.
 <Chip dotColor={subjectColor(name)}>{name}</Chip>   // optional leading dot
 ```
 
+### `InputWrapper` + input types — `input-wrapper.tsx`, `form-input.tsx`
+
+Composable form field shell (Figma Input Wrapper 124:9470). Handles label,
+required/read-only markers, error, hint, link, and removable chips. Swap the
+control type in `children`:
+
+```tsx
+<InputWrapper label="Phone" required error={errors.phone?.message}>
+  <MobileInput {...form.register("phone")} />
+</InputWrapper>
+
+<InputWrapper label="Monthly value" chips={<InputChipGroup>…</InputChipGroup>}>
+  <TextInput suffix="MMK / mo" />
+</InputWrapper>
+
+<InputWrapper label="Description">
+  <TextAreaInput languageTag="EN" maxLength={300} />
+</InputWrapper>
+```
+
+| Component | Role |
+|---|---|
+| `InputWrapper` | Label + slot + chips + messages |
+| `TextInput` / `FormInput` | Single-line text (124:8752) |
+| `TextAreaInput` / `FormTextarea` | Multi-line with optional locale tag (124:8799) |
+| `MobileInput` | Myanmar phone with +95 prefix (124:8648) |
+| `InputChip` / `InputChipGroup` | Removable values below the control |
+
+`FormField` remains as a backward-compatible alias (body-style label). Prefer
+`InputWrapper` for new forms (uppercase caption label per Figma).
+
 ### `OptionChip` / `OptionChipGrid` — `option-chip.tsx`
 
 Selectable pill with leading check indicator (fee components, payment plans).

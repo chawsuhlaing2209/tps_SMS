@@ -261,6 +261,7 @@ export default function SubjectsPage() {
       />
 
       <TablePanelBody
+        variant="card-plain"
         loading={subjects.isLoading || currentYear.isLoading}
         error={error}
         empty={!visibleSubjects.length}
@@ -401,7 +402,7 @@ export default function SubjectsPage() {
             <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={closeSheet}>
               {c("cancel")}
             </button>
-            <p className="pds-type-body-s-regular muted record-sheet__footer-note">{t("subjectFooterNote")}</p>
+            <p className="pds-type-body-s-regular muted record-form__footer-note">{t("subjectFooterNote")}</p>
             <button
               type="submit"
               className="pds-type-body-m-bold btn-primary"

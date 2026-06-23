@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState, use } from "react";
 import { ConfirmDialog } from "../../../../../components/shared/confirm-dialog";
+import { NavigationBackLink } from "../../../../../components/shared/navigation-back-link";
 import { EmptyState } from "../../../../../components/shared/empty-state";
 import { StatusBadge } from "../../../../../components/shared/badge";
 import { useApiMutation, useApiQuery, useReferenceApiQuery } from "../../../../lib/api";
@@ -236,6 +237,8 @@ export default function StructureRoomPage({
         ]}
         actionsPortal
       />
+
+      <NavigationBackLink fallback={{ label: t("structureTitle"), href: structureBackHref }} />
 
       {isArchived ? (
         <div className="archived-record-banner">

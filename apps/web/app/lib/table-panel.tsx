@@ -85,7 +85,7 @@ export function TablePanelBody({
   emptyTitle?: ReactNode;
   emptyDescription?: ReactNode;
   emptyAction?: ReactNode;
-  /** `plain` skips wrappers entirely. `card-plain` keeps table-card but omits table-card__body. */
+  /** `plain` skips wrappers entirely. `card-plain` is an alias for `card`. */
   variant?: "card" | "card-plain" | "plain";
   /** Render empty state directly in the parent panel (no table-card wrapper). */
   unwrapEmpty?: boolean;
@@ -93,18 +93,9 @@ export function TablePanelBody({
 }) {
   const c = useTranslations("common");
   const plain = variant === "plain";
-  const cardPlain = variant === "card-plain";
 
   const wrapCard = (content: ReactNode) =>
-    plain ? (
-      content
-    ) : cardPlain ? (
-      <section className="table-card">{content}</section>
-    ) : (
-      <section className="table-card">
-        <div className="table-card__body">{content}</div>
-      </section>
-    );
+    plain ? content : <section className="table-card">{content}</section>;
 
   if (loading) {
     return wrapCard(<p className="pds-type-body-s-regular muted">{c("loading")}</p>);

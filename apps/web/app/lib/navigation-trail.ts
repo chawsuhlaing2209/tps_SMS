@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 export type NavigationSegment = { label: string; href: string };
@@ -87,4 +88,27 @@ export function navigateWithTrail(
 ) {
   appendNavigationTrail(from);
   router.push(targetHref);
+}
+
+export function pushWithTrail(
+  router: { push: (href: string) => void },
+  targetHref: string,
+  from: NavigationSegment
+) {
+  navigateWithTrail(router, targetHref, from);
+}
+
+/** Previous step in the session trail (cross-module back target). */
+export function useNavigationParent(): NavigationSegment | null {
+  const pathname = usePathname();
+  const [parent, setParent] = useState<NavigationSegment | null>(null);
+
+  useEffect(() => {
+    const sync = () => setParent(getNavigationParent());
+    sync();
+    window.addEventListener(TRAIL_EVENT, sync);
+    return () => window.removeEventListener(TRAIL_EVENT, sync);
+  }, [pathname]);
+
+  return parent;
 }

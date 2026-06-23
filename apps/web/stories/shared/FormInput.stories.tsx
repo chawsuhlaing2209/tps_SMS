@@ -5,7 +5,13 @@ import {
   FormInput,
   FormSelect,
   FormTextarea,
+  InputChip,
+  InputChipGroup,
+  InputWrapper,
+  MobileInput,
   PercentInput,
+  TextAreaInput,
+  TextInput,
 } from "../../components/shared/form-input";
 
 const gradeOptions = [
@@ -14,20 +20,57 @@ const gradeOptions = [
   { value: "g3", label: "Grade 3" },
 ];
 
-const meta: Meta<typeof FormInput> = {
+const meta: Meta<typeof TextInput> = {
   title: "Shared/FormInput",
-  component: FormInput,
+  component: TextInput,
   tags: ["autodocs"],
   args: { placeholder: "Enter value" },
 };
 
 export default meta;
-type Story = StoryObj<typeof FormInput>;
+type Story = StoryObj<typeof TextInput>;
 
 export const Default: Story = {};
 export const Disabled: Story = { args: { disabled: true, value: "Read only" } };
 export const Error: Story = { args: { inputState: "error", value: "Invalid" } };
 export const Completed: Story = { args: { inputState: "completed", value: "Verified" } };
+
+export const WithSuffix: Story = {
+  render: () => (
+    <div style={{ width: 320 }}>
+      <TextInput placeholder="10" suffix="MMK / mo" />
+    </div>
+  ),
+};
+
+export const InputWrapperDefault: Story = {
+  render: function InputWrapperDemo() {
+    const [tags, setTags] = useState(["Grade 1", "Grade 2", "Science"]);
+    return (
+      <div style={{ width: 320 }}>
+        <InputWrapper
+          label="Assigned grades"
+          htmlFor="grades"
+          required
+          error={tags.length === 0 ? "Select at least one grade." : undefined}
+          hint={tags.length > 0 ? "Students in these grades receive this fee." : undefined}
+          link={<a href="#">View grade list</a>}
+          chips={
+            tags.length ? (
+              <InputChipGroup>
+                {tags.map((tag) => (
+                  <InputChip key={tag} label={tag} onRemove={() => setTags((current) => current.filter((t) => t !== tag))} />
+                ))}
+              </InputChipGroup>
+            ) : null
+          }
+        >
+          <TextInput id="grades" placeholder="Add grade…" />
+        </InputWrapper>
+      </div>
+    );
+  },
+};
 
 export const WithField: Story = {
   render: () => (
@@ -52,9 +95,29 @@ export const FieldWithError: Story = {
 export const Textarea: Story = {
   render: () => (
     <div style={{ width: 320 }}>
+      <InputWrapper label="Notes">
+        <TextAreaInput placeholder="Optional notes" maxLength={300} languageTag="EN" />
+      </InputWrapper>
+    </div>
+  ),
+};
+
+export const TextareaLegacy: Story = {
+  render: () => (
+    <div style={{ width: 320 }}>
       <FormField label="Notes">
         <FormTextarea placeholder="Optional notes" />
       </FormField>
+    </div>
+  ),
+};
+
+export const Mobile: Story = {
+  render: () => (
+    <div style={{ width: 320 }}>
+      <InputWrapper label="Phone" required>
+        <MobileInput clearable placeholder="9XXXXXXXX" defaultValue="912345678" />
+      </InputWrapper>
     </div>
   ),
 };
@@ -90,10 +153,10 @@ export const Percent: Story = {
 export const AllStates: Story = {
   render: () => (
     <div style={{ width: 320, display: "grid", gap: 16 }}>
-      <FormInput placeholder="Enabled" />
-      <FormInput inputState="completed" value="Completed" readOnly />
-      <FormInput inputState="error" value="Error state" />
-      <FormInput inputState="disabled" value="Disabled" />
+      <TextInput placeholder="Enabled" />
+      <TextInput inputState="completed" value="Completed" readOnly />
+      <TextInput inputState="error" value="Error state" />
+      <TextInput inputState="disabled" value="Disabled" />
     </div>
   ),
   parameters: { layout: "padded" },

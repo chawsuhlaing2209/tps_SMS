@@ -282,6 +282,7 @@ export function TeamEditor() {
           }
         />
         <TablePanelBody
+          variant="card-plain"
           loading={staff.isLoading}
           error={staff.isError ? c("somethingWrong") : null}
           empty={!staff.data?.data.length}

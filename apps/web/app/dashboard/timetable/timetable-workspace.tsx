@@ -763,21 +763,22 @@ export function TimetableWorkspace() {
           ) : !resolvedClassroomId ? (
             <EmptyState icon="meeting_room" title={t("selectClassroom")} />
           ) : (
-            <section
-              id="timetable-weekly-grid"
-              className={
-                isEditingTimetable
-                  ? "panel timetable-grid-panel timetable-grid-panel--editing"
-                  : "panel timetable-grid-panel"
-              }
-            >
-              <div className="timetable-grid-wrap">
+            <section id="timetable-weekly-grid">
+              <div
+                className={
+                  isEditingTimetable
+                    ? "padauk-table-wrap timetable-grid-wrap timetable-grid-wrap--editing"
+                    : "padauk-table-wrap timetable-grid-wrap"
+                }
+              >
                 <table className="pds-type-body-m-medium timetable-board">
                   <thead>
                     <tr>
                       <th className="timetable-board__time-col" />
                       {workingDays.map((day) => (
-                        <th key={day}>{dayLabel(day)}</th>
+                        <th key={day} className="pds-type-caption-s">
+                          {dayLabel(day)}
+                        </th>
                       ))}
                     </tr>
                   </thead>
@@ -785,7 +786,7 @@ export function TimetableWorkspace() {
                     {periods.map((period) =>
                       period.isBreak ? (
                         <tr key={period.id} className="timetable-board__break-row">
-                          <th>
+                          <th className="timetable-board__time-col">
                             <span>{period.startsAt}</span>
                             <span className="pds-type-body-s-regular muted">{period.name}</span>
                           </th>

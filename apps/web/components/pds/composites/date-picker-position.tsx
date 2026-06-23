@@ -1,27 +1,130 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { cn } from "../../../lib/utils";
+import { computeDatePickerPlacement, type DatePickerPlacement } from "../date-picker-placement";
 
 export type DatePickerPositionProps = {
   open?: boolean;
+  /** Anchor element (typically the picker root wrapping the trigger). */
+  anchorRef: React.RefObject<HTMLElement | null>;
+  /** Assigned to the fixed portal wrapper (for outside-click detection). */
+  containerRef?: React.Ref<HTMLDivElement>;
   children?: React.ReactNode;
   className?: string;
   panelClassName?: string;
 };
 
-/** Positions the calendar panel below the DatePicker trigger. */
+/** Positions the calendar panel below/above the trigger, clamped to the viewport. */
 export function DatePickerPosition({
   open = true,
+  anchorRef,
+  containerRef,
   children,
   className,
   panelClassName,
 }: DatePickerPositionProps) {
-  if (!open) return null;
+  const panelRef = React.useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = React.useState(false);
+  const [placement, setPlacement] = React.useState<DatePickerPlacement | null>(null);
 
-  return (
-    <div className={cn("pds-date-picker-position", className)} data-figma-node="67:14915">
-      <div className={cn("pds-date-picker-position__panel", panelClassName)}>{children}</div>
-    </div>
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  React.useLayoutEffect(() => {
+    if (!open) {
+      setPlacement(null);
+      return;
+    }
+
+    const measure = () => {
+      const anchor = anchorRef.current;
+      const panel = panelRef.current;
+      if (!anchor || !panel) return;
+
+      const panelRect = panel.getBoundingClientRect();
+      const width = panelRect.width || panel.offsetWidth;
+      const height = panelRect.height || panel.offsetHeight;
+      if (width <= 0 || height <= 0) return;
+
+      setPlacement(computeDatePickerPlacement(anchor.getBoundingClientRect(), width, height));
+    };
+
+    measure();
+    const raf = window.requestAnimationFrame(measure);
+
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, true);
+
+    const panel = panelRef.current;
+    const anchor = anchorRef.current;
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    if (panel) observer?.observe(panel);
+    if (anchor) observer?.observe(anchor);
+
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
+      observer?.disconnect();
+    };
+  }, [anchorRef, open, panelClassName, children]);
+
+  if (!open || !mounted) return null;
+
+  const isReady = placement !== null;
+
+  return createPortal(
+    <div
+      ref={containerRef}
+      className={cn(
+        "pds-date-picker-position",
+        "pds-date-picker-position--fixed",
+        isReady && `pds-date-picker-position--${placement.horizontal}`,
+        isReady && `pds-date-picker-position--${placement.vertical}`,
+        className
+      )}
+      style={
+        isReady
+          ? {
+              position: "fixed",
+              top: placement.top,
+              left: placement.left,
+              maxWidth: placement.maxWidth,
+              zIndex: 50,
+            }
+          : {
+              position: "fixed",
+              top: 0,
+              left: 0,
+              visibility: "hidden",
+              pointerEvents: "none",
+              zIndex: 50,
+            }
+      }
+      data-align={placement?.horizontal}
+      data-vertical={placement?.vertical}
+    >
+      <div
+        ref={panelRef}
+        className={cn(
+          "pds-date-picker-position__panel",
+          "pds-date-picker-position__panel--constrained",
+          panelClassName
+        )}
+        style={
+          isReady
+            ? {
+                maxHeight: placement.maxHeight,
+              }
+            : undefined
+        }
+      >
+        {children}
+      </div>
+    </div>,
+    document.body
   );
 }

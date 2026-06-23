@@ -103,3 +103,19 @@
   flex: 1 1 auto;
   min-width: 0;
 }
+
+.pds-search-filters-row__filter--range {
+  flex-shrink: 0;
+  width: auto;
+}
+
+.pds-search-filters-row__filter--range .pds-date-picker {
+  display: block;
+}
+
+.pds-search-filters-row__filter--range .pds-date-picker__trigger {
+  align-items: center;
+  justify-content: space-between;
+  min-height: 50px;
+  padding: var(--pds-input-padding-y) var(--pds-input-padding-x);
+}

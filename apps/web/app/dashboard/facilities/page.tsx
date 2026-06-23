@@ -157,6 +157,7 @@ export default function FacilitiesPage() {
       />
 
       <TablePanelBody
+        variant="plain"
         loading={rooms.isLoading}
         error={rooms.isError ? c("somethingWrong") : null}
         empty={!rooms.data?.length}

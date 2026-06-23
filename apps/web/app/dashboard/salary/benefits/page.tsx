@@ -1,9 +1,8 @@
 "use client";
 
-import { SegmentedControl } from "../../../../components/pds/composites/segmented-control";
+import { IconTagControl } from "../../../../components/pds/composites/icon-tag";
 import { StatCard, StatGrid } from "../../../../components/shared/stat-card";
 import { StatusBadge } from "../../../../components/shared/badge";
-import { Chip } from "../../../../components/shared/chip";
 import { ArchiveVisibilityFilter } from "../../../../components/shared/archive-visibility-filter";
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
@@ -15,9 +14,9 @@ import { Icon } from "../../../lib/material-icon";
 import { hasAnyPermission } from "../../../lib/permissions";
 import { moduleBreadcrumbs } from "../../../lib/page-header-utils";
 import { getSession } from "../../../lib/session";
-import { isPadaukRowInteractiveTarget } from "../../../lib/table-row-interaction";
 import { DataTableSection, TablePanelBody } from "../../../lib/table-panel";
 import { ModulePageHeader } from "../../module-page-header";
+import { BenefitPackageCard } from "./benefit-package-card";
 import {
   BenefitPackageFormSheet,
   type BenefitPackageRecord
@@ -26,16 +25,19 @@ import {
   IncentiveProgramFormSheet,
   type IncentiveProgramRecord
 } from "./incentive-program-form-sheet";
+import { IncentiveProgramsTable } from "./incentive-programs-table";
 import {
   PayComponentFormSheet,
   type PayComponentRecord
 } from "./pay-component-form-sheet";
 
 type BenefitsMetrics = {
+  benefitsPerMonth: number;
   activePackages: number;
-  enrolledStaff: number;
-  monthlyBenefitValue: number;
-  activeIncentives: number;
+  totalEnrolments: number;
+  bonusesThisTerm: number;
+  incentiveAwards: number;
+  awardRecipients: number;
 };
 
 const PACKAGES_PATH = (tenant: string) => `/tenants/${tenant}/benefit-packages`;
@@ -46,14 +48,22 @@ function formatMoney(value: number) {
   return Math.round(value).toLocaleString();
 }
 
-function awardLabel(
-  program: IncentiveProgramRecord,
-  t: (key: string, values?: Record<string, string | number>) => string
-) {
-  if (program.awardType === "percent") {
-    return t("awardPercentValue", { percent: program.amount });
+function compactAmount(value: number) {
+  if (value >= 1_000_000) {
+    const millions = value / 1_000_000;
+    const formatted = millions.toFixed(2).replace(/\.?0+$/, "");
+    return `${formatted}M`;
   }
-  return t("awardFixedValue", { amount: formatMoney(program.amount) });
+  if (value >= 1_000) {
+    return `${Math.round(value / 1_000)}K`;
+  }
+  return formatMoney(value);
+}
+
+function incentivePaidTotal(program: IncentiveProgramRecord) {
+  if (program.awardType === "percent") return 0;
+  const recipients = program.recipients ?? program.eligibleCount ?? 0;
+  return program.amount * recipients;
 }
 
 function formatDefaultAmount(
@@ -81,7 +91,6 @@ export default function SalaryBenefitsPage() {
   const [incentiveFormOpen, setIncentiveFormOpen] = useState(false);
   const [incentiveFormMode, setIncentiveFormMode] = useState<"create" | "edit">("create");
   const [editingIncentive, setEditingIncentive] = useState<IncentiveProgramRecord | null>(null);
-  const [expandedIncentiveIds, setExpandedIncentiveIds] = useState<Set<string>>(new Set());
   const [componentFormOpen, setComponentFormOpen] = useState(false);
   const [componentFormMode, setComponentFormMode] = useState<"create" | "edit">("create");
   const [editingComponent, setEditingComponent] = useState<PayComponentRecord | null>(null);
@@ -106,11 +115,19 @@ export default function SalaryBenefitsPage() {
   const metrics = useMemo<BenefitsMetrics>(() => {
     const pkgList = packages.data ?? [];
     const incList = incentives.data ?? [];
+    const activePackages = pkgList.filter((pkg) => pkg.status === "active");
+    const activeIncentives = incList.filter((inc) => inc.status === "active");
+
     return {
-      activePackages: pkgList.filter((pkg) => pkg.status === "active").length,
-      enrolledStaff: pkgList.reduce((sum, pkg) => sum + pkg.enrolledCount, 0),
-      monthlyBenefitValue: pkgList.reduce((sum, pkg) => sum + pkg.monthlyValue, 0),
-      activeIncentives: incList.filter((inc) => inc.status === "active").length
+      benefitsPerMonth: activePackages.reduce((sum, pkg) => sum + pkg.monthlyValue, 0),
+      activePackages: activePackages.length,
+      totalEnrolments: pkgList.reduce((sum, pkg) => sum + pkg.enrolledCount, 0),
+      bonusesThisTerm: activeIncentives.reduce((sum, inc) => sum + incentivePaidTotal(inc), 0),
+      incentiveAwards: activeIncentives.length,
+      awardRecipients: activeIncentives.reduce(
+        (sum, inc) => sum + (inc.recipients ?? inc.eligibleCount ?? 0),
+        0
+      )
     };
   }, [packages.data, incentives.data]);
 
@@ -126,6 +143,14 @@ export default function SalaryBenefitsPage() {
     ({ id, ...body }, tenant) => ({
       path: `${PACKAGES_PATH(tenant)}/${id}`,
       init: { method: "PATCH", body: JSON.stringify(body) }
+    }),
+    { invalidatePaths: (_b, tenant) => [PACKAGES_PATH(tenant)] }
+  );
+
+  const archivePackage = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({
+      path: `${PACKAGES_PATH(tenant)}/${id}/archive`,
+      init: { method: "POST" }
     }),
     { invalidatePaths: (_b, tenant) => [PACKAGES_PATH(tenant)] }
   );
@@ -178,10 +203,28 @@ export default function SalaryBenefitsPage() {
     { invalidatePaths: (_b, tenant) => [PAY_COMPONENTS_PATH(tenant)] }
   );
 
+  const openPackageForm = (mode: "create" | "edit", record?: BenefitPackageRecord | null) => {
+    setPackageFormMode(mode);
+    setEditingPackage(record ?? null);
+    setPackageFormOpen(true);
+  };
+
   const openComponentForm = (mode: "create" | "edit", record?: PayComponentRecord | null) => {
     setComponentFormMode(mode);
     setEditingComponent(record ?? null);
     setComponentFormOpen(true);
+  };
+
+  const openIncentiveForm = (mode: "create" | "edit", record?: IncentiveProgramRecord | null) => {
+    setIncentiveFormMode(mode);
+    setEditingIncentive(record ?? null);
+    setIncentiveFormOpen(true);
+  };
+
+  const refreshAll = () => {
+    void packages.refetch();
+    void incentives.refetch();
+    void payComponents.refetch();
   };
 
   const payComponentColumns: ColumnDef<PayComponentRecord, unknown>[] = [
@@ -270,340 +313,156 @@ export default function SalaryBenefitsPage() {
     }
   ];
 
-  const incentiveColumns: ColumnDef<IncentiveProgramRecord, unknown>[] = [
-    {
-      id: "expand",
-      header: "",
-      enableSorting: false,
-      cell: ({ row }) => {
-        const expanded = expandedIncentiveIds.has(row.original.id);
-        return (
-          <button
-            type="button"
-            className="pds-type-body-s-regular row-action"
-            aria-expanded={expanded}
-            aria-label={expanded ? t("collapseDetails") : t("expandDetails")}
-            onClick={() => {
-              setExpandedIncentiveIds((prev) => {
-                const next = new Set(prev);
-                if (next.has(row.original.id)) next.delete(row.original.id);
-                else next.add(row.original.id);
-                return next;
-              });
-            }}
-          >
-            <Icon name={expanded ? "expand_less" : "expand_more"} size={20} />
-          </button>
-        );
-      }
-    },
-    {
-      id: "name",
-      header: c("name"),
-      accessorKey: "name",
-      cell: ({ row }) => (
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--pds-gap-xx-small)" }}>
-          <span className="pds-type-body-m-bold">{row.original.name}</span>
-          <StatusBadge
-            status={row.original.status}
-            label={t(`status.${row.original.status}` as "status.active")}
-          />
-        </div>
-      )
-    },
-    {
-      id: "cadence",
-      header: t("cadenceLabel"),
-      accessorKey: "cadence",
-      cell: ({ row }) => t(`cadence.${row.original.cadence}` as "cadence.monthly")
-    },
-    {
-      id: "award",
-      header: t("award"),
-      cell: ({ row }) => awardLabel(row.original, t)
-    },
-    {
-      id: "eligible",
-      header: t("eligibleStaff"),
-      accessorKey: "eligibleCount",
-      cell: ({ row }) => String(row.original.eligibleCount)
-    },
-    {
-      id: "actions",
-      header: c("actions"),
-      enableSorting: false,
-      cell: ({ row }) => (
-        <button
-          type="button"
-          className="pds-type-body-s-regular row-action"
-          onClick={() => {
-            setIncentiveFormMode("edit");
-            setEditingIncentive(row.original);
-            setIncentiveFormOpen(true);
-          }}
-        >
-          {c("edit")}
-        </button>
-      )
-    }
-  ];
-
   if (!canManage) {
     return null;
   }
 
   return (
-    <div className="directory-page">
+    <div className="directory-page benefits-page">
       <ModulePageHeader
         navKey="salary"
         title={t("bonusesBenefits")}
         description={t("bonusesBenefitsDescription")}
         breadcrumbs={moduleBreadcrumbs("salary", nav, [{ label: t("bonusesBenefits") }])}
         actions={
-          <>
-            <button
-              type="button"
-              className="pds-type-body-m-bold btn-ghost"
-              onClick={() => {
-                void packages.refetch();
-                void incentives.refetch();
-                void payComponents.refetch();
-              }}
-            >
-              <Icon name="refresh" />
-              {c("refresh")}
-            </button>
-            {tab === "packages" ? (
-              <button
-                type="button"
-                className="pds-type-body-m-bold btn-primary"
-                onClick={() => {
-                  setPackageFormMode("create");
-                  setEditingPackage(null);
-                  setPackageFormOpen(true);
-                }}
-              >
-                <Icon name="add" />
-                {t("addBenefitPackage")}
-              </button>
-            ) : tab === "incentives" ? (
-              <button
-                type="button"
-                className="pds-type-body-m-bold btn-primary"
-                onClick={() => {
-                  setIncentiveFormMode("create");
-                  setEditingIncentive(null);
-                  setIncentiveFormOpen(true);
-                }}
-              >
-                <Icon name="add" />
-                {t("addIncentiveProgram")}
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="pds-type-body-m-bold btn-primary"
-                onClick={() => openComponentForm("create")}
-              >
-                <Icon name="add" />
-                {t("addComponent")}
-              </button>
-            )}
-          </>
+          <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={refreshAll}>
+            <Icon name="refresh" />
+            {c("refresh")}
+          </button>
         }
       />
 
-      <StatGrid>
+      <StatGrid className="benefits-page__stats">
         <StatCard
-          label={t("kpiActivePackages")}
-          value={metrics.activePackages}
-          icon={<Icon name="card_giftcard" size={20} />}
+          label={t("kpiBenefitsMonth")}
+          value={compactAmount(metrics.benefitsPerMonth)}
+          hint={t("kpiBenefitsMonthHint")}
+          icon={<Icon name="savings" size={20} />}
           accent
         />
         <StatCard
-          label={t("kpiEnrolledStaff")}
-          value={metrics.enrolledStaff}
-          icon={<Icon name="groups" size={20} />}
+          label={t("kpiActivePackages")}
+          value={metrics.activePackages}
+          hint={t("kpiActivePackagesHint", { count: metrics.totalEnrolments })}
+          icon={<Icon name="redeem" size={20} />}
         />
         <StatCard
-          label={t("kpiMonthlyBenefitValue")}
-          value={formatMoney(metrics.monthlyBenefitValue)}
-          icon={<Icon name="savings" size={20} />}
-        />
-        <StatCard
-          label={t("kpiActiveIncentives")}
-          value={metrics.activeIncentives}
+          label={t("kpiBonusesThisTerm")}
+          value={compactAmount(metrics.bonusesThisTerm)}
+          hint={t("kpiBonusesThisTermHint")}
           icon={<Icon name="emoji_events" size={20} />}
+        />
+        <StatCard
+          label={t("kpiIncentiveAwards")}
+          value={metrics.incentiveAwards}
+          hint={t("kpiIncentiveAwardsHint", { count: metrics.awardRecipients })}
+          icon={<Icon name="military_tech" size={20} />}
         />
       </StatGrid>
 
-      <SegmentedControl
-        ariaLabel={t("benefitsTabLabel")}
-        value={tab}
-        onChange={(id: string) => setTab(id as "packages" | "incentives" | "components")}
-        options={[
-          { id: "packages", label: t("tabPackages"), icon: "card_giftcard" },
-          { id: "incentives", label: t("tabIncentives"), icon: "emoji_events" },
-          { id: "components", label: t("tabPayComponents"), icon: "payments" }
-        ]}
-      />
+      <div className="benefits-workspace-toolbar">
+        <IconTagControl
+          ariaLabel={t("benefitsTabLabel")}
+          value={tab}
+          onChange={(id: string) => setTab(id as "packages" | "incentives" | "components")}
+          options={[
+            { id: "packages", label: t("tabComplimentaryPackages"), icon: "redeem" },
+            { id: "incentives", label: t("tabBonusIncentives"), icon: "military_tech" },
+            { id: "components", label: t("tabPayComponents"), icon: "payments" }
+          ]}
+        />
+        {tab === "packages" ? (
+          <button
+            type="button"
+            className="pds-type-body-m-bold btn-primary"
+            onClick={() => openPackageForm("create")}
+          >
+            <Icon name="add" />
+            {t("addBenefitPackage")}
+          </button>
+        ) : tab === "incentives" ? (
+          <button
+            type="button"
+            className="pds-type-body-m-bold btn-primary"
+            onClick={() => openIncentiveForm("create")}
+          >
+            <Icon name="add" />
+            {t("newIncentiveProgram")}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="pds-type-body-m-bold btn-primary"
+            onClick={() => openComponentForm("create")}
+          >
+            <Icon name="add" />
+            {t("addComponent")}
+          </button>
+        )}
+      </div>
 
       {tab === "packages" ? (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-            gap: "var(--pds-gap-large)"
-          }}
-        >
+        <div className="benefits-packages-grid">
           {(packages.data ?? []).map((pkg) => (
-            <article
+            <BenefitPackageCard
               key={pkg.id}
-              className="panel"
-              style={{ display: "flex", flexDirection: "column", gap: "var(--pds-gap-medium)" }}
-              tabIndex={0}
-              onClick={(event) => {
-                if (isPadaukRowInteractiveTarget(event.target)) return;
-                setPackageFormMode("edit");
-                setEditingPackage(pkg);
-                setPackageFormOpen(true);
-              }}
-              onKeyDown={(event) => {
-                if (event.key !== "Enter" && event.key !== " ") return;
-                event.preventDefault();
-                setPackageFormMode("edit");
-                setEditingPackage(pkg);
-                setPackageFormOpen(true);
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <span
-                  className="stat-card__icon"
-                  style={{ margin: 0 }}
-                  aria-hidden
-                >
-                  <Icon name={pkg.icon ?? "card_giftcard"} size={22} />
-                </span>
-                <StatusBadge
-                  status={pkg.status}
-                  label={t(`status.${pkg.status}` as "status.active")}
-                />
-              </div>
-              <div>
-                <h2 className="pds-type-title-xs-bold">{pkg.name}</h2>
-                {pkg.description ? (
-                  <p className="pds-type-body-s-regular muted" style={{ marginTop: "var(--pds-gap-xx-small)" }}>
-                    {pkg.description}
-                  </p>
-                ) : null}
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span className="pds-type-caption-s">{t("monthlyValue")}</span>
-                <strong className="pds-type-body-m-bold">{formatMoney(pkg.monthlyValue)}</strong>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span className="pds-type-caption-s">{t("enrolledCount")}</span>
-                <strong className="pds-type-body-m-bold">{pkg.enrolledCount}</strong>
-              </div>
-              <Chip>{t(`eligibility.${pkg.eligibility}` as "eligibility.all_staff")}</Chip>
-              <button
-                type="button"
-                className="pds-type-body-s-regular row-action"
-                style={{ alignSelf: "flex-start" }}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setPackageFormMode("edit");
-                  setEditingPackage(pkg);
-                  setPackageFormOpen(true);
-                }}
-              >
-                <Icon name="edit" size={16} />
-                {c("edit")}
-              </button>
-            </article>
+              pkg={pkg}
+              onEdit={(record) => openPackageForm("edit", record)}
+              onArchive={(record) =>
+                void archivePackage.mutateAsync({ id: record.id }).then(() => {
+                  void packages.refetch();
+                })
+              }
+            />
           ))}
         </div>
       ) : tab === "incentives" ? (
-        <DataTableSection>
-          <section className="panel">
-            <TablePanelBody
-              loading={incentives.isLoading}
-              error={incentives.isError ? c("somethingWrong") : null}
-              empty={!incentives.data?.length}
-              emptyTitle={t("emptyIncentivesTitle")}
-              emptyDescription={t("emptyIncentivesDescription")}
-              emptyIcon="emoji_events"
-            >
-              <DataTable
-                columns={incentiveColumns}
-                data={incentives.data ?? []}
-                renderSubRow={(row) =>
-                  expandedIncentiveIds.has(row.original.id) ? (
-                    <tr className="padauk-table__subrow">
-                      <td colSpan={incentiveColumns.length}>
-                        <div
-                          style={{
-                            display: "grid",
-                            gap: "var(--pds-gap-x-small)",
-                            padding: "var(--pds-padding-medium) var(--pds-padding-large)"
-                          }}
-                        >
-                          <div>
-                            <span className="pds-type-caption-s">{t("cadenceLabel")}</span>
-                            <p className="pds-type-body-m-medium">
-                              {t(`cadence.${row.original.cadence}` as "cadence.monthly")}
-                            </p>
-                          </div>
-                          <div>
-                            <span className="pds-type-caption-s">{t("award")}</span>
-                            <p className="pds-type-body-m-medium">{awardLabel(row.original, t)}</p>
-                          </div>
-                          {row.original.description ? (
-                            <div>
-                              <span className="pds-type-caption-s">{c("description")}</span>
-                              <p className="pds-type-body-s-regular muted">{row.original.description}</p>
-                            </div>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  ) : null
-                }
-              />
-            </TablePanelBody>
-          </section>
-        </DataTableSection>
+        <div className="benefits-incentives-section">
+          <p className="pds-type-body-s-regular benefits-incentives-section__context">
+            {t("incentivesContextLine")}
+          </p>
+          <DataTableSection>
+            <section className="panel incentive-programs-panel">
+              <TablePanelBody
+                variant="plain"
+                loading={incentives.isLoading}
+                error={incentives.isError ? c("somethingWrong") : null}
+                empty={!incentives.data?.length}
+                emptyTitle={t("emptyIncentivesTitle")}
+                emptyDescription={t("emptyIncentivesDescription")}
+                emptyIcon="emoji_events"
+              >
+                <IncentiveProgramsTable
+                  programs={incentives.data ?? []}
+                  onEdit={(program) => openIncentiveForm("edit", program)}
+                />
+              </TablePanelBody>
+            </section>
+          </DataTableSection>
+        </div>
       ) : (
         <DataTableSection>
-          <section className="panel">
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                padding: "var(--pds-padding-medium) var(--pds-padding-large) 0"
-              }}
-            >
-              <ArchiveVisibilityFilter
-                value={componentArchiveVisibility}
-                onChange={setComponentArchiveVisibility}
-              />
-            </div>
-            <TablePanelBody
-              loading={payComponents.isLoading}
-              error={payComponents.isError ? c("somethingWrong") : null}
-              empty={!filteredPayComponents.length}
-              emptyTitle={t("emptyPayComponentsTitle")}
-              emptyDescription={t("emptyPayComponentsDescription")}
-              emptyIcon="payments"
-              unwrapEmpty
-            >
-              <DataTable
-                columns={payComponentColumns}
-                data={filteredPayComponents}
-                onRowClick={(row) => openComponentForm("edit", row)}
-              />
-            </TablePanelBody>
-          </section>
+          <div className="benefits-components-toolbar">
+            <ArchiveVisibilityFilter
+              value={componentArchiveVisibility}
+              onChange={setComponentArchiveVisibility}
+            />
+          </div>
+          <TablePanelBody
+            loading={payComponents.isLoading}
+            error={payComponents.isError ? c("somethingWrong") : null}
+            empty={!filteredPayComponents.length}
+            emptyTitle={t("emptyPayComponentsTitle")}
+            emptyDescription={t("emptyPayComponentsDescription")}
+            emptyIcon="payments"
+            unwrapEmpty
+          >
+            <DataTable
+              columns={payComponentColumns}
+              data={filteredPayComponents}
+              onRowClick={(row) => openComponentForm("edit", row)}
+            />
+          </TablePanelBody>
         </DataTableSection>
       )}
 
@@ -631,10 +490,11 @@ export default function SalaryBenefitsPage() {
         record={editingIncentive}
         submitting={createIncentive.isPending || updateIncentive.isPending}
         onSubmit={async (values) => {
+          const { icon: _icon, ...payload } = values;
           if (incentiveFormMode === "edit" && editingIncentive) {
-            await updateIncentive.mutateAsync({ id: editingIncentive.id, ...values });
+            await updateIncentive.mutateAsync({ id: editingIncentive.id, ...payload });
           } else {
-            await createIncentive.mutateAsync(values);
+            await createIncentive.mutateAsync(payload);
           }
           setIncentiveFormOpen(false);
           void incentives.refetch();
