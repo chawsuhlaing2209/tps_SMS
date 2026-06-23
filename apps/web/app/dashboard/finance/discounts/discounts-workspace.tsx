@@ -7,9 +7,8 @@ import {
   type DiscountRuleCriteria
 } from "@sms/shared";
 import { useTranslations } from "next-intl";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import { Badge } from "../../../../components/shared/badge";
 import { Toggle } from "../../../../components/shared/toggle";
 import { EmptyState } from "../../../../components/shared/empty-state";
@@ -24,14 +23,12 @@ import { hasAnyPermission } from "../../../lib/permissions";
 import { getSession } from "../../../lib/session";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
 import { PageHeader } from "../../page-header-context";
-import { DiscountRequestsPanel } from "./discount-requests-panel";
+import { DiscountSetupModal } from "./discount-setup-workspace";
 import { type DiscountRuleRecord } from "./discount-form";
 
 const RULES_PATH = (tenant: string) => `/tenants/${tenant}/discounts/rules`;
 const METRICS_PATH = (tenant: string, academicYearId: string) =>
   `/tenants/${tenant}/discounts/metrics?academicYearId=${academicYearId}`;
-
-type DiscountGroup = "automatic" | "merit" | "staff";
 
 type DiscountMetrics = {
   activeTypes: number;
@@ -61,21 +58,10 @@ const TYPE_ICON_TONES: Record<string, string> = {
   custom: "need"
 };
 
-const GROUP_ORDER: DiscountGroup[] = ["automatic", "merit", "staff"];
-
 function compactMMK(value: number) {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
   if (value >= 1_000) return `${Math.round(value / 1_000)}K`;
   return String(Math.round(value));
-}
-
-function discountGroup(rule: DiscountRuleRecord): DiscountGroup {
-  const type = normalizeDiscountType(rule.discountType);
-  if (type === "scholarship") return "merit";
-  if (type === "staff_child") return "staff";
-  if (type === "sibling" || type === "early_payment") return "automatic";
-  const mode = rule.triggerMode ?? defaultTriggerMode(rule.discountType);
-  return mode === "request" ? "staff" : "automatic";
 }
 
 function appliesToFor(rule: DiscountRuleRecord): DiscountAppliesTo | undefined {
@@ -109,6 +95,19 @@ function valueTypeBadge(rule: DiscountRuleRecord, t: (key: string) => string) {
   return t("badgeFixed");
 }
 
+function applicationLabel(
+  triggerMode: string,
+  t: (key: string) => string
+): { label: string; tone: "success" | "warning" | "info" } {
+  if (triggerMode === "auto") {
+    return { label: t("applicationAutomatic"), tone: "success" };
+  }
+  if (triggerMode === "manual") {
+    return { label: t("applicationManual"), tone: "info" };
+  }
+  return { label: t("applicationOnRequest"), tone: "warning" };
+}
+
 export function DiscountsWorkspace() {
   const router = useRouter();
   const t = useTranslations("discounts");
@@ -117,8 +116,35 @@ export function DiscountsWorkspace() {
   const permissions = getSession()?.permissions;
   const canView = hasAnyPermission(permissions, ["discount.request", "discount.approve"]);
   const canManage = hasAnyPermission(permissions, ["discount.approve"]);
-  const [view, setView] = useState<"rules" | "requests">("rules");
   const [deletingRule, setDeletingRule] = useState<DiscountRuleRecord | null>(null);
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [setupMode, setSetupMode] = useState<"create" | "edit">("create");
+  const [editingRuleId, setEditingRuleId] = useState<string | undefined>();
+  const searchParams = useSearchParams();
+
+  const openCreate = useCallback(() => {
+    setSetupMode("create");
+    setEditingRuleId(undefined);
+    setSetupOpen(true);
+  }, []);
+
+  const openEdit = useCallback((ruleId: string) => {
+    setSetupMode("edit");
+    setEditingRuleId(ruleId);
+    setSetupOpen(true);
+  }, []);
+
+  useEffect(() => {
+    if (searchParams.get("create") === "1") {
+      openCreate();
+      router.replace("/dashboard/finance/discounts");
+    }
+    const editId = searchParams.get("edit");
+    if (editId) {
+      openEdit(editId);
+      router.replace("/dashboard/finance/discounts");
+    }
+  }, [searchParams, openCreate, openEdit, router]);
 
   const currentYear = useCurrentAcademicYear();
   const academicYearId = currentYear.data?.id ?? "";
@@ -146,19 +172,6 @@ export function DiscountsWorkspace() {
 
   const visibleRules = (rules.data ?? []).filter((rule) => rule.status !== "archived");
   const enabledRules = visibleRules.filter((rule) => rule.status === "active");
-
-  const groupedRules = useMemo(() => {
-    const groups: Record<DiscountGroup, DiscountRuleRecord[]> = {
-      automatic: [],
-      merit: [],
-      staff: []
-    };
-    for (const rule of visibleRules) {
-      groups[discountGroup(rule)].push(rule);
-    }
-    return groups;
-  }, [visibleRules]);
-
   const metricData = metrics.data;
 
   async function toggleRule(rule: DiscountRuleRecord, active: boolean) {
@@ -179,8 +192,9 @@ export function DiscountsWorkspace() {
         ? TYPE_ICON_TONES[rule.discountType] ?? TYPE_ICON_TONES[normalizedType] ?? "need"
         : "need";
     const triggerMode = rule.triggerMode ?? defaultTriggerMode(rule.discountType);
-    const isAuto = triggerMode === "auto";
+    const application = applicationLabel(triggerMode, t);
     const isEnabled = rule.status === "active";
+    const isSibling = normalizedType === "sibling";
 
     return (
       <tr
@@ -194,12 +208,12 @@ export function DiscountsWorkspace() {
         tabIndex={0}
         onClick={(event) => {
           if (isPadaukRowInteractiveTarget(event.target)) return;
-          router.push(`/dashboard/finance/discounts/${rule.id}`);
+          openEdit(rule.id);
         }}
         onKeyDown={(event) => {
           if (event.key !== "Enter" && event.key !== " ") return;
           event.preventDefault();
-          router.push(`/dashboard/finance/discounts/${rule.id}`);
+          openEdit(rule.id);
         }}
       >
         <td>
@@ -218,9 +232,7 @@ export function DiscountsWorkspace() {
         <td className="discount-table__value">{ruleValueLabel(rule, t)}</td>
         <td className="discount-table__scope">{ruleScopeLabel(rule, t)}</td>
         <td>
-          <Badge tone={isAuto ? "success" : "warning"}>
-            {isAuto ? t("applicationAutomatic") : t("applicationOnRequest")}
-          </Badge>
+          <Badge tone={application.tone}>{application.label}</Badge>
         </td>
         <td>
           {canManage ? (
@@ -235,6 +247,19 @@ export function DiscountsWorkspace() {
           )}
         </td>
         <td className="padauk-table__actions">
+          {canManage && isSibling ? (
+            <button
+              type="button"
+              className="discount-table__configure"
+              onClick={(event) => {
+                event.stopPropagation();
+                openEdit(rule.id);
+              }}
+            >
+              <Icon name="tune" size={16} />
+              {t("configure")}
+            </button>
+          ) : null}
           {canManage ? (
             <RowMoreActionsMenu
               ariaLabel={c("moreActions")}
@@ -243,13 +268,13 @@ export function DiscountsWorkspace() {
                   id: "view",
                   label: c("view"),
                   icon: "visibility",
-                  onSelect: () => router.push(`/dashboard/finance/discounts/${rule.id}`)
+                  onSelect: () => openEdit(rule.id)
                 },
                 {
                   id: "edit",
                   label: c("edit"),
                   icon: "edit",
-                  onSelect: () => router.push(`/dashboard/finance/discounts/${rule.id}`)
+                  onSelect: () => openEdit(rule.id)
                 },
                 {
                   id: "delete",
@@ -266,45 +291,6 @@ export function DiscountsWorkspace() {
     );
   }
 
-  function renderGroup(group: DiscountGroup, items: DiscountRuleRecord[]) {
-    if (!items.length) {
-      return null;
-    }
-
-    const titleKey =
-      group === "automatic" ? "groupAutomatic" : group === "merit" ? "groupMerit" : "groupStaff";
-    const metaKey =
-      group === "automatic"
-        ? "groupAutomaticMeta"
-        : group === "merit"
-          ? "groupMeritMeta"
-          : "groupStaffMeta";
-
-    return (
-      <section key={group} className="discount-list-group">
-        <div className="discount-list-group__head">
-          <h2 className="pds-type-title-xs-bold">{t(titleKey)}</h2>
-          <span className="discount-list-group__meta">{t(metaKey, { count: items.length })}</span>
-        </div>
-        <div className="discount-table-wrap">
-          <table className="padauk-table discount-table">
-            <thead>
-              <tr>
-                <th className="pds-type-caption-s">{t("colDiscount")}</th>
-                <th className="pds-type-caption-s">{t("colValue")}</th>
-                <th className="pds-type-caption-s">{t("colScope")}</th>
-                <th className="pds-type-caption-s">{t("colApplication")}</th>
-                <th className="pds-type-caption-s">{t("colActive")}</th>
-                <th className="pds-type-caption-s">{t("colAction")}</th>
-              </tr>
-            </thead>
-            <tbody>{items.map(renderRuleRow)}</tbody>
-          </table>
-        </div>
-      </section>
-    );
-  }
-
   return (
     <div className="discounts-config-page">
       <PageHeader
@@ -313,23 +299,24 @@ export function DiscountsWorkspace() {
           { label: nav("finance"), href: "/dashboard/finance/invoices" },
           { label: t("pageTitle") }
         ]}
+        actions={
+          canManage ? (
+            <button type="button" className="btn-primary" onClick={openCreate}>
+              <Icon name="add" />
+              {t("newDiscount")}
+            </button>
+          ) : null
+        }
       />
 
-      {canManage ? (
-        <div className="discounts-page-actions">
-          <Link href="/dashboard/finance/discounts/new" className="btn-primary">
-            <Icon name="add" />
-            {t("newDiscount")}
-          </Link>
-        </div>
+      {!canView ? (
+        <section className="panel">
+          <EmptyState embedded icon="lock" title={t("noAccess")} />
+        </section>
       ) : null}
 
-      
-
-      {view === "requests" && canView ? <DiscountRequestsPanel /> : null}
-
-      {view === "rules" && canView ? (
-        <StatGrid>
+      {canView ? (
+        <StatGrid className="discount-stat-grid">
           <StatCard
             accent
             icon={<Icon name="sell" size={18} />}
@@ -362,19 +349,17 @@ export function DiscountsWorkspace() {
         </StatGrid>
       ) : null}
 
-      {!canView ? (
-        <section className="panel">
-          <EmptyState embedded icon="lock" title={t("noAccess")} />
-        </section>
+      {canView && rules.isLoading ? (
+        <p className="pds-type-body-s-regular muted">{c("loading")}</p>
       ) : null}
-      {view === "rules" && canView && rules.isLoading ? <p className="pds-type-body-s-regular muted">{c("loading")}</p> : null}
-      {view === "rules" && canView && rules.isError ? (
+
+      {canView && rules.isError ? (
         <section className="panel">
           <EmptyState embedded icon="error" title={c("somethingWrong")} />
         </section>
       ) : null}
 
-      {view === "rules" && canView && !rules.isLoading && !rules.isError && !visibleRules.length ? (
+      {canView && !rules.isLoading && !rules.isError && !visibleRules.length ? (
         <section className="panel">
           <EmptyState
             embedded
@@ -382,8 +367,8 @@ export function DiscountsWorkspace() {
             title={t("noRules")}
             action={
               canManage ? (
-                <Button buttonType="filled" buttonColor="secondary" prefixIcon="add" asChild>
-                  <Link href="/dashboard/finance/discounts/new">{t("addDiscount")}</Link>
+                <Button buttonType="filled" buttonColor="secondary" prefixIcon="add" onClick={openCreate}>
+                  {t("addDiscount")}
                 </Button>
               ) : null
             }
@@ -391,9 +376,36 @@ export function DiscountsWorkspace() {
         </section>
       ) : null}
 
-      {view === "rules" ? GROUP_ORDER.map((group) => renderGroup(group, groupedRules[group])) : null}
+      {canView && visibleRules.length ? (
+        <section className="panel discount-table-panel">
+          <div className="discount-table-wrap">
+            <table className="padauk-table discount-table">
+              <thead>
+                <tr>
+                  <th className="pds-type-caption-s">{t("colDiscount")}</th>
+                  <th className="pds-type-caption-s">{t("colValue")}</th>
+                  <th className="pds-type-caption-s">{t("colScope")}</th>
+                  <th className="pds-type-caption-s">{t("colApplication")}</th>
+                  <th className="pds-type-caption-s">{t("colActive")}</th>
+                  <th className="pds-type-caption-s">{t("colAction")}</th>
+                </tr>
+              </thead>
+              <tbody>{visibleRules.map(renderRuleRow)}</tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
 
-      {view === "rules" ? <p className="discounts-config-footnote">{t("infoCallout")}</p> : null}
+      <DiscountSetupModal
+        open={setupOpen}
+        onOpenChange={setSetupOpen}
+        mode={setupMode}
+        ruleId={editingRuleId}
+        onSaved={() => {
+          void rules.refetch();
+          void metrics.refetch();
+        }}
+      />
 
       <ConfirmDialog
         open={deletingRule !== null}

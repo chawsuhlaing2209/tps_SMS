@@ -13,6 +13,7 @@ import { useApiMutation } from "../../../../lib/api";
 import { Field } from "../../../../lib/form";
 import { Icon } from "../../../../lib/material-icon";
 import { RecordFormSheet } from "../../../../lib/record-sheet";
+import { RecordFormModal } from "../../../../lib/record-modal";
 import { StudentCombobox } from "../../../../lib/student-combobox";
 import { toastSuccess } from "../../../../lib/toast";
 import { useCurrentAcademicYear } from "../../../../lib/use-current-academic-year";
@@ -45,8 +46,8 @@ function currentBillingMonth() {
 }
 
 type InvoicesActionsContextValue = {
-  billingMonth: string;
-  setBillingMonth: (value: string) => void;
+  issueDateRange: string;
+  setIssueDateRange: (value: string) => void;
   gradeId?: string;
   gradeName?: string;
   openCreateSheet: () => void;
@@ -81,7 +82,9 @@ export function InvoicesActionsProvider({
   const t = useTranslations("finance");
   const c = useTranslations("common");
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [billingMonth, setBillingMonth] = useState(currentBillingMonth);
+  const [generateModalOpen, setGenerateModalOpen] = useState(false);
+  const [generateMonth, setGenerateMonth] = useState(() => currentBillingMonth());
+  const [issueDateRange, setIssueDateRange] = useState("");
 
   const currentYear = useCurrentAcademicYear();
   const generateYearId = currentYear.data?.id ?? "";
@@ -138,13 +141,22 @@ export function InvoicesActionsProvider({
   });
 
   const handleGenerate = useCallback(() => {
+    setGenerateMonth(currentBillingMonth());
+    setGenerateModalOpen(true);
+  }, []);
+
+  const confirmGenerate = useCallback(() => {
+    if (!generateMonth) return;
+
     void generate
       .mutateAsync({
         academicYearId: generateYearId,
-        billingMonth,
+        billingMonth: generateMonth,
         ...(gradeId ? { gradeId } : {}),
       })
       .then((result) => {
+        setGenerateModalOpen(false);
+
         if (result.status === "queued") {
           toastSuccess(t("generateMonthlyQueued", { month: result.month }));
           return;
@@ -180,25 +192,66 @@ export function InvoicesActionsProvider({
               })
         );
       });
-  }, [billingMonth, generate, generateYearId, gradeId, gradeName, onCreated, t]);
+  }, [generate, generateMonth, generateYearId, gradeId, gradeName, onCreated, t]);
 
   const value = useMemo(
     () => ({
-      billingMonth,
-      setBillingMonth,
+      issueDateRange,
+      setIssueDateRange,
       gradeId,
       gradeName,
       openCreateSheet: () => setSheetOpen(true),
       handleGenerate,
       generatePending: generate.isPending,
-      generateDisabled: !generateYearId || !billingMonth || generate.isPending,
+      generateDisabled: !generateYearId || generate.isPending,
     }),
-    [billingMonth, gradeId, gradeName, generate.isPending, generateYearId, handleGenerate]
+    [issueDateRange, gradeId, gradeName, generate.isPending, generateYearId, handleGenerate]
   );
 
   return (
     <InvoicesActionsContext.Provider value={value}>
       {children}
+      <RecordFormModal
+        open={generateModalOpen}
+        onOpenChange={setGenerateModalOpen}
+        title={t("generateMonthlyModalTitle")}
+        help={t("generateMonthlyModalHelp")}
+        headerIcon="bolt"
+        onSubmit={(event) => {
+          event.preventDefault();
+          confirmGenerate();
+        }}
+        footer={
+          <>
+            <button
+              type="button"
+              className="pds-type-body-m-bold btn-ghost"
+              onClick={() => setGenerateModalOpen(false)}
+            >
+              {c("cancel")}
+            </button>
+            <button
+              type="submit"
+              className="pds-type-body-m-bold btn-primary"
+              disabled={!generateMonth || generate.isPending}
+            >
+              <Icon name="bolt" />
+              {generate.isPending ? c("loading") : t("generateMonthlyButton")}
+            </button>
+          </>
+        }
+      >
+        <Field label={t("month")}>
+          <PdsDatePickerField
+            type="month"
+            variant="form"
+            value={generateMonth}
+            onValueChange={setGenerateMonth}
+            placeholder={t("month")}
+            ariaLabel={t("month")}
+          />
+        </Field>
+      </RecordFormModal>
       <RecordFormSheet
         open={sheetOpen}
         onOpenChange={(open) => {
@@ -305,21 +358,25 @@ export function InvoicesHeaderActionsPortal() {
   return createPortal(<InvoicesHeaderActions />, target);
 }
 
-/** Billing month filter — lives in the page toolbar row. */
-export function InvoicesBillingMonthFilter() {
+/** Issue date range filter — lives in the page toolbar row. */
+export function InvoicesIssueDateRangeFilter() {
   const t = useTranslations("finance");
-  const { billingMonth, setBillingMonth } = useInvoicesActionsContext();
+  const { issueDateRange, setIssueDateRange } = useInvoicesActionsContext();
 
   return (
     <PdsDatePickerField
-      type="month"
+      type="day"
       variant="filter"
-      value={billingMonth}
-      onValueChange={setBillingMonth}
-      ariaLabel={t("month")}
-      placeholder={t("month")}
+      selectionMode="range"
+      value={issueDateRange}
+      onValueChange={setIssueDateRange}
+      ariaLabel={t("issueDateRange")}
+      placeholder={t("issueDateRange")}
     />
   );
 }
+
+/** @deprecated Use {@link InvoicesIssueDateRangeFilter}. */
+export const InvoicesBillingMonthFilter = InvoicesIssueDateRangeFilter;
 
 export type { InvoiceSource };

@@ -10,6 +10,7 @@ import { getSession } from "../../../../lib/session";
 import { PageHeader } from "../../../page-header-context";
 import { StatusBadge } from "../../../../../components/shared/badge";
 import { EmptyState } from "../../../../../components/shared/empty-state";
+import { NavigationBackLink } from "../../../../../components/shared/navigation-back-link";
 import {
   InvoiceDocumentBody,
   mapInvoiceDetailToDocument,
@@ -150,12 +151,15 @@ export default function InvoiceDetailPage({
     <div className="page-stack invoice-page">
       <PageHeader
         title={data.invoiceNumber}
+        segment={{ label: data.invoiceNumber, href: `/dashboard/finance/invoices/${invoiceId}` }}
         breadcrumbs={[
           { label: nav("finance"), href: "/dashboard/finance/invoices" },
           { label: t("invoices"), href: "/dashboard/finance/invoices" },
           { label: data.invoiceNumber }
         ]}
       />
+
+      <NavigationBackLink fallback={{ label: t("invoices"), href: "/dashboard/finance/invoices" }} />
 
       <article className="invoice-doc invoice-doc--page">
         <InvoiceDocumentBody

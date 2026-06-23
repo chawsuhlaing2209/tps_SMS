@@ -1,5 +1,6 @@
 "use client";
-import { FormInput } from "../../../../components/shared/form-input";
+import { InputWrapper, TextInput } from "../../../../components/shared/form-input";
+import { Toggle } from "../../../../components/shared/toggle";
 
 import { mandatoryEnrollmentFeeTypes } from "@sms/shared";
 import { cn } from "../../../../lib/utils";
@@ -8,7 +9,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ApiError, useApiMutation, useApiQuery } from "../../../lib/api";
-import { Field } from "../../../lib/form";
 import { Icon } from "../../../lib/material-icon";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { zodResolver } from "../../../lib/zod-resolver";
@@ -88,6 +88,26 @@ function annualizeAmount(amount: string, billingType: string): number {
     default:
       return base;
   }
+}
+
+function billingAmountSuffixKey(billingType: string): "monthly" | "term" | "once" | "annual" {
+  switch (billingType) {
+    case "monthly":
+      return "monthly";
+    case "term":
+      return "term";
+    case "one_time":
+      return "once";
+    default:
+      return "annual";
+  }
+}
+
+function resolveFeeType(required: boolean, feeType: string): string {
+  if (required) {
+    return (mandatoryEnrollmentFeeTypes as readonly string[]).includes(feeType) ? feeType : "tuition";
+  }
+  return "other";
 }
 
 function feeTypeColor(feeType: string): string {
@@ -240,6 +260,23 @@ export default function FeeStructuresPage() {
     }
   );
 
+  const updateFeeItem = useApiMutation<
+    { id: string; name?: string; feeType?: string; billingType?: string },
+    FeeItem
+  >(
+    ({ id, ...body }, tenant) => ({
+      path: `${FEE_ITEMS_PATH(tenant)}/${id}`,
+      init: { method: "PATCH", body: JSON.stringify(body) }
+    }),
+    {
+      invalidatePaths: (_b, tenant) => [
+        FEE_ITEMS_PATH(tenant),
+        PLANS_PATH(tenant),
+        workingYearId ? SUMMARY_PATH(tenant, workingYearId) : PLANS_PATH(tenant)
+      ]
+    }
+  );
+
   const deletePlan = useApiMutation<{ id: string }>(
     ({ id }, tenant) => ({
       path: `${PLANS_PATH(tenant)}/${id}`,
@@ -290,10 +327,19 @@ export default function FeeStructuresPage() {
   });
 
   const billingType = form.watch("billingType");
-  const amountValue = Number(form.watch("amount"));
-  const annualPreview = Number.isFinite(amountValue)
-    ? annualizeAmount(String(amountValue), billingType)
-    : 0;
+  const amountValue = form.watch("amount");
+  const nameValue = form.watch("name");
+  const gradeIdsValue = form.watch("gradeIds");
+  const requiredValue = form.watch("required");
+  const amountSuffix = t(`amountSuffix.${billingAmountSuffixKey(billingType)}`);
+  const allGradesSelected =
+    activeGrades.length > 0 && activeGrades.every((grade) => gradeIdsValue.includes(grade.id));
+  const someGradesSelected = gradeIdsValue.length > 0 && !allGradesSelected;
+  const previewName = nameValue.trim() || t("componentPreviewPlaceholder");
+  const previewAmount =
+    Number.isFinite(Number(amountValue)) && Number(amountValue) > 0
+      ? `${formatAmount(Number(amountValue))} ${amountSuffix}`
+      : `— ${amountSuffix}`;
 
   const openCreate = () => {
     form.reset({
@@ -607,10 +653,9 @@ export default function FeeStructuresPage() {
           }
         }}
         title={formMode?.type === "edit" ? t("editComponent") : t("addComponent")}
-        help={t("addComponentHelp")}
         onSubmit={form.handleSubmit(async (values) => {
           setFormError(null);
-          const feeType = values.required ? values.feeType : values.feeType || "other";
+          const feeType = resolveFeeType(values.required, values.feeType);
           const payload = {
             gradeIds: values.gradeIds,
             amount: Number(values.amount)
@@ -618,6 +663,12 @@ export default function FeeStructuresPage() {
 
           try {
             if (formMode?.type === "edit") {
+              await updateFeeItem.mutateAsync({
+                id: formMode.feeItemId,
+                name: values.name.trim(),
+                billingType: values.billingType,
+                feeType
+              });
               await updatePlan.mutateAsync({ id: formMode.planId, ...payload });
             } else {
               const item = await createFeeItem.mutateAsync({
@@ -643,96 +694,118 @@ export default function FeeStructuresPage() {
               {c("cancel")}
             </button>
             <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={form.formState.isSubmitting}>
-              <Icon name="add" />
               {form.formState.isSubmitting ? c("loading") : t("saveComponent")}
             </button>
           </>
         }
       >
-        {formMode?.type === "create" ? (
-          <Field label={t("componentName")} error={form.formState.errors.name?.message}>
-            <FormInput
+        <div className={styles.formStack}>
+          <div className={styles.componentPreview}>
+            <p className={cn("pds-type-body-m-bold", styles.componentPreviewName)}>{previewName}</p>
+            <p className={cn("pds-type-title-s-extrabold", styles.componentPreviewAmount)}>{previewAmount}</p>
+            {requiredValue ? (
+              <span className={cn("pds-type-label-s-bold", styles.componentPreviewBadge)}>
+                {t("markRequiredAutoApplied")}
+              </span>
+            ) : null}
+          </div>
+
+          <InputWrapper label={t("componentName")} error={form.formState.errors.name?.message}>
+            <TextInput
               {...form.register("name")}
               placeholder={t("componentNamePlaceholder")}
             />
-          </Field>
-        ) : null}
+          </InputWrapper>
 
-        <div>
-          <p className={cn("pds-type-label-s-medium", styles.modalSectionLabel)}>{t("billingFrequency")}</p>
-          <div className={styles.pillRow}>
-            {BILLING_TYPES.map((value) => (
-              <button
-                key={value}
-                type="button"
-                className={cn("pds-type-body-s-semibold", styles.pill, billingType === value && styles.pillActive)}
-                onClick={() => form.setValue("billingType", value, { shouldDirty: true })}
-              >
-                {t(`billingTypes.${value}`)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <Field label={t("annualAmount")} error={form.formState.errors.amount?.message}>
-          <FormInput type="number" step="1" {...form.register("amount")} />
-          <p className={cn("pds-type-body-s-regular", styles.amountHint)}>
-            {t("amountSplitHint", {
-              term: formatMmk(annualPreview / 3),
-              month: formatMmk(annualPreview / 12)
-            })}
-          </p>
-        </Field>
-
-        <div>
-          <p className={cn("pds-type-label-s-medium", styles.modalSectionLabel)}>{t("applyToGrades")}</p>
-          <p className="pds-type-body-s-regular muted">{t("applyToGradesHelp")}</p>
-          <div className={`${styles.pillRow} ${styles.gradePillRow}`} style={{ marginTop: 12 }}>
-            {activeGrades.map((grade) => {
-              const selected = form.watch("gradeIds").includes(grade.id);
-              return (
+          <div>
+            <p className={cn("pds-type-label-s-medium", styles.modalSectionLabel)}>{t("billingFrequency")}</p>
+            <div className={styles.pillRow}>
+              {BILLING_TYPES.map((value) => (
                 <button
-                  key={grade.id}
+                  key={value}
                   type="button"
-                  className={cn("pds-type-body-s-semibold", styles.gradePill, selected && styles.gradePillActive)}
-                  onClick={() => toggleGrade(grade.id)}
+                  className={cn("pds-type-body-s-semibold", styles.pill, billingType === value && styles.pillActive)}
+                  onClick={() => form.setValue("billingType", value, { shouldDirty: true })}
                 >
-                  {selected ? <Icon name="check" size={14} /> : null}
-                  {grade.name}
+                  {t(`billingTypes.${value}`)}
                 </button>
-              );
-            })}
+              ))}
+            </div>
           </div>
-          <button type="button" className="row-action" onClick={selectAllGrades}>
-            {t("selectAllGrades")}
-          </button>
-          {form.formState.errors.gradeIds ? (
-            <p className="pds-type-body-m-medium error-text">{form.formState.errors.gradeIds.message}</p>
-          ) : null}
-        </div>
 
-        {formMode?.type === "create" ? (
+          <InputWrapper label={t("amount")} error={form.formState.errors.amount?.message}>
+            <TextInput
+              type="number"
+              step="1"
+              min="0"
+              {...form.register("amount")}
+              suffix={amountSuffix}
+            />
+          </InputWrapper>
+
+          <div className={styles.gradeSection}>
+            <div className={styles.gradeSectionHead}>
+              <p className={cn("pds-type-label-s-medium", styles.gradeSectionLabel)}>{t("applyToGrades")}</p>
+              <CheckBox
+                checked={allGradesSelected}
+                indeterminate={someGradesSelected}
+                label={t("selectAllGrades")}
+                showDescription={false}
+                size="sm"
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    selectAllGrades();
+                  } else {
+                    form.setValue("gradeIds", [], { shouldValidate: true, shouldDirty: true });
+                  }
+                }}
+              />
+            </div>
+            <div className={cn(styles.pillRow, styles.gradePillRow)}>
+              {activeGrades.map((grade) => {
+                const selected = gradeIdsValue.includes(grade.id);
+                return (
+                  <button
+                    key={grade.id}
+                    type="button"
+                    className={cn("pds-type-body-s-semibold", styles.gradePill, selected && styles.gradePillActive)}
+                    onClick={() => toggleGrade(grade.id)}
+                  >
+                    {grade.name}
+                  </button>
+                );
+              })}
+            </div>
+            {form.formState.errors.gradeIds ? (
+              <p className="pds-type-body-m-medium error-text">{form.formState.errors.gradeIds.message}</p>
+            ) : null}
+          </div>
+
           <div className={styles.requiredToggle}>
-            <span>
-              <span className={cn("pds-type-body-m-medium", styles.requiredToggleTitle)}>{t("markRequired")}</span>
+            <div className={styles.requiredToggleCopy}>
+              <div className={styles.requiredToggleHeader}>
+                <span className={cn("pds-type-body-m-medium", styles.requiredToggleTitle)}>{t("markRequired")}</span>
+                {requiredValue ? (
+                  <span className={cn("pds-type-label-s-bold", styles.requiredToggleBadge)}>
+                    {t("markRequiredAutoApplied")}
+                  </span>
+                ) : null}
+              </div>
               <span className={cn("pds-type-body-s-regular", styles.requiredToggleHelp)}>{t("markRequiredHelp")}</span>
-            </span>
-            <CheckBox
-              checked={form.watch("required")}
-              showLabel={false}
-              showDescription={false}
-              onCheckedChange={(checked) =>
-                form.setValue("required", checked, { shouldValidate: true })
-              }
+            </div>
+            <Toggle
+              checked={requiredValue}
+              onCheckedChange={(checked) => form.setValue("required", checked, { shouldValidate: true })}
+              aria-label={t("markRequired")}
             />
           </div>
-        ) : null}
 
-        {formError ? (
-          <p className="pds-type-body-m-medium error-text" role="alert">
-            {formError}
-          </p>
-        ) : null}
+          {formError ? (
+            <p className="pds-type-body-m-medium error-text" role="alert">
+              {formError}
+            </p>
+          ) : null}
+        </div>
       </RecordFormSheet>
 
       <ConfirmDialog

@@ -124,6 +124,8 @@ export class ListInvoicesQueryDto {
   @IsUUID() @IsOptional() studentId?: string
   @IsString() @IsOptional() @IsIn(['enrollment', 'recurring', 'ad_hoc']) source?: string
   @IsString() @IsOptional() month?: string
+  @IsString() @IsOptional() dateFrom?: string
+  @IsString() @IsOptional() dateTo?: string
   @IsUUID() @IsOptional() academicYearId?: string
   @IsUUID() @IsOptional() gradeId?: string
   @IsString() @Transform(trimString) @IsOptional() search?: string
@@ -158,6 +160,9 @@ export class MonthlyReportQueryDto {
 
 export class BillingRosterQueryDto {
   @IsUUID() declare academicYearId: string
+  @IsString() @IsOptional() month?: string
+  @IsString() @IsOptional() dateFrom?: string
+  @IsString() @IsOptional() dateTo?: string
   @IsUUID() @IsOptional() gradeId?: string
   @IsString() @IsOptional() @IsIn(['paid', 'partial', 'due', 'overdue']) status?: string
   @IsString() @Transform(trimString) @IsOptional() search?: string
@@ -186,6 +191,7 @@ export class ReceivablesQueryDto {
 export class FinanceOverviewQueryDto {
   @IsUUID() @IsOptional() academicYearId?: string
   @IsString() @IsOptional() month?: string
+  @IsIn(['month', 'term']) @IsOptional() scope?: 'month' | 'term'
 }
 
 export class PaymentPlanInstallmentDto {

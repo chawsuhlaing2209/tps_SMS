@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import Link from "next/link";
+import { TrailLink } from "../../../../components/shared/trail-link";
 import { useMemo, useState } from "react";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { DirectoryMemberCell } from "../../../lib/data-table";
@@ -179,12 +179,13 @@ export function DiscountRequestsPanel() {
                       <DirectoryMemberCell
                         name={row.studentName}
                         subtitle={
-                          <Link
+                          <TrailLink
                             href={`/dashboard/students/${row.studentId}`}
                             className="padauk-table__link"
+                            from={{ label: t("pageTitle"), href: "/dashboard/finance/discounts" }}
                           >
                             {t("viewStudent")}
-                          </Link>
+                          </TrailLink>
                         }
                         colorKey={row.studentId}
                       />

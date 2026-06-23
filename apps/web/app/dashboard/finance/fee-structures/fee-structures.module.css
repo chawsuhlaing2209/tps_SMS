@@ -264,36 +264,96 @@
 }.modalSectionLabel {
   color: var(--pds-muted);
   margin: 0 0 var(--pds-gap-small);
-}.pillRow {
+}
+
+.formStack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pds-gap-large);
+}
+
+.componentPreview {
+  background: var(--pds-background-layout-secondary);
+  border: 1px solid var(--pds-border-color-primary);
+  border-radius: var(--pds-border-radius-12);
+  display: flex;
+  flex-direction: column;
+  gap: var(--pds-gap-x-small);
+  padding: var(--pds-gap-medium) var(--pds-gap-large);
+}
+
+.componentPreviewName {
+  color: var(--pds-text-primary);
+  margin: 0;
+}
+
+.componentPreviewAmount {
+  color: var(--pds-brand-dark);
+  margin: 0;
+}
+
+.componentPreviewBadge {
+  align-self: flex-start;
+  background: var(--pds-notification-background-success);
+  border-radius: var(--pds-radius-pill);
+  color: var(--pds-brand-dark);
+  margin-top: var(--pds-gap-x-small);
+  padding: 4px 8px;
+}
+
+.gradeSectionHead {
+  align-items: center;
+  display: flex;
+  gap: var(--pds-gap-medium);
+  justify-content: space-between;
+  margin-bottom: var(--pds-gap-small);
+}
+
+.gradeSectionLabel {
+  color: var(--pds-muted);
+  margin: 0;
+}
+
+.gradePillRow {
+  margin-top: 0;
+}
+
+.pillRow {
   display: flex;
   flex-wrap: wrap;
   gap: var(--pds-gap-small);
 }.pill {
   background: var(--pds-background-card);
   border: 1px solid var(--pds-border-color-primary);
-  border-radius: 999px;
+  border-radius: var(--pds-border-radius-8);
   color: var(--pds-text-primary);
   cursor: pointer;
   padding: var(--pds-gap-small) var(--pds-gap-medium);
-}.pillActive {
+}
+
+.pillActive {
   background: var(--pds-shell);
-  border-color: var(--pds-shell);
+  border: 1.5px solid var(--pds-shell);
   color: #fff;
-}.gradePill {
-  align-items: center;
+}
+
+.gradePill {
   background: var(--pds-background-card);
   border: 1px solid var(--pds-border-color-primary);
-  border-radius: 999px;
+  border-radius: var(--pds-border-radius-8);
   color: var(--pds-text-primary);
   cursor: pointer;
   display: inline-flex;
-  gap: 6px;
   padding: var(--pds-gap-small) var(--pds-gap-medium);
-}.gradePillActive {
+}
+
+.gradePillActive {
   background: var(--pds-shell);
-  border-color: var(--pds-shell);
+  border: 1.5px solid var(--pds-shell);
   color: #fff;
-}.requiredToggle {
+}
+
+.requiredToggle {
   align-items: center;
   background: var(--pds-background-layout-secondary);
   border: 1px solid var(--pds-border-color-primary);
@@ -302,15 +362,35 @@
   gap: var(--pds-gap-medium);
   justify-content: space-between;
   padding: var(--pds-gap-medium) var(--pds-gap-large);
-}.requiredToggleTitle {
+}
+
+.requiredToggleCopy {
+  flex: 1;
+  min-width: 0;
+}
+
+.requiredToggleHeader {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pds-gap-x-small);
+}
+
+.requiredToggleBadge {
+  background: var(--pds-notification-background-success);
+  border-radius: var(--pds-radius-pill);
+  color: var(--pds-brand-dark);
+  padding: 4px 8px;
+}
+
+.requiredToggleTitle {
   display: block;
-}.requiredToggleHelp {
+}
+
+.requiredToggleHelp {
   color: var(--pds-muted);
   display: block;
   margin-top: 2px;
-}.amountHint {
-  color: var(--pds-muted);
-  margin: var(--pds-gap-small) 0 0;
 }@media (max-width: 960px) {
   .layout {
     grid-template-columns: 1fr;

@@ -17,8 +17,9 @@ import { FinanceTableShell } from "../../finance-table-shell";
 import { ExportCsvButton } from "../../../../../components/shared/export-csv-button";
 import { PadaukSortHeader, usePadaukSort } from "../../table-sort";
 import { BillingInvoicePreviewModal } from "./invoice-preview-modal";
-import { InvoicesBillingMonthFilter } from "./invoices-actions-provider";
+import { InvoicesIssueDateRangeFilter, useInvoicesActionsContext } from "./invoices-actions-provider";
 import { RecordPaymentModal } from "./record-payment-modal";
+import { appendIssueDateRangeParams } from "../../format-finance";
 
 type Roster = {
   academicYear: { id: string; name: string };
@@ -72,6 +73,7 @@ function CollectionRosterExportPortal({
   search,
   sortKey,
   sortDir,
+  issueDateRange,
   loading
 }: {
   academicYearId: string;
@@ -80,6 +82,7 @@ function CollectionRosterExportPortal({
   search: string;
   sortKey: CollectionSortKey;
   sortDir: string;
+  issueDateRange: string;
   loading: boolean;
 }) {
   const tFees = useTranslations("finance.feesBilling");
@@ -109,6 +112,7 @@ function CollectionRosterExportPortal({
             if (gradeId) params.set("gradeId", gradeId);
             if (status !== "all") params.set("status", status);
             if (search.trim()) params.set("search", search.trim());
+            appendIssueDateRangeParams(params, issueDateRange);
             return `/tenants/${tenantId}/finance/billing/roster?${params.toString()}`;
           },
           (json) => {
@@ -155,6 +159,7 @@ export function CollectionRosterPanel() {
   const [modalOpen, setModalOpen] = useState(false);
   const [collectStudentId, setCollectStudentId] = useState<string | null>(null);
   const [previewInvoiceId, setPreviewInvoiceId] = useState<string | null>(null);
+  const { issueDateRange } = useInvoicesActionsContext();
   const { sortKey, sortDir, toggleSort } = usePadaukSort<CollectionSortKey>({
     defaultKey: "student",
     defaultDir: "asc",
@@ -163,7 +168,7 @@ export function CollectionRosterPanel() {
 
   useEffect(() => {
     setPage(0);
-  }, [gradeId, status, search, sortKey, sortDir]);
+  }, [gradeId, status, search, sortKey, sortDir, issueDateRange]);
 
   const rosterQuery = useMemo(() => {
     const params = new URLSearchParams({
@@ -176,8 +181,9 @@ export function CollectionRosterPanel() {
     if (gradeId) params.set("gradeId", gradeId);
     if (status !== "all") params.set("status", status);
     if (search.trim()) params.set("search", search.trim());
+    appendIssueDateRangeParams(params, issueDateRange);
     return params.toString();
-  }, [academicYearId, gradeId, page, search, sortDir, sortKey, status]);
+  }, [academicYearId, issueDateRange, gradeId, page, search, sortDir, sortKey, status]);
 
   const roster = useLiveApiQuery<Roster>(
     (tenant) =>
@@ -204,6 +210,7 @@ export function CollectionRosterPanel() {
         search={search}
         sortKey={sortKey}
         sortDir={sortDir}
+        issueDateRange={issueDateRange}
         loading={currentYear.isLoading || roster.isLoading}
       />
       <p className="pds-type-body-s-regular muted panel-help">{tFees("collectionViewHelp")}</p>
@@ -321,8 +328,8 @@ export function CollectionRosterPanel() {
                 }))}
               />
             </div>
-            <div className="pds-search-filters-row__filter--160">
-              <InvoicesBillingMonthFilter />
+            <div className="pds-search-filters-row__filter--range">
+              <InvoicesIssueDateRangeFilter />
             </div>
           </>
         }

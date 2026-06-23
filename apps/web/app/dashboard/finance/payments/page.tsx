@@ -2,7 +2,7 @@
 import { FormInput } from "../../../../components/shared/form-input";
 
 import { useTranslations } from "next-intl";
-import Link from "next/link";
+import { TrailLink } from "../../../../components/shared/trail-link";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useApiMutation, useLiveApiQuery } from "../../../lib/api";
@@ -464,13 +464,14 @@ export default function PaymentsPage() {
                           </button>
                         ) : null}
                         {row.invoiceId ? (
-                          <Link
+                          <TrailLink
                             href={`/dashboard/finance/invoices/${row.invoiceId}`}
                             className="pds-type-body-s-semibold table-row-action"
+                            from={{ label: t("title"), href: "/dashboard/finance/payments" }}
                           >
                             <Icon name="visibility" size={16} />
                             {t("viewInvoice")}
-                          </Link>
+                          </TrailLink>
                         ) : null}
                       </div>
                     </td>

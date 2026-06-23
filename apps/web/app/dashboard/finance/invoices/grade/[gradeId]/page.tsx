@@ -7,6 +7,7 @@ import { useCurrentAcademicYear } from "../../../../../lib/use-current-academic-
 import { TablePanelHead } from "../../../../../lib/table-panel";
 import { financeBreadcrumbs } from "../../../../../lib/page-header-utils";
 import { PageHeader } from "../../../../page-header-context";
+import { NavigationBackLink } from "../../../../../../components/shared/navigation-back-link";
 import {
   InvoicesActionsProvider,
   InvoicesHeaderActionsPortal,
@@ -28,6 +29,7 @@ export default function GradeInvoicesPage({
 }) {
   const { gradeId } = use(params);
   const t = useTranslations("finance");
+  const tOverview = useTranslations("finance.overview");
   const nav = useTranslations("nav");
   const currentYear = useCurrentAcademicYear();
   const yearId = currentYear.data?.id ?? "";
@@ -50,6 +52,9 @@ export default function GradeInvoicesPage({
             { label: pageTitle },
           ])}
           actionsPortal
+        />
+        <NavigationBackLink
+          fallback={{ label: tOverview("title"), href: "/dashboard/finance/overview" }}
         />
         <InvoicesHeaderActionsPortal />
         <section className="panel">

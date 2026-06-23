@@ -103,6 +103,7 @@ export function BillingInvoicePreviewModal({
         <InvoiceDocumentBody
           data={doc}
           isModal
+          onClose={() => onOpenChange(false)}
           onPrint={handlePrint}
           onSend={handleSend}
           sendPending={send.isPending}

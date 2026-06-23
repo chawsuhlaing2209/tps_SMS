@@ -1,13 +1,10 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { use } from "react";
-import { DiscountSetupWorkspace } from "../discount-setup-workspace";
-
-export default function EditDiscountPage({
+export default async function EditDiscountPage({
   params
 }: {
   params: Promise<{ ruleId: string }>;
 }) {
-  const { ruleId } = use(params);
-  return <DiscountSetupWorkspace mode="edit" ruleId={ruleId} />;
+  const { ruleId } = await params;
+  redirect(`/dashboard/finance/discounts?edit=${ruleId}`);
 }

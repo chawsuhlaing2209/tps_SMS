@@ -14,7 +14,7 @@ import { PaginationControls } from "../../../../lib/pagination-controls";
 import { useCurrentAcademicYear } from "../../../../lib/use-current-academic-year";
 import { Badge, type BadgeTone } from "../../../../../components/shared/badge";
 import { FinanceTableShell } from "../../finance-table-shell";
-import { formatBillingMonth, formatCreatedAt } from "../../format-finance";
+import { appendIssueDateRangeParams, formatBillingMonth, formatCreatedAt } from "../../format-finance";
 import { PadaukSortHeader, usePadaukSort } from "../../table-sort";
 import {
   PdsSearchBar,
@@ -22,7 +22,7 @@ import {
   PdsSelectField,
 } from "../../../../../components/pds";
 import { ExportCsvButton } from "../../../../../components/shared/export-csv-button";
-import { InvoicesBillingMonthFilter, useInvoicesActionsContext } from "./invoices-actions-provider";
+import { InvoicesIssueDateRangeFilter, useInvoicesActionsContext } from "./invoices-actions-provider";
 
 type InvoiceSource = "enrollment" | "recurring" | "ad_hoc";
 
@@ -80,7 +80,7 @@ function buildExportQuery(input: {
   search: string;
   sortKey: string;
   sortDir: string;
-  billingMonth: string;
+  issueDateRange: string;
   limit: number;
   offset: number;
 }) {
@@ -94,7 +94,7 @@ function buildExportQuery(input: {
   if (input.status !== "all") params.set("status", input.status);
   if (input.source !== "all") params.set("source", input.source);
   if (input.search.trim()) params.set("search", input.search.trim());
-  if (input.billingMonth) params.set("month", input.billingMonth);
+  appendIssueDateRangeParams(params, input.issueDateRange);
   return `?${params.toString()}`;
 }
 
@@ -118,7 +118,7 @@ export function InvoicesListExportPortal({
   const t = useTranslations("finance.invoiceList");
   const tFinance = useTranslations("finance");
   const tFees = useTranslations("finance.feesBilling");
-  const { billingMonth } = useInvoicesActionsContext();
+  const { issueDateRange } = useInvoicesActionsContext();
   const target = useDashPageTitleActionsTarget();
 
   if (!target) {
@@ -142,7 +142,7 @@ export function InvoicesListExportPortal({
               search: searchDebounced,
               sortKey,
               sortDir,
-              billingMonth,
+              issueDateRange,
               limit,
               offset
             })}`,
@@ -195,6 +195,7 @@ export function InvoicesListPanel() {
   const [search, setSearch] = useState("");
   const [searchDebounced, setSearchDebounced] = useState("");
   const [page, setPage] = useState(0);
+  const { issueDateRange } = useInvoicesActionsContext();
   const { sortKey, sortDir, toggleSort } = usePadaukSort({
     defaultKey: "createdAt",
     defaultDir: "desc"
@@ -205,6 +206,10 @@ export function InvoicesListPanel() {
     return () => window.clearTimeout(timer);
   }, [search]);
 
+  useEffect(() => {
+    setPage(0);
+  }, [issueDateRange]);
+
   const listQuery = useMemo(() => {
     const params = new URLSearchParams({
       limit: String(PAGE_SIZE),
@@ -214,10 +219,11 @@ export function InvoicesListPanel() {
     if (status !== "all") params.set("status", status);
     if (source !== "all") params.set("source", source);
     if (searchDebounced.trim()) params.set("search", searchDebounced.trim());
+    appendIssueDateRangeParams(params, issueDateRange);
     params.set("sortBy", sortKey);
     params.set("sortDir", sortDir);
     return `?${params.toString()}`;
-  }, [academicYearId, page, searchDebounced, sortDir, sortKey, source, status]);
+  }, [academicYearId, issueDateRange, page, searchDebounced, sortDir, sortKey, source, status]);
 
   const invoices = useApiQuery<InvoiceList>((tenant) =>
     academicYearId ? `/tenants/${tenant}/finance/invoices${listQuery}` : null
@@ -285,8 +291,8 @@ export function InvoicesListPanel() {
                 ]}
               />
             </div>
-            <div className="pds-search-filters-row__filter--160">
-              <InvoicesBillingMonthFilter />
+            <div className="pds-search-filters-row__filter--range">
+              <InvoicesIssueDateRangeFilter />
             </div>
             <div className="pds-search-filters-row__filter--160">
               <PdsSelectField

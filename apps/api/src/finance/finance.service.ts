@@ -773,6 +773,12 @@ export class FinanceService {
       )
     }
 
+    const issueDateRange = this.resolveIssueDateFilter(query)
+    if (issueDateRange) {
+      conditions.push(gte(invoices.issueDate, issueDateRange.start))
+      conditions.push(lte(invoices.issueDate, issueDateRange.end))
+    }
+
     const limit = Math.min(query.limit ?? 50, 200)
     const offset = query.offset ?? 0
     const sortDir = query.sortDir === 'asc' ? 'asc' : 'desc'
@@ -1605,6 +1611,11 @@ export class FinanceService {
       tenantId,
       query.academicYearId,
     )
+    const issueDateRange = this.resolveIssueDateFilter(query)
+    const { start: filterStart, end: filterEnd } = issueDateRange ?? {
+      start: periodStart,
+      end: periodEnd,
+    }
 
     const gradeSet = new Map<string, { id: string; name: string; sortOrder: number }>()
     if (!metricsOnly) {
@@ -1683,8 +1694,8 @@ export class FinanceService {
       ...(enrollmentInvoiceIds.length > 0 ? [inArray(invoices.id, enrollmentInvoiceIds)] : []),
       and(
         isNull(invoices.enrollmentId),
-        gte(invoices.issueDate, periodStart),
-        lte(invoices.issueDate, periodEnd),
+        gte(invoices.issueDate, filterStart),
+        lte(invoices.issueDate, filterEnd),
       ),
     ]
     const invoiceScope =
@@ -2197,6 +2208,314 @@ export class FinanceService {
 
   // ── Reports ────────────────────────────────────────────────────────────────
 
+  private resolveIssueDateFilter(query: {
+    month?: string
+    dateFrom?: string
+    dateTo?: string
+  }) {
+    const dateFrom = query.dateFrom?.trim()
+    const dateTo = query.dateTo?.trim()
+    if (dateFrom && dateTo) {
+      return { start: dateFrom, end: dateTo }
+    }
+    const month = query.month?.trim()
+    if (month) {
+      return this.issueDateRangeForMonth(month)
+    }
+    return null
+  }
+
+  private issueDateRangeForMonth(month: string) {
+    const parts = month.split('-')
+    const year = Number(parts[0] ?? 0)
+    const monthNum = Number(parts[1] ?? 0)
+    if (!year || monthNum < 1 || monthNum > 12) {
+      throw new BadRequestException('Invalid month; expected YYYY-MM')
+    }
+    const start = `${month}-01`
+    const lastDay = new Date(year, monthNum, 0).getDate()
+    const end = `${month}-${String(lastDay).padStart(2, '0')}`
+    return { start, end }
+  }
+
+  private monthRange(month: string) {
+    const parts = month.split('-')
+    const year = Number(parts[0] ?? 0)
+    const monthNum = Number(parts[1] ?? 0)
+    const start = new Date(year, monthNum - 1, 1)
+    const end = new Date(year, monthNum, 0, 23, 59, 59)
+    const prevMonth =
+      monthNum === 1
+        ? `${year - 1}-12`
+        : `${year}-${String(monthNum - 1).padStart(2, '0')}`
+    return { start, end, prevMonth }
+  }
+
+  private monthLabel(month: string) {
+    const parts = month.split('-').map(Number)
+    const year = parts[0] ?? 0
+    const monthNum = parts[1] ?? 1
+    return new Date(year, monthNum - 1, 1).toLocaleDateString('en-US', { month: 'short' })
+  }
+
+  private calcTrendPercent(current: number, previous: number) {
+    if (previous <= 0) return current > 0 ? 100 : 0
+    return Math.round(((current - previous) / previous) * 1000) / 10
+  }
+
+  private async sumVerifiedPayments(tenantId: string, start: Date, end: Date) {
+    const result = await this.db
+      .select({ total: sum(payments.amount) })
+      .from(payments)
+      .where(
+        and(
+          eq(payments.tenantId, tenantId),
+          sql`${payments.verifiedAt} >= ${start}`,
+          sql`${payments.verifiedAt} <= ${end}`,
+        ),
+      )
+    return Number(result[0]?.total ?? 0)
+  }
+
+  private async sumPaidPayroll(tenantId: string, start: Date, end: Date) {
+    const result = await this.db
+      .select({ total: sum(payrollRecords.netAmount) })
+      .from(payrollRecords)
+      .where(
+        and(
+          eq(payrollRecords.tenantId, tenantId),
+          eq(payrollRecords.status, 'paid'),
+          sql`${payrollRecords.paidAt} >= ${start}`,
+          sql`${payrollRecords.paidAt} <= ${end}`,
+        ),
+      )
+    return Number(result[0]?.total ?? 0)
+  }
+
+  private async getMonthlyTrend(tenantId: string, endMonth: string, count = 6) {
+    const parts = endMonth.split('-').map(Number)
+    let year = parts[0] ?? 0
+    let month = parts[1] ?? 1
+    const months: string[] = []
+
+    for (let i = count - 1; i >= 0; i -= 1) {
+      let m = month - i
+      let y = year
+      while (m <= 0) {
+        m += 12
+        y -= 1
+      }
+      months.push(`${y}-${String(m).padStart(2, '0')}`)
+    }
+
+    return Promise.all(
+      months.map(async (monthKey) => {
+        const { start, end } = this.monthRange(monthKey)
+        const [revenue, expenses] = await Promise.all([
+          this.sumVerifiedPayments(tenantId, start, end),
+          this.sumPaidPayroll(tenantId, start, end),
+        ])
+        return {
+          month: monthKey,
+          label: this.monthLabel(monthKey),
+          revenue,
+          expenses,
+        }
+      }),
+    )
+  }
+
+  private async getPayableSummary(tenantId: string) {
+    const rows = await this.db
+      .select({
+        total: sum(payrollRecords.netAmount),
+        staffCount: count(),
+      })
+      .from(payrollRecords)
+      .where(and(eq(payrollRecords.tenantId, tenantId), eq(payrollRecords.status, 'pending')))
+
+    return {
+      amount: Number(rows[0]?.total ?? 0),
+      staffCount: Number(rows[0]?.staffCount ?? 0),
+    }
+  }
+
+  private async getSalaryByDepartment(tenantId: string, start: Date, end: Date) {
+    const rows = await this.db
+      .select({
+        departmentName: payrollRecords.departmentName,
+        amount: sum(payrollRecords.netAmount),
+        staffCount: count(),
+        paidCount: sql<number>`count(*) filter (where ${payrollRecords.status} = 'paid')`,
+        pendingCount: sql<number>`count(*) filter (where ${payrollRecords.status} = 'pending')`,
+      })
+      .from(payrollRecords)
+      .where(
+        and(
+          eq(payrollRecords.tenantId, tenantId),
+          or(
+            and(
+              eq(payrollRecords.status, 'paid'),
+              sql`${payrollRecords.paidAt} >= ${start}`,
+              sql`${payrollRecords.paidAt} <= ${end}`,
+            ),
+            eq(payrollRecords.status, 'pending'),
+          ),
+        ),
+      )
+      .groupBy(payrollRecords.departmentName)
+
+    return rows
+      .map((row) => ({
+        departmentName: row.departmentName?.trim() || 'Unassigned',
+        amount: Number(row.amount ?? 0),
+        staffCount: Number(row.staffCount ?? 0),
+        paidCount: Number(row.paidCount ?? 0),
+        pendingCount: Number(row.pendingCount ?? 0),
+      }))
+      .sort((a, b) => b.amount - a.amount)
+  }
+
+  private async buildFinanceOverviewInsights(
+    tenantId: string,
+    params: {
+      scope: 'month' | 'term'
+      month: string
+      term: { startsOn: string; endsOn: string } | null
+      revenueMetrics: {
+        collectionRate: number
+        outstanding: number
+        overdue: number
+        overdueStudents: number
+        collected: number
+      }
+      receivableInvoiceCount: number
+    },
+  ) {
+    const scope = params.scope
+    const { start: monthStart, end: monthEnd, prevMonth } = this.monthRange(params.month)
+
+    let periodStart = monthStart
+    let periodEnd = monthEnd
+    let compareStart = this.monthRange(prevMonth).start
+    let compareEnd = this.monthRange(prevMonth).end
+
+    if (scope === 'term' && params.term) {
+      periodStart = new Date(params.term.startsOn)
+      const termEndDate = new Date(params.term.endsOn)
+      periodEnd = monthEnd < termEndDate ? monthEnd : termEndDate
+      const prevEnd = this.monthRange(prevMonth).end
+      compareStart = new Date(params.term.startsOn)
+      compareEnd = prevEnd < periodEnd ? prevEnd : periodEnd
+    }
+
+    const [
+      revenue,
+      expenses,
+      prevRevenue,
+      prevExpenses,
+      monthlyTrend,
+      payable,
+      salaryByDepartment,
+      yearCollected,
+      yearPayrollPaid,
+    ] = await Promise.all([
+      this.sumVerifiedPayments(tenantId, periodStart, periodEnd),
+      this.sumPaidPayroll(tenantId, periodStart, periodEnd),
+      this.sumVerifiedPayments(tenantId, compareStart, compareEnd),
+      this.sumPaidPayroll(tenantId, compareStart, compareEnd),
+      this.getMonthlyTrend(tenantId, params.month),
+      this.getPayableSummary(tenantId),
+      this.getSalaryByDepartment(tenantId, periodStart, periodEnd),
+      params.revenueMetrics.collected,
+      this.sumPaidPayroll(
+        tenantId,
+        new Date(new Date().getFullYear(), 0, 1),
+        new Date(new Date().getFullYear(), 11, 31, 23, 59, 59),
+      ),
+    ])
+
+    const netSurplus = revenue - expenses
+    const marginPercent = revenue > 0 ? Math.round((netSurplus / revenue) * 100) : 0
+    const expenseTotal = expenses > 0 ? expenses : 0
+
+    const expenseBreakdown =
+      expenseTotal > 0
+        ? [
+            {
+              key: 'salaries',
+              amount: expenseTotal,
+              percent: 100,
+            },
+          ]
+        : []
+
+    const staffCount = salaryByDepartment.reduce((sum, row) => sum + row.staffCount, 0)
+    const salaryTotal = salaryByDepartment.reduce((sum, row) => sum + row.amount, 0)
+
+    const cashTotal = Math.max(0, yearCollected - yearPayrollPaid)
+
+    return {
+      scope,
+      kpis: {
+        revenue: {
+          amount: revenue,
+          trendPercent: this.calcTrendPercent(revenue, prevRevenue),
+          subtitleKey: 'feesAndIncome',
+        },
+        expenses: {
+          amount: expenses,
+          trendPercent: this.calcTrendPercent(expenses, prevExpenses),
+          subtitleKey: 'payrollAndOperating',
+        },
+        netSurplus: {
+          amount: netSurplus,
+          marginPercent,
+          subtitleKey: 'revenueMinusExpenses',
+        },
+        collectionRate: {
+          percent: params.revenueMetrics.collectionRate,
+          outstandingAmount: params.revenueMetrics.outstanding,
+          subtitleKey: 'collectedDividedBilled',
+        },
+      },
+      monthlyTrend,
+      expenseBreakdown,
+      statusCards: {
+        collectable: {
+          amount: params.revenueMetrics.outstanding,
+          invoiceCount: params.receivableInvoiceCount,
+        },
+        overdue: {
+          amount: params.revenueMetrics.overdue,
+          studentCount: params.revenueMetrics.overdueStudents,
+        },
+        payable: {
+          amount: payable.amount,
+          staffCount: payable.staffCount,
+        },
+      },
+      cashPosition: {
+        total: cashTotal,
+        accounts: [
+          {
+            key: 'feeCollections',
+            amount: params.revenueMetrics.collected,
+          },
+          {
+            key: 'payrollPaid',
+            amount: yearPayrollPaid,
+          },
+        ],
+      },
+      salaryByDepartment,
+      salarySummary: {
+        totalAmount: salaryTotal,
+        staffCount,
+      },
+    }
+  }
+
   async getMonthlyReport(tenantId: string, query: MonthlyReportQueryDto) {
     const selectedMonth = query.month ?? new Date().toISOString().slice(0, 7)
     if (!/^\d{4}-\d{2}$/.test(selectedMonth)) {
@@ -2363,12 +2682,26 @@ export class FinanceService {
   async getFinanceOverview(tenantId: string, query: FinanceOverviewQueryDto) {
     const year = await this.resolveOverviewAcademicYear(tenantId, query.academicYearId)
     const month = query.month ?? new Date().toISOString().slice(0, 7)
+    const scope = query.scope ?? 'month'
 
     if (!year) {
       const monthly = await this.getMonthlyReport(tenantId, { month })
       const receivableRows = await this.getReceivables(tenantId, {})
       const aging = this.buildReceivablesAging(receivableRows)
       const topOverdue = this.buildTopOverdue(receivableRows)
+      const insights = await this.buildFinanceOverviewInsights(tenantId, {
+        scope,
+        month,
+        term: null,
+        revenueMetrics: {
+          collectionRate: 0,
+          outstanding: 0,
+          overdue: 0,
+          overdueStudents: 0,
+          collected: 0,
+        },
+        receivableInvoiceCount: receivableRows.filter((row) => row.balanceDue > 0).length,
+      })
 
       return {
         academicYear: null,
@@ -2405,10 +2738,12 @@ export class FinanceService {
             : 0,
         },
         receivables: { aging, topOverdue },
+        ...insights,
       }
     }
 
     const academicYearId = year.id
+    const { currentTerm } = await this.resolveBillingPeriod(tenantId, academicYearId)
     const [metrics, rosterShell, monthly, receivableRows, feeItemCount, discountRuleCount, bySource, studentsWithDiscounts] =
       await Promise.all([
         this.getInvoiceMetrics(tenantId, { academicYearId }),
@@ -2471,6 +2806,22 @@ export class FinanceService {
     const aging = this.buildReceivablesAging(receivableRows)
     const topOverdue = this.buildTopOverdue(receivableRows)
 
+    const insights = await this.buildFinanceOverviewInsights(tenantId, {
+      scope,
+      month,
+      term: currentTerm
+        ? { startsOn: currentTerm.startsOn, endsOn: currentTerm.endsOn }
+        : null,
+      revenueMetrics: {
+        collectionRate: metrics.collectionRate,
+        outstanding: metrics.outstanding,
+        overdue: metrics.overdue,
+        overdueStudents: metrics.overdueStudents,
+        collected: metrics.collected,
+      },
+      receivableInvoiceCount: receivableRows.filter((row) => row.balanceDue > 0).length,
+    })
+
     return {
       academicYear: { id: year.id, name: year.name, status: year.status },
       term: rosterShell.term,
@@ -2506,6 +2857,7 @@ export class FinanceService {
           monthly.revenue > 0 ? Math.round((monthly.salaryExpenses / monthly.revenue) * 100) : 0,
       },
       receivables: { aging, topOverdue },
+      ...insights,
     }
   }
 
