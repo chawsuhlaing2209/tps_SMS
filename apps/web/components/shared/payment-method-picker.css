@@ -1,0 +1,4 @@
+.pay-method-picker {
+  display: grid;
+  gap: var(--pds-gap-large);
+}

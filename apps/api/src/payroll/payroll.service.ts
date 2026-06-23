@@ -22,6 +22,7 @@ import {
   staffIncentiveEligibility,
   terms
 } from "../db/schema.js";
+import { isPercentInRange, PERCENT_RANGE_MESSAGE } from "@sms/shared";
 import { PayslipQueueService } from "./payslip-queue.service.js";
 import { PayslipRenderService } from "./payslip-render.service.js";
 import { S3StorageService } from "../storage/s3-storage.service.js";
@@ -59,6 +60,19 @@ function num(value: string | null | undefined): number {
   return Number(value ?? 0);
 }
 
+function assertPercentAmount(
+  amount: number | undefined,
+  calculation: string | undefined,
+  awardType?: string | undefined
+) {
+  const isPercent =
+    calculation === "percent_of_basic" || awardType === "percent_of_basic" || awardType === "percent";
+  if (!isPercent || amount === undefined) return;
+  if (!isPercentInRange(amount)) {
+    throw new BadRequestException(PERCENT_RANGE_MESSAGE);
+  }
+}
+
 @Injectable()
 export class PayrollService {
   constructor(
@@ -90,6 +104,9 @@ export class PayrollService {
     actorUserId: string | undefined,
     dto: CreatePayComponentDto
   ) {
+    const calculation = dto.calculation ?? "fixed";
+    assertPercentAmount(dto.defaultAmount, calculation);
+
     const [component] = await this.db
       .insert(payComponents)
       .values({
@@ -97,7 +114,7 @@ export class PayrollService {
         code: dto.code.trim().toLowerCase(),
         name: dto.name.trim(),
         kind: dto.kind,
-        calculation: dto.calculation ?? "fixed",
+        calculation,
         defaultAmount: money(dto.defaultAmount ?? 0),
         createdBy: actorUserId,
         updatedBy: actorUserId
@@ -125,6 +142,15 @@ export class PayrollService {
     return row;
   }
 
+  private async getIncentiveProgramOrThrow(tenantId: string, id: string) {
+    const [row] = await this.db
+      .select()
+      .from(incentivePrograms)
+      .where(and(eq(incentivePrograms.id, id), eq(incentivePrograms.tenantId, tenantId)));
+    if (!row) throw new NotFoundException("Incentive program not found.");
+    return row;
+  }
+
   async updatePayComponent(
     tenantId: string,
     id: string,
@@ -132,6 +158,12 @@ export class PayrollService {
     dto: UpdatePayComponentDto
   ) {
     const previous = await this.getPayComponentOrThrow(tenantId, id);
+    const calculation = dto.calculation ?? previous.calculation;
+    assertPercentAmount(
+      dto.defaultAmount !== undefined ? dto.defaultAmount : num(previous.defaultAmount),
+      calculation
+    );
+
     const [component] = await this.db
       .update(payComponents)
       .set({
@@ -365,7 +397,7 @@ export class PayrollService {
       awardType: program.awardType === "percent_of_basic" ? "percent" : "fixed",
       amount: program.awardAmount ? num(program.awardAmount) : 0,
       status: program.status,
-      triggerRule: this.formatTriggerRule(program),
+      triggerRule: program.description?.trim() || this.formatTriggerRule(program),
       eligibleCount: recipientCount.get(program.id) ?? 0,
       recipients: recipientCount.get(program.id) ?? 0,
       paidCount: 0
@@ -405,6 +437,7 @@ export class PayrollService {
       ? this.fromUiAwardType(dto.awardType)
       : dto.awardType;
     const awardAmount = dto.amount ?? dto.awardAmount;
+    assertPercentAmount(awardAmount, undefined, awardType ?? "fixed");
 
     const [program] = await this.db
       .insert(incentivePrograms)
@@ -431,6 +464,11 @@ export class PayrollService {
     actorUserId: string | undefined,
     dto: UpdateIncentiveProgramDto
   ) {
+    const previous = await this.getIncentiveProgramOrThrow(tenantId, id);
+    if (dto.awardAmount !== undefined) {
+      assertPercentAmount(dto.awardAmount, undefined, previous.awardType);
+    }
+
     const [program] = await this.db
       .update(incentivePrograms)
       .set({
@@ -929,6 +967,11 @@ export class PayrollService {
         .filter((line) => line.sourceType !== "incentive" && line.sourceId)
         .map((line) => line.sourceId!)
     );
+    const existingLineAmountBySource = new Map(
+      existingLines
+        .filter((line) => line.sourceId)
+        .map((line) => [line.sourceId!, line.amount] as const)
+    );
 
     const lineItems: Array<{
       sourceType: typeof payrollLineItems.sourceType._.data;
@@ -957,7 +1000,7 @@ export class PayrollService {
         sourceType: component.kind === "deduction" ? "deduction" : "component",
         sourceId: component.id,
         label: component.name,
-        amount: money(assignment.amount),
+        amount: existingLineAmountBySource.get(componentId) ?? money(assignment.amount),
         sortOrder: sort++
       });
     }
@@ -977,7 +1020,7 @@ export class PayrollService {
         sourceType: "package",
         sourceId: pkg.id,
         label: pkg.name,
-        amount: money(num(pkg.monthlyValue)),
+        amount: existingLineAmountBySource.get(packageId) ?? money(num(pkg.monthlyValue)),
         sortOrder: sort++
       });
     }
@@ -989,10 +1032,19 @@ export class PayrollService {
         sourceType: "incentive",
         sourceId: program.id,
         label: program.name,
-        amount: money(this.resolveIncentiveAmount(program, base)),
+        amount:
+          existingLineAmountBySource.get(program.id) ??
+          money(this.resolveIncentiveAmount(program, base)),
         sortOrder: sort++
       });
     }
+
+    sort = await this.appendPreservedPayrollLineItems(
+      tenantId,
+      existingLines,
+      lineItems,
+      sort
+    );
 
     const totals = this.sumLineItemTotals(lineItems, base);
 
@@ -1131,6 +1183,91 @@ export class PayrollService {
     };
   }
 
+  /** Keep run-specific selections that are not part of the staff compensation profile. */
+  private async appendPreservedPayrollLineItems(
+    tenantId: string,
+    existingLines: Array<typeof payrollLineItems.$inferSelect>,
+    lineItems: Array<{
+      sourceType: typeof payrollLineItems.sourceType._.data;
+      sourceId: string | null;
+      label: string;
+      amount: string;
+      sortOrder: number;
+    }>,
+    sortOrder: number
+  ) {
+    const includedSourceIds = new Set(
+      lineItems.map((item) => item.sourceId).filter((id): id is string => Boolean(id))
+    );
+
+    let sort = sortOrder;
+
+    for (const line of existingLines) {
+      if (!line.sourceId || includedSourceIds.has(line.sourceId)) continue;
+
+      if (line.sourceType === "package") {
+        const [pkg] = await this.db
+          .select()
+          .from(benefitPackages)
+          .where(
+            and(eq(benefitPackages.id, line.sourceId), eq(benefitPackages.tenantId, tenantId))
+          );
+        if (!pkg || pkg.status !== "active") continue;
+
+        lineItems.push({
+          sourceType: "package",
+          sourceId: pkg.id,
+          label: pkg.name,
+          amount: line.amount,
+          sortOrder: sort++
+        });
+        includedSourceIds.add(pkg.id);
+        continue;
+      }
+
+      if (line.sourceType === "component" || line.sourceType === "deduction") {
+        const [component] = await this.db
+          .select()
+          .from(payComponents)
+          .where(
+            and(eq(payComponents.id, line.sourceId), eq(payComponents.tenantId, tenantId))
+          );
+        if (!component || component.status !== "active") continue;
+
+        lineItems.push({
+          sourceType: component.kind === "deduction" ? "deduction" : "component",
+          sourceId: component.id,
+          label: component.name,
+          amount: line.amount,
+          sortOrder: sort++
+        });
+        includedSourceIds.add(component.id);
+        continue;
+      }
+
+      if (line.sourceType === "incentive") {
+        const [program] = await this.db
+          .select()
+          .from(incentivePrograms)
+          .where(
+            and(eq(incentivePrograms.id, line.sourceId), eq(incentivePrograms.tenantId, tenantId))
+          );
+        if (!program || program.status !== "active") continue;
+
+        lineItems.push({
+          sourceType: "incentive",
+          sourceId: program.id,
+          label: program.name,
+          amount: line.amount,
+          sortOrder: sort++
+        });
+        includedSourceIds.add(program.id);
+      }
+    }
+
+    return sort;
+  }
+
   async generatePayrollRun(tenantId: string, runId: string, actorUserId: string | undefined) {
     const run = await this.getRunOrThrow(tenantId, runId);
     const activeStaff = await this.db
@@ -1257,7 +1394,6 @@ export class PayrollService {
     actorUserId?: string
   ) {
     await this.getRunOrThrow(tenantId, runId);
-    await this.syncDraftRecordsForRun(tenantId, runId, actorUserId);
 
     const filters = [
       eq(payrollRecords.tenantId, tenantId),
@@ -1332,11 +1468,6 @@ export class PayrollService {
       .from(payrollRuns)
       .where(eq(payrollRuns.id, record.runId));
 
-    if (record.status === "draft" && run) {
-      await this.syncDraftRecordFromCompensation(tenantId, record, run, actorUserId);
-      await this.recalculateRunTotals(tenantId, record.runId);
-    }
-
     const [freshRecord] = await this.db
       .select()
       .from(payrollRecords)
@@ -1378,45 +1509,46 @@ export class PayrollService {
     const baseSalary = comp.baseSalary;
     const readOnly = syncedRecord.status === "paid" || syncedRecord.status === "pending";
 
-    const availableComponents = await Promise.all(
-      comp.payComponentAssignments.map(async (assignment) => {
-        const [component] = await this.db
-          .select()
-          .from(payComponents)
-          .where(
-            and(
-              eq(payComponents.id, assignment.payComponentId),
-              eq(payComponents.tenantId, tenantId)
-            )
-          );
-        return {
-          componentId: assignment.payComponentId,
-          name: assignment.name,
-          kind: component?.kind ?? "earning",
-          amount: lineAmountBySource.get(assignment.payComponentId) ?? assignment.amount,
-          enabled: enabledComponentIds.has(assignment.payComponentId)
-        };
-      })
+    const assignmentByComponentId = new Map(
+      comp.payComponentAssignments.map((assignment) => [assignment.payComponentId, assignment])
     );
 
-    const availablePackages = await Promise.all(
-      comp.benefitEnrollments.map(async (enrollment) => {
-        const [pkg] = await this.db
-          .select()
-          .from(benefitPackages)
-          .where(
-            and(eq(benefitPackages.id, enrollment.packageId), eq(benefitPackages.tenantId, tenantId))
-          );
-        const amount = pkg ? num(pkg.monthlyValue) : 0;
-        return {
-          packageId: enrollment.packageId,
-          name: enrollment.name,
-          icon: pkg?.iconKey ?? "card_giftcard",
-          amount: lineAmountBySource.get(enrollment.packageId) ?? amount,
-          enabled: enabledPackageIds.has(enrollment.packageId)
-        };
-      })
-    );
+    const activeComponents = await this.db
+      .select()
+      .from(payComponents)
+      .where(and(eq(payComponents.tenantId, tenantId), eq(payComponents.status, "active")));
+
+    const availableComponents = activeComponents.map((component) => {
+      const assignment = assignmentByComponentId.get(component.id);
+      const lineAmount = lineAmountBySource.get(component.id);
+      const amount =
+        lineAmount ??
+        this.calcComponentAmount(
+          component,
+          baseSalary,
+          assignment ? assignment.amount : null
+        );
+      return {
+        componentId: component.id,
+        name: component.name,
+        kind: component.kind,
+        amount,
+        enabled: enabledComponentIds.has(component.id)
+      };
+    });
+
+    const activePackages = await this.db
+      .select()
+      .from(benefitPackages)
+      .where(and(eq(benefitPackages.tenantId, tenantId), eq(benefitPackages.status, "active")));
+
+    const availablePackages = activePackages.map((pkg) => ({
+      packageId: pkg.id,
+      name: pkg.name,
+      icon: pkg.iconKey ?? "card_giftcard",
+      amount: lineAmountBySource.get(pkg.id) ?? num(pkg.monthlyValue),
+      enabled: enabledPackageIds.has(pkg.id)
+    }));
 
     const matchingPrograms = run
       ? await this.listIncentiveProgramsForRun(tenantId, run)
@@ -1509,7 +1641,6 @@ export class PayrollService {
       const componentById = new Map(
         comp.payComponentAssignments.map((c) => [c.payComponentId, c])
       );
-      const packageById = new Map(comp.benefitEnrollments.map((p) => [p.packageId, p]));
 
       const [run] = await this.db
         .select()
@@ -1534,8 +1665,6 @@ export class PayrollService {
       if (dto.componentSelections) {
         for (const selection of dto.componentSelections) {
           if (!selection.enabled) continue;
-          const assignment = componentById.get(selection.componentId);
-          if (!assignment) continue;
 
           const [component] = await this.db
             .select()
@@ -1548,8 +1677,13 @@ export class PayrollService {
             );
           if (!component || component.status !== "active") continue;
 
+          const assignment = componentById.get(selection.componentId);
           const amount =
-            selection.amount !== undefined ? selection.amount : assignment.amount;
+            selection.amount !== undefined
+              ? selection.amount
+              : assignment
+                ? assignment.amount
+                : this.calcComponentAmount(component, base, null);
           lineItems.push({
             sourceType: component.kind === "deduction" ? "deduction" : "component",
             sourceId: component.id,
@@ -1563,8 +1697,6 @@ export class PayrollService {
       if (dto.packageSelections) {
         for (const selection of dto.packageSelections) {
           if (!selection.enabled) continue;
-          const enrollment = packageById.get(selection.packageId);
-          if (!enrollment) continue;
 
           const [pkg] = await this.db
             .select()

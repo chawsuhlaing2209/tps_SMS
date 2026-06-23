@@ -1,8 +1,9 @@
 "use client";
 
+import "./invoice-modal.css";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useTranslations } from "next-intl";
-import { Icon } from "../../lib/material-icon";
+import { Invoice, type InvoiceDetailsSection } from "../../../components/pds/composites/invoice";
 import { printDocument } from "../../lib/print-document";
 import { formatReceiptAmount } from "./receipt-document";
 import {
@@ -57,14 +58,58 @@ function billedToMeta(data: InvoiceDocumentData) {
   return [gradeRoom, guardian].filter(Boolean).join(" · ");
 }
 
-function formatPaidToDate(value: number) {
-  return `−${formatReceiptAmount(value)}`;
+function buildInvoiceDetailSections(
+  data: InvoiceDocumentData,
+  labels: { lineItems: string; discounts: string; paid: string; paidToDate: string },
+): InvoiceDetailsSection[] {
+  const sections: InvoiceDetailsSection[] = [
+    {
+      id: "items",
+      title: labels.lineItems,
+      lines: data.items.map((item) => ({
+        id: item.id,
+        label: item.description,
+        amount: item.amount,
+      })),
+    },
+  ];
+
+  if (data.discountLines.length > 0) {
+    sections.push({
+      id: "discounts",
+      title: labels.discounts,
+      emphasis: true,
+      lines: data.discountLines.map((line) => ({
+        id: line.id,
+        label: line.name,
+        amount: line.amount,
+        variant: "discount",
+      })),
+    });
+  }
+
+  sections.push({
+    id: "paid",
+    title: labels.paid,
+    emphasis: true,
+    lines: [
+      {
+        id: "paid-to-date",
+        label: labels.paidToDate,
+        amount: data.paidToDate,
+        variant: "credit",
+      },
+    ],
+  });
+
+  return sections;
 }
 
 export function InvoiceDocumentBody({
   data,
   showActions = true,
   isModal = false,
+  onClose,
   onPrint,
   onSend,
   sendPending = false,
@@ -73,6 +118,7 @@ export function InvoiceDocumentBody({
   data: InvoiceDocumentData;
   showActions?: boolean;
   isModal?: boolean;
+  onClose?: () => void;
   onPrint?: () => void;
   onSend?: () => void;
   sendPending?: boolean;
@@ -82,98 +128,57 @@ export function InvoiceDocumentBody({
   const dueLabel = data.dueDate ? t("dueOn", { date: formatInvoiceDate(data.dueDate) ?? data.dueDate }) : null;
   const contact = schoolContactLine(data.schoolAddress, data.schoolContactPhone);
 
-  const closeButton = isModal ? (
-    <DialogPrimitive.Close className="invoice-doc__close" aria-label={t("close")}>
-      <Icon name="close" size={17} />
-    </DialogPrimitive.Close>
-  ) : null;
+  const actions = showActions
+    ? [
+        {
+          id: "print",
+          label: t("print"),
+          icon: "print",
+          variant: "outline" as const,
+          onClick: onPrint,
+        },
+        {
+          id: "send",
+          label: sendPending ? "…" : t("sendToGuardian"),
+          icon: "send",
+          variant: "primary" as const,
+          disabled: sendPending,
+          onClick: onSend,
+        },
+      ]
+    : undefined;
 
   return (
-    <>
-      <header className="invoice-doc__header">
-        <div className="invoice-doc__header-main">
-          <div className="invoice-doc__header-top">
-            <span className="invoice-doc__logo" aria-hidden>
-              <span className="invoice-doc__logo-mark" />
-            </span>
-            <strong className="invoice-doc__school">{data.schoolName}</strong>
-          </div>
-          {contact ? <span className="invoice-doc__contact">{contact}</span> : null}
-        </div>
-        {closeButton}
-      </header>
-
-      <div className="invoice-doc__body">
-        <div className="invoice-doc__meta">
-          <div className="invoice-doc__billed">
-            <span className="invoice-doc__eyebrow">{t("billedTo")}</span>
-            <strong className="invoice-doc__student">{data.studentFullName}</strong>
-            <span className="invoice-doc__billed-meta">{billedToMeta(data) || "—"}</span>
-          </div>
-          <div className="invoice-doc__ref">
-            <strong className="invoice-doc__title">{t("title")}</strong>
-            <span className="invoice-doc__number">{data.invoiceNumber}</span>
-            {dueLabel ? <span className="invoice-doc__due">{dueLabel}</span> : null}
-          </div>
-        </div>
-
-        <section className="invoice-doc__table">
-          <ul className="invoice-doc__lines">
-            {data.items.map((item) => (
-              <li key={item.id}>
-                <span className="pds-type-body-s-semibold invoice-doc__line-label">{item.description}</span>
-                <strong className="pds-type-body-s-semibold invoice-doc__line-amount">{formatReceiptAmount(item.amount)}</strong>
-              </li>
-            ))}
-            {data.discountLines.map((line) => (
-              <li key={line.id} className="invoice-doc__line--discount">
-                <span className="pds-type-body-s-semibold invoice-doc__line-label">{line.name}</span>
-                <strong className="pds-type-body-s-semibold invoice-doc__line-amount">−{formatReceiptAmount(line.amount)}</strong>
-              </li>
-            ))}
-          </ul>
-          <div className="pds-type-body-s-semibold invoice-doc__subtotal">
-            <span>{t("subtotalBilled")}</span>
-            <strong>{formatReceiptAmount(data.subtotal)}</strong>
-          </div>
-        </section>
-
-        <div className="invoice-doc__summary">
-          <div className="pds-type-body-s-semibold invoice-doc__paid-row">
-            <span>{t("paidToDate")}</span>
-            <strong>{formatPaidToDate(data.paidToDate)}</strong>
-          </div>
-          <div className="pds-type-body-s-semibold invoice-doc__balance">
-            <span>{t("balanceDue")}</span>
-            <strong>{formatReceiptAmount(data.balanceDue)}</strong>
-          </div>
-        </div>
-
-        <InvoiceVerifyPayments
-          invoiceId={data.id}
-          payments={data.payments}
-          canVerify={canVerifyPayments}
-        />
-
-        {showActions ? (
-          <footer className="invoice-doc__actions">
-            <button type="button" className="invoice-doc__print" onClick={onPrint}>
-              <Icon name="print" size={17} />
-              {t("print")}
-            </button>
-            <button
-              type="button"
-              className="invoice-doc__send"
-              disabled={sendPending}
-              onClick={onSend}
-            >
-              <Icon name="send" size={17} />
-              {sendPending ? "…" : t("sendToGuardian")}
-            </button>
-          </footer>
-        ) : null}
-      </div>
-    </>
+    <Invoice
+      schoolName={data.schoolName}
+      schoolContact={contact || null}
+      billedToLabel={t("billedTo")}
+      studentName={data.studentFullName}
+      studentMeta={billedToMeta(data) || null}
+      documentTitle={t("title")}
+      invoiceNumber={data.invoiceNumber}
+      dueLabel={dueLabel}
+      details={{
+        sections: buildInvoiceDetailSections(data, {
+          lineItems: t("lineItemsSection"),
+          discounts: t("discountsSection"),
+          paid: t("paidSection"),
+          paidToDate: t("paidToDate"),
+        }),
+        totalDue: data.balanceDue,
+        totalLabel: t("balanceDue"),
+        formatAmount: formatReceiptAmount,
+      }}
+      actions={actions}
+      onClose={onClose}
+      closeLabel={t("close")}
+    >
+      <InvoiceVerifyPayments
+        invoiceId={data.id}
+        payments={data.payments}
+        canVerify={canVerifyPayments}
+      />
+    </Invoice>
   );
 }
 
@@ -181,11 +186,14 @@ export function InvoicePreviewModal({
   invoiceId,
   open,
   onOpenChange,
+  title,
   children
 }: {
-  invoiceId: string | null;
+  invoiceId?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Screen-reader title; defaults to finance invoice document title. */
+  title?: string;
   children: React.ReactNode;
 }) {
   const t = useTranslations("finance.invoiceDocument");
@@ -199,7 +207,7 @@ export function InvoicePreviewModal({
           aria-describedby={undefined}
           onOpenAutoFocus={(event) => event.preventDefault()}
         >
-          <DialogPrimitive.Title className="sr-only">{t("title")}</DialogPrimitive.Title>
+          <DialogPrimitive.Title className="sr-only">{title ?? t("title")}</DialogPrimitive.Title>
           <div className="invoice-doc invoice-doc--modal" data-invoice-id={invoiceId ?? undefined}>
             {children}
           </div>
@@ -220,7 +228,7 @@ export function printInvoiceDocument(
     dueOn: (date: string) => string;
   }
 ) {
-  printDocument(".invoice-doc", {
+  printDocument(".pds-invoice", {
     title: data.invoiceNumber,
     width: "narrow"
   });

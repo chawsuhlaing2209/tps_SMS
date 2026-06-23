@@ -68,6 +68,7 @@ export default function RunPayrollPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [configRecordId, setConfigRecordId] = useState<string | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
+  const [configPayslipHint, setConfigPayslipHint] = useState(false);
 
   const runs = useApiQuery<PayrollRun[]>(
     canManage ? (tenant) => runsPath(tenant, month) : () => null,
@@ -215,6 +216,7 @@ export default function RunPayrollPage() {
             aria-label={isPaid ? c("view") : t("configureRecord")}
             onClick={() => {
               setConfigRecordId(row.original.id);
+              setConfigPayslipHint(row.original.status !== "draft");
               setConfigOpen(true);
             }}
           >
@@ -341,27 +343,30 @@ export default function RunPayrollPage() {
           }
         />
 
-        <section className="panel">
-          <TablePanelBody
-            loading={records.isLoading || runs.isLoading}
-            error={records.isError ? c("somethingWrong") : null}
-            empty={!records.data?.length}
-            emptyTitle={t("emptyPayrollTitle")}
-            emptyDescription={t("emptyPayrollDescription")}
-            emptyIcon="payments"
-            unwrapEmpty
-          >
-            <DataTable columns={columns} data={records.data ?? []} />
-          </TablePanelBody>
-        </section>
+        <TablePanelBody
+          variant="plain"
+          loading={records.isLoading || runs.isLoading}
+          error={records.isError ? c("somethingWrong") : null}
+          empty={!records.data?.length}
+          emptyTitle={t("emptyPayrollTitle")}
+          emptyDescription={t("emptyPayrollDescription")}
+          emptyIcon="payments"
+          unwrapEmpty
+        >
+          <DataTable columns={columns} data={records.data ?? []} />
+        </TablePanelBody>
       </DataTableSection>
 
       <PayrollStaffConfigModal
         recordId={configRecordId}
         open={configOpen}
+        payslipHint={configPayslipHint}
         onOpenChange={(open) => {
           setConfigOpen(open);
-          if (!open) setConfigRecordId(null);
+          if (!open) {
+            setConfigRecordId(null);
+            setConfigPayslipHint(false);
+          }
         }}
         onSaved={() => {
           void summary.refetch();

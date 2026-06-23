@@ -1,0 +1,115 @@
+/* PDS InvoiceDetails — line-item breakdown (Figma 127:8304). */
+
+.pds-invoice-details {
+  background: var(--pds-background-canvas);
+  border: 1px solid var(--pds-border-color-soft);
+  border-radius: var(--pds-radius-14);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+  width: 100%;
+}
+
+.pds-invoice-details > section:first-of-type > .pds-invoice-details__section-head {
+  border-top-left-radius: calc(var(--pds-radius-14) - 1px);
+  border-top-right-radius: calc(var(--pds-radius-14) - 1px);
+}
+
+.pds-invoice-details__section-head {
+  background: var(--pds-background-secondary);
+  border-bottom: 1px solid var(--pds-border-color-soft);
+  padding: var(--pds-padding-x-small) var(--pds-padding-medium);
+}
+
+.pds-invoice-details__section-head--primary {
+  border-bottom-color: var(--pds-border-color-primary);
+}
+
+.pds-invoice-details__section-title {
+  color: var(--pds-text-secondary);
+  letter-spacing: 0.12em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.pds-invoice-details__row {
+  align-items: center;
+  border-bottom: 1px solid var(--pds-border-color-soft);
+  display: flex;
+  gap: var(--pds-gap-small);
+  justify-content: space-between;
+  min-height: 40px;
+  padding: var(--pds-padding-x-small) var(--pds-padding-medium);
+}
+
+.pds-invoice-details__row-label {
+  color: var(--pds-text-secondary);
+  flex: 1;
+  min-width: 0;
+}
+
+.pds-invoice-details__row-sublabel {
+  color: var(--pds-text-secondary);
+}
+
+.pds-invoice-details__amount {
+  align-items: baseline;
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: var(--pds-gap-x-small);
+  white-space: nowrap;
+}
+
+.pds-invoice-details__amount-value {
+  color: var(--pds-text-primary);
+}
+
+.pds-invoice-details__amount-value--discount,
+.pds-invoice-details__amount-value--credit {
+  color: var(--pds-status-success);
+}
+
+.pds-invoice-details__amount-currency {
+  color: var(--pds-text-placeholder);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.pds-invoice-details__total {
+  align-items: center;
+  background: var(--pds-primary);
+  border-bottom-left-radius: calc(var(--pds-radius-14) - 1px);
+  border-bottom-right-radius: calc(var(--pds-radius-14) - 1px);
+  display: flex;
+  gap: var(--pds-gap-small);
+  justify-content: space-between;
+  padding: var(--pds-padding-medium);
+}
+
+.pds-invoice-details__total-label {
+  color: var(--pds-text-invert-primary);
+  flex: 1;
+  min-width: 0;
+}
+
+.pds-invoice-details__total-amount {
+  align-items: baseline;
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: var(--pds-gap-x-small);
+}
+
+.pds-invoice-details__total-value {
+  color: var(--pds-compliment-brand);
+  font-family: var(--pds-type-title-xl-extrabold-font-family);
+  font-size: var(--pds-type-title-xl-extrabold-font-size);
+  font-weight: var(--pds-type-title-xl-extrabold-font-weight);
+  line-height: var(--pds-type-title-xl-extrabold-line-height);
+}
+
+.pds-invoice-details__total-currency {
+  color: var(--pds-text-placeholder);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}

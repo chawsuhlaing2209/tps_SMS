@@ -528,6 +528,38 @@ export const PDS_COMPONENT_REGISTRY: FigmaComponentRegistryEntry[] = [
     introducedIn: "2026-06-21",
     notes: "Comfort (default) and compact variants. Use embedded when nested in table-card body.",
   },
+  {
+    id: "invoice-details",
+    name: "InvoiceDetails",
+    figmaNodeId: "127:8304",
+    figmaFileKey: FIGMA_FILE_KEY,
+    codePath: "apps/web/components/pds/composites/invoice-details.tsx",
+    status: "active",
+    introducedIn: "2026-06-21",
+    notes: "Line-item breakdown sections with total-due footer for invoices and enrollment preview.",
+  },
+  {
+    id: "modal-header-shell",
+    name: "ModalHeaderShell",
+    figmaNodeId: "127:16021",
+    figmaFileKey: FIGMA_FILE_KEY,
+    codePath: "apps/web/components/pds/composites/modal-header-shell.tsx",
+    status: "active",
+    dependsOn: ["stepper"],
+    introducedIn: "2026-06-21",
+    notes: "Modal header variants: default, withStepper (enrollment ceremony), invoice (finance document).",
+  },
+  {
+    id: "invoice",
+    name: "Invoice",
+    figmaNodeId: "127:16147",
+    figmaFileKey: FIGMA_FILE_KEY,
+    codePath: "apps/web/components/pds/composites/invoice.tsx",
+    status: "active",
+    dependsOn: ["invoice-details", "modal-header-shell"],
+    introducedIn: "2026-06-21",
+    notes: "Full invoice document shell composed of invoice header, billed-to meta, and InvoiceDetails.",
+  },
 ];
 
 export function getRegistryEntry(id: string) {

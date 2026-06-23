@@ -1,8 +1,12 @@
 "use client";
 
+import "./payroll-staff-config-modal.css";
+import "./payroll-config-row.css";
+import type { PaymentMethod } from "@sms/shared";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 import { EntityAvatar } from "../../../../components/pds/subcomponents/entity-avatar";
+import { PaymentMethodPicker, paymentMethodNeedsReference } from "../../../../components/shared/payment-method-picker";
 import {
   Modal,
   ModalBody,
@@ -10,19 +14,18 @@ import {
   ModalContent,
   ModalFooter,
   ModalFooterActions,
-  ModalFooterStart,
   ModalHeader,
   ModalTitle
 } from "../../../../components/pds/composites/modal";
-import { PdsSelectField } from "../../../../components/pds";
 import { Button } from "../../../../components/ui/button";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
+import { InvoicePreviewModal } from "../../finance/invoice-document";
 import { printDocument } from "../../../lib/print-document";
-import { usePaymentMethodOptions } from "../../../lib/payment-method-options";
 import { getSession } from "../../../lib/session";
 import { PayrollNetSummary } from "./payroll-net-summary";
 import { PayrollConfigRow, resolvePayrollRowIconTone } from "./payroll-config-row";
 import { PayrollSalaryBreakdownView } from "./payroll-salary-breakdown-view";
+import type { InvoiceAction } from "../../../../components/pds/composites/invoice";
 
 export type PayrollPackageOption = {
   packageId: string;
@@ -74,6 +77,8 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved?: () => void;
+  /** When true, use the invoice document modal shell while the record loads. */
+  payslipHint?: boolean;
 };
 
 const recordPath = (tenant: string, recordId: string) =>
@@ -121,15 +126,20 @@ async function downloadPayslip(recordId: string) {
   URL.revokeObjectURL(url);
 }
 
-export function PayrollStaffConfigModal({ recordId, open, onOpenChange, onSaved }: Props) {
+export function PayrollStaffConfigModal({
+  recordId,
+  open,
+  onOpenChange,
+  onSaved,
+  payslipHint = false
+}: Props) {
   const t = useTranslations("salary");
   const c = useTranslations("common");
-  const paymentMethodOptions = usePaymentMethodOptions();
-
   const [packages, setPackages] = useState<PayrollPackageOption[]>([]);
   const [components, setComponents] = useState<PayrollComponentOption[]>([]);
   const [incentives, setIncentives] = useState<PayrollIncentiveOption[]>([]);
-  const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("bank_transfer");
+  const [paymentReference, setPaymentReference] = useState("");
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
@@ -164,7 +174,7 @@ export function PayrollStaffConfigModal({ recordId, open, onOpenChange, onSaved 
     }
   );
 
-  const markPaid = useApiMutation<{ paymentMethod: string }>(
+  const markPaid = useApiMutation<{ paymentMethod: string; paymentRef?: string }>(
     (body, tenant) => ({
       path: `${recordPath(tenant, recordId!)}/mark-paid`,
       init: { method: "POST", body: JSON.stringify(body) }
@@ -189,6 +199,8 @@ export function PayrollStaffConfigModal({ recordId, open, onOpenChange, onSaved 
   useEffect(() => {
     if (!open) {
       setDownloadError(null);
+      setPaymentReference("");
+      setPaymentMethod("bank_transfer");
     }
   }, [open]);
 
@@ -205,9 +217,20 @@ export function PayrollStaffConfigModal({ recordId, open, onOpenChange, onSaved 
   const isPaid = data?.status === "paid";
   const isApproved = data?.status === "approved";
   const isPayslipView = isPaid || isApproved;
+  const showPayslipShell = payslipHint || isPayslipView;
   const canEdit = data?.status === "draft" && !readOnly;
   const canApprove = data?.status === "draft" && !readOnly;
   const canMarkPaid = isApproved;
+  const paymentReferenceRequired = paymentMethodNeedsReference(paymentMethod);
+  const canSubmitMarkPaid =
+    !paymentReferenceRequired || paymentReference.trim().length > 0;
+
+  function handlePaymentMethodChange(nextMethod: PaymentMethod) {
+    setPaymentMethod(nextMethod);
+    if (!paymentMethodNeedsReference(nextMethod)) {
+      setPaymentReference("");
+    }
+  }
 
   const packageSummary = useMemo(() => {
     const active = packages.filter((item) => item.enabled);
@@ -233,6 +256,18 @@ export function PayrollStaffConfigModal({ recordId, open, onOpenChange, onSaved 
     return { count: active.length, total };
   }, [components]);
 
+  const adjustmentSummary = useMemo(() => {
+    const count = componentSummary.count + packageSummary.count + incentiveSummary.count;
+    const total = packageSummary.total + componentSummary.total + incentiveSummary.total;
+    return { count, total };
+  }, [componentSummary, packageSummary, incentiveSummary]);
+
+  const hasCompensationItems =
+    components.length > 0 || packages.length > 0 || incentives.length > 0;
+
+  const showCompensationGroupLabels =
+    [components.length > 0, packages.length > 0, incentives.length > 0].filter(Boolean).length > 1;
+
   const compensationBase = data?.baseSalary ?? 0;
 
   const netPreview = useMemo(() => {
@@ -248,25 +283,40 @@ export function PayrollStaffConfigModal({ recordId, open, onOpenChange, onSaved 
     incentiveSummary.total
   ]);
 
+  function buildCompensationSelections() {
+    return {
+      packageSelections: packages.map((item) => ({
+        packageId: item.packageId,
+        enabled: item.enabled
+      })),
+      componentSelections: components.map((item) => ({
+        componentId: item.componentId,
+        enabled: item.enabled,
+        amount: item.amount
+      })),
+      incentiveSelections: incentives.map((item) => ({
+        programId: item.programId,
+        enabled: item.enabled,
+        amount: item.amount
+      }))
+    };
+  }
+
   function handleSave() {
     if (!recordId || !canEdit) return;
     void updateRecord
-      .mutateAsync({
-        packageSelections: packages.map((item) => ({
-          packageId: item.packageId,
-          enabled: item.enabled
-        })),
-        componentSelections: components.map((item) => ({
-          componentId: item.componentId,
-          enabled: item.enabled,
-          amount: item.amount
-        })),
-        incentiveSelections: incentives.map((item) => ({
-          programId: item.programId,
-          enabled: item.enabled,
-          amount: item.amount
-        }))
-      })
+      .mutateAsync(buildCompensationSelections())
+      .then(() => {
+        onSaved?.();
+        void record.refetch();
+      });
+  }
+
+  function handleApprove() {
+    if (!recordId || !canApprove) return;
+    void updateRecord
+      .mutateAsync(buildCompensationSelections())
+      .then(() => approve.mutateAsync({}))
       .then(() => {
         onSaved?.();
         void record.refetch();
@@ -274,6 +324,124 @@ export function PayrollStaffConfigModal({ recordId, open, onOpenChange, onSaved 
   }
 
   const staffMeta = [data?.staffRole, data?.department].filter(Boolean).join(" · ");
+
+  const payslipActions = useMemo((): InvoiceAction[] | undefined => {
+    if (!showPayslipShell || !data) return undefined;
+
+    if (isPaid) {
+      return [
+        {
+          id: "print",
+          label: t("breakdownPrint"),
+          icon: "print",
+          variant: "outline",
+          onClick: () =>
+            printDocument("#payroll-salary-breakdown-print", {
+              title: t("breakdownModalTitle"),
+              width: "narrow"
+            })
+        },
+        {
+          id: "download",
+          label: downloading ? c("loading") : t("breakdownDownload"),
+          icon: "download",
+          variant: "primary",
+          disabled: downloading,
+          onClick: handleDownloadPayslip
+        }
+      ];
+    }
+
+    if (canMarkPaid) {
+      return [
+        {
+          id: "mark-paid",
+          label: markPaid.isPending ? c("loading") : t("markPaid"),
+          icon: "payments",
+          variant: "primary",
+          disabled: markPaid.isPending || !canSubmitMarkPaid,
+          onClick: () => {
+            if (!recordId) return;
+            void markPaid
+              .mutateAsync({
+                paymentMethod,
+                ...(paymentReferenceRequired
+                  ? { paymentRef: paymentReference.trim() }
+                  : {})
+              })
+              .then(() => {
+                onSaved?.();
+                void record.refetch();
+              });
+          }
+        }
+      ];
+    }
+
+    return undefined;
+  }, [
+    showPayslipShell,
+    data,
+    isPaid,
+    canMarkPaid,
+    t,
+    c,
+    downloading,
+    markPaid,
+    canSubmitMarkPaid,
+    recordId,
+    paymentMethod,
+    paymentReferenceRequired,
+    paymentReference,
+    onSaved,
+    record
+  ]);
+
+  if (showPayslipShell) {
+    return (
+      <InvoicePreviewModal
+        open={open}
+        onOpenChange={onOpenChange}
+        invoiceId={recordId}
+        title={t("breakdownModalTitle")}
+      >
+        {record.isLoading ? (
+          <p className="invoice-modal__state pds-type-body-s-regular muted">{c("loading")}</p>
+        ) : record.isError || !data ? (
+          <p className="invoice-modal__state pds-type-body-m-medium error-text">{t("notFound")}</p>
+        ) : (
+          <PayrollSalaryBreakdownView
+            staffId={data.staffId}
+            staffFullName={data.staffFullName}
+            staffRole={data.staffRole}
+            department={data.department}
+            salaryMonth={data.salaryMonth}
+            baseSalary={data.baseSalary}
+            packages={data.availablePackages}
+            components={data.availableComponents}
+            incentives={data.availableIncentives}
+            recordStatus={isPaid ? "paid" : "approved"}
+            onClose={() => onOpenChange(false)}
+            closeLabel={c("close")}
+            actions={payslipActions}
+          >
+            {downloadError ? (
+              <p className="pds-type-body-s-regular error-text">{downloadError}</p>
+            ) : null}
+            {canMarkPaid ? (
+              <PaymentMethodPicker
+                label={t("paymentMethod")}
+                value={paymentMethod}
+                onChange={handlePaymentMethodChange}
+                reference={paymentReference}
+                onReferenceChange={setPaymentReference}
+              />
+            ) : null}
+          </PayrollSalaryBreakdownView>
+        )}
+      </InvoicePreviewModal>
+    );
+  }
 
   return (
     <Modal
@@ -283,16 +451,11 @@ export function PayrollStaffConfigModal({ recordId, open, onOpenChange, onSaved 
       }}
     >
       <ModalContent
-        className={[
-          "payroll-staff-config-modal",
-          isPayslipView ? "payroll-staff-config-modal--breakdown" : ""
-        ]
-          .filter(Boolean)
-          .join(" ")}
+        className="payroll-staff-config-modal"
         aria-describedby={undefined}
       >
         <ModalHeader>
-          <ModalTitle>{isPayslipView ? t("breakdownModalTitle") : t("configModalTitle")}</ModalTitle>
+          <ModalTitle>{t("configModalTitle")}</ModalTitle>
           <ModalCloseButton />
         </ModalHeader>
 
@@ -301,47 +464,6 @@ export function PayrollStaffConfigModal({ recordId, open, onOpenChange, onSaved 
             <p className="pds-type-body-s-regular muted">{c("loading")}</p>
           ) : record.isError || !data ? (
             <p className="pds-type-body-m-medium error-text">{t("notFound")}</p>
-          ) : isPayslipView ? (
-            <>
-              {downloadError ? (
-                <p className="pds-type-body-s-regular error-text">{downloadError}</p>
-              ) : null}
-              <PayrollSalaryBreakdownView
-                staffId={data.staffId}
-                staffFullName={data.staffFullName}
-                staffRole={data.staffRole}
-                department={data.department}
-                salaryMonth={data.salaryMonth}
-                baseSalary={data.baseSalary}
-                packages={data.availablePackages}
-                components={data.availableComponents}
-                incentives={data.availableIncentives}
-                allowancesTotal={data.allowances}
-                bonusesTotal={data.bonus}
-                deductionsTotal={data.deductions}
-                grossPay={data.grossAmount}
-                netPay={data.netPay}
-                recordStatus={isPaid ? "paid" : "approved"}
-              />
-              {canMarkPaid ? (
-                <div className="payroll-staff-config-modal__field payroll-staff-config-modal__field--footer-gap">
-                  <label
-                    className="pds-type-body-s-semibold payroll-staff-config-modal__label"
-                    htmlFor="payroll-payment-method"
-                  >
-                    {t("paymentMethod")}
-                  </label>
-                  <PdsSelectField
-                    variant="form"
-                    value={paymentMethod}
-                    onValueChange={(value) =>
-                      setPaymentMethod(typeof value === "string" ? value : "bank_transfer")
-                    }
-                    options={paymentMethodOptions}
-                  />
-                </div>
-              ) : null}
-            </>
           ) : (
             <div className="payroll-staff-config-modal__stack">
               <div className="payroll-staff-config-modal__staff">
@@ -368,111 +490,113 @@ export function PayrollStaffConfigModal({ recordId, open, onOpenChange, onSaved 
                 <p className="pds-type-body-s-regular muted">{t("baseSalaryFromProfile")}</p>
               </div>
 
-              {components.length > 0 ? (
+              {hasCompensationItems ? (
                 <section className="payroll-staff-config-modal__section">
                   <div className="payroll-staff-config-modal__section-head">
-                    <h3 className="pds-type-title-xxs-extrabold">{t("payComponentsSection")}</h3>
+                    <h3 className="pds-type-title-xxs-extrabold">{t("compensationAdjustmentsSection")}</h3>
                     <p className="pds-type-body-s-regular muted">
                       {t("sectionActiveSummary", {
-                        count: componentSummary.count,
-                        total: formatMoney(componentSummary.total)
+                        count: adjustmentSummary.count,
+                        total: formatMoney(adjustmentSummary.total)
                       })}
                     </p>
                   </div>
-                  <ul className="payroll-staff-config-modal__rows">
-                    {components.map((item) => (
-                      <PayrollConfigRow
-                        key={item.componentId}
-                        icon={item.kind === "deduction" ? "remove_circle_outline" : "payments"}
-                        iconTone={resolvePayrollRowIconTone(
-                          item.kind === "deduction" ? "remove_circle_outline" : "payments",
-                          item.kind
-                        )}
-                        label={item.name}
-                        amount={item.amount}
-                        enabled={item.enabled}
-                        readOnly={!canEdit}
-                        onToggle={(checked) => {
-                          setComponents((prev) =>
-                            prev.map((row) =>
-                              row.componentId === item.componentId
-                                ? { ...row, enabled: checked }
-                                : row
-                            )
-                          );
-                        }}
-                      />
-                    ))}
-                  </ul>
-                </section>
-              ) : null}
 
-              {packages.length > 0 ? (
-                <section className="payroll-staff-config-modal__section">
-                  <div className="payroll-staff-config-modal__section-head">
-                    <h3 className="pds-type-title-xxs-extrabold">{t("allowancePackagesSection")}</h3>
-                    <p className="pds-type-body-s-regular muted">
-                      {t("sectionActiveSummary", {
-                        count: packageSummary.count,
-                        total: formatMoney(packageSummary.total)
-                      })}
-                    </p>
-                  </div>
-                  <ul className="payroll-staff-config-modal__rows">
-                    {packages.map((item) => (
-                      <PayrollConfigRow
-                        key={item.packageId}
-                        icon={item.icon}
-                        iconTone={resolvePayrollRowIconTone(item.icon)}
-                        label={item.name}
-                        amount={item.amount}
-                        enabled={item.enabled}
-                        readOnly={!canEdit}
-                        onToggle={(checked) => {
-                          setPackages((prev) =>
-                            prev.map((row) =>
-                              row.packageId === item.packageId ? { ...row, enabled: checked } : row
-                            )
-                          );
-                        }}
-                      />
-                    ))}
-                  </ul>
-                </section>
-              ) : null}
+                  {components.length > 0 ? (
+                    <>
+                      {showCompensationGroupLabels ? (
+                        <p className="pds-type-caption-s payroll-staff-config-modal__group-label">
+                          {t("payComponentsSection")}
+                        </p>
+                      ) : null}
+                      <ul className="payroll-staff-config-modal__rows">
+                        {components.map((item) => (
+                          <PayrollConfigRow
+                            key={item.componentId}
+                            icon={item.kind === "deduction" ? "remove_circle_outline" : "payments"}
+                            iconTone={resolvePayrollRowIconTone(
+                              item.kind === "deduction" ? "remove_circle_outline" : "payments",
+                              item.kind
+                            )}
+                            label={item.name}
+                            amount={item.amount}
+                            enabled={item.enabled}
+                            readOnly={!canEdit}
+                            onToggle={(checked) => {
+                              setComponents((prev) =>
+                                prev.map((row) =>
+                                  row.componentId === item.componentId
+                                    ? { ...row, enabled: checked }
+                                    : row
+                                )
+                              );
+                            }}
+                          />
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
 
-              {incentives.length > 0 ? (
-                <section className="payroll-staff-config-modal__section">
-                  <div className="payroll-staff-config-modal__section-head">
-                    <h3 className="pds-type-title-xxs-extrabold">{t("bonusIncentivesSection")}</h3>
-                    <p className="pds-type-body-s-regular muted">
-                      {t("sectionActiveSummary", {
-                        count: incentiveSummary.count,
-                        total: formatMoney(incentiveSummary.total)
-                      })}
-                    </p>
-                  </div>
-                  <ul className="payroll-staff-config-modal__rows">
-                    {incentives.map((item) => (
-                      <PayrollConfigRow
-                        key={item.programId}
-                        icon="emoji_events"
-                        iconTone="amber"
-                        label={item.name}
-                        description={item.description}
-                        amount={item.amount}
-                        enabled={item.enabled}
-                        readOnly={!canEdit}
-                        onToggle={(checked) => {
-                          setIncentives((prev) =>
-                            prev.map((row) =>
-                              row.programId === item.programId ? { ...row, enabled: checked } : row
-                            )
-                          );
-                        }}
-                      />
-                    ))}
-                  </ul>
+                  {packages.length > 0 ? (
+                    <>
+                      {showCompensationGroupLabels ? (
+                        <p className="pds-type-caption-s payroll-staff-config-modal__group-label">
+                          {t("allowancePackagesSection")}
+                        </p>
+                      ) : null}
+                      <ul className="payroll-staff-config-modal__rows">
+                        {packages.map((item) => (
+                          <PayrollConfigRow
+                            key={item.packageId}
+                            icon={item.icon}
+                            iconTone={resolvePayrollRowIconTone(item.icon)}
+                            label={item.name}
+                            amount={item.amount}
+                            enabled={item.enabled}
+                            readOnly={!canEdit}
+                            onToggle={(checked) => {
+                              setPackages((prev) =>
+                                prev.map((row) =>
+                                  row.packageId === item.packageId ? { ...row, enabled: checked } : row
+                                )
+                              );
+                            }}
+                          />
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
+
+                  {incentives.length > 0 ? (
+                    <>
+                      {showCompensationGroupLabels ? (
+                        <p className="pds-type-caption-s payroll-staff-config-modal__group-label">
+                          {t("bonusIncentivesSection")}
+                        </p>
+                      ) : null}
+                      <ul className="payroll-staff-config-modal__rows">
+                        {incentives.map((item) => (
+                          <PayrollConfigRow
+                            key={item.programId}
+                            icon="emoji_events"
+                            iconTone="amber"
+                            label={item.name}
+                            description={item.description}
+                            amount={item.amount}
+                            enabled={item.enabled}
+                            readOnly={!canEdit}
+                            onToggle={(checked) => {
+                              setIncentives((prev) =>
+                                prev.map((row) =>
+                                  row.programId === item.programId ? { ...row, enabled: checked } : row
+                                )
+                              );
+                            }}
+                          />
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
                 </section>
               ) : null}
 
@@ -488,102 +612,35 @@ export function PayrollStaffConfigModal({ recordId, open, onOpenChange, onSaved 
         </ModalBody>
 
         <ModalFooter>
-          {isPaid ? (
-            <>
-              <ModalFooterStart>
-                <Button
-                  type="button"
-                  buttonType="outlined"
-                  buttonColor="secondary"
-                  prefixIcon="print"
-                  onClick={() =>
-                    printDocument("#payroll-salary-breakdown-print", {
-                      title: t("breakdownModalTitle"),
-                      width: "narrow"
-                    })
-                  }
-                >
-                  {t("breakdownPrint")}
-                </Button>
-              </ModalFooterStart>
-              <ModalFooterActions>
-                <Button
-                  type="button"
-                  buttonType="outlined"
-                  buttonColor="secondary"
-                  prefixIcon="download"
-                  disabled={downloading}
-                  onClick={handleDownloadPayslip}
-                >
-                  {downloading ? c("loading") : t("breakdownDownload")}
-                </Button>
-                <Button
-                  type="button"
-                  buttonType="outlined"
-                  buttonColor="secondary"
-                  onClick={() => onOpenChange(false)}
-                >
-                  {c("close")}
-                </Button>
-              </ModalFooterActions>
-            </>
-          ) : isApproved ? (
-            <ModalFooterActions>
-              <Button type="button" buttonType="outlined" buttonColor="secondary" onClick={() => onOpenChange(false)}>
-                {c("close")}
-              </Button>
+          <ModalFooterActions>
+            <Button type="button" buttonType="outlined" buttonColor="secondary" onClick={() => onOpenChange(false)}>
+              {c("cancel")}
+            </Button>
+            {canEdit ? (
               <Button
                 type="button"
                 buttonType="filled"
                 buttonColor="primary"
-                prefixIcon="payments"
-                disabled={markPaid.isPending}
-                onClick={() =>
-                  void markPaid.mutateAsync({ paymentMethod }).then(() => {
-                    onSaved?.();
-                    void record.refetch();
-                  })
-                }
+                prefixIcon="save"
+                disabled={updateRecord.isPending || record.isLoading}
+                onClick={handleSave}
               >
-                {markPaid.isPending ? c("loading") : t("markPaid")}
+                {updateRecord.isPending ? c("loading") : t("saveCompensation")}
               </Button>
-            </ModalFooterActions>
-          ) : (
-            <ModalFooterActions>
-              <Button type="button" buttonType="outlined" buttonColor="secondary" onClick={() => onOpenChange(false)}>
-                {c("cancel")}
+            ) : null}
+            {canApprove ? (
+              <Button
+                type="button"
+                buttonType="outlined"
+                buttonColor="secondary"
+                prefixIcon="check_circle"
+                disabled={approve.isPending || updateRecord.isPending}
+                onClick={handleApprove}
+              >
+                {approve.isPending || updateRecord.isPending ? c("loading") : t("approveRecord")}
               </Button>
-              {canEdit ? (
-                <Button
-                  type="button"
-                  buttonType="filled"
-                  buttonColor="primary"
-                  prefixIcon="save"
-                  disabled={updateRecord.isPending || record.isLoading}
-                  onClick={handleSave}
-                >
-                  {updateRecord.isPending ? c("loading") : t("saveCompensation")}
-                </Button>
-              ) : null}
-              {canApprove ? (
-                <Button
-                  type="button"
-                  buttonType="outlined"
-                  buttonColor="secondary"
-                  prefixIcon="check_circle"
-                  disabled={approve.isPending}
-                  onClick={() =>
-                    void approve.mutateAsync({}).then(() => {
-                      onSaved?.();
-                      void record.refetch();
-                    })
-                  }
-                >
-                  {approve.isPending ? c("loading") : t("approveRecord")}
-                </Button>
-              ) : null}
-            </ModalFooterActions>
-          )}
+            ) : null}
+          </ModalFooterActions>
         </ModalFooter>
       </ModalContent>
     </Modal>

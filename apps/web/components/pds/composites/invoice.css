@@ -1,0 +1,148 @@
+/* PDS Invoice — school header + billed-to meta + InvoiceDetails (Figma 127:16147). */
+
+.pds-invoice {
+  background: var(--pds-background-canvas);
+  border-radius: var(--pds-radius-16);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+}
+
+.invoice-doc--modal .pds-invoice {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.invoice-doc--modal .pds-modal-header-shell {
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.invoice-doc--modal .pds-invoice__body {
+  flex: none;
+  overflow: visible;
+}
+
+.invoice-doc--modal .pds-invoice__actions {
+  background: var(--pds-background-canvas);
+  border-top: 1px solid var(--pds-border-color-primary);
+  bottom: 0;
+  box-shadow: 0 -10px 24px -16px color-mix(in srgb, var(--pds-primary) 24%, transparent);
+  flex-shrink: 0;
+  position: sticky;
+  z-index: 2;
+}
+
+.pds-invoice__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pds-gap-large);
+  padding: var(--pds-padding-x-large);
+}
+
+.pds-invoice__meta {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.pds-invoice__billed,
+.pds-invoice__ref {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pds-gap-x-small);
+}
+
+.pds-invoice__ref {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.pds-invoice__eyebrow {
+  color: var(--pds-text-placeholder);
+  letter-spacing: 0.12em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.pds-invoice__student {
+  color: var(--pds-text-primary);
+  margin: 0;
+}
+
+.pds-invoice__billed-meta {
+  color: var(--pds-text-secondary);
+  margin: 0;
+}
+
+.pds-invoice__doc-title {
+  color: var(--pds-text-primary);
+  margin: 0;
+}
+
+.pds-invoice__number,
+.pds-invoice__due {
+  color: var(--pds-text-disabled-2nd);
+  margin: 0;
+}
+
+.pds-invoice__actions {
+  border-top: 1px solid var(--pds-border-color-primary);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pds-gap-medium);
+  justify-content: flex-end;
+  padding: var(--pds-padding-large) var(--pds-padding-x-large);
+}
+
+.pds-invoice__action {
+  align-items: center;
+  border-radius: var(--pds-radius-pill);
+  cursor: pointer;
+  display: inline-flex;
+  font-family: inherit;
+  font-weight: 700;
+  gap: var(--pds-gap-x-small);
+  justify-content: center;
+  padding: var(--pds-button-padding-y) var(--pds-button-padding-x);
+  text-decoration: none;
+}
+
+.pds-invoice__action--outline {
+  background: transparent;
+  border: 1px solid var(--pds-border-color-secondary);
+  color: var(--pds-text-primary);
+}
+
+.pds-invoice__action--outline:hover:not(:disabled) {
+  border-color: var(--pds-border-color-active);
+}
+
+.pds-invoice__action--primary {
+  background: var(--pds-button-color-background-primary);
+  border: 1px solid transparent;
+  color: var(--pds-button-color-text-on-light);
+}
+
+.pds-invoice__action--primary:hover:not(:disabled) {
+  background: var(--pds-button-color-background-primary-hover);
+}
+
+.pds-invoice__action:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.pds-invoice__extra {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pds-gap-large);
+}

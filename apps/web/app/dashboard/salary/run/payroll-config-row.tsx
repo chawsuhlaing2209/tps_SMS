@@ -1,32 +1,43 @@
 "use client";
 
-import { Toggle } from "../../../../components/shared/toggle";
-import { Icon } from "../../../lib/material-icon";
+import {
+  ToggleListItem,
+  resolveToggleListIconTone,
+  type ToggleListIconTone,
+} from "../../../../components/pds/composites/toggle-list";
 import "./payroll-config-row.css";
 
 export type PayrollConfigRowIconTone = "blue" | "teal" | "amber" | "red" | "default";
 
-function formatMoney(value: number) {
-  return Math.round(value).toLocaleString();
+function mapPayrollToneToToggleListTone(tone: PayrollConfigRowIconTone): ToggleListIconTone {
+  switch (tone) {
+    case "blue":
+      return "info";
+    case "teal":
+      return "success";
+    case "amber":
+      return "warning";
+    case "red":
+      return "error";
+    default:
+      return "default";
+  }
 }
 
 export function resolvePayrollRowIconTone(icon: string, kind?: string): PayrollConfigRowIconTone {
-  const name = icon.toLowerCase();
-
-  if (kind === "deduction" || name.includes("health") || name.includes("safety") || name.includes("remove")) {
-    return "red";
+  const tone = resolveToggleListIconTone(icon, kind);
+  switch (tone) {
+    case "info":
+      return "blue";
+    case "success":
+      return "teal";
+    case "warning":
+      return "amber";
+    case "error":
+      return "red";
+    default:
+      return "default";
   }
-  if (name.includes("bus") || name.includes("direction") || name.includes("transport")) {
-    return "teal";
-  }
-  if (name.includes("restaurant") || name.includes("meal") || name.includes("emoji_events") || name.includes("trophy")) {
-    return "amber";
-  }
-  if (name.includes("home") || name.includes("house") || name.includes("payments")) {
-    return "blue";
-  }
-
-  return "default";
 }
 
 type Props = {
@@ -35,6 +46,7 @@ type Props = {
   label: string;
   description?: string | null;
   amount: number;
+  currency?: string;
   enabled: boolean;
   readOnly: boolean;
   onToggle: (checked: boolean) => void;
@@ -46,39 +58,24 @@ export function PayrollConfigRow({
   label,
   description,
   amount,
+  currency = "MMK",
   enabled,
   readOnly,
-  onToggle
+  onToggle,
 }: Props) {
   return (
-    <li className="payroll-staff-config-modal__row">
-      <span
-        className={[
-          "payroll-staff-config-modal__row-icon",
-          `payroll-staff-config-modal__row-icon--${iconTone}`
-        ].join(" ")}
-      >
-        <Icon name={icon} size={18} />
-      </span>
-      <div className="payroll-staff-config-modal__row-label-wrap">
-        <p className="payroll-staff-config-modal__row-label">{label}</p>
-        {description ? (
-          <p className="pds-type-body-s-regular payroll-staff-config-modal__row-description">
-            {description}
-          </p>
-        ) : null}
-      </div>
-      <div className="payroll-staff-config-modal__row-amount-box">
-        <span className="payroll-staff-config-modal__row-amount-value">{formatMoney(amount)}</span>
-        <span className="payroll-staff-config-modal__row-amount-currency">MMK</span>
-      </div>
-      <Toggle
-        className="payroll-staff-config-modal__row-toggle"
-        checked={enabled}
-        disabled={readOnly}
-        aria-label={label}
-        onCheckedChange={onToggle}
-      />
-    </li>
+    <ToggleListItem
+      variant="toggle"
+      icon={icon}
+      iconTone={mapPayrollToneToToggleListTone(iconTone)}
+      title={label}
+      description={description ?? undefined}
+      amount={amount}
+      currency={currency}
+      checked={enabled}
+      readOnly={readOnly}
+      ariaLabel={label}
+      onCheckedChange={onToggle}
+    />
   );
 }

@@ -1,0 +1,55 @@
+/* Invoice preview modal shell — shared by finance invoices and payroll payslips. */
+
+.invoice-modal__overlay {
+  background: var(--pds-background-backdrop);
+  inset: 0;
+  position: fixed;
+  z-index: var(--pds-z-overlay, 100);
+}
+
+.invoice-modal {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  left: 50%;
+  max-height: min(calc(100vh - 48px), calc(100dvh - 48px));
+  max-width: 520px;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+  position: fixed;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: calc(100% - 32px);
+  z-index: var(--pds-z-modal, 101);
+}
+
+.invoice-modal__state {
+  background: var(--pds-background-card);
+  border-radius: var(--pds-border-radius-16);
+  padding: var(--pds-padding-large);
+}
+
+.invoice-doc {
+  background: var(--pds-background-card);
+  border-radius: var(--pds-border-radius-16);
+  box-shadow: 0 40px 80px -30px color-mix(in srgb, var(--pds-primary) 50%, transparent);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  width: 100%;
+}
+
+.invoice-doc--modal {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.invoice-doc--modal > *:not(.invoice-modal__state) {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
