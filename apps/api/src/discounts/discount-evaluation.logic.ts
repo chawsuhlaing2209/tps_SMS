@@ -10,8 +10,10 @@ import {
   siblingRuleMatches,
   type AppliedDiscount,
   type DiscountEvaluationContext,
-  type DiscountPolicy
+  type DiscountPolicy,
+  type DiscountRuleCriteria
 } from "@sms/shared";
+import type { EnrollmentPreviewDiscountOption } from "@sms/shared";
 import { and, eq, gte, isNull, lte, or } from "drizzle-orm";
 import type { Database } from "../db/db.module.js";
 import { discountRules, invoiceDiscountLines, studentDiscounts } from "../db/schema.js";
@@ -21,7 +23,58 @@ type EvaluateInput = {
   studentId: string;
   context: DiscountEvaluationContext;
   policy?: DiscountPolicy;
+  excludedDiscountRuleIds?: string[];
+  forcedDiscountRuleIds?: string[];
 };
+
+function autoRuleTypeMatches(
+  normalizedType: string,
+  criteria: DiscountRuleCriteria,
+  context: DiscountEvaluationContext
+): boolean {
+  if (normalizedType === "sibling") {
+    return criteria.type === "sibling" && siblingRuleMatches(criteria, context.siblingSummary);
+  }
+  if (normalizedType === "early_payment") {
+    return criteria.type === "early_payment" && earlyPaymentRuleMatches(criteria, context);
+  }
+  if (normalizedType === "custom") {
+    return criteria.type === "custom" && customRuleMatches(criteria, context);
+  }
+  return false;
+}
+
+function discountOptionSubtitle(
+  criteria: DiscountRuleCriteria,
+  normalizedType: string,
+  context: DiscountEvaluationContext
+): string | undefined {
+  const notes =
+    "notes" in criteria && typeof criteria.notes === "string"
+      ? criteria.notes
+      : undefined;
+  if (notes) return notes;
+
+  if (normalizedType === "sibling") {
+    if (!context.siblingSummary.eligible) return undefined;
+    const position = context.siblingSummary.studentPosition ?? context.siblingSummary.enrolledSiblingCount + 1;
+    return `${position}${position === 1 ? "st" : position === 2 ? "nd" : position === 3 ? "rd" : "th"} child in same family`;
+  }
+  if (normalizedType === "early_payment") {
+    return "Full fees paid before term start";
+  }
+  if (normalizedType === "staff_child") {
+    return "Parent employed at the school";
+  }
+  return undefined;
+}
+
+function formatDiscountName(name: string, valueType: string, value: number): string {
+  if (valueType === "percentage") {
+    return `${name} (${value}%)`;
+  }
+  return name;
+}
 
 export async function evaluateDiscountsFromDb(
   db: Database,
@@ -30,9 +83,12 @@ export async function evaluateDiscountsFromDb(
   discounts: AppliedDiscount[];
   discountTotal: number;
   discountApprovalRequired: boolean;
+  discountOptions: EnrollmentPreviewDiscountOption[];
 }> {
   const today = new Date().toISOString().slice(0, 10);
   const policy = input.policy ?? DEFAULT_DISCOUNT_POLICY;
+  const excluded = new Set(input.excludedDiscountRuleIds ?? []);
+  const forced = new Set(input.forcedDiscountRuleIds ?? []);
   const candidates: Array<{
     id: string;
     ruleId: string;
@@ -79,6 +135,8 @@ export async function evaluateDiscountsFromDb(
     );
 
   for (const row of approvedStudentDiscounts) {
+    if (excluded.has(row.ruleId)) continue;
+
     const criteria = parseDiscountCriteria(row.discountType, row.criteria as Record<string, unknown>);
     if (!ruleMatchesContext(criteria, input.context)) continue;
 
@@ -120,25 +178,30 @@ export async function evaluateDiscountsFromDb(
     );
 
   for (const rule of autoRules) {
+    if (excluded.has(rule.id)) continue;
+
     const normalizedType = normalizeDiscountType(rule.discountType);
     const criteria = parseDiscountCriteria(rule.discountType, rule.criteria as Record<string, unknown>);
 
     if (!ruleMatchesContext(criteria, input.context)) continue;
 
-    if (normalizedType === "sibling") {
-      if (criteria.type !== "sibling" || !siblingRuleMatches(criteria, input.context.siblingSummary)) {
+    const forcedRule = forced.has(rule.id);
+    if (!forcedRule) {
+      if (normalizedType === "sibling") {
+        if (criteria.type !== "sibling" || !siblingRuleMatches(criteria, input.context.siblingSummary)) {
+          continue;
+        }
+      } else if (normalizedType === "early_payment") {
+        if (criteria.type !== "early_payment" || !earlyPaymentRuleMatches(criteria, input.context)) {
+          continue;
+        }
+      } else if (normalizedType === "custom") {
+        if (criteria.type !== "custom" || !customRuleMatches(criteria, input.context)) {
+          continue;
+        }
+      } else {
         continue;
       }
-    } else if (normalizedType === "early_payment") {
-      if (criteria.type !== "early_payment" || !earlyPaymentRuleMatches(criteria, input.context)) {
-        continue;
-      }
-    } else if (normalizedType === "custom") {
-      if (criteria.type !== "custom" || !customRuleMatches(criteria, input.context)) {
-        continue;
-      }
-    } else {
-      continue;
     }
 
     if (
@@ -181,7 +244,91 @@ export async function evaluateDiscountsFromDb(
     });
   }
 
-  return applyDiscountStacking(candidates, input.context.feeLines, policy);
+  for (const ruleId of forced) {
+    if (candidates.some((candidate) => candidate.ruleId === ruleId) || excluded.has(ruleId)) {
+      continue;
+    }
+
+    const [rule] = await db
+      .select()
+      .from(discountRules)
+      .where(and(eq(discountRules.tenantId, input.tenantId), eq(discountRules.id, ruleId)));
+
+    if (!rule || rule.status !== "active") continue;
+
+    const criteria = parseDiscountCriteria(rule.discountType, rule.criteria as Record<string, unknown>);
+    if (!ruleMatchesContext(criteria, input.context)) continue;
+
+    const amount = computeDiscountAmount(
+      input.context.feeLines,
+      criteria.appliesTo,
+      rule.valueType,
+      Number(rule.value)
+    );
+    if (amount <= 0) continue;
+
+    candidates.push({
+      id: rule.id,
+      ruleId: rule.id,
+      name: rule.name,
+      discountType: rule.discountType,
+      source: "rule",
+      stackable: rule.stackable,
+      sortOrder: rule.sortOrder,
+      valueType: rule.valueType,
+      value: Number(rule.value),
+      approvalThreshold: rule.approvalThreshold != null ? Number(rule.approvalThreshold) : null,
+      criteria,
+      amount,
+      eligibilityReason: "Manually added at enrollment"
+    });
+  }
+
+  const stacking = applyDiscountStacking(candidates, input.context.feeLines, policy);
+  const appliedRuleIds = new Set(
+    stacking.discounts.map((discount) => discount.ruleId).filter(Boolean) as string[]
+  );
+
+  const discountOptions: EnrollmentPreviewDiscountOption[] = [];
+
+  for (const rule of autoRules) {
+    const normalizedType = normalizeDiscountType(rule.discountType);
+    const criteria = parseDiscountCriteria(rule.discountType, rule.criteria as Record<string, unknown>);
+    const contextMatches = ruleMatchesContext(criteria, input.context);
+    const typeMatches = autoRuleTypeMatches(normalizedType, criteria, input.context);
+    const amount = computeDiscountAmount(
+      input.context.feeLines,
+      criteria.appliesTo,
+      rule.valueType,
+      Number(rule.value)
+    );
+    const applied = appliedRuleIds.has(rule.id);
+    const eligible = contextMatches && (typeMatches || forced.has(rule.id)) && amount > 0;
+
+    let eligibility: EnrollmentPreviewDiscountOption["eligibility"];
+    if (applied) {
+      eligibility = "auto_applied";
+    } else if (eligible) {
+      eligibility = "eligible";
+    } else {
+      eligibility = "not_eligible";
+    }
+
+    discountOptions.push({
+      ruleId: rule.id,
+      name: formatDiscountName(rule.name, rule.valueType, Number(rule.value)),
+      subtitle: discountOptionSubtitle(criteria, normalizedType, input.context),
+      amount,
+      applied,
+      eligibility,
+      canToggle: applied || eligible
+    });
+  }
+
+  return {
+    ...stacking,
+    discountOptions
+  };
 }
 
 export async function persistInvoiceDiscountLines(

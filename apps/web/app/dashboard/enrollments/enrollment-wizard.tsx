@@ -1,25 +1,36 @@
 "use client";
 import { FormDatePicker, FormInput } from "../../../components/shared/form-input";
 
-import type { EnrollmentConfirmResult, EnrollmentPreviewResult } from "@sms/shared";
-import { enrollmentPaymentMethods } from "@sms/shared";
+import type { EnrollmentConfirmResult, EnrollmentPreviewResult, PaymentMethod } from "@sms/shared";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ApiError, useApiMutation, useApiQuery } from "../../lib/api";
+import { toastSuccess } from "../../lib/toast";
 import { Field } from "../../lib/form";
 import { Icon } from "../../lib/material-icon";
 import { RecordFormModal } from "../../lib/record-modal";
 import { StudentCombobox } from "../../lib/student-combobox";
 import { zodResolver } from "../../lib/zod-resolver";
-import { CheckBox, CheckboxList, PdsSelectField } from "../../../components/pds";
+import { InvoiceDetails, ToggleList, ToggleListItem, ToggleListSectionHead, DiscountToggleList, DiscountToggleListDivider, DiscountToggleListIntro, DiscountToggleListItem, DiscountToggleListSectionHead, DiscountToggleListTotal, mapDiscountOptionBadge } from "../../../components/pds";
+import { PaymentMethodPicker, paymentMethodNeedsReference } from "../../../components/shared/payment-method-picker";
 import { Stepper } from "../../../components/shared/stepper";
 import { EmptyState } from "../../../components/shared/empty-state";
+import { ConfirmDialog } from "../../../components/shared/confirm-dialog";
 import { type DiscountRuleRecord } from "../finance/discounts/discount-form";
 import { RequestDiscountSheet } from "../finance/discounts/request-discount-sheet";
 import { hasAnyPermission } from "../../lib/permissions";
 import { getSession } from "../../lib/session";
+import {
+  buildEnrollmentInvoiceDetails,
+  EnrollmentChip,
+  EnrollmentConfirmOption,
+  EnrollmentStudentBanner,
+  formatEnrollmentAmount,
+  resolveOptionalFeeIcon,
+} from "./enrollment-ceremony-ui";
+import "./enrollment-ceremony.css";
 
 type Classroom = { id: string; name: string; gradeId: string; academicYearId: string };
 
@@ -37,6 +48,8 @@ type DraftEnrollment = {
 type WizardValues = { studentId: string; gradeId: string; classroomId: string };
 
 const STEPS = ["placement", "feeLines", "discounts", "invoicePreview"] as const;
+
+type ConfirmMode = "pay" | "confirm" | "draft";
 
 type AcademicYear = { id: string; name: string };
 type Grade = { id: string; name: string };
@@ -91,13 +104,17 @@ export function EnrollmentWizard({
   const [draftId, setDraftId] = useState<string | null>(null);
   const [preview, setPreview] = useState<EnrollmentPreviewResult | null>(null);
   const [optionalFeeItemIds, setOptionalFeeItemIds] = useState<string[]>([]);
-  const [paymentMethod, setPaymentMethod] = useState<string>("cash");
+  const [excludedDiscountRuleIds, setExcludedDiscountRuleIds] = useState<string[]>([]);
+  const [forcedDiscountRuleIds, setForcedDiscountRuleIds] = useState<string[]>([]);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [paymentReference, setPaymentReference] = useState("");
   const [collectPaymentAtConfirm, setCollectPaymentAtConfirm] = useState(false);
+  const [confirmMode, setConfirmMode] = useState<ConfirmMode>("confirm");
   const [dueDate, setDueDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [formError, setFormError] = useState<string | null>(null);
   const [requestDiscountOpen, setRequestDiscountOpen] = useState(false);
   const [requestRuleId, setRequestRuleId] = useState<string | undefined>();
+  const [deleteDraftOpen, setDeleteDraftOpen] = useState(false);
   const canRequestDiscount = hasAnyPermission(getSession()?.permissions, ["discount.request"]);
 
   const schema = z.object({
@@ -112,6 +129,10 @@ export function EnrollmentWizard({
   });
 
   const watchedStudentId = form.watch("studentId");
+
+  const selectedStudent = useApiQuery<{ fullName: string; admissionNumber?: string | null }>(
+    (tenant) => (open && watchedStudentId ? `/tenants/${tenant}/students/${watchedStudentId}` : null)
+  );
 
   type StudentDiscountRow = {
     id: string;
@@ -152,14 +173,19 @@ export function EnrollmentWizard({
       gradeId: string;
       classroomId: string;
       optionalFeeItemIds: string[];
+      excludedDiscountRuleIds?: string[];
+      forcedDiscountRuleIds?: string[];
       collectPayment?: boolean;
       paymentMethod?: string;
     },
     EnrollmentPreviewResult
-  >((body, tenant) => ({
-    path: `/tenants/${tenant}/enrollments/preview`,
-    init: { method: "POST", body: JSON.stringify(body) }
-  }));
+  >(
+    (body, tenant) => ({
+      path: `/tenants/${tenant}/enrollments/preview`,
+      init: { method: "POST", body: JSON.stringify(body) }
+    }),
+    { showSuccessToast: false, showErrorToast: false }
+  );
 
   const saveDraft = useApiMutation<
     {
@@ -176,7 +202,11 @@ export function EnrollmentWizard({
       path: `/tenants/${tenant}/enrollments`,
       init: { method: "POST", body: JSON.stringify(body) }
     }),
-    { invalidatePaths: (_b, tenant) => invalidatePaths(tenant) }
+    {
+      invalidatePaths: (_b, tenant) => invalidatePaths(tenant),
+      showSuccessToast: false,
+      showErrorToast: false
+    }
   );
 
   const updateDraft = useApiMutation<
@@ -195,7 +225,11 @@ export function EnrollmentWizard({
       path: `/tenants/${tenant}/enrollments/${enrollmentId}`,
       init: { method: "PATCH", body: JSON.stringify(body) }
     }),
-    { invalidatePaths: (_b, tenant) => invalidatePaths(tenant) }
+    {
+      invalidatePaths: (_b, tenant) => invalidatePaths(tenant),
+      showSuccessToast: false,
+      showErrorToast: false
+    }
   );
 
   const confirmEnrollment = useApiMutation<
@@ -203,6 +237,8 @@ export function EnrollmentWizard({
       enrollmentId: string;
       body: {
         optionalFeeItemIds: string[];
+        excludedDiscountRuleIds?: string[];
+        forcedDiscountRuleIds?: string[];
         collectPayment: boolean;
         dueDate?: string;
         paymentMethod?: string;
@@ -217,7 +253,22 @@ export function EnrollmentWizard({
       init: { method: "POST", body: JSON.stringify(body) }
     }),
     {
-      invalidatePaths: (_b, tenant) => invalidatePaths(tenant)
+      invalidatePaths: (_b, tenant) => invalidatePaths(tenant),
+      successMessage: t("confirmSuccess"),
+      showSuccessToast: true,
+      showErrorToast: false
+    }
+  );
+
+  const deleteDraft = useApiMutation<{ enrollmentId: string }, { id: string }>(
+    ({ enrollmentId }, tenant) => ({
+      path: `/tenants/${tenant}/enrollments/${enrollmentId}`,
+      init: { method: "DELETE" }
+    }),
+    {
+      invalidatePaths: (_b, tenant) => invalidatePaths(tenant),
+      showSuccessToast: false,
+      showErrorToast: false
     }
   );
 
@@ -226,9 +277,12 @@ export function EnrollmentWizard({
     setDraftId(null);
     setPreview(null);
     setOptionalFeeItemIds([]);
+    setExcludedDiscountRuleIds([]);
+    setForcedDiscountRuleIds([]);
     setPaymentMethod("cash");
     setPaymentReference("");
     setCollectPaymentAtConfirm(false);
+    setConfirmMode("confirm");
     setDueDate(new Date().toISOString().slice(0, 10));
     setFormError(null);
     form.reset({ studentId: "", gradeId: "", classroomId: "" });
@@ -342,21 +396,32 @@ export function EnrollmentWizard({
 
   const runPreview = async (
     optionalIds: string[],
-    options?: { collectPayment?: boolean; paymentMethod?: string }
+    options?: {
+      collectPayment?: boolean;
+      paymentMethod?: string;
+      excludedDiscountRuleIds?: string[];
+      forcedDiscountRuleIds?: string[];
+    }
   ) => {
     const values = form.getValues();
     if (!classroom) {
       throw new ApiError(t("selectClassroom"), 400);
     }
+    const nextExcluded = options?.excludedDiscountRuleIds ?? excludedDiscountRuleIds;
+    const nextForced = options?.forcedDiscountRuleIds ?? forcedDiscountRuleIds;
     const result = await previewMutation.mutateAsync({
       studentId: values.studentId,
       academicYearId: classroom.academicYearId,
       gradeId: classroom.gradeId,
       classroomId: classroom.id,
       optionalFeeItemIds: optionalIds,
+      excludedDiscountRuleIds: nextExcluded,
+      forcedDiscountRuleIds: nextForced,
       collectPayment: options?.collectPayment,
       paymentMethod: options?.paymentMethod
     });
+    setExcludedDiscountRuleIds(nextExcluded);
+    setForcedDiscountRuleIds(nextForced);
     setPreview(result);
     setOptionalFeeItemIds(
       result.availableOptionalFees.filter((fee) => fee.selected).map((fee) => fee.feeItemId)
@@ -366,6 +431,137 @@ export function EnrollmentWizard({
 
   const formatAmount = (amount: number) =>
     new Intl.NumberFormat(undefined, { style: "decimal" }).format(amount);
+
+  const bannerStudentName = studentDisplayName ?? selectedStudent.data?.fullName ?? "";
+  const bannerStudentMeta = selectedStudent.data?.admissionNumber
+    ? `#${selectedStudent.data.admissionNumber}`
+    : null;
+  const selectedGradeName = gradeOptions.find((grade) => grade.id === selectedGradeId)?.name ?? "";
+
+  const invoiceDetailSections = useMemo(() => {
+    if (!preview) return [];
+    return buildEnrollmentInvoiceDetails(
+      preview,
+      {
+        previewHeader: t("invoicePreviewHeader", {
+          grade: selectedGradeName,
+          room: classroom?.name ?? "",
+        }),
+        discountSection: t("discountApplied"),
+        paidSection: t("paidSection"),
+        paidToDate: finance("invoiceDocument.paidToDate"),
+      },
+    );
+  }, [preview, selectedGradeName, classroom?.name, t, finance]);
+
+  const optionalServicesSummary = useMemo(() => {
+    if (!preview) return null;
+    const activeFees = preview.availableOptionalFees.filter((fee) =>
+      optionalFeeItemIds.includes(fee.feeItemId),
+    );
+    if (activeFees.length === 0) return null;
+    const total = activeFees.reduce((sum, fee) => sum + fee.unitAmount, 0);
+    return t("optionalServicesSummary", {
+      count: activeFees.length,
+      total: formatEnrollmentAmount(total),
+    });
+  }, [preview, optionalFeeItemIds, t]);
+
+  const appliedDiscountOptions = useMemo(
+    () => (preview?.discountOptions ?? []).filter((option) => option.applied),
+    [preview?.discountOptions],
+  );
+
+  const otherDiscountOptions = useMemo(
+    () => (preview?.discountOptions ?? []).filter((option) => !option.applied),
+    [preview?.discountOptions],
+  );
+
+  const otherDiscountSummary = useMemo(() => {
+    const active = otherDiscountOptions.filter((option) => option.applied);
+    if (active.length === 0) {
+      return t("discountOtherInactiveSummary");
+    }
+    const total = active.reduce((sum, option) => sum + option.amount, 0);
+    return t("optionalServicesSummary", {
+      count: active.length,
+      total: formatEnrollmentAmount(total),
+    });
+  }, [otherDiscountOptions, t]);
+
+  const handleDiscountToggle = (ruleId: string, checked: boolean) => {
+    const nextExcluded = excludedDiscountRuleIds.filter((id) => id !== ruleId);
+    const nextForced = forcedDiscountRuleIds.filter((id) => id !== ruleId);
+
+    if (checked) {
+      nextForced.push(ruleId);
+    } else {
+      nextExcluded.push(ruleId);
+    }
+
+    setExcludedDiscountRuleIds(nextExcluded);
+    setForcedDiscountRuleIds(nextForced);
+
+    void runPreview(optionalFeeItemIds, {
+      excludedDiscountRuleIds: nextExcluded,
+      forcedDiscountRuleIds: nextForced,
+    }).catch((error) => {
+      setFormError(error instanceof ApiError ? error.message : c("somethingWrong"));
+    });
+  };
+
+  const isDiscountChecked = (option: { ruleId: string; applied: boolean }) => {
+    if (excludedDiscountRuleIds.includes(option.ruleId)) return false;
+    if (forcedDiscountRuleIds.includes(option.ruleId)) return true;
+    return option.applied;
+  };
+
+  const handlePaymentMethodChange = (nextMethod: PaymentMethod) => {
+    setPaymentMethod(nextMethod);
+    if (!paymentMethodNeedsReference(nextMethod)) {
+      setPaymentReference("");
+    }
+    void runPreview(optionalFeeItemIds, {
+      collectPayment: true,
+      paymentMethod: nextMethod,
+    }).catch((error) => {
+      setFormError(error instanceof ApiError ? error.message : c("somethingWrong"));
+    });
+  };
+
+  const paymentReferenceRequired =
+    confirmMode === "pay" && paymentMethodNeedsReference(paymentMethod);
+  const canSubmitPayment =
+    !paymentReferenceRequired || paymentReference.trim().length > 0;
+
+  const confirmPrimaryLabel =
+    confirmMode === "draft"
+      ? t("saveDraft")
+      : confirmMode === "pay"
+        ? t("confirmAndPay")
+        : t("confirmEnrollment");
+
+  const handleConfirmModeChange = (mode: ConfirmMode) => {
+    setConfirmMode(mode);
+    const withPayment = mode === "pay";
+    setCollectPaymentAtConfirm(withPayment);
+    if (step === STEPS.length - 1) {
+      void runPreview(optionalFeeItemIds, {
+        collectPayment: withPayment,
+        paymentMethod: withPayment ? paymentMethod : undefined,
+      }).catch((error) => {
+        setFormError(error instanceof ApiError ? error.message : c("somethingWrong"));
+      });
+    }
+  };
+
+  const handleFinalConfirm = () => {
+    if (confirmMode === "draft") {
+      void handleSaveDraft();
+      return;
+    }
+    void handleConfirm(confirmMode === "pay");
+  };
 
   const setOptionalFees = async (feeItemIds: string[]) => {
     setOptionalFeeItemIds(feeItemIds);
@@ -411,18 +607,6 @@ export function EnrollmentWizard({
 
     if (step === 0) {
       try {
-        if (draftId && classroom) {
-          const values = form.getValues();
-          await updateDraft.mutateAsync({
-            enrollmentId: draftId,
-            body: {
-              classroomId: values.classroomId,
-              gradeId: classroom.gradeId,
-              academicYearId: classroom.academicYearId,
-              optionalFeeItemIds
-            }
-          });
-        }
         await runPreview(optionalFeeItemIds);
         setStep(1);
       } catch (error) {
@@ -453,6 +637,7 @@ export function EnrollmentWizard({
     setFormError(null);
     try {
       await ensureDraftId();
+      toastSuccess(t("draftSavedSuccess"));
       onSaved();
       onOpenChange(false);
       resetWizard();
@@ -460,6 +645,24 @@ export function EnrollmentWizard({
       setFormError(error instanceof ApiError ? error.message : c("somethingWrong"));
     }
   });
+
+  const handleDeleteDraft = async () => {
+    if (!draftId) return;
+    setFormError(null);
+    try {
+      await deleteDraft.mutateAsync({ enrollmentId: draftId });
+      setDeleteDraftOpen(false);
+      onSaved();
+      onOpenChange(false);
+      resetWizard();
+    } catch (error) {
+      setFormError(error instanceof ApiError ? error.message : c("somethingWrong"));
+    }
+  };
+
+  const canDeleteDraft =
+    Boolean(draftId) &&
+    (initialDraft == null || (initialDraft.status === "draft" && !initialDraft.invoiceId));
 
   const handleConfirm = async (withPayment: boolean) => {
     setFormError(null);
@@ -470,17 +673,27 @@ export function EnrollmentWizard({
       return;
     }
 
+    if (withPayment && paymentMethodNeedsReference(paymentMethod) && !paymentReference.trim()) {
+      setFormError(t("paymentReferenceRequired"));
+      return;
+    }
+
     try {
       const enrollmentId = await ensureDraftId();
       await confirmEnrollment.mutateAsync({
         enrollmentId,
         body: {
           optionalFeeItemIds,
+          excludedDiscountRuleIds,
+          forcedDiscountRuleIds,
           collectPayment: withPayment,
           dueDate,
           paymentMethod: withPayment ? paymentMethod : undefined,
           paymentAmount: withPayment ? preview.total : undefined,
-          paymentReference: withPayment ? paymentReference || undefined : undefined
+          paymentReference:
+            withPayment && paymentMethodNeedsReference(paymentMethod)
+              ? paymentReference.trim() || undefined
+              : undefined
         }
       });
       onSaved();
@@ -496,28 +709,49 @@ export function EnrollmentWizard({
     saveDraft.isPending ||
     updateDraft.isPending ||
     confirmEnrollment.isPending ||
+    deleteDraft.isPending ||
     form.formState.isSubmitting;
 
   return (
     <RecordFormModal
       open={open}
       size="wide"
+      headerVariant="withStepper"
+      description={t("wizardSubtitle")}
+      closeLabel={c("close")}
+      stepper={
+        <Stepper
+          variant="ceremony"
+          steps={STEPS.map((key) => ({ id: key, label: t(`wizardStepLabel_${key}`) }))}
+          currentStep={step}
+          ariaLabel={t("wizardProgress")}
+        />
+      }
       onOpenChange={(next) => {
         if (!next) resetWizard();
         onOpenChange(next);
       }}
       title={t("wizardTitle")}
-      help={lockStudent && step === 0 ? t("wizardStep_placementLocked") : t(`wizardStep_${STEPS[step]}`)}
       onSubmit={(event) => {
         event.preventDefault();
         if (step === STEPS.length - 1) return;
         void goNext();
       }}
+      footerStart={
+        canDeleteDraft ? (
+          <button
+            type="button"
+            className="pds-type-body-m-bold btn-ghost discount-setup-footer__delete"
+            disabled={busy}
+            onClick={() => setDeleteDraftOpen(true)}
+          >
+            <Icon name="delete" />
+            {c("delete")}
+          </button>
+        ) : null
+      }
       footer={
         <>
-          <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => onOpenChange(false)}>
-            {c("cancel")}
-          </button>
           {step > 0 ? (
             <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={goBack} disabled={busy}>
               <Icon name="arrow_back" />
@@ -525,30 +759,19 @@ export function EnrollmentWizard({
             </button>
           ) : null}
           {step === STEPS.length - 1 ? (
-            <>
-              <button type="button" className="pds-type-body-m-bold btn-ghost" disabled={busy} onClick={() => void handleSaveDraft()}>
-                <Icon name="save" />
-                {t("saveDraft")}
-              </button>
-              <button
-                type="button"
-                className="pds-type-body-m-bold btn-primary"
-                disabled={busy || preview?.canConfirm === false}
-                onClick={() => void handleConfirm(false)}
-              >
-                <Icon name="how_to_reg" />
-                {confirmEnrollment.isPending ? c("loading") : t("confirmEnrollment")}
-              </button>
-              <button
-                type="button"
-                className="pds-type-body-m-bold btn-primary"
-                disabled={busy || preview?.canConfirm === false || !collectPaymentAtConfirm}
-                onClick={() => void handleConfirm(true)}
-              >
-                <Icon name="payments" />
-                {t("confirmAndPay")}
-              </button>
-            </>
+            <button
+              type="button"
+              className="pds-type-body-m-bold btn-primary"
+              disabled={
+                busy ||
+                (confirmMode !== "draft" && preview?.canConfirm === false) ||
+                (confirmMode === "pay" && !canSubmitPayment)
+              }
+              onClick={() => void handleFinalConfirm()}
+            >
+              <Icon name={confirmMode === "draft" ? "save" : confirmMode === "pay" ? "payments" : "how_to_reg"} />
+              {confirmEnrollment.isPending || saveDraft.isPending ? c("loading") : confirmPrimaryLabel}
+            </button>
           ) : (
             <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={busy}>
               <Icon name="arrow_forward" />
@@ -558,119 +781,231 @@ export function EnrollmentWizard({
         </>
       }
     >
-      <Stepper
-        className="pds-type-body-m-medium stepper--sheet"
-        steps={STEPS.map((key) => ({ id: key, label: t(`wizardStepLabel_${key}`) }))}
-        currentStep={step}
-        ariaLabel={t("wizardProgress")}
-      />
-
       {step === 0 ? (
-        <>
-          <Field label={t("student")} error={form.formState.errors.studentId?.message}>
-            {lockStudent ? (
-              <FormInput value={studentDisplayName ?? ""} readOnly disabled inputClassName="input-readonly" />
-            ) : (
+        <div className="enrollment-ceremony__stack">
+          {lockStudent && bannerStudentName ? (
+            <EnrollmentStudentBanner
+              name={bannerStudentName}
+              meta={bannerStudentMeta}
+              badge={t("preselected")}
+            />
+          ) : (
+            <Field label={t("student")} error={form.formState.errors.studentId?.message}>
               <StudentCombobox
                 value={form.watch("studentId")}
                 onChange={(nextStudentId) =>
                   form.setValue("studentId", nextStudentId, { shouldValidate: true })
                 }
               />
-            )}
-          </Field>
-          <Field label={t("grade")} error={form.formState.errors.gradeId?.message}>
+            </Field>
+          )}
+          {bannerStudentName && !lockStudent ? (
+            <EnrollmentStudentBanner name={bannerStudentName} meta={bannerStudentMeta} />
+          ) : null}
+
+          <div className="enrollment-ceremony__section">
+            <p className="pds-type-caption-s enrollment-ceremony__section-title">{t("grade")}</p>
             {lockClassroom && initialClassroomId ? (
-              <FormInput readOnly value={lockedGradeName} inputClassName="input-readonly" />
+              <div className="enrollment-chip-grid">
+                <EnrollmentChip selected disabled>
+                  {lockedGradeName}
+                </EnrollmentChip>
+              </div>
             ) : (
-              <PdsSelectField
-                variant="form"
-                value={selectedGradeId}
-                onValueChange={(value) => {
-                  const nextGradeId = typeof value === "string" ? value : "";
-                  form.setValue("gradeId", nextGradeId, { shouldValidate: true });
-                  form.setValue("classroomId", "", { shouldValidate: true });
-                }}
-                placeholder={t("selectGrade")}
-                options={gradeOptions.map((grade) => ({
-                  value: grade.id,
-                  label: grade.name
-                }))}
-              />
+              <div className="enrollment-chip-grid">
+                {gradeOptions.map((grade) => (
+                  <EnrollmentChip
+                    key={grade.id}
+                    selected={selectedGradeId === grade.id}
+                    onClick={() => {
+                      form.setValue("gradeId", grade.id, { shouldValidate: true });
+                      form.setValue("classroomId", "", { shouldValidate: true });
+                    }}
+                  >
+                    {grade.name}
+                  </EnrollmentChip>
+                ))}
+              </div>
             )}
-          </Field>
-          <Field label={t("classroom")} error={form.formState.errors.classroomId?.message}>
+            {form.formState.errors.gradeId?.message ? (
+              <p className="pds-type-body-s-regular error-text">{form.formState.errors.gradeId.message}</p>
+            ) : null}
+          </div>
+
+          <div className="enrollment-ceremony__section">
+            <p className="pds-type-caption-s enrollment-ceremony__section-title">{t("classroom")}</p>
+            {!selectedGradeName ? (
+              <p className="pds-type-body-s-regular enrollment-ceremony__section-hint">{t("selectGrade")}</p>
+            ) : null}
             {lockClassroom && initialClassroomId ? (
-              <FormInput
-                readOnly
-                value={classroomDisplayName ?? lockedClassroom?.name ?? ""}
-                inputClassName="input-readonly"
-              />
+              <div className="enrollment-chip-grid">
+                <EnrollmentChip selected disabled>
+                  {classroomDisplayName ?? lockedClassroom?.name ?? ""}
+                </EnrollmentChip>
+              </div>
             ) : (
-              <PdsSelectField
-                variant="form"
-                value={form.watch("classroomId") ?? ""}
-                onValueChange={(value) =>
-                  form.setValue("classroomId", typeof value === "string" ? value : "", {
-                    shouldValidate: true
-                  })
-                }
-                disabled={!selectedGradeId}
-                placeholder={selectedGradeId ? t("selectClassroom") : t("selectGradeFirst")}
-                options={filteredClassrooms.map((cl) => ({
-                  value: cl.id,
-                  label: cl.name
-                }))}
-              />
+              <div className="enrollment-chip-grid">
+                {filteredClassrooms.map((room) => (
+                  <EnrollmentChip
+                    key={room.id}
+                    selected={form.watch("classroomId") === room.id}
+                    disabled={!selectedGradeId}
+                    onClick={() =>
+                      form.setValue("classroomId", room.id, { shouldValidate: true })
+                    }
+                  >
+                    {room.name}
+                  </EnrollmentChip>
+                ))}
+              </div>
             )}
-          </Field>
-        </>
+            {form.formState.errors.classroomId?.message ? (
+              <p className="pds-type-body-s-regular error-text">{form.formState.errors.classroomId.message}</p>
+            ) : null}
+          </div>
+        </div>
       ) : null}
 
       {step === 1 && preview ? (
-        <>
-          <p className="pds-type-body-s-regular muted">{t("mandatoryFeesHint")}</p>
-          {preview.feeLines.filter((line) => line.mandatory).length === 0 ? (
-            <p className="pds-type-body-m-medium error-text">{t("noMandatoryFees")}</p>
-          ) : (
-            <ul className="preview-line-list">
-              {preview.feeLines
-                .filter((line) => line.mandatory)
-                .map((line) => (
-                  <li key={line.planId ?? line.feeItemId}>
-                    <span>{line.description}</span>
-                    <span>{formatAmount(line.lineTotal)} MMK</span>
-                  </li>
-                ))}
-            </ul>
-          )}
+        <div className="enrollment-ceremony__stack">
+          <div className="enrollment-ceremony__section">
+            <ToggleListSectionHead title={t("includedByDefault")} />
+            {preview.feeLines.filter((line) => line.mandatory).length === 0 ? (
+              <p className="pds-type-body-m-medium error-text">{t("noMandatoryFees")}</p>
+            ) : (
+              <ToggleList aria-label={t("includedByDefault")}>
+                {preview.feeLines
+                  .filter((line) => line.mandatory)
+                  .map((line) => (
+                    <ToggleListItem
+                      key={line.planId ?? line.feeItemId}
+                      variant="locked"
+                      title={line.description}
+                      description={finance(`billingTypes.${line.billingType}`)}
+                      amount={line.lineTotal}
+                    />
+                  ))}
+              </ToggleList>
+            )}
+          </div>
+
           {preview.availableOptionalFees.length > 0 ? (
-            <CheckboxList
-              title={t("optionalServices")}
-              options={preview.availableOptionalFees.map((fee) => ({
-                id: fee.feeItemId,
-                label: fee.name,
-                description: finance(`billingTypes.${fee.billingType}`),
-                amount: fee.unitAmount,
-              }))}
-              selectedIds={optionalFeeItemIds}
-              onChange={(ids) => void setOptionalFees(ids)}
-            />
+            <div className="enrollment-ceremony__section">
+              <ToggleListSectionHead title={t("optionalAddOns")} summary={optionalServicesSummary} />
+              <ToggleList aria-label={t("optionalAddOns")}>
+                {preview.availableOptionalFees.map((fee) => {
+                  const selected = optionalFeeItemIds.includes(fee.feeItemId);
+                  const { icon, tone } = resolveOptionalFeeIcon(fee.name, fee.feeType);
+                  return (
+                    <ToggleListItem
+                      key={fee.feeItemId}
+                      variant="toggle"
+                      icon={icon}
+                      iconTone={tone}
+                      title={fee.name}
+                      amount={fee.unitAmount}
+                      checked={selected}
+                      onCheckedChange={(checked) => {
+                        const next = checked
+                          ? [...optionalFeeItemIds, fee.feeItemId]
+                          : optionalFeeItemIds.filter((id) => id !== fee.feeItemId);
+                        void setOptionalFees(next);
+                      }}
+                    />
+                  );
+                })}
+              </ToggleList>
+            </div>
           ) : (
             <EmptyState compact embedded icon="inventory_2" title={t("noOptionalServices")} />
           )}
-        </>
+
+          <div className="enrollment-services-subtotal">
+            <p className="pds-type-body-s-bold enrollment-services-subtotal__label">{t("servicesSubtotal")}</p>
+            <p className="enrollment-services-subtotal__value">
+              <span className="pds-type-title-xl-extrabold enrollment-services-subtotal__amount">
+                {formatEnrollmentAmount(preview.subtotal)}
+              </span>
+              <span className="pds-type-caption-s enrollment-services-subtotal__currency">MMK</span>
+            </p>
+          </div>
+        </div>
       ) : null}
 
       {step === 2 && preview ? (
-        <>
-          <div className={`callout${preview.siblingSummary.eligible ? " callout--success" : ""}`}>
-            <strong>{t("siblingDiscount")}</strong>
-            <p>{preview.siblingSummary.message}</p>
-            {preview.siblingSummary.studentPosition ? (
-              <p className="pds-type-body-s-regular muted">{t("siblingPosition", { position: preview.siblingSummary.studentPosition })}</p>
-            ) : null}
-          </div>
+        <div className="enrollment-ceremony__stack">
+          <DiscountToggleListIntro>{t("discountsStepIntro")}</DiscountToggleListIntro>
+
+          {appliedDiscountOptions.length > 0 ? (
+            <div className="pds-discount-toggle-list__section">
+              <DiscountToggleList aria-label={t("discountAutoAppliedSection")}>
+                {appliedDiscountOptions.map((option) => {
+                  const badge = mapDiscountOptionBadge(option, {
+                    autoApplied: t("discountBadgeAutoApplied"),
+                    eligible: t("discountBadgeEligible"),
+                    notEligible: t("discountBadgeNotEligible"),
+                  });
+                  return (
+                    <DiscountToggleListItem
+                      key={option.ruleId}
+                      title={option.name}
+                      subtitle={option.subtitle}
+                      amount={option.amount}
+                      badge={badge.label}
+                      badgeTone={badge.tone}
+                      checked={isDiscountChecked(option)}
+                      applied
+                      ariaLabel={option.name}
+                      onCheckedChange={(checked) => handleDiscountToggle(option.ruleId, checked)}
+                    />
+                  );
+                })}
+              </DiscountToggleList>
+            </div>
+          ) : null}
+
+          {otherDiscountOptions.length > 0 ? (
+            <>
+              <DiscountToggleListDivider />
+              <div className="pds-discount-toggle-list__section">
+                <DiscountToggleListSectionHead
+                  title={t("otherEligibleDiscounts")}
+                  summary={otherDiscountSummary}
+                />
+                <DiscountToggleList aria-label={t("otherEligibleDiscounts")}>
+                  {otherDiscountOptions.map((option) => {
+                    const badge = mapDiscountOptionBadge(option, {
+                      autoApplied: t("discountBadgeAutoApplied"),
+                      eligible: t("discountBadgeEligible"),
+                      notEligible: t("discountBadgeNotEligible"),
+                    });
+                    return (
+                      <DiscountToggleListItem
+                        key={option.ruleId}
+                        title={option.name}
+                        subtitle={option.subtitle}
+                        amount={option.amount}
+                        badge={badge.label}
+                        badgeTone={badge.tone}
+                        checked={isDiscountChecked(option)}
+                        disabled={!option.canToggle}
+                        ariaLabel={option.name}
+                        onCheckedChange={(checked) => handleDiscountToggle(option.ruleId, checked)}
+                      />
+                    );
+                  })}
+                </DiscountToggleList>
+              </div>
+            </>
+          ) : appliedDiscountOptions.length === 0 ? (
+            <EmptyState compact embedded icon="sell" title={t("noDiscounts")} />
+          ) : null}
+
+          <DiscountToggleListTotal
+            label={t("totalDiscounts")}
+            amount={preview.discountTotal}
+          />
+
           {preview.pendingDiscounts.length > 0 ? (
             <div className="callout">
               <strong>{t("pendingDiscounts")}</strong>
@@ -710,38 +1045,6 @@ export function EnrollmentWizard({
           {preview.discountApprovalRequired ? (
             <p className="pds-type-body-s-regular muted">{t("discountApprovalRequired")}</p>
           ) : null}
-          {preview.discounts.length > 0 ? (
-            <ul className="discount-preview-list">
-              {preview.discounts.map((discount) => (
-                <li key={`${discount.source}-${discount.id}`} className="discount-preview-card panel">
-                  <div className="discount-preview-card__header">
-                    <strong>{discount.name}</strong>
-                    <span className="discount-preview-card__amount">-{formatAmount(discount.amount)} MMK</span>
-                  </div>
-                  <div className="discount-preview-card__meta">
-                    <span className="pds-type-body-s-regular discount-preview-card__tag">
-                      {discount.source === "rule" ? t("discountSourceRule") : t("discountSourceApproved")}
-                    </span>
-                    {discount.stackable ? (
-                      <span className="pds-type-body-s-regular discount-preview-card__tag">{t("discountStackable")}</span>
-                    ) : (
-                      <span className="pds-type-body-s-regular discount-preview-card__tag">{t("discountBestWins")}</span>
-                    )}
-                    {discount.requiresApproval ? (
-                      <span className="pds-type-body-s-regular discount-preview-card__tag discount-preview-card__tag--warn">
-                        {t("requiresApproval")}
-                      </span>
-                    ) : null}
-                  </div>
-                  {discount.eligibilityReason ? (
-                    <p className="pds-type-body-s-regular muted discount-preview-card__reason">{discount.eligibilityReason}</p>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <EmptyState compact embedded icon="sell" title={t("noDiscounts")} />
-          )}
           {preview.confirmBlockers.map((blocker) => (
             <p key={blocker} className="pds-type-body-m-medium error-text">
               {blocker}
@@ -752,43 +1055,19 @@ export function EnrollmentWizard({
               {warning}
             </p>
           ))}
-        </>
+        </div>
       ) : null}
 
       {step === 3 && preview ? (
-        <div className="invoice-preview">
-          <ul className="preview-line-list">
-            {preview.feeLines.map((line) => (
-              <li key={line.planId ?? line.feeItemId}>
-                <span>{line.description}</span>
-                <span>{formatAmount(line.lineTotal)} MMK</span>
-              </li>
-            ))}
-          </ul>
-          {preview.discounts.length > 0 ? (
-            <ul className="discount-preview-list discount-preview-list--compact">
-              {preview.discounts.map((discount) => (
-                <li key={`${discount.source}-${discount.id}-preview`}>
-                  <span>{discount.name}</span>
-                  <span>-{formatAmount(discount.amount)} MMK</span>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          <div className="invoice-preview__totals">
-            <div>
-              <span>{t("subtotal")}</span>
-              <span>{formatAmount(preview.subtotal)} MMK</span>
-            </div>
-            <div>
-              <span>{t("discountTotal")}</span>
-              <span>-{formatAmount(preview.discountTotal)} MMK</span>
-            </div>
-            <div className="invoice-preview__grand">
-              <span>{t("totalDue")}</span>
-              <span>{formatAmount(preview.total)} MMK</span>
-            </div>
-          </div>
+        <div className="enrollment-ceremony__stack">
+          <InvoiceDetails
+            sections={invoiceDetailSections}
+            totalDue={preview.total}
+            totalLabel={t("totalDue")}
+            currencyLabel="MMK"
+            formatAmount={formatEnrollmentAmount}
+          />
+
           <Field label={t("dueDate")}>
             <FormDatePicker
               type="day"
@@ -799,55 +1078,54 @@ export function EnrollmentWizard({
               ariaLabel={t("dueDate")}
             />
           </Field>
-          <CheckBox
-            id="collect-payment-at-confirm"
-            checked={collectPaymentAtConfirm}
-            showDescription={false}
-            label={t("collectPaymentAtConfirm")}
-            onCheckedChange={(checked) => {
-              setCollectPaymentAtConfirm(checked);
-              void runPreview(optionalFeeItemIds, {
-                collectPayment: checked,
-                paymentMethod: checked ? paymentMethod : undefined,
-              }).catch((error) => {
-                setFormError(error instanceof ApiError ? error.message : c("somethingWrong"));
-              });
-            }}
-          />
-          {collectPaymentAtConfirm ? (
-            <>
-              <Field label={t("paymentMethod")}>
-                <PdsSelectField
-                  variant="form"
-                  value={paymentMethod}
-                  onValueChange={(value) => {
-                    const nextMethod = typeof value === "string" ? value : "";
-                    setPaymentMethod(nextMethod);
-                    void runPreview(optionalFeeItemIds, {
-                      collectPayment: true,
-                      paymentMethod: nextMethod
-                    }).catch((error) => {
-                      setFormError(error instanceof ApiError ? error.message : c("somethingWrong"));
-                    });
-                  }}
-                  options={enrollmentPaymentMethods.map((method) => ({
-                    value: method,
-                    label: t(`paymentMethods.${method}`)
-                  }))}
-                />
-              </Field>
-              <Field label={t("paymentReference")}>
-                <FormInput
-                  value={paymentReference}
-                  onChange={(e) => setPaymentReference(e.target.value)}
-                  placeholder={t("paymentReferencePlaceholder")}
-                />
-              </Field>
-            </>
-          ) : (
+
+          <div className="enrollment-ceremony__section">
+            <p className="pds-type-caption-s enrollment-ceremony__section-title">{t("confirmHelp")}</p>
+            <div className="enrollment-confirm-options">
+              <EnrollmentConfirmOption
+                icon="payments"
+                title={t("confirmPayTitle")}
+                hint={t("confirmPayHint")}
+                selected={confirmMode === "pay"}
+                onSelect={() => handleConfirmModeChange("pay")}
+              />
+              <EnrollmentConfirmOption
+                icon="how_to_reg"
+                title={t("confirmOnlyTitle")}
+                hint={t("confirmOnlyHint")}
+                selected={confirmMode === "confirm"}
+                onSelect={() => handleConfirmModeChange("confirm")}
+              />
+              <EnrollmentConfirmOption
+                icon="save"
+                title={t("saveDraftTitle")}
+                hint={t("saveDraftHint")}
+                selected={confirmMode === "draft"}
+                onSelect={() => handleConfirmModeChange("draft")}
+              />
+            </div>
+          </div>
+
+          {confirmMode === "pay" ? (
+            <div className="enrollment-ceremony__payment-fields">
+              <PaymentMethodPicker
+                value={paymentMethod}
+                label={t("paymentMethod")}
+                onChange={handlePaymentMethodChange}
+              />
+              {paymentReferenceRequired ? (
+                <Field label={t("paymentReference")}>
+                  <FormInput
+                    value={paymentReference}
+                    onChange={(e) => setPaymentReference(e.target.value)}
+                    placeholder={t("paymentReferencePlaceholder")}
+                  />
+                </Field>
+              ) : null}
+            </div>
+          ) : confirmMode === "confirm" ? (
             <p className="pds-type-body-s-regular muted">{t("earlyPaymentPreviewHint")}</p>
-          )}
-          <p className="pds-type-body-s-regular muted">{t("confirmHelp")}</p>
+          ) : null}
         </div>
       ) : step > 0 && !preview ? (
         <p className="pds-type-body-m-medium error-text">{t("previewRequired")}</p>
@@ -864,7 +1142,7 @@ export function EnrollmentWizard({
           open={requestDiscountOpen}
           onOpenChange={setRequestDiscountOpen}
           studentId={watchedStudentId}
-          studentName={studentDisplayName}
+          studentName={bannerStudentName || studentDisplayName}
           defaultRuleId={requestRuleId}
           onRequested={() => {
             void runPreview(optionalFeeItemIds).catch((error) => {
@@ -873,6 +1151,18 @@ export function EnrollmentWizard({
           }}
         />
       ) : null}
+
+      <ConfirmDialog
+        open={deleteDraftOpen}
+        onOpenChange={setDeleteDraftOpen}
+        title={t("deleteDraftTitle")}
+        description={t("deleteDraftHelp")}
+        confirmLabel={c("delete")}
+        cancelLabel={c("cancel")}
+        destructive
+        loading={deleteDraft.isPending}
+        onConfirm={() => void handleDeleteDraft()}
+      />
     </RecordFormModal>
   );
 }

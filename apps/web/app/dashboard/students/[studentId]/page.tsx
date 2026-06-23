@@ -11,6 +11,8 @@ import { z } from "zod";
 import { SegmentedControl } from "../../../../components/pds/composites/segmented-control";
 import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
 import { EmptyState } from "../../../../components/shared/empty-state";
+import { NavigationBackLink } from "../../../../components/shared/navigation-back-link";
+import { TrailLink } from "../../../../components/shared/trail-link";
 import { Button } from "../../../../components/ui/button";
 import { StatusPill } from "../../../../components/pds/subcomponents/status-pill";
 import { StatusBadge } from "../../../../components/shared/badge";
@@ -461,22 +463,24 @@ export default function StudentDetailPage({
         }
         if (enrollment?.invoiceId) {
           return (
-            <Link
+            <TrailLink
               className="pds-type-body-s-regular row-action"
               href={`/dashboard/finance/invoices/${enrollment.invoiceId}`}
+              from={{ label: data?.fullName ?? t("profileTitle"), href: studentHref }}
             >
               {e("viewInvoice")}
-            </Link>
+            </TrailLink>
           );
         }
         if (row.original.classroomId) {
           return (
-            <Link
+            <TrailLink
               className="pds-type-body-s-regular row-action"
               href={`/dashboard/structure/rooms/${row.original.classroomId}`}
+              from={{ label: data?.fullName ?? t("profileTitle"), href: studentHref }}
             >
               {t("membershipDetailsLink")}
-            </Link>
+            </TrailLink>
           );
         }
         return "—";
@@ -507,17 +511,30 @@ export default function StudentDetailPage({
   const data = student.data;
   const profile = data?.profile;
 
-  const linkedGuardians = useMemo(
-    () =>
+  const linkedGuardians = useMemo(() => {
+    const mapped =
       data?.guardians.map((row) => ({
         id: row.guardians.id,
         fullName: row.guardians.fullName,
         phone: row.guardians.phone,
         email: row.guardians.email,
         relationship: row.student_guardians.relationship
-      })) ?? [],
-    [data?.guardians]
-  );
+      })) ?? [];
+
+    if (mapped.length > 0 || !profile?.primaryGuardian) {
+      return mapped;
+    }
+
+    return [
+      {
+        id: profile.primaryGuardian.id,
+        fullName: profile.primaryGuardian.fullName,
+        phone: profile.primaryGuardian.phone,
+        email: null,
+        relationship: profile.primaryGuardian.relationship
+      }
+    ];
+  }, [data?.guardians, profile?.primaryGuardian]);
 
   const tabOptions = useMemo(() => {
     const options = [
@@ -575,10 +592,9 @@ export default function StudentDetailPage({
 
       {data && profile ? (
         <>
-          <Link href="/dashboard/people?tab=students" className="page-back-link">
-            <Icon name="arrow_back" size={18} />
-            {t("backToPeople")}
-          </Link>
+          <NavigationBackLink
+            fallback={{ label: nav("students"), href: "/dashboard/people?tab=students" }}
+          />
 
           <section className="structure-room-banner student-profile-banner">
             <div className="structure-room-banner__main student-profile-banner__main">
@@ -777,6 +793,7 @@ export default function StudentDetailPage({
               <StudentFamilyPanel
                 variant="tab"
                 studentId={studentId}
+                studentName={data.fullName}
                 familyGroupId={data.familyGroupId}
                 guardians={linkedGuardians}
                 primaryGuardian={
@@ -814,6 +831,7 @@ export default function StudentDetailPage({
                 </div>
                 <StudentRecurrentBillingPanel
                   studentId={studentId}
+                  studentName={data.fullName}
                   data={billing.data}
                   loading={billing.isLoading}
                   error={billing.isError}

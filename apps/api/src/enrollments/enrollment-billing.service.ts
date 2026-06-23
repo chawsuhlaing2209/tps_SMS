@@ -142,19 +142,22 @@ export class EnrollmentBillingService {
       input.studentId,
       input.academicYearId
     );
-    const { discounts, discountTotal, discountApprovalRequired } = await this.evaluateDiscounts(
-      tenantId,
-      student.id,
-      input.academicYearId,
-      input.gradeId,
-      feeLines,
-      siblingSummary,
-      {
-        billingContext: "enrollment",
-        collectPayment: input.collectPayment,
-        paymentMethod: input.paymentMethod
-      }
-    );
+    const { discounts, discountTotal, discountApprovalRequired, discountOptions } =
+      await this.evaluateDiscounts(
+        tenantId,
+        student.id,
+        input.academicYearId,
+        input.gradeId,
+        feeLines,
+        siblingSummary,
+        {
+          billingContext: "enrollment",
+          collectPayment: input.collectPayment,
+          paymentMethod: input.paymentMethod,
+          excludedDiscountRuleIds: input.excludedDiscountRuleIds,
+          forcedDiscountRuleIds: input.forcedDiscountRuleIds
+        }
+      );
     const pendingDiscounts = await this.loadPendingDiscounts(tenantId, student.id);
 
     const confirmBlockers: string[] = [];
@@ -168,6 +171,7 @@ export class EnrollmentBillingService {
       feeLines,
       availableOptionalFees,
       discounts,
+      discountOptions,
       pendingDiscounts,
       siblingSummary,
       subtotal,
@@ -211,6 +215,7 @@ export class EnrollmentBillingService {
     feeLines: EnrollmentPreviewResult["feeLines"];
     availableOptionalFees: EnrollmentPreviewResult["availableOptionalFees"];
     discounts: EnrollmentPreviewResult["discounts"];
+    discountOptions?: EnrollmentPreviewResult["discountOptions"];
     pendingDiscounts: EnrollmentPreviewResult["pendingDiscounts"];
     siblingSummary: EnrollmentPreviewResult["siblingSummary"];
     subtotal: number;
@@ -225,6 +230,7 @@ export class EnrollmentBillingService {
       feeLines: input.feeLines,
       availableOptionalFees: input.availableOptionalFees,
       discounts: input.discounts,
+      discountOptions: input.discountOptions ?? [],
       pendingDiscounts: input.pendingDiscounts,
       siblingSummary: input.siblingSummary,
       subtotal: input.subtotal,
@@ -295,7 +301,9 @@ export class EnrollmentBillingService {
       classroomId,
       optionalFeeItemIds,
       collectPayment: dto.collectPayment,
-      paymentMethod: dto.paymentMethod
+      paymentMethod: dto.paymentMethod,
+      excludedDiscountRuleIds: dto.excludedDiscountRuleIds,
+      forcedDiscountRuleIds: dto.forcedDiscountRuleIds
     });
 
     if (!preview.canConfirm) {
@@ -673,11 +681,14 @@ export class EnrollmentBillingService {
       billingContext?: "enrollment" | "recurring";
       collectPayment?: boolean;
       paymentMethod?: string;
+      excludedDiscountRuleIds?: string[];
+      forcedDiscountRuleIds?: string[];
     }
   ): Promise<{
     discounts: EnrollmentPreviewResult["discounts"];
     discountTotal: number;
     discountApprovalRequired: boolean;
+    discountOptions: EnrollmentPreviewResult["discountOptions"];
   }> {
     const result = await evaluateDiscountsFromDb(this.db, {
       tenantId,
@@ -694,7 +705,9 @@ export class EnrollmentBillingService {
         },
         collectPayment: options?.collectPayment,
         paymentMethod: options?.paymentMethod
-      }
+      },
+      excludedDiscountRuleIds: options?.excludedDiscountRuleIds,
+      forcedDiscountRuleIds: options?.forcedDiscountRuleIds
     });
 
     return {
@@ -711,7 +724,8 @@ export class EnrollmentBillingService {
         requiresApproval: discount.requiresApproval
       })),
       discountTotal: result.discountTotal,
-      discountApprovalRequired: result.discountApprovalRequired
+      discountApprovalRequired: result.discountApprovalRequired,
+      discountOptions: result.discountOptions
     };
   }
 

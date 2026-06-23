@@ -18,6 +18,7 @@ import { WorkspaceLoading } from "../../lib/workspace-loading";
 import { PdsSearchFiltersRow, PdsSelectField } from "../../../components/pds";
 import { StatusBadge } from "../../../components/shared/badge";
 import { ExportCsvButton } from "../../../components/shared/export-csv-button";
+import { TrailLink } from "../../../components/shared/trail-link";
 
 const EnrollmentWizard = dynamic(
   () => import("./enrollment-wizard").then((module) => module.EnrollmentWizard),
@@ -136,9 +137,13 @@ export function EnrollmentsWorkspace({
       header: t("invoice"),
       cell: ({ row }) =>
         row.original.invoiceId ? (
-          <Link className="pds-type-body-s-regular row-action" href={`/dashboard/finance/invoices/${row.original.invoiceId}`}>
+          <TrailLink
+            className="pds-type-body-s-regular row-action"
+            href={`/dashboard/finance/invoices/${row.original.invoiceId}`}
+            from={{ label: t("title"), href: "/dashboard/enrollments" }}
+          >
             {t("viewInvoice")}
-          </Link>
+          </TrailLink>
         ) : (
           "—"
         )
@@ -178,7 +183,6 @@ export function EnrollmentsWorkspace({
         yearName={yearName}
         loading={enrollments.isLoading}
       />
-      <p className="pds-type-body-s-regular muted">{t("help")}</p>
       {showStatusFilter ? (
         <PdsSearchFiltersRow
           filters={

@@ -560,6 +560,17 @@ export const PDS_COMPONENT_REGISTRY: FigmaComponentRegistryEntry[] = [
     introducedIn: "2026-06-21",
     notes: "Full invoice document shell composed of invoice header, billed-to meta, and InvoiceDetails.",
   },
+  {
+    id: "toggle-list-item",
+    name: "ToggleListItem",
+    figmaNodeId: "127:5528",
+    figmaFileKey: FIGMA_FILE_KEY,
+    codePath: "apps/web/components/pds/composites/toggle-list.tsx",
+    status: "active",
+    dependsOn: ["toggle"],
+    introducedIn: "2026-06-21",
+    notes: "Locked, toggle, and expandable row variants. Toggle enabled 127:21707, disabled 127:21725. Expandable eligibility 132:33687.",
+  },
 ];
 
 export function getRegistryEntry(id: string) {

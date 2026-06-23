@@ -83,7 +83,9 @@ export class EnrollmentsService {
       classroomId: dto.classroomId,
       optionalFeeItemIds: dto.optionalFeeItemIds ?? [],
       collectPayment: dto.collectPayment,
-      paymentMethod: dto.paymentMethod
+      paymentMethod: dto.paymentMethod,
+      excludedDiscountRuleIds: dto.excludedDiscountRuleIds,
+      forcedDiscountRuleIds: dto.forcedDiscountRuleIds
     });
   }
 
@@ -320,6 +322,44 @@ export class EnrollmentsService {
     });
 
     return row;
+  }
+
+  async deleteEnrollment(
+    tenantId: string,
+    enrollmentId: string,
+    actorUserId: string | undefined
+  ) {
+    const [existing] = await this.db
+      .select()
+      .from(enrollments)
+      .where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.id, enrollmentId)));
+
+    if (!existing) {
+      throw new NotFoundException("Enrollment not found.");
+    }
+
+    if (existing.status !== "draft") {
+      throw new BadRequestException("Only draft enrollments can be deleted.");
+    }
+
+    if (existing.invoiceId || existing.confirmedAt) {
+      throw new BadRequestException("This enrollment cannot be deleted.");
+    }
+
+    await this.db
+      .delete(enrollments)
+      .where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.id, enrollmentId)));
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "enrollment.delete",
+      recordType: "Enrollment",
+      recordId: enrollmentId,
+      before: existing as Record<string, unknown>
+    });
+
+    return { id: enrollmentId };
   }
 
   /** Places the student in the classroom when an enrollment is approved. */

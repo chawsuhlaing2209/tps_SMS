@@ -16,6 +16,8 @@ export * from "./subcomponents/icon-tile";
 export * from "./subcomponents/subject-chip";
 export * from "./subcomponents/grade-chip";
 export * from "./composites/filter-tabs";
+export * from "./composites/toggle-list";
+export * from "./composites/discount-toggle-list";
 export * from "./composites/segmented-control";
 export * from "./composites/search-bar";
 export * from "./composites/search-filters-row";

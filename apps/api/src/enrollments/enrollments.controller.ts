@@ -87,6 +87,16 @@ export class EnrollmentsController {
     return this.enrollmentsService.updateEnrollment(tenantId, enrollmentId, actorUserId, dto);
   }
 
+  @Delete("enrollments/:enrollmentId")
+  @RequirePermissions("student.manage")
+  deleteEnrollment(
+    @Param("tenantId") tenantId: string,
+    @Param("enrollmentId") enrollmentId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.enrollmentsService.deleteEnrollment(tenantId, enrollmentId, actorUserId);
+  }
+
   @Get("student-services/available")
   @RequirePermissions("student.manage")
   listAvailableOptionalServices(

@@ -1,0 +1,152 @@
+/* Discount toggle list — Figma 127:6083 */
+
+.pds-discount-toggle-list {
+  display: grid;
+  gap: var(--pds-gap-small);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pds-discount-toggle-list__intro {
+  color: var(--pds-text-disabled-2nd);
+  margin: 0;
+  padding-bottom: 0;
+}
+
+.pds-discount-toggle-list__section {
+  display: grid;
+  gap: var(--pds-gap-small);
+}
+
+.pds-discount-toggle-list__item {
+  align-items: center;
+  border: 1px solid var(--pds-border-color-primary);
+  border-radius: var(--pds-radius-12);
+  display: flex;
+  gap: var(--pds-gap-medium);
+  min-width: 0;
+  padding: 13px 17px;
+  width: 100%;
+}
+
+.pds-discount-toggle-list__item--applied {
+  background: var(--pds-background-layout-primary);
+}
+
+.pds-discount-toggle-list__item--available {
+  background: var(--pds-background-canvas);
+}
+
+.pds-discount-toggle-list__copy {
+  align-items: center;
+  display: flex;
+  flex: 1 1 auto;
+  gap: var(--pds-gap-medium);
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.pds-discount-toggle-list__main {
+  display: grid;
+  flex: 1 1 auto;
+  gap: var(--pds-gap-xx-small);
+  min-width: 0;
+}
+
+.pds-discount-toggle-list__title-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pds-gap-x-small);
+  min-width: 0;
+}
+
+.pds-discount-toggle-list__title {
+  color: var(--pds-text-primary);
+  margin: 0;
+}
+
+.pds-discount-toggle-list__subtitle {
+  color: var(--pds-text-disabled-2nd);
+  margin: 0;
+}
+
+.pds-discount-toggle-list__badge {
+  border-radius: var(--pds-radius-pill);
+  flex-shrink: 0;
+  max-height: 24px;
+  padding: 4px 12px;
+}
+
+.pds-discount-toggle-list__badge--auto {
+  background: var(--pds-notification-background-success);
+  color: var(--pds-notification-foreground-success);
+}
+
+.pds-discount-toggle-list__badge--eligible {
+  background: var(--pds-notification-background-info);
+  color: var(--pds-notification-foreground-info);
+}
+
+.pds-discount-toggle-list__badge--ineligible {
+  background: var(--pds-background-backdrop);
+  color: var(--pds-text-disabled);
+}
+
+.pds-discount-toggle-list__amount {
+  align-items: baseline;
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: var(--pds-gap-x-small);
+  white-space: nowrap;
+}
+
+.pds-discount-toggle-list__amount-value {
+  color: var(--pds-status-error);
+}
+
+.pds-discount-toggle-list__amount-value--muted {
+  color: var(--pds-text-disabled-2nd);
+}
+
+.pds-discount-toggle-list__amount-currency {
+  color: var(--pds-text-placeholder);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.pds-discount-toggle-list__toggle {
+  flex-shrink: 0;
+}
+
+.pds-discount-toggle-list__total {
+  align-items: center;
+  background: var(--pds-primary);
+  border-radius: var(--pds-radius-14);
+  display: flex;
+  justify-content: space-between;
+  padding: 15px 16px;
+}
+
+.pds-discount-toggle-list__total-label {
+  color: var(--pds-text-placeholder);
+  margin: 0;
+}
+
+.pds-discount-toggle-list__total-value {
+  align-items: baseline;
+  display: inline-flex;
+  gap: var(--pds-gap-x-small);
+  margin: 0;
+}
+
+.pds-discount-toggle-list__total-amount {
+  color: var(--pds-compliment-brand-ink);
+}
+
+.pds-discount-toggle-list__total-currency {
+  color: var(--pds-text-placeholder);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}

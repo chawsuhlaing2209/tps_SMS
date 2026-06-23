@@ -23,6 +23,7 @@ import { TablePanelBody } from "../../../../lib/table-panel";
 import { PdsSelectField } from "../../../../../components/pds";
 import { zodResolver } from "../../../../lib/zod-resolver";
 import { PageHeader } from "../../../page-header-context";
+import { NavigationBackLink } from "../../../../../components/shared/navigation-back-link";
 
 type HouseholdTree = {
   id: string;
@@ -167,11 +168,16 @@ export default function HouseholdDetailPage({
     <div className="student-profile-page">
       <PageHeader
         title={data.name}
+        segment={{ label: data.name, href: `/dashboard/people/households/${familyGroupId}` }}
         breadcrumbs={[
           { label: nav("group_school") },
           { label: p("directoryTitle"), href: "/dashboard/people" },
           { label: t("directoryTitle"), href: "/dashboard/people?tab=households" }
         ]}
+      />
+
+      <NavigationBackLink
+        fallback={{ label: t("directoryTitle"), href: "/dashboard/people?tab=households" }}
       />
 
       <section className="structure-room-banner student-profile-banner">

@@ -1,8 +1,8 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import Link from "next/link";
-import { useEffect, useState } from "react";
+import { TrailLink } from "../../../components/shared/trail-link";
+import { useEffect, useMemo, useState } from "react";
 import { ApiError, useApiMutation, useApiQuery } from "../../lib/api";
 import { Field } from "../../lib/form";
 import { Icon } from "../../lib/material-icon";
@@ -12,6 +12,7 @@ import { DataTableSection, TablePanelBody } from "../../lib/table-panel";
 import { EntityAvatar, RadioBox } from "../../../components/pds";
 import { Badge, StatusBadge } from "../../../components/shared/badge";
 import { EmptyState } from "../../../components/shared/empty-state";
+import { Button } from "../../../components/ui/button";
 import { TableSearchInput } from "../../lib/table-search";
 
 type FamilyMember = {
@@ -21,11 +22,20 @@ type FamilyMember = {
   status: string;
 };
 
+type FamilyGroupGuardian = {
+  id: string;
+  fullName: string;
+  phone: string | null;
+  isPrimary: boolean;
+  studentLinks: Array<{ studentId: string; relationship: string }>;
+};
+
 type FamilyGroupDetail = {
   id: string;
   name: string;
   primaryGuardian: { id: string; fullName: string; phone: string | null } | null;
   members: FamilyMember[];
+  guardians?: FamilyGroupGuardian[];
 };
 
 type FamilyGroupSearchResult = {
@@ -56,6 +66,7 @@ function personInitials(fullName: string) {
 
 export function StudentFamilyPanel({
   studentId,
+  studentName,
   familyGroupId,
   hasGuardian,
   guardians = [],
@@ -66,6 +77,7 @@ export function StudentFamilyPanel({
   variant = "section"
 }: {
   studentId: string;
+  studentName: string;
   familyGroupId: string | null | undefined;
   hasGuardian: boolean;
   guardians?: LinkedGuardian[];
@@ -82,6 +94,10 @@ export function StudentFamilyPanel({
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedFamilyId, setSelectedFamilyId] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  const studentTrailFrom = {
+    label: studentName,
+    href: `/dashboard/students/${studentId}`
+  };
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -126,6 +142,51 @@ export function StudentFamilyPanel({
 
   const siblings =
     family.data?.members.filter((member) => member.id !== studentId) ?? [];
+
+  const displayGuardians = useMemo(() => {
+    const byId = new Map<string, LinkedGuardian>();
+
+    for (const guardian of guardians) {
+      byId.set(guardian.id, guardian);
+    }
+
+    for (const guardian of family.data?.guardians ?? []) {
+      if (byId.has(guardian.id)) {
+        continue;
+      }
+      const studentLink = guardian.studentLinks.find((link) => link.studentId === studentId);
+      byId.set(guardian.id, {
+        id: guardian.id,
+        fullName: guardian.fullName,
+        phone: guardian.phone,
+        email: null,
+        relationship: studentLink?.relationship ?? "guardian"
+      });
+    }
+
+    if (primaryGuardian && !byId.has(primaryGuardian.id)) {
+      byId.set(primaryGuardian.id, {
+        id: primaryGuardian.id,
+        fullName: primaryGuardian.fullName,
+        phone: null,
+        email: null,
+        relationship: "guardian"
+      });
+    }
+
+    const familyPrimary = family.data?.primaryGuardian;
+    if (familyPrimary && !byId.has(familyPrimary.id)) {
+      byId.set(familyPrimary.id, {
+        id: familyPrimary.id,
+        fullName: familyPrimary.fullName,
+        phone: familyPrimary.phone,
+        email: null,
+        relationship: "guardian"
+      });
+    }
+
+    return [...byId.values()];
+  }, [family.data?.guardians, family.data?.primaryGuardian, guardians, primaryGuardian, studentId]);
 
   const handleCreateFamily = async () => {
     setFormError(null);
@@ -189,18 +250,19 @@ export function StudentFamilyPanel({
             <Icon name="group_add" />
             {createFamily.isPending ? c("loading") : t("createFamily")}
           </button>
-          <button
+          <Button
             type="button"
-            className="pds-type-body-m-bold btn-ghost"
+            buttonType="outlined"
+            buttonColor="secondary"
+            prefixIcon="link"
             disabled={busy}
             onClick={() => {
               setFormError(null);
               setJoinOpen(true);
             }}
           >
-            <Icon name="link" />
             {t("joinFamily")}
-          </button>
+          </Button>
         </>
       ) : canManage && familyGroupId ? (
         <PanelMoreActionsMenu
@@ -236,8 +298,8 @@ export function StudentFamilyPanel({
     primaryGuardian?.fullName ?? family.data?.primaryGuardian?.fullName ?? null;
 
   const guardianMemberCards =
-    guardians.length > 0 ? (
-      guardians.map((guardian) => (
+    displayGuardians.length > 0 ? (
+      displayGuardians.map((guardian) => (
         <li key={guardian.id} className="student-family-panel__card">
           <EntityAvatar
             initials={personInitials(guardian.fullName)}
@@ -245,12 +307,13 @@ export function StudentFamilyPanel({
             className="student-family-panel__avatar"
           />
           <div className="student-family-panel__card-main">
-            <Link
+            <TrailLink
               href={`/dashboard/people/guardians/${guardian.id}`}
               className="pds-type-body-m-bold student-family-panel__card-name"
+              from={studentTrailFrom}
             >
               {guardian.fullName}
-            </Link>
+            </TrailLink>
             <span className="pds-type-body-s-regular student-family-panel__card-meta">
               {guardian.id === primaryGuardianId
                 ? t("guardianPrimaryMeta", {
@@ -289,12 +352,13 @@ export function StudentFamilyPanel({
               className="student-family-panel__avatar"
             />
             <div className="student-family-panel__card-main">
-              <Link
+              <TrailLink
                 href={`/dashboard/students/${member.id}`}
                 className="pds-type-body-m-bold student-family-panel__card-name"
+                from={studentTrailFrom}
               >
                 {member.fullName}
-              </Link>
+              </TrailLink>
               <span className="pds-type-body-s-regular student-family-panel__card-meta">
                 {t("siblingMeta", { roll: member.admissionNumber })}
               </span>
@@ -315,7 +379,7 @@ export function StudentFamilyPanel({
 
   const showFamilyLoading = Boolean(familyGroupId) && family.isLoading;
   const showFamilyError = Boolean(familyGroupId) && family.isError;
-  const hasMemberCards = guardians.length > 0 || (familyGroupId && siblings.length > 0);
+  const hasMemberCards = displayGuardians.length > 0 || (familyGroupId && siblings.length > 0);
 
   const tabFamilyBody = (
     <>
@@ -325,7 +389,7 @@ export function StudentFamilyPanel({
         <p className="pds-type-body-m-medium error-text">{c("somethingWrong")}</p>
       ) : null}
 
-      {!showFamilyLoading && guardians.length === 0 ? (
+      {!showFamilyLoading && displayGuardians.length === 0 ? (
         <EmptyState compact embedded icon="supervisor_account" title={t("noGuardians")} />
       ) : null}
 
@@ -343,13 +407,14 @@ export function StudentFamilyPanel({
       ) : null}
 
       {familyGroupId && !showFamilyLoading && !showFamilyError ? (
-        <Link
+        <TrailLink
           className="pds-type-body-m-bold student-family-panel__tree-link"
           href={`/dashboard/people/households/${familyGroupId}`}
+          from={studentTrailFrom}
         >
           <Icon name="account_tree" size={18} />
           {t("viewCompleteFamilyTree")}
-        </Link>
+        </TrailLink>
       ) : null}
 
       {formError && !joinOpen ? (
@@ -380,13 +445,14 @@ export function StudentFamilyPanel({
                 </span>
               ) : null}
             </div>
-            <Link
+            <TrailLink
               className="pds-type-body-m-bold btn-ghost student-profile-family-card__link"
               href={`/dashboard/people/households/${familyGroupId}`}
+              from={studentTrailFrom}
             >
               <Icon name="account_tree" />
               {t("viewFamilyTree")}
-            </Link>
+            </TrailLink>
           </article>
           {siblings.length > 0 ? (
             <>
@@ -396,7 +462,9 @@ export function StudentFamilyPanel({
               <ul className="student-profile-family-list">
                 {siblings.map((member) => (
                   <li key={member.id}>
-                    <Link href={`/dashboard/students/${member.id}`}>{member.fullName}</Link>
+                    <TrailLink href={`/dashboard/students/${member.id}`} from={studentTrailFrom}>
+                      {member.fullName}
+                    </TrailLink>
                     <span className="pds-type-body-s-regular muted">
                       {member.admissionNumber} · {member.status}
                     </span>

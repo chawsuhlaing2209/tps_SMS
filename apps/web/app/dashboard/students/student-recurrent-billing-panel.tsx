@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import Link from "next/link";
+import { TrailLink } from "../../../components/shared/trail-link";
 import { useState } from "react";
 import { ConfirmDialog } from "../../../components/shared/confirm-dialog";
 import { EmptyState } from "../../../components/shared/empty-state";
@@ -57,6 +58,7 @@ function serviceIcon(name: string) {
 
 type Props = {
   studentId: string;
+  studentName: string;
   data: StudentRecurrentBillingData | undefined;
   loading: boolean;
   error: boolean;
@@ -66,6 +68,7 @@ type Props = {
 
 export function StudentRecurrentBillingPanel({
   studentId,
+  studentName,
   data,
   loading,
   error,
@@ -145,12 +148,13 @@ export function StudentRecurrentBillingPanel({
             {data.invoices.map((invoice) => (
               <li key={invoice.id} className="student-recurrent-billing__invoice-row">
                 <div className="student-recurrent-billing__invoice-main">
-                  <Link
+                  <TrailLink
                     href={`/dashboard/finance/invoices/${invoice.id}`}
                     className="pds-type-body-m-bold student-recurrent-billing__invoice-number"
+                    from={{ label: studentName, href: `/dashboard/students/${studentId}` }}
                   >
                     {invoice.invoiceNumber}
-                  </Link>
+                  </TrailLink>
                   <span className="student-recurrent-billing__invoice-source">
                     {f(`source_${invoice.source}`)}
                   </span>
