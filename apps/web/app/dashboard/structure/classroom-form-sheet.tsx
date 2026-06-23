@@ -2,7 +2,8 @@
 import { FormInput } from "../../../components/shared/form-input";
 
 import { useTranslations } from "next-intl";
-import { useEffect } from "react";
+import Link from "next/link";
+import { useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Field } from "../../lib/form";
@@ -13,10 +14,16 @@ import { zodResolver } from "../../lib/zod-resolver";
 
 type StaffMember = { id: string; fullName: string };
 
+export type FacilityRoomOption = {
+  id: string;
+  name: string;
+  capacity: number | null;
+  note: string | null;
+};
+
 export type ClassroomFormValues = {
   name: string;
-  room: string;
-  capacity: string;
+  facilityRoomId: string;
   classTeacherStaffId: string;
 };
 
@@ -25,6 +32,7 @@ type ClassroomFormSheetProps = {
   onOpenChange: (open: boolean) => void;
   mode: "create" | "edit";
   teachers: StaffMember[];
+  facilityRooms: FacilityRoomOption[];
   initialValues?: Partial<ClassroomFormValues>;
   submitting?: boolean;
   onSubmit: (values: ClassroomFormValues) => Promise<void>;
@@ -35,6 +43,7 @@ export function ClassroomFormSheet({
   onOpenChange,
   mode,
   teachers,
+  facilityRooms,
   initialValues,
   submitting,
   onSubmit
@@ -44,8 +53,7 @@ export function ClassroomFormSheet({
 
   const schema = z.object({
     name: z.string().trim().min(1, c("required")),
-    room: z.string(),
-    capacity: z.string(),
+    facilityRoomId: z.string(),
     classTeacherStaffId: z.string()
   });
 
@@ -53,8 +61,7 @@ export function ClassroomFormSheet({
     resolver: zodResolver(schema),
     defaultValues: {
       name: "",
-      room: "",
-      capacity: "",
+      facilityRoomId: "",
       classTeacherStaffId: ""
     }
   });
@@ -63,11 +70,24 @@ export function ClassroomFormSheet({
     if (!open) return;
     form.reset({
       name: initialValues?.name ?? "",
-      room: initialValues?.room ?? "",
-      capacity: initialValues?.capacity ?? "",
+      facilityRoomId: initialValues?.facilityRoomId ?? "",
       classTeacherStaffId: initialValues?.classTeacherStaffId ?? ""
     });
   }, [form, initialValues, open]);
+
+  const selectedFacilityRoomId = form.watch("facilityRoomId");
+  const selectedFacilityRoom = useMemo(
+    () => facilityRooms.find((room) => room.id === selectedFacilityRoomId) ?? null,
+    [facilityRooms, selectedFacilityRoomId]
+  );
+
+  const facilityOptions = facilityRooms.map((room) => ({
+    value: room.id,
+    label:
+      room.capacity != null
+        ? t("facilityRoomOption", { name: room.name, capacity: room.capacity })
+        : room.name
+  }));
 
   return (
     <RecordFormSheet
@@ -96,12 +116,46 @@ export function ClassroomFormSheet({
       <Field label={t("classroomName")} error={form.formState.errors.name?.message}>
         <FormInput placeholder={t("classroomNamePlaceholder")} {...form.register("name")} />
       </Field>
-      <Field label={t("room")}>
-        <FormInput placeholder={t("roomPlaceholder")} {...form.register("room")} />
+      <Field label={t("facilityRoom")}>
+        <p className="pds-type-body-s-regular form-field-block__hint muted">{t("facilityRoomHint")}</p>
+        {facilityRooms.length ? (
+          <PdsSelectField
+            variant="form"
+            value={form.watch("facilityRoomId")}
+            onValueChange={(value) =>
+              form.setValue("facilityRoomId", typeof value === "string" ? value : "", {
+                shouldValidate: true
+              })
+            }
+            placeholder={t("selectFacilityRoom")}
+            options={facilityOptions}
+          />
+        ) : (
+          <p className="pds-type-body-s-regular muted">
+            {t("noFacilityRooms")}{" "}
+            <Link href="/dashboard/facilities" className="pds-type-body-s-semibold">
+              {t("manageFacilities")}
+            </Link>
+          </p>
+        )}
       </Field>
-      <Field label={t("capacity")}>
-        <FormInput type="number" min={1} {...form.register("capacity")} />
-      </Field>
+      {selectedFacilityRoom ? (
+        <div className="classroom-facility-summary">
+          <p className="pds-type-body-s-regular classroom-facility-summary__row">
+            <span className="pds-type-label-s-medium muted">{t("capacity")}</span>
+            <span className="pds-type-body-m-medium">
+              {selectedFacilityRoom.capacity != null
+                ? t("facilityRoomCapacityValue", { capacity: selectedFacilityRoom.capacity })
+                : c("empty")}
+            </span>
+          </p>
+          {selectedFacilityRoom.note ? (
+            <p className="pds-type-body-s-regular classroom-facility-summary__note muted">
+              {selectedFacilityRoom.note}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       <Field label={t("homeroomTeacher")}>
         <PdsSelectField
           variant="form"

@@ -11,8 +11,9 @@ import {
 } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { useMemo, useState, Fragment, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { appendNavigationTrail, type NavigationSegment } from "./navigation-trail";
+import { isPadaukRowInteractiveTarget } from "./table-row-interaction";
 import { subjectColor } from "../dashboard/structure/subject-colors";
 import {
   Table,
@@ -167,11 +168,7 @@ function sortIndicator(isSorted: false | "asc" | "desc"): string {
 }
 
 function isInteractiveTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof Element)) {
-    return false;
-  }
-
-  return Boolean(target.closest("button, a, input, select, textarea, label, [data-row-stop]"));
+  return isPadaukRowInteractiveTarget(target);
 }
 
 export function deriveInitials(name: string): string {
@@ -248,7 +245,8 @@ export function DataTable<TData>({
   initialSorting,
   getRowHref,
   onRowClick,
-  navigationFrom
+  navigationFrom,
+  renderSubRow
 }: {
   columns: ColumnDef<TData, unknown>[];
   data: TData[];
@@ -259,6 +257,8 @@ export function DataTable<TData>({
   onRowClick?: (row: TData) => void;
   /** Current list page appended to the trail before row navigation. */
   navigationFrom?: NavigationSegment;
+  /** Optional detail row rendered immediately after each data row. */
+  renderSubRow?: (row: Row<TData>) => ReactNode | null;
 }) {
   const c = useTranslations("common");
   const router = useRouter();
@@ -345,25 +345,28 @@ export function DataTable<TData>({
         {table.getRowModel().rows.map((row: Row<TData>) => {
           const href = getRowHref?.(row.original);
           const clickable = rowIsInteractive && (onRowClick || href);
+          const subRow = renderSubRow?.(row);
 
           return (
-            <TableRow
-              key={row.id}
-              className={clickable ? "table-row--clickable" : undefined}
-              tabIndex={clickable ? 0 : undefined}
-              role={clickable ? "link" : undefined}
-              aria-label={clickable && href ? c("openRecord") : undefined}
-              onClick={clickable ? (event) => handleRowClick(row.original, event) : undefined}
-              onKeyDown={
-                clickable ? (event) => handleRowKeyDown(row.original, event) : undefined
-              }
-            >
-              {row.getVisibleCells().map((cell) => (
-                <TableCell key={cell.id}>
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </TableCell>
-              ))}
-            </TableRow>
+            <Fragment key={row.id}>
+              <TableRow
+                className={clickable ? "table-row--clickable" : undefined}
+                tabIndex={clickable ? 0 : undefined}
+                role={clickable ? "link" : undefined}
+                aria-label={clickable && href ? c("openRecord") : undefined}
+                onClick={clickable ? (event) => handleRowClick(row.original, event) : undefined}
+                onKeyDown={
+                  clickable ? (event) => handleRowKeyDown(row.original, event) : undefined
+                }
+              >
+                {row.getVisibleCells().map((cell) => (
+                  <TableCell key={cell.id}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
+                ))}
+              </TableRow>
+              {subRow}
+            </Fragment>
           );
         })}
       </TableBody>

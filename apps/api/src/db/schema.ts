@@ -85,6 +85,45 @@ export const invoiceSourceEnum = pgEnum("invoice_source", [
   "recurring",
   "ad_hoc"
 ]);
+export const payComponentKindEnum = pgEnum("pay_component_kind", ["earning", "deduction"]);
+export const payComponentCalculationEnum = pgEnum("pay_component_calculation", [
+  "fixed",
+  "percent_of_basic"
+]);
+export const benefitEligibilityScopeEnum = pgEnum("benefit_eligibility_scope", [
+  "all_staff",
+  "teachers",
+  "non_teaching"
+]);
+export const incentiveCadenceEnum = pgEnum("incentive_cadence", [
+  "per_payroll",
+  "term",
+  "annual",
+  "one_time"
+]);
+export const incentiveAwardTypeEnum = pgEnum("incentive_award_type", [
+  "fixed",
+  "percent_of_basic",
+  "manual"
+]);
+export const payrollRunStatusEnum = pgEnum("payroll_run_status", [
+  "draft",
+  "processing",
+  "approved",
+  "closed"
+]);
+export const payrollRecordStatusEnum = pgEnum("payroll_record_status", [
+  "draft",
+  "pending",
+  "paid"
+]);
+export const payrollLineSourceTypeEnum = pgEnum("payroll_line_source_type", [
+  "component",
+  "package",
+  "incentive",
+  "deduction",
+  "adjustment"
+]);
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -227,17 +266,43 @@ export const userRoles = pgTable(
   })
 );
 
-export const sessions = pgTable("sessions", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  tenantId: uuid("tenant_id").references(() => tenants.id),
-  userId: uuid("user_id").references(() => users.id).notNull(),
-  tokenHash: text("token_hash").notNull(),
-  userAgent: text("user_agent"),
-  ipAddress: text("ip_address"),
-  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-  revokedAt: timestamp("revoked_at", { withTimezone: true }),
-  ...timestamps
-});
+export const sessions = pgTable(
+  "sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").references(() => tenants.id),
+    userId: uuid("user_id").references(() => users.id).notNull(),
+    tokenHash: text("token_hash").notNull(),
+    userAgent: text("user_agent"),
+    ipAddress: text("ip_address"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    ...timestamps
+  },
+  (table) => ({
+    tokenHashActiveIdx: index("sessions_token_hash_active_idx")
+      .on(table.tokenHash)
+      .where(sql`${table.revokedAt} IS NULL`)
+  })
+);
+
+export const accountActivationTokens = pgTable(
+  "account_activation_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+    userId: uuid("user_id").references(() => users.id).notNull(),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+  },
+  (table) => ({
+    lookupIdx: index("account_activation_tokens_lookup_idx")
+      .on(table.tenantId, table.tokenHash)
+      .where(sql`${table.usedAt} IS NULL`)
+  })
+);
 
 export const passwordResetTokens = pgTable("password_reset_tokens", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -434,6 +499,22 @@ export const departments = pgTable(
   })
 );
 
+/** Physical rooms and spaces (buildings, labs, halls) — separate from academic classrooms. */
+export const facilityRooms = pgTable(
+  "facility_rooms",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...tenantFields,
+    name: text("name").notNull(),
+    capacity: integer("capacity"),
+    note: text("note"),
+    status: text("status").$type<"active" | "inactive">().default("active").notNull()
+  },
+  (table) => ({
+    tenantNameUnique: uniqueIndex("facility_rooms_tenant_name_unique").on(table.tenantId, table.name)
+  })
+);
+
 /** School division for teacher placement (Primary / Middle / High, etc.). */
 export const teachingSectors = pgTable(
   "teaching_sectors",
@@ -489,6 +570,7 @@ export const classrooms = pgTable("classrooms", {
   name: text("name").notNull(),
   capacity: integer("capacity"),
   room: text("room"),
+  facilityRoomId: uuid("facility_room_id").references(() => facilityRooms.id),
   classTeacherStaffId: uuid("class_teacher_staff_id").references(() => staff.id),
   status: recordStatusEnum("status").default("active").notNull()
 });
@@ -650,7 +732,7 @@ export const timetableSlots = pgTable("timetable_slots", {
   ...tenantFields,
   classroomId: uuid("classroom_id").references(() => classrooms.id).notNull(),
   subjectId: uuid("subject_id").references(() => subjects.id).notNull(),
-  teacherStaffId: uuid("teacher_staff_id").references(() => staff.id).notNull(),
+  teacherStaffId: uuid("teacher_staff_id").references(() => staff.id),
   periodId: uuid("period_id").references(() => timetablePeriods.id).notNull(),
   room: text("room"),
   dayOfWeek: integer("day_of_week").notNull(),
@@ -973,6 +1055,203 @@ export const salaryRecords = pgTable("salary_records", {
   paidAt: timestamp("paid_at", { withTimezone: true })
 });
 
+export const payComponents = pgTable(
+  "pay_components",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...tenantFields,
+    code: text("code").notNull(),
+    name: text("name").notNull(),
+    kind: payComponentKindEnum("kind").notNull(),
+    calculation: payComponentCalculationEnum("calculation").default("fixed").notNull(),
+    defaultAmount: numeric("default_amount", { precision: 14, scale: 2 }).default("0").notNull(),
+    status: recordStatusEnum("status").default("active").notNull()
+  },
+  (table) => ({
+    tenantCodeUnique: uniqueIndex("pay_components_tenant_code_unique").on(table.tenantId, table.code)
+  })
+);
+
+export const benefitPackages = pgTable("benefit_packages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  name: text("name").notNull(),
+  description: text("description"),
+  iconKey: text("icon_key"),
+  monthlyValue: numeric("monthly_value", { precision: 14, scale: 2 }).default("0").notNull(),
+  eligibilityScope: benefitEligibilityScopeEnum("eligibility_scope").default("all_staff").notNull(),
+  status: recordStatusEnum("status").default("active").notNull()
+});
+
+export const staffBenefitEnrollments = pgTable(
+  "staff_benefit_enrollments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...tenantFields,
+    staffId: uuid("staff_id")
+      .references(() => staff.id)
+      .notNull(),
+    packageId: uuid("package_id")
+      .references(() => benefitPackages.id)
+      .notNull(),
+    effectiveFrom: date("effective_from").notNull(),
+    effectiveTo: date("effective_to")
+  },
+  (table) => ({
+    tenantStaffPackageUnique: uniqueIndex("staff_benefit_enrollments_tenant_staff_package_unique").on(
+      table.tenantId,
+      table.staffId,
+      table.packageId
+    )
+  })
+);
+
+export const incentivePrograms = pgTable("incentive_programs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  name: text("name").notNull(),
+  description: text("description"),
+  cadence: incentiveCadenceEnum("cadence").notNull(),
+  awardType: incentiveAwardTypeEnum("award_type").notNull(),
+  awardAmount: numeric("award_amount", { precision: 14, scale: 2 }),
+  capAmount: numeric("cap_amount", { precision: 14, scale: 2 }),
+  termId: uuid("term_id").references(() => terms.id),
+  academicYearId: uuid("academic_year_id").references(() => academicYears.id),
+  status: recordStatusEnum("status").default("active").notNull()
+});
+
+export const staffIncentiveEligibility = pgTable(
+  "staff_incentive_eligibility",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...tenantFields,
+    staffId: uuid("staff_id")
+      .references(() => staff.id)
+      .notNull(),
+    programId: uuid("program_id")
+      .references(() => incentivePrograms.id)
+      .notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    lastAwardedAt: timestamp("last_awarded_at", { withTimezone: true })
+  },
+  (table) => ({
+    tenantStaffProgramUnique: uniqueIndex("staff_incentive_eligibility_tenant_staff_program_unique").on(
+      table.tenantId,
+      table.staffId,
+      table.programId
+    )
+  })
+);
+
+export const staffCompensationProfiles = pgTable(
+  "staff_compensation_profiles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...tenantFields,
+    staffId: uuid("staff_id")
+      .references(() => staff.id)
+      .notNull(),
+    baseSalary: numeric("base_salary", { precision: 14, scale: 2 }).default("0").notNull(),
+    currency: text("currency").default("MMK").notNull()
+  },
+  (table) => ({
+    tenantStaffUnique: uniqueIndex("staff_compensation_profiles_tenant_staff_unique").on(
+      table.tenantId,
+      table.staffId
+    )
+  })
+);
+
+export const staffCompensationComponents = pgTable(
+  "staff_compensation_components",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...tenantFields,
+    profileId: uuid("profile_id")
+      .references(() => staffCompensationProfiles.id, { onDelete: "cascade" })
+      .notNull(),
+    componentId: uuid("component_id")
+      .references(() => payComponents.id)
+      .notNull(),
+    amountOverride: numeric("amount_override", { precision: 14, scale: 2 })
+  },
+  (table) => ({
+    profileComponentUnique: uniqueIndex("staff_compensation_components_profile_component_unique").on(
+      table.profileId,
+      table.componentId
+    )
+  })
+);
+
+export const payrollRuns = pgTable(
+  "payroll_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...tenantFields,
+    periodYear: integer("period_year").notNull(),
+    periodMonth: integer("period_month").notNull(),
+    status: payrollRunStatusEnum("status").default("draft").notNull(),
+    totalNet: numeric("total_net", { precision: 14, scale: 2 }).default("0").notNull(),
+    totalPaid: numeric("total_paid", { precision: 14, scale: 2 }).default("0").notNull(),
+    totalPending: numeric("total_pending", { precision: 14, scale: 2 }).default("0").notNull(),
+    totalBonuses: numeric("total_bonuses", { precision: 14, scale: 2 }).default("0").notNull()
+  },
+  (table) => ({
+    tenantPeriodUnique: uniqueIndex("payroll_runs_tenant_period_unique").on(
+      table.tenantId,
+      table.periodYear,
+      table.periodMonth
+    )
+  })
+);
+
+export const payrollRecords = pgTable(
+  "payroll_records",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...tenantFields,
+    runId: uuid("run_id")
+      .references(() => payrollRuns.id, { onDelete: "cascade" })
+      .notNull(),
+    staffId: uuid("staff_id")
+      .references(() => staff.id)
+      .notNull(),
+    departmentName: text("department_name"),
+    baseAmount: numeric("base_amount", { precision: 14, scale: 2 }).default("0").notNull(),
+    allowancesAmount: numeric("allowances_amount", { precision: 14, scale: 2 }).default("0").notNull(),
+    bonusesAmount: numeric("bonuses_amount", { precision: 14, scale: 2 }).default("0").notNull(),
+    deductionsAmount: numeric("deductions_amount", { precision: 14, scale: 2 }).default("0").notNull(),
+    netAmount: numeric("net_amount", { precision: 14, scale: 2 }).default("0").notNull(),
+    status: payrollRecordStatusEnum("status").default("draft").notNull(),
+    approvedByUserId: uuid("approved_by_user_id").references(() => users.id),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    paymentMethod: text("payment_method"),
+    paymentRef: text("payment_ref"),
+    payslipStorageKey: text("payslip_storage_key"),
+    payslipGeneratedAt: timestamp("payslip_generated_at", { withTimezone: true })
+  },
+  (table) => ({
+    tenantRunStaffUnique: uniqueIndex("payroll_records_tenant_run_staff_unique").on(
+      table.tenantId,
+      table.runId,
+      table.staffId
+    )
+  })
+);
+
+export const payrollLineItems = pgTable("payroll_line_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  recordId: uuid("record_id")
+    .references(() => payrollRecords.id, { onDelete: "cascade" })
+    .notNull(),
+  sourceType: payrollLineSourceTypeEnum("source_type").notNull(),
+  sourceId: uuid("source_id"),
+  label: text("label").notNull(),
+  amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull()
+});
+
 export const emailTemplates = pgTable("email_templates", {
   id: uuid("id").primaryKey().defaultRandom(),
   ...tenantFields,
@@ -1019,6 +1298,9 @@ export const studentDocuments = pgTable("student_documents", {
   studentId: uuid("student_id").references(() => students.id).notNull(),
   documentRequirementId: uuid("document_requirement_id").references(() => documentRequirements.id),
   fileId: uuid("file_id").notNull(),
+  originalFilename: text("original_filename"),
+  mimeType: text("mime_type"),
+  sizeBytes: integer("size_bytes"),
   expiresOn: date("expires_on"),
   verifiedByUserId: uuid("verified_by_user_id").references(() => users.id),
   verifiedAt: timestamp("verified_at", { withTimezone: true })

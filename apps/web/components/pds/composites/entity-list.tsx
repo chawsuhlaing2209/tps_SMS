@@ -112,6 +112,7 @@ export function EntityList({ children, className }: { children: ReactNode; class
 /** Panel wrapper for an {@link EntityList} section. */
 export function EntityListPanel({
   title,
+  titlePlacement = "above",
   help,
   empty,
   emptyDescription,
@@ -119,8 +120,11 @@ export function EntityListPanel({
   emptyAction,
   children,
   className,
+  variant = "panel",
 }: {
   title?: ReactNode;
+  /** `above` — section heading outside the card; `inside-eyebrow` — uppercase label inside the panel body. */
+  titlePlacement?: "above" | "inside-eyebrow";
   help?: ReactNode;
   empty?: ReactNode;
   emptyDescription?: ReactNode;
@@ -128,12 +132,32 @@ export function EntityListPanel({
   emptyAction?: ReactNode;
   children: ReactNode;
   className?: string;
+  /** `bare` — list only (no outer panel chrome); `panel` — white rounded card wrapper. */
+  variant?: "panel" | "bare";
 }) {
-  return (
-    <Panel className={cn("pds-entity-list-panel", className)}>
+  const sectionTitle =
+    title && titlePlacement === "above" ? (
+      <h2 className="pds-type-title-xs-bold section-title">{title}</h2>
+    ) : null;
+
+  const eyebrowTitle =
+    title && titlePlacement === "inside-eyebrow" ? (
+      <p className="structure-side-label">{title}</p>
+    ) : null;
+
+  const panel = (
+    <Panel
+      className={cn(
+        "pds-entity-list-panel",
+        variant === "bare" && "pds-entity-list-panel--bare",
+        className
+      )}
+    >
+      {sectionTitle}
       <PanelHead title={title} help={help} />
       {empty ? (
         <div className="panel-body">
+          {eyebrowTitle}
           <EmptyState
             compact
             embedded
@@ -144,8 +168,17 @@ export function EntityListPanel({
           />
         </div>
       ) : (
-        <div className="panel-body">{children}</div>
+        <div className="panel-body">
+          {eyebrowTitle}
+          {children}
+        </div>
       )}
     </Panel>
   );
+
+  if (sectionTitle) {
+    return <div className="pds-entity-list-section">{panel}</div>;
+  }
+
+  return panel;
 }

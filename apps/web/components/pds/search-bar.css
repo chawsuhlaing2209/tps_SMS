@@ -81,7 +81,41 @@
   width: 10rem;
 }
 
+/* Filter selects in toolbar — full-width trigger, balanced padding, icon aligned right. */
+.pds-search-filters-row__filter--160 .pds-select,
+.pds-search-filters-row__filter--160.pds-select {
+  display: block;
+  width: 100%;
+}
+
 .pds-search-filters-row__filter--160 .pds-select__trigger,
+.pds-search-filters-row__filter--160.pds-select > .pds-select__trigger,
 .pds-search-filters-row__filter--160 .pds-date-picker__trigger {
-  width: 10rem;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 50px;
+  padding: var(--pds-input-padding-y) var(--pds-input-padding-x);
+  width: 100%;
+}
+
+.pds-search-filters-row__filter--160 .pds-select__trigger--filter .pds-select__value,
+.pds-search-filters-row__filter--160.pds-select > .pds-select__trigger--filter .pds-select__value {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pds-search-filters-row__filter--range {
+  flex-shrink: 0;
+  width: auto;
+}
+
+.pds-search-filters-row__filter--range .pds-date-picker {
+  display: block;
+}
+
+.pds-search-filters-row__filter--range .pds-date-picker__trigger {
+  align-items: center;
+  justify-content: space-between;
+  min-height: 50px;
+  padding: var(--pds-input-padding-y) var(--pds-input-padding-x);
 }

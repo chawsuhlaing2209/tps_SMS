@@ -1,18 +1,25 @@
 "use client";
-import { FormInput } from "../../../../../components/shared/form-input";
 
 import { useTranslations } from "next-intl";
-import { useMemo, useState } from "react";
-import { useApiQuery } from "../../../../lib/api";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { useLiveApiQuery } from "../../../../lib/api";
+import { useDashPageTitleActionsTarget } from "../../../dashboard-page-title";
+import { fetchAllPaginated } from "../../../../lib/export-csv";
+import { getSession } from "../../../../lib/session";
 import { DirectoryMemberCell } from "../../../../lib/data-table";
 import { Icon } from "../../../../lib/material-icon";
+import { PaginationControls } from "../../../../lib/pagination-controls";
 import { useCurrentAcademicYear } from "../../../../lib/use-current-academic-year";
 import { Badge, type BadgeTone } from "../../../../../components/shared/badge";
+import { PdsSearchBar, PdsSearchFiltersRow, PdsSelectField } from "../../../../../components/pds";
 import { FinanceTableShell } from "../../finance-table-shell";
+import { ExportCsvButton } from "../../../../../components/shared/export-csv-button";
 import { PadaukSortHeader, usePadaukSort } from "../../table-sort";
 import { BillingInvoicePreviewModal } from "./invoice-preview-modal";
-import { InvoicesBillingMonthFilter } from "./invoices-actions-provider";
-import { RecordPaymentModal, type RosterRow } from "./record-payment-modal";
+import { InvoicesIssueDateRangeFilter, useInvoicesActionsContext } from "./invoices-actions-provider";
+import { RecordPaymentModal } from "./record-payment-modal";
+import { appendIssueDateRangeParams } from "../../format-finance";
 
 type Roster = {
   academicYear: { id: string; name: string };
@@ -28,13 +35,17 @@ type Roster = {
     collectionRate: number;
     totalStudents: number;
   };
-  rows: RosterRow[];
+  rows: import("./record-payment-modal").RosterRow[];
+  total: number;
+  limit: number;
+  offset: number;
 };
 
-type StatusFilter = "" | "paid" | "partial" | "due" | "overdue";
+type StatusFilter = "all" | "paid" | "partial" | "due" | "overdue";
 
-const STATUS_FILTERS: StatusFilter[] = ["", "paid", "partial", "due", "overdue"];
-const STATUS_TONES: Record<RosterRow["status"], BadgeTone> = {
+const PAGE_SIZE = 50;
+const STATUS_FILTER_OPTIONS: StatusFilter[] = ["all", "paid", "partial", "due", "overdue"];
+const STATUS_TONES: Record<import("./record-payment-modal").RosterRow["status"], BadgeTone> = {
   paid: "success",
   partial: "warning",
   due: "info",
@@ -51,32 +62,88 @@ function fullNumber(value: number) {
   return Math.round(value).toLocaleString("en-US");
 }
 
-const STATUS_SORT_RANK: Record<RosterRow["status"], number> = {
-  overdue: 0,
-  due: 1,
-  partial: 2,
-  paid: 3
-};
-
 type CollectionSortKey = "student" | "status" | "balance";
 
-function sortCollectionRows(
-  rows: RosterRow[],
-  sortKey: CollectionSortKey,
-  sortDir: "asc" | "desc"
-) {
-  const direction = sortDir === "asc" ? 1 : -1;
-  return [...rows].sort((a, b) => {
-    let cmp = 0;
-    if (sortKey === "student") {
-      cmp = a.studentFullName.localeCompare(b.studentFullName);
-    } else if (sortKey === "status") {
-      cmp = STATUS_SORT_RANK[a.status] - STATUS_SORT_RANK[b.status];
-    } else {
-      cmp = a.balance - b.balance;
-    }
-    return cmp * direction;
-  });
+type RosterRow = import("./record-payment-modal").RosterRow;
+
+function CollectionRosterExportPortal({
+  academicYearId,
+  gradeId,
+  status,
+  search,
+  sortKey,
+  sortDir,
+  issueDateRange,
+  loading
+}: {
+  academicYearId: string;
+  gradeId: string;
+  status: StatusFilter;
+  search: string;
+  sortKey: CollectionSortKey;
+  sortDir: string;
+  issueDateRange: string;
+  loading: boolean;
+}) {
+  const tFees = useTranslations("finance.feesBilling");
+  const target = useDashPageTitleActionsTarget();
+
+  if (!target) {
+    return null;
+  }
+
+  return createPortal(
+    <ExportCsvButton
+      disabled={loading || !academicYearId}
+      onExport={async () => {
+        const tenantId = getSession()?.tenantId;
+        if (!tenantId) {
+          throw new Error("Not signed in.");
+        }
+        const rows = await fetchAllPaginated<RosterRow>(
+          (limit, offset) => {
+            const params = new URLSearchParams({
+              academicYearId,
+              limit: String(limit),
+              offset: String(offset),
+              sortBy: sortKey,
+              sortDir
+            });
+            if (gradeId) params.set("gradeId", gradeId);
+            if (status !== "all") params.set("status", status);
+            if (search.trim()) params.set("search", search.trim());
+            appendIssueDateRangeParams(params, issueDateRange);
+            return `/tenants/${tenantId}/finance/billing/roster?${params.toString()}`;
+          },
+          (json) => {
+            const payload = json as Roster;
+            return { rows: payload.rows, total: payload.total };
+          },
+          500
+        );
+        return {
+          filename: "collection-roster.csv",
+          columns: [
+            { key: "student", header: tFees("student") },
+            { key: "gradeRoom", header: tFees("gradeRoom") },
+            { key: "billed", header: tFees("billed") },
+            { key: "collected", header: tFees("collected") },
+            { key: "balance", header: tFees("outstanding") },
+            { key: "status", header: tFees("status") }
+          ],
+          rows: rows.map((row) => ({
+            student: row.studentFullName ?? "",
+            gradeRoom: [row.gradeName, row.classroomName].filter(Boolean).join(" · "),
+            billed: row.billed,
+            collected: row.paid,
+            balance: row.balance,
+            status: row.status
+          }))
+        };
+      }}
+    />,
+    target
+  );
 }
 
 export function CollectionRosterPanel() {
@@ -86,44 +153,45 @@ export function CollectionRosterPanel() {
   const academicYearId = currentYear.data?.id ?? "";
 
   const [gradeId, setGradeId] = useState("");
-  const [status, setStatus] = useState<StatusFilter>("");
+  const [status, setStatus] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
   const [collectStudentId, setCollectStudentId] = useState<string | null>(null);
   const [previewInvoiceId, setPreviewInvoiceId] = useState<string | null>(null);
+  const { issueDateRange } = useInvoicesActionsContext();
   const { sortKey, sortDir, toggleSort } = usePadaukSort<CollectionSortKey>({
     defaultKey: "student",
     defaultDir: "asc",
     initialDir: { balance: "desc" }
   });
 
-  const rosterQuery = useMemo(() => {
-    const params = new URLSearchParams({ academicYearId });
-    if (gradeId) params.set("gradeId", gradeId);
-    return params.toString();
-  }, [academicYearId, gradeId]);
+  useEffect(() => {
+    setPage(0);
+  }, [gradeId, status, search, sortKey, sortDir, issueDateRange]);
 
-  const roster = useApiQuery<Roster>((tenant) =>
-    academicYearId ? `/tenants/${tenant}/finance/billing/roster?${rosterQuery}` : null
+  const rosterQuery = useMemo(() => {
+    const params = new URLSearchParams({
+      academicYearId,
+      limit: String(PAGE_SIZE),
+      offset: String(page * PAGE_SIZE),
+      sortBy: sortKey,
+      sortDir
+    });
+    if (gradeId) params.set("gradeId", gradeId);
+    if (status !== "all") params.set("status", status);
+    if (search.trim()) params.set("search", search.trim());
+    appendIssueDateRangeParams(params, issueDateRange);
+    return params.toString();
+  }, [academicYearId, issueDateRange, gradeId, page, search, sortDir, sortKey, status]);
+
+  const roster = useLiveApiQuery<Roster>(
+    (tenant) =>
+      academicYearId ? `/tenants/${tenant}/finance/billing/roster?${rosterQuery}` : null
   );
 
   const data = roster.data;
-  const allRows = data?.rows ?? [];
-
-  const rows = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    const filtered = allRows.filter((row) => {
-      if (status && row.status !== status) return false;
-      if (!needle) return true;
-      return (
-        row.studentFullName.toLowerCase().includes(needle) ||
-        (row.guardianName?.toLowerCase().includes(needle) ?? false) ||
-        row.admissionNumber.toLowerCase().includes(needle)
-      );
-    });
-    return sortCollectionRows(filtered, sortKey, sortDir);
-  }, [allRows, search, sortDir, sortKey, status]);
-
+  const rows = data?.rows ?? [];
   const metrics = data?.metrics;
   const grades = data?.grades ?? [];
   const termName = data?.term?.name ?? null;
@@ -133,12 +201,18 @@ export function CollectionRosterPanel() {
     setModalOpen(true);
   };
 
-  const refetchAll = () => {
-    void roster.refetch();
-  };
-
   return (
     <>
+      <CollectionRosterExportPortal
+        academicYearId={academicYearId}
+        gradeId={gradeId}
+        status={status}
+        search={search}
+        sortKey={sortKey}
+        sortDir={sortDir}
+        issueDateRange={issueDateRange}
+        loading={currentYear.isLoading || roster.isLoading}
+      />
       <p className="pds-type-body-s-regular muted panel-help">{tFees("collectionViewHelp")}</p>
 
       <section className="fees-metrics" aria-label={tFees("collectionRate")}>
@@ -231,32 +305,35 @@ export function CollectionRosterPanel() {
         </div>
       </section>
 
-      <section className="fees-toolbar">
-        <div className="pds-type-body-m-medium fees-search">
-          <Icon name="search" size={18} className="fees-search__icon" />
-          <FormInput
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder={tFees("searchPlaceholder")}
-            aria-label={tFees("searchPlaceholder")}
-          />
-        </div>
-        <div className="fees-segmented" role="tablist" aria-label={tFees("status")}>
-          {STATUS_FILTERS.map((value) => (
-            <button
-              key={value || "all"}
-              type="button"
-              role="tab"
-              aria-selected={status === value}
-              className={status === value ? "fees-segment fees-segment--active" : "fees-segment"}
-              onClick={() => setStatus(value)}
-            >
-              {value ? tFees(`statusFilters.${value}`) : tFees("statusFilters.all")}
-            </button>
-          ))}
-        </div>
-        <div className="fees-toolbar__actions">
+      <PdsSearchFiltersRow
+        filters={
+          <>
+            <PdsSearchBar
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={tFees("searchPlaceholder")}
+              aria-label={tFees("searchPlaceholder")}
+            />
+            <div className="pds-search-filters-row__filter--160">
+              <PdsSelectField
+                variant="filter"
+                value={status}
+                onValueChange={(value) => {
+                  setStatus((typeof value === "string" ? value : "all") as StatusFilter);
+                }}
+                placeholder={tFees("statusFilters.all")}
+                options={STATUS_FILTER_OPTIONS.map((value) => ({
+                  value,
+                  label: tFees(`statusFilters.${value}`),
+                }))}
+              />
+            </div>
+            <div className="pds-search-filters-row__filter--range">
+              <InvoicesIssueDateRangeFilter />
+            </div>
+          </>
+        }
+        statusControl={
           <button
             type="button"
             className="pds-type-body-m-bold btn-primary fees-record-btn"
@@ -266,9 +343,8 @@ export function CollectionRosterPanel() {
             <Icon name="point_of_sale" size={18} />
             {tFees("recordPayment")}
           </button>
-          <InvoicesBillingMonthFilter />
-        </div>
-      </section>
+        }
+      />
 
       <FinanceTableShell
         loading={currentYear.isLoading || roster.isLoading}
@@ -377,13 +453,20 @@ export function CollectionRosterPanel() {
         </div>
       </FinanceTableShell>
 
+      <PaginationControls
+        page={page}
+        pageSize={PAGE_SIZE}
+        total={data?.total ?? 0}
+        onPageChange={setPage}
+      />
+
       <RecordPaymentModal
         open={modalOpen}
         onOpenChange={setModalOpen}
         variant="roster"
-        rows={allRows}
         initialStudentId={collectStudentId}
         academicYearId={academicYearId}
+        gradeId={gradeId || undefined}
         onCollected={() => void roster.refetch()}
       />
 

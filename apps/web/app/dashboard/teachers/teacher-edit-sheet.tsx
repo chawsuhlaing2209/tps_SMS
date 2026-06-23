@@ -1,5 +1,5 @@
 "use client";
-import { FormInput } from "../../../components/shared/form-input";
+import { FormDatePicker, FormInput } from "../../../components/shared/form-input";
 
 import { myanmarPhoneSchema, type StaffQualification } from "@sms/shared";
 import { useTranslations } from "next-intl";
@@ -9,7 +9,7 @@ import { z } from "zod";
 import { useApiMutation, useApiQuery } from "../../lib/api";
 import { Field } from "../../lib/form";
 import { Icon } from "../../lib/material-icon";
-import { RecordFormSheet } from "../../lib/record-sheet";
+import { RecordFormModal } from "../../lib/record-modal";
 import { PdsSelectField } from "../../../components/pds";
 import { zodResolver } from "../../lib/zod-resolver";
 
@@ -143,8 +143,9 @@ export function TeacherEditSheet({
   }
 
   return (
-    <RecordFormSheet
+    <RecordFormModal
       open={open}
+      size="wide"
       onOpenChange={onOpenChange}
       title={t("editTeacher")}
       help={t("editHelp")}
@@ -189,7 +190,14 @@ export function TeacherEditSheet({
         />
       </Field>
       <Field label={t("joinDate")}>
-        <FormInput type="date" {...form.register("joinDate")} />
+        <FormDatePicker
+          type="day"
+          variant="form"
+          value={form.watch("joinDate")}
+          onValueChange={(next) => form.setValue("joinDate", next, { shouldValidate: true })}
+          placeholder={t("joinDate")}
+          ariaLabel={t("joinDate")}
+        />
       </Field>
       <Field label={t("promotionTitle")}>
         <FormInput
@@ -244,6 +252,6 @@ export function TeacherEditSheet({
         <Icon name="add" />
         {t("addQualification")}
       </button>
-    </RecordFormSheet>
+    </RecordFormModal>
   );
 }

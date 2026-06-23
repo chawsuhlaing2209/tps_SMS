@@ -5,8 +5,7 @@ import { type ColumnDef } from "@tanstack/react-table";
 import { featureFlags as allFeatureFlagKeys } from "@sms/shared";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useState, use } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { usePlatformMutation, usePlatformQuery } from "../../../lib/api";
@@ -63,9 +62,12 @@ type SaveSettingsBody = {
 
 const TENANTS_PATH = "/platform/tenants";
 
-export default function TenantDetailPage() {
-  const params = useParams<{ tenantId: string }>();
-  const tenantId = params.tenantId;
+export default function TenantDetailPage({
+  params
+}: {
+  params: Promise<{ tenantId: string }>;
+}) {
+  const { tenantId } = use(params);
   const t = useTranslations("platformTenants");
   const c = useTranslations("common");
   const [settingsSaved, setSettingsSaved] = useState(false);

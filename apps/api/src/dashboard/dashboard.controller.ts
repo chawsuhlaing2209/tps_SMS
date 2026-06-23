@@ -34,4 +34,21 @@ export class DashboardController {
   currentAcademicYear(@Param("tenantId") tenantId: string) {
     return this.dashboardService.getCurrentAcademicYear(tenantId);
   }
+
+  @Get("home")
+  @RequireAnyPermissions(
+    "student.view",
+    "student.manage",
+    "academic_setup.manage",
+    "finance.manage",
+    "admissions.manage",
+    "classroom.manage",
+    "calendar.manage",
+    "timetable.manage",
+    "exam.manage",
+    "hr.manage"
+  )
+  home(@Param("tenantId") tenantId: string) {
+    return this.dashboardService.getHome(tenantId);
+  }
 }

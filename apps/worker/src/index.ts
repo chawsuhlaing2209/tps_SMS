@@ -1,6 +1,7 @@
 import { Worker } from "bullmq";
 import { mvpBacklog, queueNames } from "@sms/shared";
 import { handleGenerateMonthlyInvoices } from "./generate-monthly-invoices.js";
+import { handleRenderPayslipPdf } from "./render-payslip-pdf.js";
 
 const redisUrl = new URL(process.env.REDIS_URL ?? "redis://localhost:6379");
 const connection = {
@@ -26,6 +27,11 @@ for (const queueName of Object.values(queueNames)) {
         case "render-report-card-pdf":
           console.log("Rendering report card PDF", job.data);
           break;
+        case "render-payslip-pdf": {
+          const result = await handleRenderPayslipPdf(job.data);
+          console.log("Payslip PDF rendered", result);
+          break;
+        }
         case "import-students":
           console.log("Importing students", job.data);
           break;

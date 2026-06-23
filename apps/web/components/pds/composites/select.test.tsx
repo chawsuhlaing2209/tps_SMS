@@ -1,7 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, afterEach } from "vitest";
 import { PdsSelect } from "./select";
+import { resetSelectOpenCoordinatorForTests } from "./select-open-coordinator";
 
 const items = [
   { id: "1", label: "Grade 1" },
@@ -10,6 +11,10 @@ const items = [
 ];
 
 describe("PdsSelect", () => {
+  afterEach(() => {
+    resetSelectOpenCoordinatorForTests();
+  });
+
   it("opens options on trigger click", async () => {
     const user = userEvent.setup();
     render(<PdsSelect items={items} />);
@@ -43,5 +48,24 @@ describe("PdsSelect", () => {
   it("applies error state class", () => {
     render(<PdsSelect items={items} state="error" value="1" />);
     expect(document.querySelector(".pds-select__trigger--error")).toBeTruthy();
+  });
+
+  it("closes the previously open select when another is opened", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <PdsSelect items={items} placeholder="First" />
+        <PdsSelect items={items} placeholder="Second" />
+      </>
+    );
+
+    const triggers = screen.getAllByRole("combobox");
+    await user.click(triggers[0]!);
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+
+    await user.click(triggers[1]!);
+    expect(screen.getAllByRole("listbox")).toHaveLength(1);
+    expect(triggers[0]).toHaveAttribute("aria-expanded", "false");
+    expect(triggers[1]).toHaveAttribute("aria-expanded", "true");
   });
 });

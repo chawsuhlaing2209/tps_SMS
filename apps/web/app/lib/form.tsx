@@ -1,9 +1,9 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { FormField } from "../../components/shared/form-input";
+import { InputWrapper } from "../../components/shared/input-wrapper";
 
-/** @deprecated Prefer `FormField` from `components/shared/form-input`. Thin alias for legacy call sites. */
+/** @deprecated Prefer `InputWrapper` from `components/shared/input-wrapper`. Thin alias for legacy call sites. */
 export function Field({
   label,
   error,
@@ -23,8 +23,8 @@ export function Field({
   }
 
   return (
-    <FormField label={label} error={error}>
+    <InputWrapper label={label} error={error} labelStyle="default">
       {children}
-    </FormField>
+    </InputWrapper>
   );
 }

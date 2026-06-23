@@ -1,5 +1,5 @@
-import { DiscountSetupWorkspace } from "../discount-setup-workspace";
+import { redirect } from "next/navigation";
 
 export default function NewDiscountPage() {
-  return <DiscountSetupWorkspace mode="create" />;
+  redirect("/dashboard/finance/discounts?create=1");
 }

@@ -12,7 +12,10 @@ import { Icon } from "../../../lib/material-icon";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { zodResolver } from "../../../lib/zod-resolver";
 import { PdsSelectField } from "../../../../components/pds";
+import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
 import { PageHeader } from "../../page-header-context";
+import { hasAnyPermission } from "../../../lib/permissions";
+import { getSession } from "../../../lib/session";
 import { EmptyState } from "../../../../components/shared/empty-state";
 import styles from "./payment-plans.module.css";
 
@@ -66,10 +69,13 @@ export default function PaymentPlansPage() {
   const t = useTranslations("finance");
   const nav = useTranslations("nav");
   const c = useTranslations("common");
+  const permissions = getSession()?.permissions;
+  const canManage = hasAnyPermission(permissions, ["finance.manage"]);
 
   const plans = useApiQuery<PaymentPlan[]>(PLANS_PATH);
   const [schedulePlan, setSchedulePlan] = useState<PaymentPlan | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [deletingPlan, setDeletingPlan] = useState<PaymentPlan | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
   const toggleStatus = useApiMutation<{ id: string }>(
@@ -92,6 +98,14 @@ export default function PaymentPlansPage() {
     (body, tenant) => ({
       path: PLANS_PATH(tenant),
       init: { method: "POST", body: JSON.stringify(body) }
+    }),
+    { invalidatePaths: (_b, tenant) => [PLANS_PATH(tenant)] }
+  );
+
+  const deletePlan = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({
+      path: `${PLANS_PATH(tenant)}/${id}`,
+      init: { method: "DELETE" }
     }),
     { invalidatePaths: (_b, tenant) => [PLANS_PATH(tenant)] }
   );
@@ -170,18 +184,20 @@ export default function PaymentPlansPage() {
 
       <div className={styles.intro}>
         <p className={cn("pds-type-body-m-medium", styles.introText)}>{t("paymentPlansIntro")}</p>
-        <button
-          type="button"
-          className="pds-type-body-m-bold btn-primary"
-          onClick={() => {
-            createForm.reset({ name: "", description: "", frequency: "annual" });
-            setFormError(null);
-            setCreateOpen(true);
-          }}
-        >
-          <Icon name="add" />
-          {t("createPaymentPlan")}
-        </button>
+        {canManage ? (
+          <button
+            type="button"
+            className="pds-type-body-m-bold btn-primary"
+            onClick={() => {
+              createForm.reset({ name: "", description: "", frequency: "annual" });
+              setFormError(null);
+              setCreateOpen(true);
+            }}
+          >
+            <Icon name="add" />
+            {t("createPaymentPlan")}
+          </button>
+        ) : null}
       </div>
 
       {plans.isLoading ? (
@@ -212,18 +228,30 @@ export default function PaymentPlansPage() {
                     </div>
                   </div>
                   <div className={styles.planActions}>
-                    <button type="button" className={cn("pds-type-body-m-bold", styles.editBtn)} onClick={() => openSchedule(plan)}>
-                      <Icon name="edit" size={16} />
-                      {t("editSchedule")}
-                    </button>
-                    <button
-                      type="button"
-                      className={`${styles.toggle} ${active ? styles.toggleOn : ""}`}
-                      aria-pressed={active}
-                      aria-label={active ? t("deactivatePlan") : t("activatePlan")}
-                      disabled={toggleStatus.isPending}
-                      onClick={() => void toggleStatus.mutateAsync({ id: plan.id })}
-                    />
+                    {canManage ? (
+                      <>
+                        <button type="button" className={cn("pds-type-body-m-bold", styles.editBtn)} onClick={() => openSchedule(plan)}>
+                          <Icon name="edit" size={16} />
+                          {t("editSchedule")}
+                        </button>
+                        <button
+                          type="button"
+                          className={cn("pds-type-body-s-semibold", styles.deleteBtn)}
+                          onClick={() => setDeletingPlan(plan)}
+                        >
+                          <Icon name="delete" size={16} />
+                          {c("delete")}
+                        </button>
+                        <button
+                          type="button"
+                          className={`${styles.toggle} ${active ? styles.toggleOn : ""}`}
+                          aria-pressed={active}
+                          aria-label={active ? t("deactivatePlan") : t("activatePlan")}
+                          disabled={toggleStatus.isPending}
+                          onClick={() => void toggleStatus.mutateAsync({ id: plan.id })}
+                        />
+                      </>
+                    ) : null}
                   </div>
                 </div>
                 <div className={styles.schedule}>
@@ -378,6 +406,23 @@ export default function PaymentPlansPage() {
         </Field>
         {formError ? <p className="pds-type-body-m-medium error-text">{formError}</p> : null}
       </RecordFormSheet>
+
+      <ConfirmDialog
+        open={deletingPlan !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeletingPlan(null);
+        }}
+        title={t("deletePaymentPlanTitle")}
+        description={t("deletePaymentPlanHelp", { name: deletingPlan?.name ?? "" })}
+        confirmLabel={c("delete")}
+        destructive
+        loading={deletePlan.isPending}
+        onConfirm={async () => {
+          if (!deletingPlan) return;
+          await deletePlan.mutateAsync({ id: deletingPlan.id });
+          setDeletingPlan(null);
+        }}
+      />
     </div>
   );
 }

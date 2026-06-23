@@ -3,7 +3,7 @@ import { z } from "zod";
 export const discountBillingContexts = ["enrollment", "recurring"] as const;
 export type DiscountBillingContext = (typeof discountBillingContexts)[number];
 
-export const discountTriggerModes = ["auto", "request"] as const;
+export const discountTriggerModes = ["auto", "manual", "request"] as const;
 export type DiscountTriggerMode = (typeof discountTriggerModes)[number];
 
 export const discountRuleTypes = [
@@ -87,10 +87,17 @@ export const customRuleCriteriaSchema = z.object({
   type: z.literal("custom"),
   appliesTo: discountAppliesToSchema,
   paymentPlanFrequencies: z.array(z.enum(discountPaymentPlanFrequencies)).optional(),
+  eligibilityMatchMode: z.enum(["all", "any"]).optional(),
   minEnrolledSiblings: z.number().int().min(0).optional(),
   siblingOrdinal: z.number().int().min(2).optional(),
+  minEnrollmentYears: z.number().int().min(1).optional(),
+  parentIsFullTimeStaff: z.boolean().optional(),
+  topRankInGrade: z.number().int().min(1).optional(),
+  newEnrollmentThisYear: z.boolean().optional(),
   requiresPaymentAtEnrollment: z.boolean().optional(),
   requiresDocumentation: z.boolean().optional(),
+  prorateAcrossInstallments: z.boolean().optional(),
+  priorityOrder: z.number().int().min(1).optional(),
   notes: z.string().optional()
 });
 
@@ -123,7 +130,7 @@ export const DEFAULT_DISCOUNT_POLICY: DiscountPolicy = {
   ordinalMethod: "birth_date_then_id"
 };
 
-export const createDiscountRuleSchema = z.object({
+const discountRuleFieldsSchema = z.object({
   name: z.string().trim().min(1),
   discountType: z.enum([...discountRuleTypes, LEGACY_STAFF_DISCOUNT_TYPE]),
   valueType: z.enum(["percentage", "fixed"]),
@@ -135,9 +142,26 @@ export const createDiscountRuleSchema = z.object({
   criteria: discountRuleCriteriaSchema
 });
 
+function refineDiscountPercentValue(
+  data: { valueType?: "percentage" | "fixed"; value?: number },
+  ctx: z.RefinementCtx
+) {
+  if (data.valueType === "percentage" && data.value != null && data.value > 100) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Enter a percentage between 0 and 100.",
+      path: ["value"]
+    });
+  }
+}
+
+export const createDiscountRuleSchema = discountRuleFieldsSchema.superRefine(refineDiscountPercentValue);
+
 export type CreateDiscountRuleInput = z.infer<typeof createDiscountRuleSchema>;
 
-export const updateDiscountRuleSchema = createDiscountRuleSchema.partial();
+export const updateDiscountRuleSchema = discountRuleFieldsSchema
+  .partial()
+  .superRefine(refineDiscountPercentValue);
 export type UpdateDiscountRuleInput = z.infer<typeof updateDiscountRuleSchema>;
 
 export type DiscountEvaluationContext = {
@@ -152,6 +176,13 @@ export type DiscountEvaluationContext = {
   };
   collectPayment?: boolean;
   paymentMethod?: string;
+  paymentPlanFrequency?: DiscountPaymentPlanFrequency;
+  /** Consecutive academic years enrolled at the school. */
+  enrollmentYears?: number;
+  parentIsFullTimeStaff?: boolean;
+  /** Student rank in grade by GPA (1 = top). */
+  gradeRank?: number;
+  isNewEnrollmentThisYear?: boolean;
 };
 
 export type DiscountCandidate = {
@@ -257,12 +288,23 @@ export function parseDiscountCriteria(
       paymentPlanFrequencies: Array.isArray(raw?.paymentPlanFrequencies)
         ? raw.paymentPlanFrequencies
         : undefined,
+      eligibilityMatchMode:
+        raw?.eligibilityMatchMode === "any" || raw?.eligibilityMatchMode === "all"
+          ? raw.eligibilityMatchMode
+          : undefined,
       minEnrolledSiblings:
         typeof raw?.minEnrolledSiblings === "number" ? raw.minEnrolledSiblings : undefined,
       siblingOrdinal: typeof raw?.siblingOrdinal === "number" ? raw.siblingOrdinal : undefined,
+      minEnrollmentYears:
+        typeof raw?.minEnrollmentYears === "number" ? raw.minEnrollmentYears : undefined,
+      parentIsFullTimeStaff: raw?.parentIsFullTimeStaff === true ? true : undefined,
+      topRankInGrade: typeof raw?.topRankInGrade === "number" ? raw.topRankInGrade : undefined,
+      newEnrollmentThisYear: raw?.newEnrollmentThisYear === true ? true : undefined,
       requiresPaymentAtEnrollment:
         raw?.requiresPaymentAtEnrollment === true ? true : undefined,
       requiresDocumentation: raw?.requiresDocumentation === true ? true : undefined,
+      prorateAcrossInstallments: raw?.prorateAcrossInstallments === true ? true : undefined,
+      priorityOrder: typeof raw?.priorityOrder === "number" ? raw.priorityOrder : undefined,
       notes:
         typeof raw?.notes === "string"
           ? raw.notes
@@ -365,12 +407,19 @@ export function customRuleMatches(
   criteria: z.infer<typeof customRuleCriteriaSchema>,
   context: DiscountEvaluationContext
 ): boolean {
+  const checks: boolean[] = [];
+
   if (
-    criteria.minEnrolledSiblings != null ||
-    criteria.siblingOrdinal != null
+    criteria.paymentPlanFrequencies?.length &&
+    context.paymentPlanFrequency &&
+    !criteria.paymentPlanFrequencies.includes(context.paymentPlanFrequency)
   ) {
-    if (
-      !siblingRuleMatches(
+    return false;
+  }
+
+  if (criteria.minEnrolledSiblings != null || criteria.siblingOrdinal != null) {
+    checks.push(
+      siblingRuleMatches(
         {
           type: "sibling",
           appliesTo: criteria.appliesTo,
@@ -379,14 +428,12 @@ export function customRuleMatches(
         },
         context.siblingSummary
       )
-    ) {
-      return false;
-    }
+    );
   }
 
   if (criteria.requiresPaymentAtEnrollment) {
-    if (
-      !earlyPaymentRuleMatches(
+    checks.push(
+      earlyPaymentRuleMatches(
         {
           type: "early_payment",
           appliesTo: criteria.appliesTo,
@@ -394,12 +441,31 @@ export function customRuleMatches(
         },
         context
       )
-    ) {
-      return false;
-    }
+    );
   }
 
-  return true;
+  if (criteria.minEnrollmentYears != null) {
+    checks.push((context.enrollmentYears ?? 0) >= criteria.minEnrollmentYears);
+  }
+
+  if (criteria.parentIsFullTimeStaff) {
+    checks.push(context.parentIsFullTimeStaff === true);
+  }
+
+  if (criteria.topRankInGrade != null) {
+    checks.push((context.gradeRank ?? Number.MAX_SAFE_INTEGER) <= criteria.topRankInGrade);
+  }
+
+  if (criteria.newEnrollmentThisYear) {
+    checks.push(context.isNewEnrollmentThisYear === true);
+  }
+
+  if (!checks.length) {
+    return true;
+  }
+
+  const mode = criteria.eligibilityMatchMode ?? "all";
+  return mode === "any" ? checks.some(Boolean) : checks.every(Boolean);
 }
 
 function exceedsThreshold(amount: number, threshold: number | null): boolean {
@@ -506,7 +572,13 @@ export function deriveRuleTags(input: {
   criteria: DiscountRuleCriteria;
 }): string[] {
   const tags: string[] = [];
-  tags.push(input.triggerMode === "auto" ? "Auto" : "Request");
+  tags.push(
+    input.triggerMode === "auto"
+      ? "Auto"
+      : input.triggerMode === "manual"
+        ? "Manual"
+        : "Request"
+  );
   tags.push(deriveRuleScopeLabel(input.criteria));
   if (input.stackable) tags.push("Stackable");
   else tags.push("Best wins");

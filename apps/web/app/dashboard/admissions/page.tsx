@@ -7,13 +7,16 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useApiMutation, useApiQuery } from "../../lib/api";
+import { fetchAllPaginated } from "../../lib/export-csv";
+import { getSession } from "../../lib/session";
 import { DataTable, DirectoryNameCell } from "../../lib/data-table";
 import { Field } from "../../lib/form";
 import { Icon } from "../../lib/material-icon";
 import { RecordFormSheet } from "../../lib/record-sheet";
-import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
+import { DataTableSection, TablePanelBody } from "../../lib/table-panel";
 import { zodResolver } from "../../lib/zod-resolver";
 import { StatusBadge } from "../../../components/shared/badge";
+import { ExportCsvButton } from "../../../components/shared/export-csv-button";
 import { StatCard, StatGrid } from "../../../components/shared/stat-card";
 import { ModulePageHeader } from "../module-page-header";
 
@@ -107,7 +110,55 @@ export default function AdmissionsPage() {
 
   return (
     <div className="page-stack">
-      <ModulePageHeader navKey="admissions" title={nav("admissions")} />
+      <ModulePageHeader
+        navKey="admissions"
+        title={nav("admissions")}
+        description={t("description")}
+        actions={
+          <>
+            <ExportCsvButton
+              disabled={enquiries.isLoading}
+              onExport={async () => {
+                const tenantId = getSession()?.tenantId;
+                if (!tenantId) {
+                  throw new Error(c("notSignedIn"));
+                }
+                const rows = await fetchAllPaginated<Enquiry>(
+                  (limit, offset) =>
+                    `/tenants/${tenantId}/admissions/enquiries?limit=${limit}&offset=${offset}`,
+                  (json) => {
+                    const payload = json as EnquiryList;
+                    return { rows: payload.data, total: payload.total };
+                  }
+                );
+                return {
+                  filename: "enquiries.csv",
+                  columns: [
+                    { key: "prospectiveStudentName", header: t("prospect") },
+                    { key: "targetGrade", header: t("grade") },
+                    { key: "source", header: t("source") },
+                    { key: "guardianPhone", header: t("guardianPhone") },
+                    { key: "status", header: c("status") },
+                    { key: "createdAt", header: t("when") }
+                  ],
+                  rows: rows.map((row) => ({
+                    prospectiveStudentName: row.prospectiveStudentName,
+                    targetGrade: row.targetGrade ?? "",
+                    source: row.source,
+                    guardianPhone: row.guardianPhone ?? "",
+                    status: row.status,
+                    createdAt: row.createdAt
+                  }))
+                };
+              }}
+            />
+            <button type="button" className="pds-type-body-m-bold btn-primary" onClick={() => setSheetOpen(true)}>
+              <Icon name="add" />
+              {t("createEnquiry")}
+            </button>
+          </>
+        }
+      />
       <StatGrid>
         <StatCard
           icon={<Icon name="group_add" size={18} />}
@@ -116,23 +167,29 @@ export default function AdmissionsPage() {
         />
       </StatGrid>
 
-      <TablePanelHead
-          title={t("listTitle")}
-          onRefresh={() => void enquiries.refetch()}
-          onAdd={() => setSheetOpen(true)}
-          addLabel={t("createEnquiry")}
-        />
-      <TablePanelBody
+      <DataTableSection>
+
+        <TablePanelBody
           loading={enquiries.isLoading}
           error={enquiries.isError ? c("somethingWrong") : null}
           empty={!enquiries.data?.data.length}
+          emptyIcon="group_add"
+          emptyTitle={t("empty")}
+          emptyAction={
+            <button type="button" className="pds-type-body-m-bold btn-primary" onClick={() => setSheetOpen(true)}>
+              <Icon name="add" />
+              {t("createEnquiry")}
+            </button>
+          }
         >
           <DataTable
             columns={columns}
             data={enquiries.data?.data ?? []}
             getRowHref={(enquiry) => `/dashboard/admissions/${enquiry.id}`}
+            navigationFrom={{ label: nav("admissions"), href: "/dashboard/admissions" }}
           />
         </TablePanelBody>
+      </DataTableSection>
 
       <RecordFormSheet
         open={sheetOpen}

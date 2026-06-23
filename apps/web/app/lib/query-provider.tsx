@@ -9,9 +9,12 @@ export function QueryProvider({ children }: { children: ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 0,
+            // List reads: show cached data instantly when revisiting a module; refetch only when stale.
+            staleTime: 30_000,
+            gcTime: 10 * 60_000,
             retry: 1,
-            refetchOnWindowFocus: false
+            refetchOnWindowFocus: false,
+            refetchOnReconnect: true
           }
         }
       })

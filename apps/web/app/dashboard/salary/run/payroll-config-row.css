@@ -1,0 +1,8 @@
+/* Payroll config row list spacing — uses PDS ToggleListItem */
+.payroll-staff-config-modal__rows {
+  display: grid;
+  gap: var(--pds-gap-small);
+  list-style: none;
+  margin: 0;
+  padding: var(--pds-padding-x-small) 0 0;
+}

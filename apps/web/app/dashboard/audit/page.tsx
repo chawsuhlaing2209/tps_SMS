@@ -3,11 +3,11 @@
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { useApiQuery } from "../../lib/api";
+import { useLiveApiQuery } from "../../lib/api";
 import { DataTable } from "../../lib/data-table";
 import { PaginationControls } from "../../lib/pagination-controls";
-import { TablePanelBody, TablePanelHead, DataTableSection } from "../../lib/table-panel";
-import { TableSearchInput } from "../../lib/table-search";
+import { TablePanelBody, DataTableSection } from "../../lib/table-panel";
+import { PdsSearchBar, PdsSearchFiltersRow } from "../../../components/pds";
 import { ModulePageHeader } from "../module-page-header";
 
 type AuditLog = {
@@ -31,7 +31,7 @@ export default function AuditPage() {
   const [recordType, setRecordType] = useState("");
   const [page, setPage] = useState(0);
 
-  const audit = useApiQuery<AuditList>((tenant) => {
+  const audit = useLiveApiQuery<AuditList>((tenant) => {
     const params = new URLSearchParams({
       limit: String(PAGE_SIZE),
       offset: String(page * PAGE_SIZE)
@@ -68,23 +68,25 @@ export default function AuditPage() {
 
   return (
     <div className="page-stack">
-      <ModulePageHeader navKey="audit" title={nav("audit")} />
+      <ModulePageHeader
+        navKey="audit"
+        title={nav("audit")}
+        description={t("description")}
+      />
     <DataTableSection>
-      <TablePanelHead
-          title={t("events")}
-          onRefresh={() => void audit.refetch()}
-          extra={
-            <TableSearchInput
-              value={recordType}
-              placeholder={t("filterPlaceholder")}
-              aria-label={t("filterRecordType")}
-              onChange={(e) => {
-                setRecordType(e.target.value);
-                setPage(0);
-              }}
-            />
-          }
-        />
+      <PdsSearchFiltersRow
+        filters={
+          <PdsSearchBar
+            value={recordType}
+            onChange={(event) => {
+              setRecordType(event.target.value);
+              setPage(0);
+            }}
+            placeholder={t("filterPlaceholder")}
+            aria-label={t("filterRecordType")}
+          />
+        }
+      />
         <TablePanelBody
           loading={audit.isLoading}
           error={audit.isError ? c("somethingWrong") : null}

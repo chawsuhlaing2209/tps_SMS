@@ -12,8 +12,10 @@ import {
 import type {
   CreateEnrollmentDto,
   CreateStudentServiceDto,
+  ListAvailableStudentServicesQueryDto,
   ListEnrollmentsQueryDto,
   ListStudentServicesQueryDto,
+  PreviewAddStudentServiceDto,
   PreviewEnrollmentDto,
   UpdateEnrollmentDto,
   ConfirmEnrollmentDto
@@ -81,7 +83,9 @@ export class EnrollmentsService {
       classroomId: dto.classroomId,
       optionalFeeItemIds: dto.optionalFeeItemIds ?? [],
       collectPayment: dto.collectPayment,
-      paymentMethod: dto.paymentMethod
+      paymentMethod: dto.paymentMethod,
+      excludedDiscountRuleIds: dto.excludedDiscountRuleIds,
+      forcedDiscountRuleIds: dto.forcedDiscountRuleIds
     });
   }
 
@@ -320,6 +324,44 @@ export class EnrollmentsService {
     return row;
   }
 
+  async deleteEnrollment(
+    tenantId: string,
+    enrollmentId: string,
+    actorUserId: string | undefined
+  ) {
+    const [existing] = await this.db
+      .select()
+      .from(enrollments)
+      .where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.id, enrollmentId)));
+
+    if (!existing) {
+      throw new NotFoundException("Enrollment not found.");
+    }
+
+    if (existing.status !== "draft") {
+      throw new BadRequestException("Only draft enrollments can be deleted.");
+    }
+
+    if (existing.invoiceId || existing.confirmedAt) {
+      throw new BadRequestException("This enrollment cannot be deleted.");
+    }
+
+    await this.db
+      .delete(enrollments)
+      .where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.id, enrollmentId)));
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "enrollment.delete",
+      recordType: "Enrollment",
+      recordId: enrollmentId,
+      before: existing as Record<string, unknown>
+    });
+
+    return { id: enrollmentId };
+  }
+
   /** Places the student in the classroom when an enrollment is approved. */
   private async syncClassroomPlacement(
     tenantId: string,
@@ -388,30 +430,24 @@ export class EnrollmentsService {
     actorUserId: string | undefined,
     dto: CreateStudentServiceDto
   ) {
-    const rows = await this.db
-      .insert(studentServices)
-      .values({
-        tenantId,
-        studentId: dto.studentId,
-        feeItemId: dto.feeItemId,
-        effectiveFrom: dto.startDate,
-        effectiveTo: dto.endDate,
-        createdBy: actorUserId,
-        updatedBy: actorUserId
-      })
-      .returning();
-    const row = rows[0]!;
+    if (!actorUserId) {
+      throw new UnauthorizedException("Actor user id is required.");
+    }
 
-    await this.auditService.recordEvent({
-      tenantId,
-      actorUserId: actorUserId ?? null,
-      action: "student_service.create",
-      recordType: "StudentService",
-      recordId: row.id,
-      after: row as Record<string, unknown>
+    return this.enrollmentBillingService.confirmAddStudentService(tenantId, actorUserId, {
+      studentId: dto.studentId,
+      feeItemId: dto.feeItemId,
+      startDate: dto.startDate,
+      dueDate: dto.dueDate
     });
+  }
 
-    return row;
+  listAvailableOptionalServices(tenantId: string, studentId: string) {
+    return this.enrollmentBillingService.listAvailableOptionalServices(tenantId, studentId);
+  }
+
+  previewAddStudentService(tenantId: string, dto: PreviewAddStudentServiceDto) {
+    return this.enrollmentBillingService.previewAddStudentService(tenantId, dto);
   }
 
   async removeStudentService(

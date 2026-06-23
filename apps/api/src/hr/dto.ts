@@ -1,4 +1,4 @@
-import { IsArray, IsBoolean, IsDateString, IsEmail, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, ValidateNested } from "class-validator";
+import { IsArray, IsBoolean, IsDateString, IsEmail, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Max, Min, ValidateNested } from "class-validator";
 import { Type } from "class-transformer";
 import { personTypes } from "@sms/shared";
 
@@ -118,14 +118,25 @@ export class ListStaffQueryDto {
   @IsOptional()
   search?: string;
 
+  @IsUUID()
+  @IsOptional()
+  eligibleGradeId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  includeStaffId?: string;
+
   @IsNumber()
   @IsOptional()
   @Type(() => Number)
+  @Min(1)
+  @Max(200)
   limit?: number;
 
   @IsNumber()
   @IsOptional()
   @Type(() => Number)
+  @Min(0)
   offset?: number;
 }
 

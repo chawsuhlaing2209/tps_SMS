@@ -1,3 +1,12 @@
+import { parseDayRangeValue, toDayValue } from "../../../components/pds/date-picker-utils";
+
+export function appendIssueDateRangeParams(params: URLSearchParams, issueDateRange: string) {
+  const parsed = parseDayRangeValue(issueDateRange);
+  if (!parsed) return;
+  params.set("dateFrom", toDayValue(parsed.start.year, parsed.start.month, parsed.start.day));
+  params.set("dateTo", toDayValue(parsed.end.year, parsed.end.month, parsed.end.day));
+}
+
 export function formatCreatedAt(value: string | null | undefined) {
   if (!value) return "—";
   return new Date(value).toLocaleString("en-GB", {

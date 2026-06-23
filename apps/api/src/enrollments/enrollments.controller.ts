@@ -7,8 +7,10 @@ import {
   ConfirmEnrollmentDto,
   CreateEnrollmentDto,
   CreateStudentServiceDto,
+  ListAvailableStudentServicesQueryDto,
   ListEnrollmentsQueryDto,
   ListStudentServicesQueryDto,
+  PreviewAddStudentServiceDto,
   PreviewEnrollmentDto,
   UpdateEnrollmentDto
 } from "./dto.js";
@@ -83,6 +85,34 @@ export class EnrollmentsController {
     @Headers("x-user-id") actorUserId?: string
   ) {
     return this.enrollmentsService.updateEnrollment(tenantId, enrollmentId, actorUserId, dto);
+  }
+
+  @Delete("enrollments/:enrollmentId")
+  @RequirePermissions("student.manage")
+  deleteEnrollment(
+    @Param("tenantId") tenantId: string,
+    @Param("enrollmentId") enrollmentId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.enrollmentsService.deleteEnrollment(tenantId, enrollmentId, actorUserId);
+  }
+
+  @Get("student-services/available")
+  @RequirePermissions("student.manage")
+  listAvailableOptionalServices(
+    @Param("tenantId") tenantId: string,
+    @Query() query: ListAvailableStudentServicesQueryDto
+  ) {
+    return this.enrollmentsService.listAvailableOptionalServices(tenantId, query.studentId);
+  }
+
+  @Post("student-services/preview")
+  @RequirePermissions("student.manage")
+  previewAddStudentService(
+    @Param("tenantId") tenantId: string,
+    @Body() dto: PreviewAddStudentServiceDto
+  ) {
+    return this.enrollmentsService.previewAddStudentService(tenantId, dto);
   }
 
   @Get("student-services")

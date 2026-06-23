@@ -3,11 +3,11 @@
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { EmptyState } from "../../components/shared/empty-state";
-import { Icon } from "./material-icon";
 
 /**
- * Vertical stack for a list page: toolbar card (banner + actions), then table card.
- * Do not wrap {@link TablePanelHead} and {@link TablePanelBody} in `.panel`.
+ * Vertical stack for a list page: optional context banner, then table card.
+ * Primary actions belong in {@link PageHeader} / dash-page-title; filters use
+ * {@link PdsSearchFiltersRow}.
  */
 export function DataTableSection({
   children,
@@ -24,72 +24,42 @@ export function DataTableSection({
 }
 
 /**
- * Toolbar card — context banner or help on the left, actions on the right (one card).
+ * Optional context banner above a table (e.g. working year). No row actions here.
  */
 export function TablePanelHead({
   title: _title,
   banner,
   bannerVariant = "default",
-  help,
-  onRefresh,
-  onAdd,
-  addLabel,
-  extra
+  help
 }: {
   /** @deprecated Section titles are not rendered; page context lives in the top bar. */
   title?: string;
   /** Left-side context copy (e.g. working year). Rendered with banner styling. */
   banner?: ReactNode;
   bannerVariant?: "default" | "warning";
+  /** @deprecated Prefer {@link PageHeader} `description` for page-level intro copy. */
   help?: ReactNode;
-  onRefresh?: () => void;
-  onAdd?: () => void;
-  addLabel?: string;
-  extra?: ReactNode;
 }) {
-  const c = useTranslations("common");
-  const hasLeft = Boolean(banner || help);
-  const hasActions = Boolean(extra || onAdd || onRefresh);
-  const hasToolbar = hasLeft || hasActions;
-
-  if (!hasToolbar) {
-    return null;
+  if (banner) {
+    return (
+      <div
+        className={[
+          "module-strip module-strip--row table-toolbar-card",
+          bannerVariant === "warning" ? "table-toolbar-card--warning" : null
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        <p className="pds-type-body-m-medium table-toolbar-card__banner">{banner}</p>
+      </div>
+    );
   }
 
-  return (
-    <div
-      className={[
-        "module-strip module-strip--row table-toolbar-card",
-        !hasLeft ? "table-toolbar-card--actions-only" : null,
-        bannerVariant === "warning" ? "table-toolbar-card--warning" : null
-      ]
-        .filter(Boolean)
-        .join(" ")}
-    >
-      {banner ? (
-        <p className="pds-type-body-m-medium table-toolbar-card__banner">{banner}</p>
-      ) : help ? (
-        <p className="pds-type-body-m-medium module-strip__help">{help}</p>
-      ) : null}
-      {hasActions ? (
-        <div className="table-section__actions">
-          {extra}
-          {onAdd ? (
-            <button type="button" className="pds-type-body-m-bold btn-primary" onClick={onAdd}>
-              <Icon name="add" />
-              {addLabel ?? c("add")}
-            </button>
-          ) : null}
-          {onRefresh ? (
-            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={onRefresh}>
-              <Icon name="refresh" />
-              {c("refresh")}
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
+  if (help) {
+    return <p className="pds-type-body-s-regular muted">{help}</p>;
+  }
+
+  return null;
 }
 
 /**
@@ -103,6 +73,8 @@ export function TablePanelBody({
   emptyTitle,
   emptyDescription,
   emptyAction,
+  variant = "card",
+  unwrapEmpty,
   children
 }: {
   loading?: boolean;
@@ -113,48 +85,39 @@ export function TablePanelBody({
   emptyTitle?: ReactNode;
   emptyDescription?: ReactNode;
   emptyAction?: ReactNode;
+  /** `plain` skips wrappers entirely. `card-plain` is an alias for `card`. */
+  variant?: "card" | "card-plain" | "plain";
+  /** Render empty state directly in the parent panel (no table-card wrapper). */
+  unwrapEmpty?: boolean;
   children: ReactNode;
 }) {
   const c = useTranslations("common");
+  const plain = variant === "plain";
+
+  const wrapCard = (content: ReactNode) =>
+    plain ? content : <section className="table-card">{content}</section>;
 
   if (loading) {
-    return (
-      <section className="table-card">
-        <div className="table-card__body">
-          <p className="pds-type-body-s-regular muted">{c("loading")}</p>
-        </div>
-      </section>
-    );
+    return wrapCard(<p className="pds-type-body-s-regular muted">{c("loading")}</p>);
   }
   if (error) {
-    return (
-      <section className="table-card">
-        <div className="table-card__body">
-          <EmptyState compact embedded icon="error" title={c("somethingWrong")} description={error} />
-        </div>
-      </section>
+    return wrapCard(
+      <EmptyState compact embedded icon="error" title={c("somethingWrong")} description={error} />
     );
   }
   if (empty) {
-    return (
-      <section className="table-card">
-        <div className="table-card__body">
-          <EmptyState
-            compact
-            embedded
-            icon={emptyIcon ?? "inbox"}
-            title={emptyTitle ?? c("empty")}
-            description={emptyDescription}
-            action={emptyAction}
-          />
-        </div>
-      </section>
+    const emptyState = (
+      <EmptyState
+        compact
+        embedded
+        icon={emptyIcon ?? "inbox"}
+        title={emptyTitle ?? c("empty")}
+        description={emptyDescription}
+        action={emptyAction}
+      />
     );
+    return unwrapEmpty ? emptyState : wrapCard(emptyState);
   }
 
-  return (
-    <section className="table-card">
-      <div className="table-card__body">{children}</div>
-    </section>
-  );
+  return wrapCard(children);
 }

@@ -1,5 +1,6 @@
 "use client";
-import { FormInput } from "../../../../components/shared/form-input";
+import { InputWrapper, TextInput } from "../../../../components/shared/form-input";
+import { Toggle } from "../../../../components/shared/toggle";
 
 import { mandatoryEnrollmentFeeTypes } from "@sms/shared";
 import { cn } from "../../../../lib/utils";
@@ -8,13 +9,17 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ApiError, useApiMutation, useApiQuery } from "../../../lib/api";
-import { Field } from "../../../lib/form";
 import { Icon } from "../../../lib/material-icon";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { zodResolver } from "../../../lib/zod-resolver";
 import { PageHeader } from "../../page-header-context";
+import { hasAnyPermission } from "../../../lib/permissions";
+import { getSession } from "../../../lib/session";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
 import { CheckBox } from "../../../../components/pds";
+import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
+import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
+import { isPadaukRowInteractiveTarget } from "../../../lib/table-row-interaction";
 import { EmptyState } from "../../../../components/shared/empty-state";
 import styles from "./fee-structures.module.css";
 
@@ -85,6 +90,26 @@ function annualizeAmount(amount: string, billingType: string): number {
   }
 }
 
+function billingAmountSuffixKey(billingType: string): "monthly" | "term" | "once" | "annual" {
+  switch (billingType) {
+    case "monthly":
+      return "monthly";
+    case "term":
+      return "term";
+    case "one_time":
+      return "once";
+    default:
+      return "annual";
+  }
+}
+
+function resolveFeeType(required: boolean, feeType: string): string {
+  if (required) {
+    return (mandatoryEnrollmentFeeTypes as readonly string[]).includes(feeType) ? feeType : "tuition";
+  }
+  return "other";
+}
+
 function feeTypeColor(feeType: string): string {
   switch (feeType) {
     case "tuition":
@@ -103,12 +128,20 @@ export default function FeeStructuresPage() {
   const nav = useTranslations("nav");
   const a = useTranslations("academics");
   const c = useTranslations("common");
+  const permissions = getSession()?.permissions;
+  const canManage = hasAnyPermission(permissions, ["finance.manage"]);
   const currentYear = useCurrentAcademicYear();
 
   const workingYearId = currentYear.data?.id ?? "";
   const [selectedGradeId, setSelectedGradeId] = useState<string | null>(null);
   const [formMode, setFormMode] = useState<FormMode | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [deletingComponent, setDeletingComponent] = useState<{
+    planId: string;
+    feeItemId: string;
+    name: string;
+    gradeOnly: boolean;
+  } | null>(null);
 
   const grades = useApiQuery<Grade[]>((tenant) => `/tenants/${tenant}/academics/grades`);
   const feeItems = useApiQuery<FeeItem[]>(FEE_ITEMS_PATH);
@@ -221,9 +254,49 @@ export default function FeeStructuresPage() {
     {
       invalidatePaths: (_b, tenant) => [
         PLANS_PATH(tenant),
+        FEE_ITEMS_PATH(tenant),
         workingYearId ? SUMMARY_PATH(tenant, workingYearId) : PLANS_PATH(tenant)
       ]
     }
+  );
+
+  const updateFeeItem = useApiMutation<
+    { id: string; name?: string; feeType?: string; billingType?: string },
+    FeeItem
+  >(
+    ({ id, ...body }, tenant) => ({
+      path: `${FEE_ITEMS_PATH(tenant)}/${id}`,
+      init: { method: "PATCH", body: JSON.stringify(body) }
+    }),
+    {
+      invalidatePaths: (_b, tenant) => [
+        FEE_ITEMS_PATH(tenant),
+        PLANS_PATH(tenant),
+        workingYearId ? SUMMARY_PATH(tenant, workingYearId) : PLANS_PATH(tenant)
+      ]
+    }
+  );
+
+  const deletePlan = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({
+      path: `${PLANS_PATH(tenant)}/${id}`,
+      init: { method: "DELETE" }
+    }),
+    {
+      invalidatePaths: (_b, tenant) => [
+        PLANS_PATH(tenant),
+        FEE_ITEMS_PATH(tenant),
+        workingYearId ? SUMMARY_PATH(tenant, workingYearId) : PLANS_PATH(tenant)
+      ]
+    }
+  );
+
+  const archiveFeeItem = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({
+      path: `${FEE_ITEMS_PATH(tenant)}/${id}/archive`,
+      init: { method: "POST" }
+    }),
+    { invalidatePaths: (_b, tenant) => [FEE_ITEMS_PATH(tenant), PLANS_PATH(tenant)] }
   );
 
   const schema = useMemo(
@@ -254,10 +327,19 @@ export default function FeeStructuresPage() {
   });
 
   const billingType = form.watch("billingType");
-  const amountValue = Number(form.watch("amount"));
-  const annualPreview = Number.isFinite(amountValue)
-    ? annualizeAmount(String(amountValue), billingType)
-    : 0;
+  const amountValue = form.watch("amount");
+  const nameValue = form.watch("name");
+  const gradeIdsValue = form.watch("gradeIds");
+  const requiredValue = form.watch("required");
+  const amountSuffix = t(`amountSuffix.${billingAmountSuffixKey(billingType)}`);
+  const allGradesSelected =
+    activeGrades.length > 0 && activeGrades.every((grade) => gradeIdsValue.includes(grade.id));
+  const someGradesSelected = gradeIdsValue.length > 0 && !allGradesSelected;
+  const previewName = nameValue.trim() || t("componentPreviewPlaceholder");
+  const previewAmount =
+    Number.isFinite(Number(amountValue)) && Number(amountValue) > 0
+      ? `${formatAmount(Number(amountValue))} ${amountSuffix}`
+      : `— ${amountSuffix}`;
 
   const openCreate = () => {
     form.reset({
@@ -299,6 +381,37 @@ export default function FeeStructuresPage() {
       activeGrades.map((grade) => grade.id),
       { shouldValidate: true, shouldDirty: true }
     );
+  };
+
+  const confirmRemoveComponent = async () => {
+    if (!deletingComponent || !selectedGradeId) return;
+
+    const plan = yearPlans.find((row) => row.id === deletingComponent.planId);
+    if (!plan) {
+      setDeletingComponent(null);
+      return;
+    }
+
+    try {
+      if (deletingComponent.gradeOnly) {
+        await updatePlan.mutateAsync({
+          id: plan.id,
+          gradeIds: plan.gradeIds.filter((gradeId) => gradeId !== selectedGradeId),
+          amount: Number(plan.amount)
+        });
+      } else {
+        await deletePlan.mutateAsync({ id: plan.id });
+        const hasOtherPlans = yearPlans.some(
+          (row) => row.feeItemId === deletingComponent.feeItemId && row.id !== plan.id
+        );
+        if (!hasOtherPlans) {
+          await archiveFeeItem.mutateAsync({ id: deletingComponent.feeItemId });
+        }
+      }
+      setDeletingComponent(null);
+    } catch {
+      // Keep dialog open; mutation error surfaces via query invalidation / toast if configured.
+    }
   };
 
   const summaryByGrade = new Map(
@@ -381,10 +494,12 @@ export default function FeeStructuresPage() {
                 <section className={styles.componentsPanel}>
                   <div className={styles.componentsHead}>
                     <h2 className={cn("pds-type-title-xs-bold", styles.componentsTitle)}>{t("feeComponents")}</h2>
-                    <button type="button" className={cn("pds-type-body-m-bold", styles.componentsAdd)} onClick={openCreate}>
-                      <Icon name="add" />
-                      {t("addComponent")}
-                    </button>
+                    {canManage ? (
+                      <button type="button" className={cn("pds-type-body-m-bold", styles.componentsAdd)} onClick={openCreate}>
+                        <Icon name="add" />
+                        {t("addComponent")}
+                      </button>
+                    ) : null}
                   </div>
 
                   {!gradeComponents.length ? (
@@ -404,7 +519,28 @@ export default function FeeStructuresPage() {
                           mandatoryEnrollmentFeeTypes as readonly string[]
                         ).includes(row.feeType);
                         return (
-                        <div key={row.planId} className={styles.componentRow}>
+                        <div
+                          key={row.planId}
+                          className={cn(styles.componentRow, canManage && styles.componentRowClickable)}
+                          tabIndex={canManage ? 0 : undefined}
+                          onClick={
+                            canManage
+                              ? (event) => {
+                                  if (isPadaukRowInteractiveTarget(event.target)) return;
+                                  openEdit(row.planId, row.feeItemId);
+                                }
+                              : undefined
+                          }
+                          onKeyDown={
+                            canManage
+                              ? (event) => {
+                                  if (event.key !== "Enter" && event.key !== " ") return;
+                                  event.preventDefault();
+                                  openEdit(row.planId, row.feeItemId);
+                                }
+                              : undefined
+                          }
+                        >
                           <div className={styles.componentName}>
                             <span
                               className={styles.componentDot}
@@ -433,13 +569,49 @@ export default function FeeStructuresPage() {
                             </div>
                             <span className={cn("pds-type-body-s-semibold", styles.sharePct)}>{row.share}%</span>
                           </div>
-                          <button
-                            type="button"
-                            className={cn("pds-type-body-s-semibold", "btn-outline", styles.componentEdit)}
-                            onClick={() => openEdit(row.planId, row.feeItemId)}
-                          >
-                            {a("edit")}
-                          </button>
+                          {canManage ? (
+                            <RowMoreActionsMenu
+                              ariaLabel={c("moreActions")}
+                              items={[
+                                {
+                                  id: "view",
+                                  label: c("view"),
+                                  icon: "visibility",
+                                  onSelect: () => openEdit(row.planId, row.feeItemId)
+                                },
+                                {
+                                  id: "edit",
+                                  label: c("edit"),
+                                  icon: "edit",
+                                  onSelect: () => openEdit(row.planId, row.feeItemId)
+                                },
+                                ...(!isRequired
+                                  ? [
+                                      {
+                                        id: "delete",
+                                        label: c("delete"),
+                                        icon: "delete",
+                                        destructive: true,
+                                        onSelect: () => {
+                                          const plan = yearPlans.find((entry) => entry.id === row.planId);
+                                          setDeletingComponent({
+                                            planId: row.planId,
+                                            feeItemId: row.feeItemId,
+                                            name: row.name,
+                                            gradeOnly: Boolean(
+                                              plan &&
+                                                selectedGradeId &&
+                                                plan.gradeIds.length > 1 &&
+                                                plan.gradeIds.includes(selectedGradeId)
+                                            )
+                                          });
+                                        }
+                                      }
+                                    ]
+                                  : [])
+                              ]}
+                            />
+                          ) : null}
                         </div>
                         );
                       })}
@@ -481,10 +653,9 @@ export default function FeeStructuresPage() {
           }
         }}
         title={formMode?.type === "edit" ? t("editComponent") : t("addComponent")}
-        help={t("addComponentHelp")}
         onSubmit={form.handleSubmit(async (values) => {
           setFormError(null);
-          const feeType = values.required ? values.feeType : values.feeType || "other";
+          const feeType = resolveFeeType(values.required, values.feeType);
           const payload = {
             gradeIds: values.gradeIds,
             amount: Number(values.amount)
@@ -492,6 +663,12 @@ export default function FeeStructuresPage() {
 
           try {
             if (formMode?.type === "edit") {
+              await updateFeeItem.mutateAsync({
+                id: formMode.feeItemId,
+                name: values.name.trim(),
+                billingType: values.billingType,
+                feeType
+              });
               await updatePlan.mutateAsync({ id: formMode.planId, ...payload });
             } else {
               const item = await createFeeItem.mutateAsync({
@@ -517,97 +694,139 @@ export default function FeeStructuresPage() {
               {c("cancel")}
             </button>
             <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={form.formState.isSubmitting}>
-              <Icon name="add" />
               {form.formState.isSubmitting ? c("loading") : t("saveComponent")}
             </button>
           </>
         }
       >
-        {formMode?.type === "create" ? (
-          <Field label={t("componentName")} error={form.formState.errors.name?.message}>
-            <FormInput
+        <div className={styles.formStack}>
+          <div className={styles.componentPreview}>
+            <p className={cn("pds-type-body-m-bold", styles.componentPreviewName)}>{previewName}</p>
+            <p className={cn("pds-type-title-s-extrabold", styles.componentPreviewAmount)}>{previewAmount}</p>
+            {requiredValue ? (
+              <span className={cn("pds-type-label-s-bold", styles.componentPreviewBadge)}>
+                {t("markRequiredAutoApplied")}
+              </span>
+            ) : null}
+          </div>
+
+          <InputWrapper label={t("componentName")} error={form.formState.errors.name?.message}>
+            <TextInput
               {...form.register("name")}
               placeholder={t("componentNamePlaceholder")}
             />
-          </Field>
-        ) : null}
+          </InputWrapper>
 
-        <div>
-          <p className={cn("pds-type-label-s-medium", styles.modalSectionLabel)}>{t("billingFrequency")}</p>
-          <div className={styles.pillRow}>
-            {BILLING_TYPES.map((value) => (
-              <button
-                key={value}
-                type="button"
-                className={cn("pds-type-body-s-semibold", styles.pill, billingType === value && styles.pillActive)}
-                onClick={() => form.setValue("billingType", value, { shouldDirty: true })}
-              >
-                {t(`billingTypes.${value}`)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <Field label={t("annualAmount")} error={form.formState.errors.amount?.message}>
-          <FormInput type="number" step="1" {...form.register("amount")} />
-          <p className={cn("pds-type-body-s-regular", styles.amountHint)}>
-            {t("amountSplitHint", {
-              term: formatMmk(annualPreview / 3),
-              month: formatMmk(annualPreview / 12)
-            })}
-          </p>
-        </Field>
-
-        <div>
-          <p className={cn("pds-type-label-s-medium", styles.modalSectionLabel)}>{t("applyToGrades")}</p>
-          <p className="pds-type-body-s-regular muted">{t("applyToGradesHelp")}</p>
-          <div className={`${styles.pillRow} ${styles.gradePillRow}`} style={{ marginTop: 12 }}>
-            {activeGrades.map((grade) => {
-              const selected = form.watch("gradeIds").includes(grade.id);
-              return (
+          <div>
+            <p className={cn("pds-type-label-s-medium", styles.modalSectionLabel)}>{t("billingFrequency")}</p>
+            <div className={styles.pillRow}>
+              {BILLING_TYPES.map((value) => (
                 <button
-                  key={grade.id}
+                  key={value}
                   type="button"
-                  className={cn("pds-type-body-s-semibold", styles.gradePill, selected && styles.gradePillActive)}
-                  onClick={() => toggleGrade(grade.id)}
+                  className={cn("pds-type-body-s-semibold", styles.pill, billingType === value && styles.pillActive)}
+                  onClick={() => form.setValue("billingType", value, { shouldDirty: true })}
                 >
-                  {selected ? <Icon name="check" size={14} /> : null}
-                  {grade.name}
+                  {t(`billingTypes.${value}`)}
                 </button>
-              );
-            })}
+              ))}
+            </div>
           </div>
-          <button type="button" className="row-action" onClick={selectAllGrades}>
-            {t("selectAllGrades")}
-          </button>
-          {form.formState.errors.gradeIds ? (
-            <p className="pds-type-body-m-medium error-text">{form.formState.errors.gradeIds.message}</p>
-          ) : null}
-        </div>
 
-        {formMode?.type === "create" ? (
+          <InputWrapper label={t("amount")} error={form.formState.errors.amount?.message}>
+            <TextInput
+              type="number"
+              step="1"
+              min="0"
+              {...form.register("amount")}
+              suffix={amountSuffix}
+            />
+          </InputWrapper>
+
+          <div className={styles.gradeSection}>
+            <div className={styles.gradeSectionHead}>
+              <p className={cn("pds-type-label-s-medium", styles.gradeSectionLabel)}>{t("applyToGrades")}</p>
+              <CheckBox
+                checked={allGradesSelected}
+                indeterminate={someGradesSelected}
+                label={t("selectAllGrades")}
+                showDescription={false}
+                size="sm"
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    selectAllGrades();
+                  } else {
+                    form.setValue("gradeIds", [], { shouldValidate: true, shouldDirty: true });
+                  }
+                }}
+              />
+            </div>
+            <div className={cn(styles.pillRow, styles.gradePillRow)}>
+              {activeGrades.map((grade) => {
+                const selected = gradeIdsValue.includes(grade.id);
+                return (
+                  <button
+                    key={grade.id}
+                    type="button"
+                    className={cn("pds-type-body-s-semibold", styles.gradePill, selected && styles.gradePillActive)}
+                    onClick={() => toggleGrade(grade.id)}
+                  >
+                    {grade.name}
+                  </button>
+                );
+              })}
+            </div>
+            {form.formState.errors.gradeIds ? (
+              <p className="pds-type-body-m-medium error-text">{form.formState.errors.gradeIds.message}</p>
+            ) : null}
+          </div>
+
           <div className={styles.requiredToggle}>
-            <span>
-              <span className={cn("pds-type-body-m-medium", styles.requiredToggleTitle)}>{t("markRequired")}</span>
+            <div className={styles.requiredToggleCopy}>
+              <div className={styles.requiredToggleHeader}>
+                <span className={cn("pds-type-body-m-medium", styles.requiredToggleTitle)}>{t("markRequired")}</span>
+                {requiredValue ? (
+                  <span className={cn("pds-type-label-s-bold", styles.requiredToggleBadge)}>
+                    {t("markRequiredAutoApplied")}
+                  </span>
+                ) : null}
+              </div>
               <span className={cn("pds-type-body-s-regular", styles.requiredToggleHelp)}>{t("markRequiredHelp")}</span>
-            </span>
-            <CheckBox
-              checked={form.watch("required")}
-              showLabel={false}
-              showDescription={false}
-              onCheckedChange={(checked) =>
-                form.setValue("required", checked, { shouldValidate: true })
-              }
+            </div>
+            <Toggle
+              checked={requiredValue}
+              onCheckedChange={(checked) => form.setValue("required", checked, { shouldValidate: true })}
+              aria-label={t("markRequired")}
             />
           </div>
-        ) : null}
 
-        {formError ? (
-          <p className="pds-type-body-m-medium error-text" role="alert">
-            {formError}
-          </p>
-        ) : null}
+          {formError ? (
+            <p className="pds-type-body-m-medium error-text" role="alert">
+              {formError}
+            </p>
+          ) : null}
+        </div>
       </RecordFormSheet>
+
+      <ConfirmDialog
+        open={deletingComponent !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeletingComponent(null);
+        }}
+        title={t("deleteComponentTitle")}
+        description={
+          deletingComponent?.gradeOnly
+            ? t("deleteComponentGradeHelp", {
+                name: deletingComponent.name,
+                grade: selectedGrade?.name ?? ""
+              })
+            : t("deleteComponentHelp", { name: deletingComponent?.name ?? "" })
+        }
+        confirmLabel={c("delete")}
+        destructive
+        loading={deletePlan.isPending || updatePlan.isPending || archiveFeeItem.isPending}
+        onConfirm={() => void confirmRemoveComponent()}
+      />
     </div>
   );
 }

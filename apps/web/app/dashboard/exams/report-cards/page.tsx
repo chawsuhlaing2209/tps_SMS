@@ -13,8 +13,8 @@ import { Icon } from "../../../lib/material-icon";
 import { hasAnyPermission } from "../../../lib/permissions";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { getSession } from "../../../lib/session";
-import { TablePanelBody, TablePanelHead } from "../../../lib/table-panel";
-import { PdsSelectField } from "../../../../components/pds";
+import { TablePanelBody } from "../../../lib/table-panel";
+import { PdsSearchFiltersRow, PdsSelectField } from "../../../../components/pds";
 import { StatusBadge } from "../../../../components/shared/badge";
 import { EmptyState } from "../../../../components/shared/empty-state";
 import { zodResolver } from "../../../lib/zod-resolver";
@@ -165,29 +165,34 @@ export default function ReportCardsPage() {
       <PageHeader
         title={t("reportCardsTitle")}
         segment={{ label: t("reportCardsTitle"), href: reportCardsHref }}
+        actions={
+          canGenerate ? (
+            <button
+              type="button"
+              className="pds-type-body-m-bold btn-primary"
+              onClick={() => {
+                form.reset({ classroomId: "", termId: "" });
+                setOpen(true);
+              }}
+            >
+              <Icon name="bolt" />
+              {t("generate")}
+            </button>
+          ) : null
+        }
       />
-      <TablePanelHead
-        title={t("reportCardsTitle")}
-        extra={
-          <label className="form-inline">
-            <span className="pds-type-body-s-regular muted">{t("filterClassroom")}</span>
+      <PdsSearchFiltersRow
+        filters={
+          <div className="pds-search-filters-row__filter--160">
             <PdsSelectField
               variant="filter"
               value={classroomFilter}
               onValueChange={(value) => setClassroomFilter(typeof value === "string" ? value : "")}
               placeholder={t("allClassrooms")}
-              options={
-                classrooms.data?.map((cl) => ({ value: cl.id, label: cl.name })) ?? []
-              }
+              options={classrooms.data?.map((cl) => ({ value: cl.id, label: cl.name })) ?? []}
             />
-          </label>
+          </div>
         }
-        onRefresh={() => void cards.refetch()}
-        onAdd={canGenerate ? () => {
-          form.reset({ classroomId: "", termId: "" });
-          setOpen(true);
-        } : undefined}
-        addLabel={t("generate")}
       />
       <TablePanelBody
         loading={cards.isLoading}

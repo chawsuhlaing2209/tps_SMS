@@ -1,9 +1,9 @@
 "use client";
 
+import { use } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useApiQuery } from "../../../../lib/api";
+import { useReferenceApiQuery } from "../../../../lib/api";
 import { Icon } from "../../../../lib/material-icon";
 import { PageHeader } from "../../../page-header-context";
 import { StatusBadge } from "../../../../../components/shared/badge";
@@ -28,15 +28,18 @@ function formatDateRange(startsOn: string, endsOn: string) {
   return `${fmt.format(new Date(startsOn))} → ${fmt.format(new Date(endsOn))}`;
 }
 
-export default function AcademicYearDetailPage() {
-  const params = useParams<{ yearId: string }>();
-  const yearId = params.yearId;
+export default function AcademicYearDetailPage({
+  params
+}: {
+  params: Promise<{ yearId: string }>;
+}) {
+  const { yearId } = use(params);
   const t = useTranslations("academics");
   const setup = useTranslations("academicSetup");
   const nav = useTranslations("nav");
   const c = useTranslations("common");
 
-  const years = useApiQuery<AcademicYearOverview[]>(SETUP_PATH);
+  const years = useReferenceApiQuery<AcademicYearOverview[]>(SETUP_PATH);
   const year = years.data?.find((row) => row.id === yearId);
 
   return (

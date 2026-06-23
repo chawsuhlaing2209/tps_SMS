@@ -252,9 +252,6 @@ export default function PlatformTenantsPage() {
       <section className="panel">
         <div className="panel-head">
           <h2 className="pds-type-title-xs-bold">{t("listTitle")}</h2>
-          <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => void tenants.refetch()}>
-            {c("refresh")}
-          </button>
         </div>
         {tenants.isLoading ? (
           <p className="pds-type-body-s-regular muted">{c("loading")}</p>

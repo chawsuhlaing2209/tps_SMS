@@ -92,6 +92,7 @@ export function PdsDatePicker({
   presetLabels,
 }: PdsDatePickerProps) {
   const rootRef = React.useRef<HTMLDivElement>(null);
+  const panelContainerRef = React.useRef<HTMLDivElement>(null);
   const isDisabled = disabled || inputState === "disabled";
   const [open, setOpen] = React.useState(false);
 
@@ -118,28 +119,51 @@ export function PdsDatePicker({
   );
 
   React.useEffect(() => {
-    if (type === "month" && parsedMonth) {
-      setViewYear(parsedMonth.year);
-      setViewMonth(parsedMonth.month);
+    if (type === "month") {
+      const month = parseMonthValue(value);
+      if (!month) return;
+      setViewYear((current) => (current === month.year ? current : month.year));
+      setViewMonth((current) => (current === month.month ? current : month.month));
+      return;
     }
-    if (type === "day" && parsedDay) {
-      setViewYear(parsedDay.year);
-      setViewMonth(parsedDay.month);
-      setDraftDay(parsedDay);
+
+    if (selectionMode === "range") {
+      const range = parseDayRangeValue(value);
+      if (!range) return;
+      setViewYear((current) => (current === range.start.year ? current : range.start.year));
+      setViewMonth((current) => (current === range.start.month ? current : range.start.month));
+      setDraftRange((current) => {
+        const sameStart =
+          current.start?.year === range.start.year &&
+          current.start?.month === range.start.month &&
+          current.start?.day === range.start.day;
+        const sameEnd =
+          current.end?.year === range.end.year &&
+          current.end?.month === range.end.month &&
+          current.end?.day === range.end.day;
+        return sameStart && sameEnd ? current : range;
+      });
+      return;
     }
-    if (type === "day" && parsedRange) {
-      setViewYear(parsedRange.start.year);
-      setViewMonth(parsedRange.start.month);
-      setDraftRange(parsedRange);
-    }
-  }, [parsedDay, parsedMonth, parsedRange, type, value]);
+
+    const day = parseDayValue(value);
+    if (!day) return;
+    setViewYear((current) => (current === day.year ? current : day.year));
+    setViewMonth((current) => (current === day.month ? current : day.month));
+    setDraftDay((current) =>
+      current?.year === day.year && current?.month === day.month && current?.day === day.day
+        ? current
+        : day
+    );
+  }, [selectionMode, type, value]);
 
   React.useEffect(() => {
     if (!open) return;
     const handlePointerDown = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target)) return;
+      if (panelContainerRef.current?.contains(target)) return;
+      setOpen(false);
     };
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
@@ -250,7 +274,12 @@ export function PdsDatePicker({
           setOpen((current) => !current);
         }}
       />
-      <DatePickerPosition open={open} panelClassName={panelClassName}>
+      <DatePickerPosition
+        open={open}
+        anchorRef={rootRef}
+        containerRef={panelContainerRef}
+        panelClassName={panelClassName}
+      >
         {type === "month" ? (
           <MonthCalendar
             year={viewYear}

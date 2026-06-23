@@ -4,16 +4,30 @@ import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { useApiMutation, useApiQuery } from "../../../lib/api";
+import { PdsSearchFiltersRow } from "../../../../components/pds";
+import { useApiMutation, useReferenceApiQuery } from "../../../lib/api";
 import { Icon } from "../../../lib/material-icon";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { zodResolver } from "../../../lib/zod-resolver";
 import { FormField, FormInput } from "../../../../components/shared/form-input";
+import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
+import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
+import { isPadaukRowInteractiveTarget } from "../../../lib/table-row-interaction";
 import { Chip, ChipGroup } from "../../../../components/shared/chip";
+import { StatusBadge } from "../../../../components/shared/badge";
+import { ArchiveVisibilityFilter } from "../../../../components/shared/archive-visibility-filter";
+import {
+  filterByArchiveVisibility,
+  isArchivedRecord,
+  type ArchiveVisibility
+} from "../../../lib/archive-filter";
+import { hasAnyPermission } from "../../../lib/permissions";
+import { getSession } from "../../../lib/session";
+import { toastSuccess } from "../../../lib/toast";
 import { useAcademicYearContext } from "../use-academic-year-context";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
 import { PageHeader } from "../../page-header-context";
-import { TablePanelBody, TablePanelHead } from "../../../lib/table-panel";
+import { TablePanelBody } from "../../../lib/table-panel";
 import { gradeBadgeLabel } from "../grade-label";
 import {
   defaultSubjectColorKey,
@@ -75,14 +89,18 @@ export default function SubjectsPage() {
   const setup = useTranslations("academicSetup");
   const nav = useTranslations("nav");
   const c = useTranslations("common");
+  const permissions = getSession()?.permissions;
+  const canManage = hasAnyPermission(permissions, ["academic_setup.manage"]);
   const requiredMessage = c("required");
   const [formMode, setFormMode] = useState<FormMode | null>(null);
+  const [deletingSubject, setDeletingSubject] = useState<SubjectOverview | null>(null);
+  const [archiveVisibility, setArchiveVisibility] = useState<ArchiveVisibility>("active");
 
   const currentYear = useCurrentAcademicYear();
-  const grades = useApiQuery<Grade[]>((tn) => `/tenants/${tn}/academics/grades`);
+  const grades = useReferenceApiQuery<Grade[]>((tn) => `/tenants/${tn}/academics/grades`);
   const { contextYearId } = useAcademicYearContext(currentYear.data);
 
-  const subjects = useApiQuery<SubjectOverview[]>((tn) =>
+  const subjects = useReferenceApiQuery<SubjectOverview[]>((tn) =>
     contextYearId ? setupSubjectsPath(tn, contextYearId) : null
   );
 
@@ -108,6 +126,28 @@ export default function SubjectsPage() {
     {
       invalidatePaths: (body, tenantId) =>
         mappingInvalidationPaths(tenantId, body.academicYearId)
+    }
+  );
+
+  const archiveSubject = useApiMutation<{ id: string }>(
+    ({ id }, tenantId) => ({
+      path: `${SUBJECTS_PATH(tenantId)}/${id}/archive`,
+      init: { method: "POST" }
+    }),
+    {
+      invalidatePaths: (_body, tenantId) =>
+        contextYearId ? mappingInvalidationPaths(tenantId, contextYearId) : [SUBJECTS_PATH(tenantId)]
+    }
+  );
+
+  const reactivateSubject = useApiMutation<{ id: string }>(
+    ({ id }, tenantId) => ({
+      path: `${SUBJECTS_PATH(tenantId)}/${id}/reactivate`,
+      init: { method: "POST" }
+    }),
+    {
+      invalidatePaths: (_body, tenantId) =>
+        contextYearId ? mappingInvalidationPaths(tenantId, contextYearId) : [SUBJECTS_PATH(tenantId)]
     }
   );
 
@@ -142,7 +182,10 @@ export default function SubjectsPage() {
   const selectedGradeIds = form.watch("gradeIds");
   const colorKey = form.watch("colorKey");
   const iconKey = form.watch("iconKey");
-  const activeSubjects = (subjects.data ?? []).filter((s) => s.status !== "archived");
+  const visibleSubjects = useMemo(
+    () => filterByArchiveVisibility(subjects.data ?? [], archiveVisibility),
+    [subjects.data, archiveVisibility]
+  );
 
   const closeSheet = () => {
     setFormMode(null);
@@ -190,7 +233,7 @@ export default function SubjectsPage() {
     <>
       <PageHeader
         title={setup("subjects")}
-        description={setup("subjectsPageHelp")}
+        description={setup("subjectsToolbarHelp")}
         breadcrumbs={[
           { label: nav("settings"), href: "/dashboard/settings/user-roles" },
           { label: setup("subjects") }
@@ -200,18 +243,31 @@ export default function SubjectsPage() {
           { label: setup("subjects"), href: "/dashboard/academic-setup/subjects" }
         ]}
         segment={{ label: setup("subjects"), href: "/dashboard/academic-setup/subjects" }}
+        actions={
+          canManage ? (
+            <button type="button" className="pds-type-body-m-bold btn-primary" onClick={openCreate}>
+              <Icon name="add" />
+              {t("addSubject")}
+            </button>
+          ) : null
+        }
       />
 
-      <TablePanelHead
-        help={setup("subjectsToolbarHelp")}
-        onAdd={openCreate}
-        addLabel={t("addSubject")}
+      <PdsSearchFiltersRow
+        filters={<span />}
+        statusControl={
+          <ArchiveVisibilityFilter value={archiveVisibility} onChange={setArchiveVisibility} />
+        }
       />
 
       <TablePanelBody
+        variant="card-plain"
         loading={subjects.isLoading || currentYear.isLoading}
         error={error}
-        empty={!activeSubjects.length}
+        empty={!visibleSubjects.length}
+        emptyTitle={
+          archiveVisibility === "archived" ? t("archivedSubjectsEmpty") : undefined
+        }
       >
         <table className="pds-type-body-m-medium padauk-table setup-subjects-table">
           <thead>
@@ -225,11 +281,34 @@ export default function SubjectsPage() {
             </tr>
           </thead>
           <tbody>
-            {activeSubjects.map((subject) => {
+            {visibleSubjects.map((subject) => {
+              const subjectArchived = isArchivedRecord(subject.status);
               const colors = subjectColor(subject.name, subject.colorKey);
               const icon = subjectIcon(subject.name, subject.iconKey);
+              const rowInteractive = canManage && !subjectArchived;
               return (
-                <tr key={subject.id}>
+                <tr
+                  key={subject.id}
+                  className={rowInteractive ? "table-row--clickable" : undefined}
+                  tabIndex={rowInteractive ? 0 : undefined}
+                  onClick={
+                    rowInteractive
+                      ? (event) => {
+                          if (isPadaukRowInteractiveTarget(event.target)) return;
+                          openEdit(subject);
+                        }
+                      : undefined
+                  }
+                  onKeyDown={
+                    rowInteractive
+                      ? (event) => {
+                          if (event.key !== "Enter" && event.key !== " ") return;
+                          event.preventDefault();
+                          openEdit(subject);
+                        }
+                      : undefined
+                  }
+                >
                   <td>
                     <div className="setup-subjects-table__name">
                       <span
@@ -237,6 +316,9 @@ export default function SubjectsPage() {
                         style={{ background: colors.bg }}
                       />
                       <span className="pds-type-body-l-medium setup-subjects-table__title">{subject.name}</span>
+                      {subjectArchived ? (
+                        <StatusBadge status="archived" label={c("archivedBadge")} />
+                      ) : null}
                     </div>
                   </td>
                   <td className="setup-subjects-table__icon-cell">
@@ -256,13 +338,40 @@ export default function SubjectsPage() {
                     </ChipGroup>
                   </td>
                   <td className="setup-subjects-table__actions-col">
-                    <button
-                      type="button"
-                      className="pds-type-body-m-medium btn-outline setup-subjects-table__edit"
-                      onClick={() => openEdit(subject)}
-                    >
-                      {t("edit")}
-                    </button>
+                    {canManage ? (
+                      <RowMoreActionsMenu
+                        ariaLabel={c("moreActions")}
+                        items={
+                          subjectArchived
+                            ? [
+                                {
+                                  id: "reactivate",
+                                  label: c("reactivate"),
+                                  icon: "unarchive",
+                                  onSelect: async () => {
+                                    await reactivateSubject.mutateAsync({ id: subject.id });
+                                    toastSuccess(t("subjectReactivated"));
+                                  }
+                                }
+                              ]
+                            : [
+                                {
+                                  id: "edit",
+                                  label: c("edit"),
+                                  icon: "edit",
+                                  onSelect: () => openEdit(subject)
+                                },
+                                {
+                                  id: "archive",
+                                  label: t("archive"),
+                                  icon: "inventory_2",
+                                  destructive: true,
+                                  onSelect: () => setDeletingSubject(subject)
+                                }
+                              ]
+                        }
+                      />
+                    ) : null}
                   </td>
                 </tr>
               );
@@ -293,7 +402,7 @@ export default function SubjectsPage() {
             <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={closeSheet}>
               {c("cancel")}
             </button>
-            <p className="pds-type-body-s-regular muted record-sheet__footer-note">{t("subjectFooterNote")}</p>
+            <p className="pds-type-body-s-regular muted record-form__footer-note">{t("subjectFooterNote")}</p>
             <button
               type="submit"
               className="pds-type-body-m-bold btn-primary"
@@ -333,6 +442,23 @@ export default function SubjectsPage() {
           onGradeIdsChange={(gradeIds) => form.setValue("gradeIds", gradeIds, { shouldDirty: true })}
         />
       </RecordFormSheet>
+
+      <ConfirmDialog
+        open={deletingSubject !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeletingSubject(null);
+        }}
+        title={t("archiveSubjectTitle")}
+        description={t("archiveSubjectHelp", { name: deletingSubject?.name ?? "" })}
+        confirmLabel={t("archive")}
+        destructive
+        loading={archiveSubject.isPending}
+        onConfirm={async () => {
+          if (!deletingSubject) return;
+          await archiveSubject.mutateAsync({ id: deletingSubject.id });
+          setDeletingSubject(null);
+        }}
+      />
     </>
   );
 }

@@ -1,7 +1,8 @@
 "use client";
 
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { Fragment, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
+import { Button } from "../../components/ui/button";
 import { Icon } from "./material-icon";
 
 export type HeroMoreActionItem = {
@@ -13,26 +14,22 @@ export type HeroMoreActionItem = {
   onSelect: () => void;
 };
 
-/** Outline pill trigger + white menu for secondary actions on dark hero banners. */
-export function HeroMoreActionsMenu({
-  label,
-  items
+function MoreActionsMenu({
+  items,
+  trigger
 }: {
-  label: string;
   items: HeroMoreActionItem[];
+  trigger: ReactNode;
 }) {
+  const [open, setOpen] = useState(false);
+
   if (!items.length) {
     return null;
   }
 
   return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>
-        <button type="button" className="pds-type-body-m-medium btn-hero-outline">
-          {label}
-          <Icon name="expand_more" size={18} />
-        </button>
-      </DropdownMenu.Trigger>
+    <DropdownMenu.Root open={open} onOpenChange={setOpen} modal={false}>
+      <DropdownMenu.Trigger asChild>{trigger}</DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className="hero-actions-menu" align="end" sideOffset={8}>
           {items.map((item, index) => (
@@ -46,8 +43,8 @@ export function HeroMoreActionsMenu({
                   .filter(Boolean)
                   .join(" ")}
                 disabled={item.disabled}
-                onSelect={(event) => {
-                  event.preventDefault();
+                onSelect={() => {
+                  setOpen(false);
                   item.onSelect();
                 }}
               >
@@ -59,6 +56,47 @@ export function HeroMoreActionsMenu({
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
+  );
+}
+
+/** Outline pill trigger + white menu for secondary actions on dark hero banners. */
+export function HeroMoreActionsMenu({
+  label,
+  items
+}: {
+  label: string;
+  items: HeroMoreActionItem[];
+}) {
+  return (
+    <MoreActionsMenu
+      items={items}
+      trigger={
+        <button type="button" className="pds-type-body-m-medium btn-hero-outline">
+          {label}
+          <Icon name="expand_more" size={18} />
+        </button>
+      }
+    />
+  );
+}
+
+/** Secondary outlined trigger + white menu for secondary actions on light panel toolbars. */
+export function PanelMoreActionsMenu({
+  label,
+  items
+}: {
+  label: string;
+  items: HeroMoreActionItem[];
+}) {
+  return (
+    <MoreActionsMenu
+      items={items}
+      trigger={
+        <Button buttonType="outlined" buttonColor="secondary" suffixIcon="expand_more">
+          {label}
+        </Button>
+      }
+    />
   );
 }
 

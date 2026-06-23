@@ -1,5 +1,5 @@
 "use client";
-import { FormInput } from "../../../components/shared/form-input";
+import { FormDatePicker, FormInput } from "../../../components/shared/form-input";
 
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
@@ -10,11 +10,12 @@ import { ApiError, useApiMutation, useApiQuery } from "../../lib/api";
 import { Field } from "../../lib/form";
 import { GuardianCombobox } from "../../lib/guardian-combobox";
 import { Icon } from "../../lib/material-icon";
-import { RecordFormSheet } from "../../lib/record-sheet";
+import { RecordFormModal } from "../../lib/record-modal";
 import { TableSearchInput } from "../../lib/table-search";
 import { PdsSelectField } from "../../../components/pds";
 import { EmptyState } from "../../../components/shared/empty-state";
 import { zodResolver } from "../../lib/zod-resolver";
+import { peopleDirectoryCountsPath } from "./people-directory-counts";
 
 type HouseholdSearchResult = {
   id: string;
@@ -180,7 +181,8 @@ export function StudentRegistrationWizard({
       invalidatePaths: (_b, tenant) => [
         `/tenants/${tenant}/students`,
         `/tenants/${tenant}/students/guardians`,
-        `/tenants/${tenant}/family-groups`
+        `/tenants/${tenant}/family-groups`,
+        peopleDirectoryCountsPath(tenant)
       ]
     }
   );
@@ -278,8 +280,9 @@ export function StudentRegistrationWizard({
   ];
 
   return (
-    <RecordFormSheet
+    <RecordFormModal
       open={open}
+      size="wide"
       onOpenChange={(nextOpen) => {
         if (!nextOpen) {
           resetForm();
@@ -330,7 +333,14 @@ export function StudentRegistrationWizard({
         <FormInput {...form.register("lastName")} />
       </Field>
       <Field label={t("dateOfBirth")} error={form.formState.errors.dateOfBirth?.message}>
-        <FormInput type="date" {...form.register("dateOfBirth")} />
+        <FormDatePicker
+          type="day"
+          variant="form"
+          value={form.watch("dateOfBirth")}
+          onValueChange={(next) => form.setValue("dateOfBirth", next, { shouldValidate: true })}
+          placeholder={t("dateOfBirth")}
+          ariaLabel={t("dateOfBirth")}
+        />
       </Field>
       <Field label={t("gender")} error={form.formState.errors.gender?.message}>
         <PdsSelectField
@@ -528,6 +538,6 @@ export function StudentRegistrationWizard({
           {formError}
         </p>
       ) : null}
-    </RecordFormSheet>
+    </RecordFormModal>
   );
 }

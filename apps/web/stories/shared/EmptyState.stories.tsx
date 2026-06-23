@@ -6,9 +6,16 @@ const meta: Meta<typeof EmptyState> = {
   title: "Shared/EmptyState",
   component: EmptyState,
   tags: ["autodocs"],
+  parameters: {
+    layout: "padded",
+    design: {
+      type: "figma",
+      url: "https://www.figma.com/design/ijAgEelM6OgifzPI0R5BoQ/Pujuba?node-id=54-2584",
+    },
+  },
   args: {
     icon: "schedule",
-    title: "Empty state title",
+    title: "No rooms yet for this grade.",
     description:
       "A description which can hold up to 1 or 2 lines. Lorem Ipsum is simply dummy text of the printing and typesetting industry.",
   },
@@ -17,9 +24,8 @@ const meta: Meta<typeof EmptyState> = {
 export default meta;
 type Story = StoryObj<typeof EmptyState>;
 
-export const Default: Story = {};
-
-export const WithAction: Story = {
+/** Figma `type=comfort` (54:2585) — default spacing, filled secondary CTA. */
+export const Comfort: Story = {
   args: {
     action: (
       <Button buttonType="filled" buttonColor="secondary" prefixIcon="add">
@@ -29,20 +35,33 @@ export const WithAction: Story = {
   },
 };
 
+/** Figma `type=compact` (118:9666) — tighter gap, outlined CTA. */
 export const Compact: Story = {
-  args: { compact: true, embedded: true },
-};
-
-export const CompactWithAction: Story = {
   args: {
     compact: true,
-    embedded: true,
     action: (
-      <Button buttonType="filled" buttonColor="secondary" prefixIcon="add" size="sm">
+      <Button buttonType="outlined" buttonColor="secondary" prefixIcon="add" size="sm">
         Add New
       </Button>
     ),
   },
+};
+
+export const CompactEmbeddedInTableCard: Story = {
+  name: "Compact / embedded in table card",
+  args: {
+    compact: true,
+    embedded: true,
+  },
+  decorators: [
+    (Story) => (
+      <section className="table-card">
+        <div className="table-card__body">
+          <Story />
+        </div>
+      </section>
+    ),
+  ],
 };
 
 export const Error: Story = {
@@ -53,4 +72,13 @@ export const Error: Story = {
     compact: true,
     embedded: true,
   },
+  decorators: [
+    (Story) => (
+      <section className="table-card">
+        <div className="table-card__body">
+          <Story />
+        </div>
+      </section>
+    ),
+  ],
 };

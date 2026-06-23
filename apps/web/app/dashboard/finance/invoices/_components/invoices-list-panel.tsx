@@ -3,22 +3,26 @@
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useApiQuery } from "../../../../lib/api";
+import { useDashPageTitleActionsTarget } from "../../../dashboard-page-title";
+import { fetchAllPaginated } from "../../../../lib/export-csv";
+import { getSession } from "../../../../lib/session";
 import { DirectoryMemberCell } from "../../../../lib/data-table";
 import { Icon } from "../../../../lib/material-icon";
 import { PaginationControls } from "../../../../lib/pagination-controls";
 import { useCurrentAcademicYear } from "../../../../lib/use-current-academic-year";
 import { Badge, type BadgeTone } from "../../../../../components/shared/badge";
 import { FinanceTableShell } from "../../finance-table-shell";
-import { formatBillingMonth, formatCreatedAt } from "../../format-finance";
+import { appendIssueDateRangeParams, formatBillingMonth, formatCreatedAt } from "../../format-finance";
 import { PadaukSortHeader, usePadaukSort } from "../../table-sort";
 import {
   PdsSearchBar,
   PdsSearchFiltersRow,
   PdsSelectField,
-  SegmentedControl,
 } from "../../../../../components/pds";
-import { InvoicesBillingMonthFilter } from "./invoices-actions-provider";
+import { ExportCsvButton } from "../../../../../components/shared/export-csv-button";
+import { InvoicesIssueDateRangeFilter, useInvoicesActionsContext } from "./invoices-actions-provider";
 
 type InvoiceSource = "enrollment" | "recurring" | "ad_hoc";
 
@@ -41,9 +45,10 @@ type InvoiceRow = {
 
 type InvoiceList = { data: InvoiceRow[]; total: number; limit: number; offset: number };
 
-type StatusFilter = "" | "paid" | "partial" | "due" | "overdue";
+type StatusFilter = "all" | "paid" | "partial" | "due" | "overdue";
+type SourceFilter = "all" | InvoiceSource;
 
-const STATUS_FILTERS: StatusFilter[] = ["", "paid", "partial", "due", "overdue"];
+const STATUS_FILTER_OPTIONS: StatusFilter[] = ["all", "paid", "partial", "due", "overdue"];
 const PAGE_SIZE = 50;
 
 const STATUS_TONES: Record<string, BadgeTone> = {
@@ -66,6 +71,117 @@ function formatDueDate(value: string | null) {
   });
 }
 
+const INVOICES_PATH = (tenant: string) => `/tenants/${tenant}/finance/invoices`;
+
+function buildExportQuery(input: {
+  academicYearId: string;
+  status: StatusFilter;
+  source: SourceFilter;
+  search: string;
+  sortKey: string;
+  sortDir: string;
+  issueDateRange: string;
+  limit: number;
+  offset: number;
+}) {
+  const params = new URLSearchParams({
+    limit: String(input.limit),
+    offset: String(input.offset),
+    sortBy: input.sortKey,
+    sortDir: input.sortDir
+  });
+  if (input.academicYearId) params.set("academicYearId", input.academicYearId);
+  if (input.status !== "all") params.set("status", input.status);
+  if (input.source !== "all") params.set("source", input.source);
+  if (input.search.trim()) params.set("search", input.search.trim());
+  appendIssueDateRangeParams(params, input.issueDateRange);
+  return `?${params.toString()}`;
+}
+
+export function InvoicesListExportPortal({
+  academicYearId,
+  status,
+  source,
+  searchDebounced,
+  sortKey,
+  sortDir,
+  loading
+}: {
+  academicYearId: string;
+  status: StatusFilter;
+  source: SourceFilter;
+  searchDebounced: string;
+  sortKey: string;
+  sortDir: string;
+  loading: boolean;
+}) {
+  const t = useTranslations("finance.invoiceList");
+  const tFinance = useTranslations("finance");
+  const tFees = useTranslations("finance.feesBilling");
+  const { issueDateRange } = useInvoicesActionsContext();
+  const target = useDashPageTitleActionsTarget();
+
+  if (!target) {
+    return null;
+  }
+
+  return createPortal(
+    <ExportCsvButton
+      disabled={loading || !academicYearId}
+      onExport={async () => {
+        const tenantId = getSession()?.tenantId;
+        if (!tenantId) {
+          throw new Error("Not signed in.");
+        }
+        const rows = await fetchAllPaginated<InvoiceRow>(
+          (limit, offset) =>
+            `${INVOICES_PATH(tenantId)}${buildExportQuery({
+              academicYearId,
+              status,
+              source,
+              search: searchDebounced,
+              sortKey,
+              sortDir,
+              issueDateRange,
+              limit,
+              offset
+            })}`,
+          (json) => {
+            const payload = json as InvoiceList;
+            return { rows: payload.data, total: payload.total };
+          }
+        );
+        return {
+          filename: "invoices.csv",
+          columns: [
+            { key: "invoiceNumber", header: t("invoice") },
+            { key: "createdAt", header: t("created") },
+            { key: "billingMonth", header: tFinance("billingMonth") },
+            { key: "source", header: tFinance("source") },
+            { key: "student", header: tFees("student") },
+            { key: "gradeRoom", header: tFees("grade") },
+            { key: "total", header: tFees("billed") },
+            { key: "balanceDue", header: t("balanceDue") },
+            { key: "status", header: tFees("status") }
+          ],
+          rows: rows.map((row) => ({
+            invoiceNumber: row.invoiceNumber,
+            createdAt: row.createdAt,
+            billingMonth: row.billingMonth ?? "",
+            source: row.source,
+            student: row.studentFullName ?? "",
+            gradeRoom: [row.gradeName, row.classroomName].filter(Boolean).join(" · "),
+            total: row.total,
+            balanceDue: row.balanceDue,
+            status: row.status
+          }))
+        };
+      }}
+    />,
+    target
+  );
+}
+
 export function InvoicesListPanel() {
   const t = useTranslations("finance.invoiceList");
   const tFees = useTranslations("finance.feesBilling");
@@ -74,11 +190,12 @@ export function InvoicesListPanel() {
   const currentYear = useCurrentAcademicYear();
   const academicYearId = currentYear.data?.id ?? "";
 
-  const [status, setStatus] = useState<StatusFilter>("");
-  const [source, setSource] = useState<InvoiceSource | "">("");
+  const [status, setStatus] = useState<StatusFilter>("all");
+  const [source, setSource] = useState<SourceFilter>("all");
   const [search, setSearch] = useState("");
   const [searchDebounced, setSearchDebounced] = useState("");
   const [page, setPage] = useState(0);
+  const { issueDateRange } = useInvoicesActionsContext();
   const { sortKey, sortDir, toggleSort } = usePadaukSort({
     defaultKey: "createdAt",
     defaultDir: "desc"
@@ -89,19 +206,24 @@ export function InvoicesListPanel() {
     return () => window.clearTimeout(timer);
   }, [search]);
 
+  useEffect(() => {
+    setPage(0);
+  }, [issueDateRange]);
+
   const listQuery = useMemo(() => {
     const params = new URLSearchParams({
       limit: String(PAGE_SIZE),
       offset: String(page * PAGE_SIZE)
     });
     if (academicYearId) params.set("academicYearId", academicYearId);
-    if (status) params.set("status", status);
-    if (source) params.set("source", source);
+    if (status !== "all") params.set("status", status);
+    if (source !== "all") params.set("source", source);
     if (searchDebounced.trim()) params.set("search", searchDebounced.trim());
+    appendIssueDateRangeParams(params, issueDateRange);
     params.set("sortBy", sortKey);
     params.set("sortDir", sortDir);
     return `?${params.toString()}`;
-  }, [academicYearId, page, searchDebounced, sortDir, sortKey, source, status]);
+  }, [academicYearId, issueDateRange, page, searchDebounced, sortDir, sortKey, source, status]);
 
   const invoices = useApiQuery<InvoiceList>((tenant) =>
     academicYearId ? `/tenants/${tenant}/finance/invoices${listQuery}` : null
@@ -129,6 +251,15 @@ export function InvoicesListPanel() {
 
   return (
     <>
+      <InvoicesListExportPortal
+        academicYearId={academicYearId}
+        status={status}
+        source={source}
+        searchDebounced={searchDebounced}
+        sortKey={sortKey}
+        sortDir={sortDir}
+        loading={currentYear.isLoading || invoices.isLoading}
+      />
       <p className="pds-type-body-s-regular muted panel-help">{tFees("invoicesViewHelp")}</p>
 
       <PdsSearchFiltersRow
@@ -143,39 +274,42 @@ export function InvoicesListPanel() {
               placeholder={t("searchPlaceholder")}
               aria-label={t("searchPlaceholder")}
             />
-            <PdsSelectField
-              className="pds-search-filters-row__filter--160"
-              variant="filter"
-              value={source}
-              onValueChange={(value) => {
-                setSource((typeof value === "string" ? value : "") as InvoiceSource | "");
-                setPage(0);
-              }}
-              placeholder={tFinance("allSources")}
-              options={[
-                { value: "enrollment", label: tFinance("sourceEnrollment") },
-                { value: "recurring", label: tFinance("sourceRecurring") },
-                { value: "ad_hoc", label: tFinance("sourceOther") },
-              ]}
-            />
             <div className="pds-search-filters-row__filter--160">
-              <InvoicesBillingMonthFilter />
+              <PdsSelectField
+                variant="filter"
+                value={source}
+                onValueChange={(value) => {
+                  setSource((typeof value === "string" ? value : "all") as SourceFilter);
+                  setPage(0);
+                }}
+                placeholder={tFinance("allSources")}
+                options={[
+                  { value: "all", label: tFinance("allSources") },
+                  { value: "enrollment", label: tFinance("sourceEnrollment") },
+                  { value: "recurring", label: tFinance("sourceRecurring") },
+                  { value: "ad_hoc", label: tFinance("sourceOther") },
+                ]}
+              />
+            </div>
+            <div className="pds-search-filters-row__filter--range">
+              <InvoicesIssueDateRangeFilter />
+            </div>
+            <div className="pds-search-filters-row__filter--160">
+              <PdsSelectField
+                variant="filter"
+                value={status}
+                onValueChange={(value) => {
+                  setStatus((typeof value === "string" ? value : "all") as StatusFilter);
+                  setPage(0);
+                }}
+                placeholder={tFees("statusFilters.all")}
+                options={STATUS_FILTER_OPTIONS.map((value) => ({
+                  value,
+                  label: tFees(`statusFilters.${value}`),
+                }))}
+              />
             </div>
           </>
-        }
-        statusControl={
-          <SegmentedControl
-            ariaLabel={tFees("status")}
-            value={status}
-            onChange={(next) => {
-              setStatus(next as StatusFilter);
-              setPage(0);
-            }}
-            options={STATUS_FILTERS.map((value) => ({
-              id: value,
-              label: value ? tFees(`statusFilters.${value}`) : tFees("statusFilters.all"),
-            }))}
-          />
         }
       />
 

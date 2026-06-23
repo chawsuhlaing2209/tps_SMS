@@ -1,17 +1,29 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { type ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { useApiQuery } from "../../lib/api";
+import { createPortal } from "react-dom";
+import { apiFetch, useApiQuery, useReferenceApiQuery } from "../../lib/api";
 import { useCurrentAcademicYear } from "../../lib/use-current-academic-year";
+import { getSession } from "../../lib/session";
 import { DataTable } from "../../lib/data-table";
-import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
-import { EnrollmentWizard } from "./enrollment-wizard";
-import { PdsSelectField } from "../../../components/pds";
+import { Icon } from "../../lib/material-icon";
+import { TablePanelBody } from "../../lib/table-panel";
+import { useDashPageTitleActionsTarget } from "../dashboard-page-title";
+import { WorkspaceLoading } from "../../lib/workspace-loading";
+import { PdsSearchFiltersRow, PdsSelectField } from "../../../components/pds";
 import { StatusBadge } from "../../../components/shared/badge";
+import { ExportCsvButton } from "../../../components/shared/export-csv-button";
+import { TrailLink } from "../../../components/shared/trail-link";
+
+const EnrollmentWizard = dynamic(
+  () => import("./enrollment-wizard").then((module) => module.EnrollmentWizard),
+  { loading: () => <WorkspaceLoading /> }
+);
 
 type Grade = { id: string; name: string };
 type Classroom = { id: string; name: string; gradeId: string; academicYearId: string };
@@ -79,8 +91,8 @@ export function EnrollmentsWorkspace({
     setResumeDraft(resumeEnrollment.data);
   }, [resumeEnrollmentId, resumeEnrollment.data]);
 
-  const grades = useApiQuery<Grade[]>((tn) => `/tenants/${tn}/academics/grades`);
-  const classrooms = useApiQuery<Classroom[]>((tn) => `/tenants/${tn}/classrooms`);
+  const grades = useReferenceApiQuery<Grade[]>((tn) => `/tenants/${tn}/academics/grades`);
+  const classrooms = useReferenceApiQuery<Classroom[]>((tn) => `/tenants/${tn}/classrooms`);
 
   const enrollmentsQuery = useMemo(() => {
     const params = new URLSearchParams();
@@ -125,9 +137,13 @@ export function EnrollmentsWorkspace({
       header: t("invoice"),
       cell: ({ row }) =>
         row.original.invoiceId ? (
-          <Link className="pds-type-body-s-regular row-action" href={`/dashboard/finance/invoices/${row.original.invoiceId}`}>
+          <TrailLink
+            className="pds-type-body-s-regular row-action"
+            href={`/dashboard/finance/invoices/${row.original.invoiceId}`}
+            from={{ label: t("title"), href: "/dashboard/enrollments" }}
+          >
             {t("viewInvoice")}
-          </Link>
+          </TrailLink>
         ) : (
           "—"
         )
@@ -158,31 +174,34 @@ export function EnrollmentsWorkspace({
 
   return (
     <>
-      <TablePanelHead
-          title={compactTitle ? t("listTitle") : t("title")}
-          help={t("help")}
-          extra={
-            showStatusFilter ? (
-              <label className="form-inline">
-                <span className="pds-type-body-s-regular muted">{t("filterStatus")}</span>
-                <PdsSelectField
-                  variant="filter"
-                  value={statusFilter}
-                  onValueChange={(value) => setStatusFilter(typeof value === "string" ? value : "")}
-                  placeholder={t("allStatuses")}
-                  options={[
-                    { value: "draft", label: t("status_draft") },
-                    { value: "approved", label: t("status_approved") },
-                    { value: "archived", label: t("status_archived") }
-                  ]}
-                />
-              </label>
-            ) : null
+      <EnrollmentsHeaderActionsPortal
+        onAdd={() => openWizard(null)}
+        statusFilter={statusFilter}
+        workingYearId={workingYearId}
+        gradeName={gradeName}
+        classroomName={classroomName}
+        yearName={yearName}
+        loading={enrollments.isLoading}
+      />
+      {showStatusFilter ? (
+        <PdsSearchFiltersRow
+          filters={
+            <div className="pds-search-filters-row__filter--160">
+              <PdsSelectField
+                variant="filter"
+                value={statusFilter}
+                onValueChange={(value) => setStatusFilter(typeof value === "string" ? value : "")}
+                placeholder={t("allStatuses")}
+                options={[
+                  { value: "draft", label: t("status_draft") },
+                  { value: "approved", label: t("status_approved") },
+                  { value: "archived", label: t("status_archived") }
+                ]}
+              />
+            </div>
           }
-          onRefresh={() => void enrollments.refetch()}
-          onAdd={() => openWizard(null)}
-          addLabel={t("addEnrollment")}
         />
+      ) : null}
       <TablePanelBody
           loading={enrollments.isLoading}
           error={enrollments.isError ? c("somethingWrong") : null}
@@ -211,5 +230,72 @@ export function EnrollmentsWorkspace({
         onSaved={() => void enrollments.refetch()}
       />
     </>
+  );
+}
+
+function EnrollmentsHeaderActionsPortal({
+  onAdd,
+  statusFilter,
+  workingYearId,
+  gradeName,
+  classroomName,
+  yearName,
+  loading
+}: {
+  onAdd: () => void;
+  statusFilter: string;
+  workingYearId: string;
+  gradeName: (id: string) => string;
+  classroomName: (id: string | null) => string;
+  yearName: (id: string) => string;
+  loading: boolean;
+}) {
+  const t = useTranslations("enrollments");
+  const c = useTranslations("common");
+  const target = useDashPageTitleActionsTarget();
+
+  if (!target) {
+    return null;
+  }
+
+  return createPortal(
+    <>
+      <ExportCsvButton
+        disabled={loading}
+        onExport={async () => {
+          const params = new URLSearchParams();
+          if (workingYearId) params.set("academicYearId", workingYearId);
+          if (statusFilter) params.set("status", statusFilter);
+          const qs = params.toString();
+          const rows = await apiFetch<EnrollmentRow[]>(
+            `/tenants/${getSession()?.tenantId}/enrollments${qs ? `?${qs}` : ""}`
+          );
+          return {
+            filename: "enrollments.csv",
+            columns: [
+              { key: "student", header: t("student") },
+              { key: "classroom", header: t("classroom") },
+              { key: "grade", header: t("grade") },
+              { key: "year", header: t("academicYear") },
+              { key: "status", header: t("status") },
+              { key: "invoiceId", header: t("invoice") }
+            ],
+            rows: rows.map((row) => ({
+              student: row.studentFullName ?? row.studentId,
+              classroom: classroomName(row.classroomId),
+              grade: gradeName(row.gradeId),
+              year: yearName(row.academicYearId),
+              status: row.status,
+              invoiceId: row.invoiceId ?? ""
+            }))
+          };
+        }}
+      />
+      <button type="button" className="pds-type-body-m-bold btn-primary" onClick={onAdd}>
+        <Icon name="add" />
+        {t("addEnrollment")}
+      </button>
+    </>,
+    target
   );
 }

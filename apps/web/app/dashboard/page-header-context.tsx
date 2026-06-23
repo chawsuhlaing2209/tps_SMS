@@ -27,6 +27,8 @@ export type PageHeaderValue = {
   actions?: ReactNode;
   /** Reserve the title-row actions slot for a client portal (context-aware CTAs). */
   actionsPortal?: boolean;
+  /** When false, hides the in-body title row (e.g. home dashboard hero). Default true. */
+  showTitle?: boolean;
 };
 
 type StoredHeader = PageHeaderValue & { pathname: string };
@@ -54,7 +56,8 @@ function usePageHeaderContext(): PageHeaderContextType {
 
 /**
  * Publishes page metadata to the in-body chrome (breadcrumb bar + title row).
- * Navigation is via breadcrumbs only — no in-page back links.
+ * Section descriptions belong in `description` — rendered under the title in
+ * {@link DashboardPageTitle}, not as standalone copy in the page body.
  */
 export function PageHeader({
   title,
@@ -62,6 +65,7 @@ export function PageHeader({
   description,
   actions,
   actionsPortal,
+  showTitle = true,
   segment,
   resetTrail
 }: {
@@ -70,6 +74,7 @@ export function PageHeader({
   description?: string;
   actions?: ReactNode;
   actionsPortal?: boolean;
+  showTitle?: boolean;
   segment?: NavigationSegment;
   resetTrail?: NavigationSegment[];
 }) {
@@ -95,9 +100,10 @@ export function PageHeader({
       breadcrumbs,
       description,
       actions,
-      actionsPortal
+      actionsPortal,
+      showTitle
     });
-  }, [pathname, title, crumbKey, description, actions, actionsPortal, setHeader]);
+  }, [pathname, title, crumbKey, description, actions, actionsPortal, showTitle, setHeader]);
 
   return null;
 }
@@ -155,7 +161,8 @@ export function useResolvedPageHeader(): PageHeaderValue {
       breadcrumbs,
       description: header.description,
       actions: header.actions,
-      actionsPortal: header.actionsPortal
+      actionsPortal: header.actionsPortal,
+      showTitle: header.showTitle ?? true
     };
   }
   return fallback;

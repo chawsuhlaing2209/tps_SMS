@@ -7,6 +7,7 @@ import { PlatformAdminGuard } from "./platform-admin.guard.js";
 import { RbacService } from "./rbac.service.js";
 import { RequestContextService } from "./request-context.service.js";
 import { TeacherAssignmentService } from "./teacher-assignment.service.js";
+import { TenantContextCache } from "./tenant-context.cache.js";
 
 /**
  * Authorization primitives shared across feature modules. Kept free of
@@ -17,6 +18,7 @@ import { TeacherAssignmentService } from "./teacher-assignment.service.js";
   imports: [DbModule],
   providers: [
     PasswordService,
+    TenantContextCache,
     RequestContextService,
     RbacService,
     TeacherAssignmentService,
@@ -26,6 +28,7 @@ import { TeacherAssignmentService } from "./teacher-assignment.service.js";
   ],
   exports: [
     PasswordService,
+    TenantContextCache,
     RequestContextService,
     RbacService,
     TeacherAssignmentService,

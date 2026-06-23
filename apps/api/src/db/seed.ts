@@ -14,12 +14,10 @@ import {
   enrollmentFeePlans,
   enrollmentFeePlanGrades,
   enrollments,
-  familyGroups,
   feeItems,
   gradeChiefAssignments,
   gradeSubjects,
   grades,
-  guardians,
   invoiceItems,
   invoices,
   paymentPlanInstallments,
@@ -30,19 +28,25 @@ import {
   schoolOperatingHourBlocks,
   schoolScheduleSettings,
   staff,
-  studentServices,
   students,
   subjects,
   teachingSectorGrades,
   teachingSectors,
   tenantSettings,
   tenants,
-  terms,
   timetablePeriods,
   userRoles,
   users
 } from "./schema.js";
 import { buildPeriodRowsFromSchedule } from "../school-schedule/school-schedule.service.js";
+import { seedAcademicCatalog } from "./seed-academic-catalog.js";
+import { seedDemoClassroomAssignments } from "./seed-demo-classroom-assignments.js";
+import { seedFacilityRooms } from "./seed-facility-rooms.js";
+import { seedDemoTimetable } from "./seed-demo-timetable.js";
+import { printDemoAlphaCredentials, seedDemoAlpha } from "./seed-demo-alpha.js";
+import { seedDemoTeachers } from "./seed-demo-teachers.js";
+import { seedDemoEnquiries } from "./seed-demo-enquiries.js";
+import { seedDepartments } from "./seed-departments.js";
 
 // Load env from the API folder first, then the repo root.
 config();
@@ -51,31 +55,6 @@ config({ path: "../../.env" });
 const demoTenants = [
   { name: "Demo Alpha Academy", slug: "demo-alpha" },
   { name: "Demo Beta International", slug: "demo-beta" }
-] as const;
-
-/** Myanmar-style student names for the people-directory seed roster (YIA-26-xxx). */
-const SEED_DIRECTORY_NAMES = [
-  "Pyae Sone", "Hnin Wai", "Zaw Lin", "Shwe Yi", "Kaung Khant",
-  "Thazin Oo", "Ye Yint", "Su Myat", "Thiha Kyaw", "Ei Mon",
-  "Phyo Wai", "Hsu Yati", "Min Khant", "Nan Htwe", "Aung Kaung",
-  "Khin Sandar", "Zin Myo", "Yamone Lwin", "Kyaw Zin", "Hay Mar",
-  "Nyein Chan", "Myat Noe", "Hein Htet", "Phyu Phyu", "Soe Moe",
-  "May Thin", "Aung Paing", "Hlaing Hlaing", "Win Ko", "Ei Shwe",
-  "Kyaw Thu", "Su Su", "Min Thu", "Hnin Hnin", "Zaw Myo",
-  "Thiri Aung", "Paing Soe", "May Khaing", "Bo Bo", "Chit Su",
-  "Aung Ko", "Yadanar", "Myo Min", "Hla Hla", "Soe Win",
-  "Phyo Hein", "Ei Ei", "Kyaw Myo", "Thandar", "Min Ko",
-  "Nilar", "Aung Zin", "Su Latt", "Hein Zaw", "May Oo",
-  "Zaw Bo", "Hnin Pyae", "Myat Thu", "Kaung Set", "Ei Phyo",
-  "Soe Paing", "Thiri", "Aung Hein", "May Zin", "Phyo Thu",
-  "Hlaing Phyu", "Min Paing", "Su Mon", "Kyaw Hein", "Nan Wai",
-  "Zaw Thu", "Ei Thiri", "Bo Hein", "May Phyu", "Aung Thu",
-  "Hnin Mon", "Myo Thu", "Kaung Hein", "Thazin", "Soe Thu",
-  "Phyu Mon", "Ye Hein", "Su Pyae", "Min Zaw", "Nyein Pyae",
-  "Aung Mon", "Hla Pyae", "Zaw Hein", "May Thu", "Ei Zin",
-  "Kyaw Paing", "Thiri Mon", "Hein Thu", "Su Hein", "Bo Zaw",
-  "Nan Pyae", "Myat Zin", "Phyo Mon", "Hnin Thu", "Kaung Zaw",
-  "Ye Thu", "May Hein", "Aung Pyae", "Su Thu", "Min Hein"
 ] as const;
 
 // Default password for seeded demo owners so they can sign in immediately.
@@ -376,7 +355,106 @@ async function seedDemoClassroomData(
 
   await seedDemoEnrollmentBilling(db, tenantId, year.id, grade.id, classroomAId);
   await seedDemoPaymentPlans(db, tenantId);
-  await seedFeesBillingDemo(db, tenantId, year.id);
+}
+
+const DEMO_TUITION_BY_GRADE: Record<string, string> = {
+  KG: "850000",
+  "Grade 1": "500000",
+  "Grade 2": "520000",
+  "Grade 3": "540000",
+  "Grade 4": "560000",
+  "Grade 5": "1000000",
+  "Grade 6": "620000",
+  "Grade 7": "640000",
+  "Grade 8": "660000",
+  "Grade 9": "1100000",
+  "Grade 10": "1200000",
+  "Grade 11": "1300000",
+  "Grade 12": "1400000"
+};
+
+async function seedDemoEnrollmentBillingAllGrades(
+  db: ReturnType<typeof drizzle>,
+  tenantId: string,
+  academicYearId: string,
+  gradeIds: Map<string, string>
+) {
+  const ensureFeeItem = async (name: string, feeType: string, billingType: string) => {
+    const [existing] = await db
+      .select({ id: feeItems.id })
+      .from(feeItems)
+      .where(and(eq(feeItems.tenantId, tenantId), eq(feeItems.name, name)));
+
+    if (existing) {
+      return existing.id;
+    }
+
+    const [created] = await db
+      .insert(feeItems)
+      .values({ tenantId, name, feeType, billingType, status: "active" })
+      .returning({ id: feeItems.id });
+
+    return created!.id;
+  };
+
+  const registrationId = await ensureFeeItem("Registration Fee", "registration", "one_time");
+  const transportId = await ensureFeeItem("School Transport", "transport", "monthly");
+
+  const sharedPlans = [
+    { feeItemId: registrationId, amount: "50000" },
+    { feeItemId: transportId, amount: "40000" }
+  ];
+
+  const ensurePlanGrade = async (feeItemId: string, amount: string, gradeId: string) => {
+    const [existingPlan] = await db
+      .select({ id: enrollmentFeePlans.id })
+      .from(enrollmentFeePlans)
+      .where(
+        and(
+          eq(enrollmentFeePlans.tenantId, tenantId),
+          eq(enrollmentFeePlans.academicYearId, academicYearId),
+          eq(enrollmentFeePlans.feeItemId, feeItemId),
+          eq(enrollmentFeePlans.amount, amount)
+        )
+      );
+
+    const planId =
+      existingPlan?.id ??
+      (
+        await db
+          .insert(enrollmentFeePlans)
+          .values({ tenantId, academicYearId, feeItemId, amount })
+          .returning({ id: enrollmentFeePlans.id })
+      )[0]?.id;
+
+    if (!planId) return;
+
+    const [existingGrade] = await db
+      .select({ id: enrollmentFeePlanGrades.id })
+      .from(enrollmentFeePlanGrades)
+      .where(
+        and(
+          eq(enrollmentFeePlanGrades.tenantId, tenantId),
+          eq(enrollmentFeePlanGrades.planId, planId),
+          eq(enrollmentFeePlanGrades.gradeId, gradeId)
+        )
+      );
+
+    if (!existingGrade) {
+      await db.insert(enrollmentFeePlanGrades).values({ tenantId, planId, gradeId });
+    }
+  };
+
+  for (const [gradeName, gradeId] of gradeIds) {
+    const tuitionAmount = DEMO_TUITION_BY_GRADE[gradeName] ?? "500000";
+    const tuitionId = await ensureFeeItem(`${gradeName} Tuition`, "tuition", "one_time");
+    await ensurePlanGrade(tuitionId, tuitionAmount, gradeId);
+    for (const plan of sharedPlans) {
+      await ensurePlanGrade(plan.feeItemId, plan.amount, gradeId);
+    }
+  }
+
+  await seedDemoPaymentPlans(db, tenantId);
 }
 
 /** Default school hours + generated lesson periods for the active academic year. */
@@ -573,245 +651,6 @@ async function backfillBillingInvoiceLinks(
         receiptNumber: `PKR-${suffix}`,
         issuedAt: new Date("2026-06-12T03:00:00Z")
       });
-    }
-  }
-}
-
-/**
- * Populates the Fees & Billing workspace with a realistic per-student roster:
- * multiple grades, classrooms, guardians, approved enrollments, Term-1 invoices,
- * and a spread of paid / partial / due / overdue payment states.
- */
-async function seedFeesBillingDemo(
-  db: ReturnType<typeof drizzle>,
-  tenantId: string,
-  academicYearId: string
-) {
-  // Brand the receipts/school name to match the production reference design.
-  await db
-    .update(tenantSettings)
-    .set({
-      schoolName: "Yangon International Academy",
-      receiptPrefix: "PKR",
-      address: "No. 12, Pyay Road, Yangon",
-      contactPhone: "+95 9 771 000 000"
-    })
-    .where(eq(tenantSettings.tenantId, tenantId));
-
-  // ── Terms ──────────────────────────────────────────────────────────────────
-  const termDefs = [
-    { name: "Term 1", startsOn: "2026-06-01", endsOn: "2026-09-30" },
-    { name: "Term 2", startsOn: "2026-10-01", endsOn: "2027-01-15" },
-    { name: "Term 3", startsOn: "2027-01-16", endsOn: "2027-03-31" }
-  ];
-  for (const term of termDefs) {
-    const [existing] = await db
-      .select({ id: terms.id })
-      .from(terms)
-      .where(
-        and(
-          eq(terms.tenantId, tenantId),
-          eq(terms.academicYearId, academicYearId),
-          eq(terms.name, term.name)
-        )
-      );
-    if (!existing) {
-      await db.insert(terms).values({ tenantId, academicYearId, ...term });
-    }
-  }
-
-  // ── Grades (KG + secondary grades alongside the existing Grade 1) ────────────
-  const gradeDefs = [
-    { name: "KG", sortOrder: 0, code: "KG", tuition: 900000 },
-    { name: "Grade 5", sortOrder: 5, code: "G5", tuition: 1000000 },
-    { name: "Grade 9", sortOrder: 9, code: "G9", tuition: 1100000 },
-    { name: "Grade 10", sortOrder: 10, code: "G10", tuition: 1200000 },
-    { name: "Grade 11", sortOrder: 11, code: "G11", tuition: 1300000 },
-    { name: "Grade 12", sortOrder: 12, code: "G12", tuition: 1400000 }
-  ];
-
-  const ensureGrade = async (name: string, sortOrder: number) => {
-    const [existing] = await db
-      .select({ id: grades.id })
-      .from(grades)
-      .where(and(eq(grades.tenantId, tenantId), eq(grades.name, name)));
-    if (existing) return existing.id;
-    const [created] = await db
-      .insert(grades)
-      .values({ tenantId, name, sortOrder, status: "active" })
-      .returning({ id: grades.id });
-    return created!.id;
-  };
-
-  const ensureClassroom = async (gradeId: string, name: string) => {
-    const [existing] = await db
-      .select({ id: classrooms.id })
-      .from(classrooms)
-      .where(and(eq(classrooms.tenantId, tenantId), eq(classrooms.name, name)));
-    if (existing) return existing.id;
-    const [created] = await db
-      .insert(classrooms)
-      .values({ tenantId, academicYearId, gradeId, name, room: name, capacity: 30, status: "active" })
-      .returning({ id: classrooms.id });
-    return created!.id;
-  };
-
-  const firstNames = [
-    "Wai Yan Phyo", "Hnin Ei Phyu", "Zaw Lin Htet", "Shwe Yi Win", "Kaung Khant Zaw",
-    "Thazin Oo", "Ye Yint Aung", "Su Myat Noe", "Thiha Kyaw", "Ei Mon Kyaw",
-    "Phyo Wai Aung", "Hsu Yati", "Min Khant", "Nan Htwe", "Aung Kaung Myat",
-    "Khin Sandar", "Zin Myo Aung", "Yamone Lwin", "Kyaw Zin Latt", "Hay Mar Win"
-  ];
-  const guardianNames = [
-    "U Phyo Min", "Daw Mya Mya", "U Lin Htut", "Daw Aye Aye", "U Zaw Win",
-    "Daw Hla Hla", "U Aung Kyaw", "Daw Noe Noe", "U Kyaw Soe", "Daw Thida",
-    "U Myo Naing", "Daw Yati", "U Khant Min", "Daw Htwe Htwe", "U Myat Aung",
-    "Daw Sandar", "U Myo Aung", "Daw Lwin Lwin", "U Zin Latt", "Daw Mar Win"
-  ];
-
-  const issueDate = "2026-06-05";
-  const dueFuture = "2026-07-31";
-  const duePast = "2026-06-10";
-
-  // Per-student billing state: paid / partial / due / overdue.
-  const stateForIndex = (i: number): "paid" | "partial" | "due" | "overdue" => {
-    if (i < 6) return "paid";
-    if (i === 6) return "partial";
-    if (i === 7) return "overdue";
-    return "due";
-  };
-
-  for (const gradeDef of gradeDefs) {
-    const gradeId = await ensureGrade(gradeDef.name, gradeDef.sortOrder);
-    const classroomName = `${gradeDef.code}-A`;
-    const classroomId = await ensureClassroom(gradeId, classroomName);
-    if (!classroomId) continue;
-
-    for (let i = 0; i < 10; i += 1) {
-      const seq = String(i + 1).padStart(2, "0");
-      const admissionNumber = `BILL-${gradeDef.code}-${seq}`;
-      const prefix = i % 2 === 0 ? "Mg" : "Ma";
-      const studentName = `${prefix} ${firstNames[i % firstNames.length]!}`;
-      const guardianName = guardianNames[(i + gradeDef.sortOrder) % guardianNames.length]!;
-
-      const [existingStudent] = await db
-        .select({ id: students.id })
-        .from(students)
-        .where(and(eq(students.tenantId, tenantId), eq(students.admissionNumber, admissionNumber)));
-      if (existingStudent) {
-        await backfillBillingInvoiceLinks(
-          db,
-          tenantId,
-          existingStudent.id,
-          academicYearId,
-          gradeId
-        );
-        continue;
-      }
-
-      const [guardian] = await db
-        .insert(guardians)
-        .values({ tenantId, fullName: guardianName, phone: `09-${250 + i}-123 ${gradeDef.sortOrder}${seq}`, preferredChannel: "phone" })
-        .returning({ id: guardians.id });
-
-      const [family] = await db
-        .insert(familyGroups)
-        .values({ tenantId, name: `${guardianName} Family`, primaryGuardianId: guardian!.id })
-        .returning({ id: familyGroups.id });
-
-      const [student] = await db
-        .insert(students)
-        .values({ tenantId, familyGroupId: family!.id, admissionNumber, fullName: studentName, status: "enrolled" })
-        .returning({ id: students.id });
-
-      const [enrollment] = await db
-        .insert(enrollments)
-        .values({
-          tenantId,
-          studentId: student!.id,
-          academicYearId,
-          gradeId,
-          classroomId,
-          status: "approved",
-          confirmedAt: new Date(),
-          billingSnapshot: { optionalFeeItemIds: [] }
-        })
-        .returning({ id: enrollments.id });
-
-      await db.insert(classroomStudents).values({
-        tenantId,
-        classroomId,
-        studentId: student!.id,
-        effectiveFrom: "2026-06-01",
-        movementReason: "seed_billing"
-      });
-
-      const state = stateForIndex(i);
-      const total = gradeDef.tuition;
-      const invoiceStatus =
-        state === "paid"
-          ? "paid"
-          : state === "partial"
-            ? "partial"
-            : state === "overdue"
-              ? "overdue"
-              : "unpaid";
-      const dueDate = state === "overdue" ? duePast : dueFuture;
-
-      const [invoice] = await db
-        .insert(invoices)
-        .values({
-          tenantId,
-          studentId: student!.id,
-          enrollmentId: enrollment!.id,
-          familyGroupId: family!.id,
-          source: "enrollment",
-          invoiceNumber: buildInvoiceNumber(
-            new Date(issueDate),
-            `${gradeDef.code}${seq}`
-          ),
-          issueDate,
-          dueDate,
-          subtotal: String(total),
-          discountTotal: "0",
-          total: String(total),
-          status: invoiceStatus
-        })
-        .returning({ id: invoices.id });
-
-      await db.insert(invoiceItems).values({
-        tenantId,
-        invoiceId: invoice!.id,
-        description: `${gradeDef.name} tuition — Term 1`,
-        quantity: "1",
-        unitAmount: String(total),
-        total: String(total)
-      });
-
-      if (state === "paid" || state === "partial") {
-        const amount = state === "paid" ? total : Math.round(total / 2);
-        const method = i % 3 === 0 ? "kbzpay" : i % 3 === 1 ? "cash" : "wavepay";
-        const [payment] = await db
-          .insert(payments)
-          .values({
-            tenantId,
-            invoiceId: invoice!.id,
-            kind: "payment",
-            amount: String(amount),
-            method,
-            referenceNumber: method === "cash" ? null : `TXN-${admissionNumber}`,
-            paidAt: new Date("2026-06-12T03:00:00Z"),
-            verifiedAt: new Date("2026-06-12T03:00:00Z")
-          })
-          .returning({ id: payments.id });
-
-        await db.insert(receipts).values({
-          tenantId,
-          paymentId: payment!.id,
-          receiptNumber: `PKR-${gradeDef.code}-${seq}`,
-          issuedAt: new Date("2026-06-12T03:00:00Z")
-        });
-      }
     }
   }
 }
@@ -1110,184 +949,6 @@ async function seedDemoEnrollmentBilling(
     .update(discountRules)
     .set({ status: "inactive" })
     .where(and(eq(discountRules.tenantId, tenantId), eq(discountRules.status, "archived")));
-
-  const [existingFamily] = await db
-    .select({ id: familyGroups.id })
-    .from(familyGroups)
-    .where(and(eq(familyGroups.tenantId, tenantId), eq(familyGroups.name, "Kyaw Family")));
-
-  let familyGroupId = existingFamily?.id;
-
-  if (!familyGroupId) {
-    const [legacyFamily] = await db
-      .select({ id: familyGroups.id })
-      .from(familyGroups)
-      .where(and(eq(familyGroups.tenantId, tenantId), eq(familyGroups.name, "Demo Kyaw Family")));
-
-    if (legacyFamily) {
-      await db
-        .update(familyGroups)
-        .set({ name: "Kyaw Family" })
-        .where(eq(familyGroups.id, legacyFamily.id));
-      familyGroupId = legacyFamily.id;
-    }
-  }
-
-  if (!familyGroupId) {
-    const [guardian] = await db
-      .insert(guardians)
-      .values({
-        tenantId,
-        fullName: "U Kyaw Kyaw",
-        phone: "09123456789",
-        preferredChannel: "phone"
-      })
-      .returning({ id: guardians.id });
-
-    const [family] = await db
-      .insert(familyGroups)
-      .values({
-        tenantId,
-        name: "Kyaw Family",
-        primaryGuardianId: guardian!.id
-      })
-      .returning({ id: familyGroups.id });
-
-    familyGroupId = family!.id;
-  }
-
-  const directoryName = (index: number) => {
-    const base = SEED_DIRECTORY_NAMES[index % SEED_DIRECTORY_NAMES.length]!;
-    const prefix = index % 2 === 0 ? "Ma" : "Mg";
-    return `${prefix} ${base}`;
-  };
-
-  const ensureDirectoryStudent = async (
-    admissionNumber: string,
-    fullName: string,
-    status: "draft" | "enrolled",
-    legacyAdmissionNumber?: string
-  ) => {
-    const [existing] = await db
-      .select({ id: students.id, admissionNumber: students.admissionNumber })
-      .from(students)
-      .where(
-        and(
-          eq(students.tenantId, tenantId),
-          legacyAdmissionNumber
-            ? or(
-                eq(students.admissionNumber, admissionNumber),
-                eq(students.admissionNumber, legacyAdmissionNumber)
-              )
-            : eq(students.admissionNumber, admissionNumber)
-        )
-      );
-
-    if (existing) {
-      await db
-        .update(students)
-        .set({
-          familyGroupId,
-          status,
-          fullName,
-          admissionNumber
-        })
-        .where(eq(students.id, existing.id));
-      return existing.id;
-    }
-
-    const [created] = await db
-      .insert(students)
-      .values({
-        tenantId,
-        familyGroupId,
-        admissionNumber,
-        fullName,
-        dateOfBirth: admissionNumber === "YIA-26-001" ? "2018-03-15" : "2020-08-20",
-        status
-      })
-      .returning({ id: students.id });
-
-    return created!.id;
-  };
-
-  const olderStudentId = await ensureDirectoryStudent(
-    "YIA-26-001",
-    "Mg Maung Maung Kyaw",
-    "enrolled",
-    "DEMO-001"
-  );
-  await ensureDirectoryStudent("YIA-26-002", "Ma Hla Kyaw", "draft", "DEMO-002");
-
-  for (let i = 3; i <= 102; i += 1) {
-    const num = String(i).padStart(3, "0");
-    const legacyNum = `DEMO-${num}`;
-    await ensureDirectoryStudent(
-      `YIA-26-${num}`,
-      directoryName(i - 3),
-      i % 5 === 0 ? "enrolled" : "draft",
-      legacyNum
-    );
-  }
-
-  const [existingEnrollment] = await db
-    .select({ id: enrollments.id })
-    .from(enrollments)
-    .where(
-      and(
-        eq(enrollments.tenantId, tenantId),
-        eq(enrollments.studentId, olderStudentId),
-        eq(enrollments.academicYearId, academicYearId)
-      )
-    );
-
-  if (!existingEnrollment) {
-    await db.insert(enrollments).values({
-      tenantId,
-      studentId: olderStudentId,
-      academicYearId,
-      gradeId,
-      classroomId,
-      status: "approved",
-      billingSnapshot: { optionalFeeItemIds: [] }
-    });
-
-    await db.insert(classroomStudents).values({
-      tenantId,
-      classroomId,
-      studentId: olderStudentId,
-      effectiveFrom: "2026-06-01",
-      movementReason: "seed_enrollment"
-    });
-  }
-
-  const [transportFee] = await db
-    .select({ id: feeItems.id })
-    .from(feeItems)
-    .where(and(eq(feeItems.tenantId, tenantId), eq(feeItems.name, "School Transport")));
-
-  if (transportFee) {
-    const [existingService] = await db
-      .select({ id: studentServices.id })
-      .from(studentServices)
-      .where(
-        and(
-          eq(studentServices.tenantId, tenantId),
-          eq(studentServices.studentId, olderStudentId),
-          eq(studentServices.feeItemId, transportFee.id),
-          isNull(studentServices.effectiveTo)
-        )
-      );
-
-    if (!existingService) {
-      await db.insert(studentServices).values({
-        tenantId,
-        studentId: olderStudentId,
-        feeItemId: transportFee.id,
-        effectiveFrom: "2026-06-01"
-      });
-    }
-  }
 }
 
 async function seedTenant(
@@ -1385,13 +1046,23 @@ async function seedTenant(
     await db.insert(subjects).values({ tenantId: tenant.id, name: "Mathematics", code: "MATH" });
   }
 
-  if (input.slug === "demo-alpha") {
+  if (input.slug === "demo-alpha" && academicYearId) {
+    const catalog = await seedAcademicCatalog(db, tenant.id, academicYearId);
     await seedTeachingSectors(db, tenant.id);
-    await seedDemoClassroomData(db, tenant.id, input.slug, ownerPasswordHash);
+    await seedFacilityRooms(db, tenant.id);
+    await seedDemoTeachers(db, tenant.id, academicYearId, input.slug, ownerPasswordHash, catalog);
+    await seedDemoClassroomAssignments(db, tenant.id, academicYearId, input.slug, catalog);
+    await seedDemoEnrollmentBillingAllGrades(db, tenant.id, academicYearId, catalog.gradeIds);
+    await seedDemoAlpha(db, tenant.id, academicYearId, ownerPasswordHash);
+    await seedDepartments(db, tenant.id);
+    await seedDemoEnquiries(db, tenant.id);
   }
 
   if (academicYearId && owner?.id) {
     await seedTimetableSchedule(db, tenant.id, academicYearId, owner.id);
+    if (input.slug === "demo-alpha") {
+      await seedDemoTimetable(db, tenant.id, academicYearId, owner.id);
+    }
   }
 
   return { tenant, academicYearId };
@@ -1445,11 +1116,9 @@ async function main() {
       );
     }
     console.log(
-      `  • Demo teacher (demo-alpha only)  ·  tenant demo-alpha  ·  email teacher@demo-alpha.example.edu.mm  ·  password ${DEMO_OWNER_PASSWORD}`
+      `  • Demo teachers (demo-alpha)  ·  13 accounts  ·  e.g. teacher@demo-alpha.example.edu.mm  ·  password ${DEMO_OWNER_PASSWORD}`
     );
-    console.log(
-      "    Grade chief of Grade 1, homeroom of Room A, teaches Maths in Room A — edit under People → Teacher assignments."
-    );
+    printDemoAlphaCredentials(DEMO_OWNER_PASSWORD);
   } finally {
     await pool.end();
   }

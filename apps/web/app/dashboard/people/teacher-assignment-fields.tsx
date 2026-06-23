@@ -167,6 +167,32 @@ export function chiefConflicts(
     .filter((row): row is { gradeId: string; gradeName: string; staffName: string } => row !== null);
 }
 
+export function homeroomConflicts(
+  draft: AssignmentDraft,
+  options: AssignmentOptions | undefined,
+  currentStaffId: string | undefined
+): { classroomId: string; classroomName: string }[] {
+  const homeroomId = draft.homeroomClassroomIds[0];
+  if (!homeroomId || !options) {
+    return [];
+  }
+
+  const classroom = options.classrooms.find((row) => row.id === homeroomId);
+  if (
+    !classroom?.classTeacherStaffId ||
+    classroom.classTeacherStaffId === currentStaffId
+  ) {
+    return [];
+  }
+
+  return [
+    {
+      classroomId: classroom.id,
+      classroomName: classroom.name
+    }
+  ];
+}
+
 type Props = {
   draft: AssignmentDraft;
   onChange: (next: AssignmentDraft) => void;
@@ -238,6 +264,8 @@ export function TeacherAssignmentFields({
   };
 
   const conflicts = chiefConflicts(draft, options, currentStaffId);
+  const homeroomConflictRows = homeroomConflicts(draft, options, currentStaffId);
+  const selectSingleId = (ids: string[]) => (ids.length <= 1 ? ids : [ids[ids.length - 1]!]);
 
   const showGrades = section === "all" || section === "grade";
   const showHomeroom = section === "all" || section === "homeroom";
@@ -290,7 +318,7 @@ export function TeacherAssignmentFields({
                   <CheckboxList
                     options={selectedGrades.map((grade) => ({ id: grade.id, label: grade.name }))}
                     selectedIds={draft.chiefGradeIds}
-                    onChange={(ids) => onChange({ ...draft, chiefGradeIds: ids })}
+                    onChange={(ids) => onChange({ ...draft, chiefGradeIds: selectSingleId(ids) })}
                   />
                   {conflicts.map((conflict) => (
                     <p key={conflict.gradeId} className="pds-type-body-s-regular assign-warning" role="alert">
@@ -326,12 +354,22 @@ export function TeacherAssignmentFields({
                 </div>
               </div>
               {draft.isHomeroom ? (
-                <CheckboxList
-                  options={classroomOptions}
-                  selectedIds={draft.homeroomClassroomIds}
-                  onChange={(ids) => onChange({ ...draft, homeroomClassroomIds: ids })}
-                  emptyTitle={t("noClassroomsForGrades")}
-                />
+                <>
+                  <CheckboxList
+                    options={classroomOptions}
+                    selectedIds={draft.homeroomClassroomIds}
+                    onChange={(ids) =>
+                      onChange({ ...draft, homeroomClassroomIds: selectSingleId(ids) })
+                    }
+                    emptyTitle={t("noClassroomsForGrades")}
+                  />
+                  {homeroomConflictRows.map((conflict) => (
+                    <p key={conflict.classroomId} className="pds-type-body-s-regular assign-warning" role="alert">
+                      <Icon name="warning" size={16} />
+                      {t("homeroomConflictWarning", { classroom: conflict.classroomName })}
+                    </p>
+                  ))}
+                </>
               ) : null}
             </section>
           ) : null}

@@ -12,7 +12,7 @@ import { Icon } from "../../lib/material-icon";
 import { hasAnyPermission } from "../../lib/permissions";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { getSession } from "../../lib/session";
-import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
+import { TablePanelBody } from "../../lib/table-panel";
 import { zodResolver } from "../../lib/zod-resolver";
 import { PageHeader } from "../page-header-context";
 
@@ -124,15 +124,16 @@ export default function DepartmentsPage() {
         title={t("title")}
         description={t("description")}
         breadcrumbs={[{ label: nav("group_admin") }, { label: nav("departments") }]}
+        actions={
+          <>
+            <button type="button" className="pds-type-body-m-bold btn-primary" onClick={openCreate}>
+              <Icon name="add" />
+              {t("addDepartment")}
+            </button>
+          </>
+        }
       />
 
-      <TablePanelHead
-        title={t("listTitle")}
-        help={t("listHelp")}
-        onRefresh={() => void departments.refetch()}
-        onAdd={openCreate}
-        addLabel={t("addDepartment")}
-      />
       <TablePanelBody
           loading={departments.isLoading}
           error={departments.isError ? c("somethingWrong") : null}

@@ -26,12 +26,31 @@ export const Accent: Story = {
   },
 };
 
+export const Dark: Story = {
+  args: {
+    dark: true,
+    label: "Total paid",
+    value: "1,436,000",
+    hint: "MMK",
+  },
+};
+
+export const Layout: Story = {
+  args: {
+    layout: true,
+    label: "Outstanding",
+    value: "80,000",
+    hint: "MMK",
+  },
+};
+
 export const Grid: Story = {
   render: () => (
     <StatGrid>
       <StatCard label="Students" value="248" />
       <StatCard label="Enrolled" value="231" accent />
-      <StatCard label="Outstanding" value="3.2M MMK" hint="18 overdue" />
+      <StatCard layout label="Outstanding" value="3.2M" hint="MMK" />
+      <StatCard dark label="Total paid" value="1.4M" hint="MMK" />
     </StatGrid>
   ),
   parameters: { layout: "padded" },

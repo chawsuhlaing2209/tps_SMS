@@ -18,7 +18,7 @@
 }.planCard {
   background: var(--pds-background-card);
   border: 1px solid var(--pds-border-color-primary);
-  border-radius: var(--pds-radius-base);
+  border-radius: var(--pds-border-radius-16);
   overflow: hidden;
 }.planCardInactive .planHead {
   background: var(--pds-background-layout-secondary);
@@ -74,6 +74,17 @@
 }.planCardInactive .editBtn {
   background: var(--pds-background-card);
   border: 1px solid var(--pds-border-color-primary);
+}.deleteBtn {
+  align-items: center;
+  background: transparent;
+  border: none;
+  color: var(--pds-status-error);
+  cursor: pointer;
+  display: inline-flex;
+  gap: 6px;
+  padding: 10px 12px;
+}.deleteBtn:hover {
+  color: var(--pds-brand-dark);
 }.toggle {
   appearance: none;
   background: var(--pds-border-color-secondary);

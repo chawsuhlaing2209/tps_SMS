@@ -88,6 +88,29 @@ export class StudentsService {
     return { data: rows, total: countRow?.count ?? 0 };
   }
 
+  async getPeopleDirectoryCounts(tenantId: string) {
+    const [[studentRow], [guardianRow], [householdRow]] = await Promise.all([
+      this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(students)
+        .where(eq(students.tenantId, tenantId)),
+      this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(guardians)
+        .where(eq(guardians.tenantId, tenantId)),
+      this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(familyGroups)
+        .where(eq(familyGroups.tenantId, tenantId))
+    ]);
+
+    return {
+      students: studentRow?.count ?? 0,
+      guardians: guardianRow?.count ?? 0,
+      households: householdRow?.count ?? 0
+    };
+  }
+
   async getById(tenantId: string, studentId: string) {
     const [student] = await this.db
       .select()
@@ -879,6 +902,65 @@ export class StudentsService {
     return link!;
   }
 
+  private async guardianNamesById(tenantId: string, guardianIds: string[]) {
+    const names = new Map<string, string>();
+    if (!guardianIds.length) {
+      return names;
+    }
+
+    const rows = await this.db
+      .select({ id: guardians.id, fullName: guardians.fullName })
+      .from(guardians)
+      .where(and(eq(guardians.tenantId, tenantId), inArray(guardians.id, guardianIds)));
+
+    for (const row of rows) {
+      names.set(row.id, row.fullName);
+    }
+
+    return names;
+  }
+
+  private async membersByFamilyGroupId(tenantId: string, familyGroupIds: string[]) {
+    const members = new Map<
+      string,
+      Array<{ id: string; fullName: string; admissionNumber: string; status: string }>
+    >();
+    if (!familyGroupIds.length) {
+      return members;
+    }
+
+    const rows = await this.db
+      .select({
+        familyGroupId: students.familyGroupId,
+        id: students.id,
+        fullName: students.fullName,
+        admissionNumber: students.admissionNumber,
+        status: students.status
+      })
+      .from(students)
+      .where(
+        and(
+          eq(students.tenantId, tenantId),
+          inArray(students.familyGroupId, familyGroupIds)
+        )
+      )
+      .orderBy(students.fullName);
+
+    for (const row of rows) {
+      if (!row.familyGroupId) continue;
+      const bucket = members.get(row.familyGroupId) ?? [];
+      bucket.push({
+        id: row.id,
+        fullName: row.fullName,
+        admissionNumber: row.admissionNumber,
+        status: row.status
+      });
+      members.set(row.familyGroupId, bucket);
+    }
+
+    return members;
+  }
+
   async searchFamilyGroups(tenantId: string, query: SearchFamilyGroupsQueryDto) {
     const search = query.search?.trim();
     if (!search) {
@@ -967,49 +1049,27 @@ export class StudentsService {
       .from(familyGroups)
       .where(and(eq(familyGroups.tenantId, tenantId), inArray(familyGroups.id, ids)));
 
-    const summaries = await Promise.all(
-      rows.map(async (group) => {
-        const members = await this.db
-          .select({
-            id: students.id,
-            fullName: students.fullName,
-            admissionNumber: students.admissionNumber,
-            status: students.status
-          })
-          .from(students)
-          .where(
-            and(eq(students.tenantId, tenantId), eq(students.familyGroupId, group.id))
-          )
-          .orderBy(students.fullName);
+    const groupIds = rows.map((group) => group.id);
+    const guardianIds = rows
+      .map((group) => group.primaryGuardianId)
+      .filter((id): id is string => Boolean(id));
+    const [guardianNames, membersByGroup] = await Promise.all([
+      this.guardianNamesById(tenantId, guardianIds),
+      this.membersByFamilyGroupId(tenantId, groupIds)
+    ]);
 
-        let primaryGuardianName: string | null = null;
-        if (group.primaryGuardianId) {
-          const [guardian] = await this.db
-            .select({ fullName: guardians.fullName })
-            .from(guardians)
-            .where(
-              and(
-                eq(guardians.tenantId, tenantId),
-                eq(guardians.id, group.primaryGuardianId)
-              )
-            );
-          primaryGuardianName = guardian?.fullName ?? null;
-        }
-
-        return {
-          id: group.id,
-          name: group.name,
-          primaryGuardianName,
-          memberCount: members.length,
-          members: members.map((member) => ({
-            id: member.id,
-            fullName: member.fullName,
-            admissionNumber: member.admissionNumber,
-            status: member.status
-          }))
-        };
-      })
-    );
+    const summaries = rows.map((group) => {
+      const members = membersByGroup.get(group.id) ?? [];
+      return {
+        id: group.id,
+        name: group.name,
+        primaryGuardianName: group.primaryGuardianId
+          ? (guardianNames.get(group.primaryGuardianId) ?? null)
+          : null,
+        memberCount: members.length,
+        members
+      };
+    });
 
     return summaries.sort((a, b) => a.name.localeCompare(b.name));
   }
@@ -1046,30 +1106,19 @@ export class StudentsService {
       .from(familyGroups)
       .where(eq(familyGroups.tenantId, tenantId));
 
-    const data = await Promise.all(
-      rows.map(async (group) => {
-        let primaryGuardianName: string | null = null;
-        if (group.primaryGuardianId) {
-          const [guardian] = await this.db
-            .select({ fullName: guardians.fullName })
-            .from(guardians)
-            .where(
-              and(
-                eq(guardians.tenantId, tenantId),
-                eq(guardians.id, group.primaryGuardianId)
-              )
-            );
-          primaryGuardianName = guardian?.fullName ?? null;
-        }
+    const guardianIds = rows
+      .map((group) => group.primaryGuardianId)
+      .filter((id): id is string => Boolean(id));
+    const guardianNames = await this.guardianNamesById(tenantId, guardianIds);
 
-        return {
-          id: group.id,
-          name: group.name,
-          primaryGuardianName,
-          memberCount: group.memberCount
-        };
-      })
-    );
+    const data = rows.map((group) => ({
+      id: group.id,
+      name: group.name,
+      primaryGuardianName: group.primaryGuardianId
+        ? (guardianNames.get(group.primaryGuardianId) ?? null)
+        : null,
+      memberCount: group.memberCount
+    }));
 
     return { data, total: countRow?.total ?? 0 };
   }

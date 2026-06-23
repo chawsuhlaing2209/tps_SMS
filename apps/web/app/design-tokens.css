@@ -32,6 +32,7 @@
   --pds-border-color-soft: var(--pds-color-neutral-100);
   --pds-border-radius-4: var(--pds-radius-4);
   --pds-border-radius-8: var(--pds-radius-8);
+  --pds-border-radius-16: var(--pds-radius-16);
   --pds-border-radius-pill: var(--pds-radius-pill);
   --pds-border-width-default: 1px;
   --pds-border-width-hidden: 0px;
@@ -83,6 +84,7 @@
   --pds-foreground-contrast-low: var(--pds-color-neutral-500);
   --pds-foreground-contrast-lower: var(--pds-color-neutral-on-shell-white-20);
   --pds-foreground-contrast-medium: var(--pds-color-spring-green-400);
+  --pds-foreground-ink: var(--pds-brand-ink);
   --pds-foreground-link: var(--pds-color-spring-green-500);
 
   /* ── pds-input ── */

@@ -17,10 +17,12 @@ import {
   ClassroomOverviewQueryDto,
   CreatePeriodDto,
   CreateTimetableSlotDto,
+  EligibleTeachersQueryDto,
   GeneratePeriodsDto,
   ListPeriodsQueryDto,
   ListTimetableSlotsQueryDto,
   PublishTimetableDto,
+  TeacherScheduleConflictQueryDto,
   UpdateTimetableSlotDto
 } from "./dto.js";
 
@@ -63,6 +65,31 @@ export class TimetableController {
     @Query() query: ClassroomOverviewQueryDto
   ) {
     return this.timetableService.getClassroomOverview(tenantId, classroomId, query.academicYearId);
+  }
+
+  @Get("classrooms/:classroomId/subjects/:subjectId/eligible-teachers")
+  @RequirePermissions("timetable.manage")
+  listEligibleTeachersForSlot(
+    @Param("tenantId") tenantId: string,
+    @Param("classroomId") classroomId: string,
+    @Param("subjectId") subjectId: string,
+    @Query() query: EligibleTeachersQueryDto
+  ) {
+    return this.timetableService.listEligibleTeachersForSlot(
+      tenantId,
+      classroomId,
+      subjectId,
+      query
+    );
+  }
+
+  @Get("teacher-schedule-conflict")
+  @RequirePermissions("timetable.manage")
+  getTeacherScheduleConflict(
+    @Param("tenantId") tenantId: string,
+    @Query() query: TeacherScheduleConflictQueryDto
+  ) {
+    return this.timetableService.getTeacherScheduleConflict(tenantId, query);
   }
 
   @Get("slots")

@@ -7,9 +7,12 @@ import {
 } from "@nestjs/common";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
+import { ClassroomsService } from "../classrooms/classrooms.service.js";
 import { DB, type Database } from "../db/db.module.js";
 import {
   classrooms,
+  gradeSubjects,
+  grades,
   schoolOperatingHourBlocks,
   schoolScheduleSettings,
   staff,
@@ -24,18 +27,22 @@ import {
 import type {
   CreatePeriodDto,
   CreateTimetableSlotDto,
+  EligibleTeachersQueryDto,
   GeneratePeriodsDto,
   ListTimetableSlotsQueryDto,
   PublishTimetableDto,
+  TeacherScheduleConflictQueryDto,
   UpdateTimetableSlotDto
 } from "./dto.js";
+import { listTeacherScheduleConflicts } from "./timetable-conflicts.js";
 
 @Injectable()
 export class TimetableService {
   constructor(
     @Inject(DB) private readonly db: Database,
     private readonly auditService: AuditService,
-    private readonly schoolScheduleService: SchoolScheduleService
+    private readonly schoolScheduleService: SchoolScheduleService,
+    private readonly classroomsService: ClassroomsService
   ) {}
 
   listPeriods(tenantId: string, academicYearId?: string) {
@@ -48,7 +55,8 @@ export class TimetableService {
       .select()
       .from(timetablePeriods)
       .where(and(...filters))
-      .orderBy(timetablePeriods.sortOrder);
+      .orderBy(timetablePeriods.sortOrder)
+      .limit(200);
   }
 
   async createPeriod(tenantId: string, actorUserId: string, dto: CreatePeriodDto) {
@@ -194,7 +202,138 @@ export class TimetableService {
       .innerJoin(timetablePeriods, eq(timetableSlots.periodId, timetablePeriods.id))
       .leftJoin(subjects, eq(timetableSlots.subjectId, subjects.id))
       .leftJoin(staff, eq(timetableSlots.teacherStaffId, staff.id))
-      .where(and(...filters));
+      .where(and(...filters))
+      .limit(500);
+  }
+
+  listEligibleTeachersForSlot(
+    tenantId: string,
+    classroomId: string,
+    subjectId: string,
+    query: EligibleTeachersQueryDto = {}
+  ) {
+    return this.classroomsService.listEligibleSubjectTeachers(
+      tenantId,
+      classroomId,
+      subjectId,
+      query.includeStaffId
+    );
+  }
+
+  async getTeacherScheduleConflict(tenantId: string, query: TeacherScheduleConflictQueryDto) {
+    const filters = [
+      eq(timetableSlots.tenantId, tenantId),
+      eq(timetableSlots.teacherStaffId, query.staffId),
+      eq(timetableSlots.periodId, query.periodId),
+      eq(timetableSlots.dayOfWeek, query.dayOfWeek)
+    ];
+
+    if (query.excludeSlotId) {
+      filters.push(ne(timetableSlots.id, query.excludeSlotId));
+    }
+
+    const [existing] = await this.db
+      .select({
+        slotId: timetableSlots.id,
+        classroomId: timetableSlots.classroomId,
+        classroomName: classrooms.name,
+        gradeId: classrooms.gradeId,
+        gradeName: grades.name,
+        subjectName: subjects.name,
+        teacherFullName: staff.fullName,
+        periodName: timetablePeriods.name,
+        periodStartsAt: timetablePeriods.startsAt,
+        periodEndsAt: timetablePeriods.endsAt,
+        dayOfWeek: timetableSlots.dayOfWeek
+      })
+      .from(timetableSlots)
+      .innerJoin(classrooms, eq(timetableSlots.classroomId, classrooms.id))
+      .innerJoin(grades, eq(classrooms.gradeId, grades.id))
+      .innerJoin(timetablePeriods, eq(timetableSlots.periodId, timetablePeriods.id))
+      .leftJoin(subjects, eq(timetableSlots.subjectId, subjects.id))
+      .leftJoin(staff, eq(timetableSlots.teacherStaffId, staff.id))
+      .where(and(...filters))
+      .limit(1);
+
+    if (!existing) {
+      return { hasConflict: false as const };
+    }
+
+    return {
+      hasConflict: true as const,
+      existing
+    };
+  }
+
+  private async assertSubjectInGradeCurriculum(
+    tenantId: string,
+    classroomId: string,
+    subjectId: string
+  ) {
+    const [classroom] = await this.db
+      .select({
+        academicYearId: classrooms.academicYearId,
+        gradeId: classrooms.gradeId
+      })
+      .from(classrooms)
+      .where(and(eq(classrooms.tenantId, tenantId), eq(classrooms.id, classroomId)))
+      .limit(1);
+
+    if (!classroom) {
+      throw new NotFoundException("Classroom not found.");
+    }
+
+    const [mapping] = await this.db
+      .select({ id: gradeSubjects.id })
+      .from(gradeSubjects)
+      .where(
+        and(
+          eq(gradeSubjects.tenantId, tenantId),
+          eq(gradeSubjects.academicYearId, classroom.academicYearId),
+          eq(gradeSubjects.gradeId, classroom.gradeId),
+          eq(gradeSubjects.subjectId, subjectId)
+        )
+      )
+      .limit(1);
+
+    if (!mapping) {
+      throw new BadRequestException(
+        "Subject is not part of this classroom's grade curriculum for the academic year."
+      );
+    }
+  }
+
+  private async assertTeacherEligibleForSlot(
+    tenantId: string,
+    classroomId: string,
+    subjectId: string,
+    staffId: string
+  ) {
+    const { data } = await this.classroomsService.listEligibleSubjectTeachers(
+      tenantId,
+      classroomId,
+      subjectId,
+      staffId
+    );
+
+    if (!data.some((teacher) => teacher.id === staffId)) {
+      throw new BadRequestException(
+        "Selected teacher is not eligible to teach this subject for this grade."
+      );
+    }
+  }
+
+  private async assertNoTeacherScheduleConflict(
+    tenantId: string,
+    input: TeacherScheduleConflictQueryDto
+  ) {
+    const conflict = await this.getTeacherScheduleConflict(tenantId, input);
+    if (conflict.hasConflict) {
+      const existing = conflict.existing;
+      throw new ConflictException(
+        `Teacher is already scheduled in ${existing.gradeName} · ${existing.classroomName} (${existing.subjectName ?? "lesson"}) at this day and period.`
+      );
+    }
   }
 
   async getClassroomOverview(tenantId: string, classroomId: string, academicYearId?: string) {
@@ -219,7 +358,9 @@ export class TimetableService {
     const slots = await this.listSlots(tenantId, { classroomId, academicYearId: yearId });
 
     const subjectIds = new Set(slots.map((slot) => slot.subjectId));
-    const teacherIds = new Set(slots.map((slot) => slot.teacherStaffId));
+    const teacherIds = new Set(
+      slots.map((slot) => slot.teacherStaffId).filter((id): id is string => Boolean(id))
+    );
     const workingDays = await this.getWorkingDays(tenantId);
     const totalLessonCells = lessonPeriods.length * workingDays.length;
     const filledCells = slots.length;
@@ -285,20 +426,20 @@ export class TimetableService {
       throw new ConflictException("Classroom already has a class in this period");
     }
 
-    const [teacherConflict] = await this.db
-      .select()
-      .from(timetableSlots)
-      .where(
-        and(
-          eq(timetableSlots.tenantId, tenantId),
-          eq(timetableSlots.teacherStaffId, dto.staffId),
-          eq(timetableSlots.periodId, dto.periodId),
-          eq(timetableSlots.dayOfWeek, dto.dayOfWeek)
-        )
-      );
+    await this.assertSubjectInGradeCurriculum(tenantId, dto.classroomId, dto.subjectId);
 
-    if (teacherConflict) {
-      throw new ConflictException("Teacher already assigned in this period");
+    if (dto.staffId) {
+      await this.assertTeacherEligibleForSlot(
+        tenantId,
+        dto.classroomId,
+        dto.subjectId,
+        dto.staffId
+      );
+      await this.assertNoTeacherScheduleConflict(tenantId, {
+        staffId: dto.staffId,
+        periodId: dto.periodId,
+        dayOfWeek: dto.dayOfWeek
+      });
     }
 
     const today = new Date().toISOString().slice(0, 10);
@@ -309,7 +450,7 @@ export class TimetableService {
         tenantId,
         classroomId: dto.classroomId,
         subjectId: dto.subjectId,
-        teacherStaffId: dto.staffId,
+        teacherStaffId: dto.staffId ?? null,
         periodId: dto.periodId,
         dayOfWeek: dto.dayOfWeek,
         room: dto.roomLabel ?? null,
@@ -375,29 +516,28 @@ export class TimetableService {
       throw new ConflictException("Classroom already has a class in this period");
     }
 
-    const [teacherConflict] = await this.db
-      .select()
-      .from(timetableSlots)
-      .where(
-        and(
-          eq(timetableSlots.tenantId, tenantId),
-          eq(timetableSlots.teacherStaffId, dto.staffId),
-          eq(timetableSlots.periodId, existing.periodId),
-          eq(timetableSlots.dayOfWeek, existing.dayOfWeek),
-          ne(timetableSlots.id, slotId)
-        )
-      )
-      .limit(1);
+    await this.assertSubjectInGradeCurriculum(tenantId, existing.classroomId, dto.subjectId);
 
-    if (teacherConflict) {
-      throw new ConflictException("Teacher already assigned in this period");
+    if (dto.staffId) {
+      await this.assertTeacherEligibleForSlot(
+        tenantId,
+        existing.classroomId,
+        dto.subjectId,
+        dto.staffId
+      );
+      await this.assertNoTeacherScheduleConflict(tenantId, {
+        staffId: dto.staffId,
+        periodId: existing.periodId,
+        dayOfWeek: existing.dayOfWeek,
+        excludeSlotId: slotId
+      });
     }
 
     const [slot] = await this.db
       .update(timetableSlots)
       .set({
         subjectId: dto.subjectId,
-        teacherStaffId: dto.staffId,
+        teacherStaffId: dto.staffId ?? null,
         updatedBy: actorUserId,
         updatedAt: new Date()
       })
@@ -471,6 +611,27 @@ export class TimetableService {
         return { published: 0 };
       }
       filters.push(inArray(timetableSlots.periodId, periodIds));
+    }
+
+    const scopedSlots = await this.db
+      .select({
+        id: timetableSlots.id,
+        teacherStaffId: timetableSlots.teacherStaffId,
+        periodId: timetableSlots.periodId,
+        dayOfWeek: timetableSlots.dayOfWeek
+      })
+      .from(timetableSlots)
+      .where(and(...filters));
+
+    const conflicts = listTeacherScheduleConflicts(
+      scopedSlots.filter(
+        (slot): slot is typeof slot & { teacherStaffId: string } => Boolean(slot.teacherStaffId)
+      )
+    );
+    if (conflicts.length) {
+      throw new ConflictException(
+        "Cannot publish timetable: one or more teachers are scheduled in multiple classes at the same time."
+      );
     }
 
     const result = await this.db

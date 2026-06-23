@@ -188,6 +188,32 @@ export function draftToTeachingSetup(
   };
 }
 
+export function homeroomConflicts(
+  draft: TeachingSetupDraft,
+  options: TeachingSetupOptions | undefined,
+  currentStaffId: string | undefined
+): { classroomId: string; classroomName: string }[] {
+  const homeroomRow = draft.classroomRows.find((row) => row.homeroom && row.classroomId);
+  if (!homeroomRow?.classroomId || !options) {
+    return [];
+  }
+
+  const classroom = options.classrooms.find((row) => row.id === homeroomRow.classroomId);
+  if (
+    !classroom?.classTeacherStaffId ||
+    classroom.classTeacherStaffId === currentStaffId
+  ) {
+    return [];
+  }
+
+  return [
+    {
+      classroomId: classroom.id,
+      classroomName: classroom.name
+    }
+  ];
+}
+
 export function chiefConflicts(
   draft: TeachingSetupDraft,
   options: TeachingSetupOptions | undefined,
@@ -232,7 +258,6 @@ export function TeacherTeachingSetupFields({
     return <p className="pds-type-body-s-regular muted">{t("loadingTeachingSetup")}</p>;
   }
 
-  const showSectors = (options?.sectors.length ?? 0) > 1;
   const sectorGrades = gradesForSectors(options, draft.sectorIds);
   const gradeName = (gradeId: string) =>
     options?.grades.find((grade) => grade.id === gradeId)?.name ?? gradeId;
@@ -252,12 +277,13 @@ export function TeacherTeachingSetupFields({
       return [];
     }
     const competent = new Set(draft.competentSubjectIds);
-    return (options?.gradeSubjects ?? [])
-      .filter((row) => row.gradeId === gradeId && competent.has(row.subjectId))
-      .map((row) => ({
-        id: row.subjectId,
-        label: `${row.subjectName}${row.subjectCode ? ` (${row.subjectCode})` : ""}`
-      }));
+    const gradeSubjectRows = (options?.gradeSubjects ?? []).filter((row) => row.gradeId === gradeId);
+    const competentRows = gradeSubjectRows.filter((row) => competent.has(row.subjectId));
+    const source = competentRows.length > 0 ? competentRows : gradeSubjectRows;
+    return source.map((row) => ({
+      id: row.subjectId,
+      label: `${row.subjectName}${row.subjectCode ? ` (${row.subjectCode})` : ""}`
+    }));
   };
 
   const setEligibleGradeIds = (gradeIds: string[]) => {
@@ -289,32 +315,12 @@ export function TeacherTeachingSetupFields({
   };
 
   const conflicts = chiefConflicts(draft, options, currentStaffId);
+  const homeroomConflictRows = homeroomConflicts(draft, options, currentStaffId);
+
+  const selectSingleId = (ids: string[]) => (ids.length <= 1 ? ids : [ids[ids.length - 1]!]);
 
   return (
     <div className="assign-step teaching-setup">
-      {showSectors ? (
-        <section className="assign-block">
-          <CheckboxList
-            title={t("sectorLabel")}
-            description={t("sectorHelp")}
-            options={(options?.sectors ?? []).map((sector) => ({
-              id: sector.id,
-              label: sector.name
-            }))}
-            selectedIds={draft.sectorIds}
-            onChange={(sectorIds) =>
-              onChange({
-                ...draft,
-                sectorIds,
-                eligibleGradeIds: draft.eligibleGradeIds.filter((gradeId) =>
-                  gradesForSectors(options, sectorIds).some((grade) => grade.id === gradeId)
-                )
-              })
-            }
-          />
-        </section>
-      ) : null}
-
       <section className="assign-block">
         <CheckboxList
           title={t("subjectCompetencyLabel")}
@@ -345,44 +351,6 @@ export function TeacherTeachingSetupFields({
       ) : (
         <>
           <section className="assign-block">
-            <div className="assign-toggle">
-                <Toggle
-                checked={draft.isGradeChief}
-                onCheckedChange={(checked) =>
-                  onChange({
-                    ...draft,
-                    isGradeChief: checked,
-                    chiefGradeIds: checked ? draft.chiefGradeIds : []
-                  })
-                }
-                aria-label={t("gradeChiefToggle")}
-              />
-              <div>
-                <strong>{t("gradeChiefToggle")}</strong>
-                <p className="pds-type-body-s-regular muted assign-help">{t("gradeChiefHelp")}</p>
-              </div>
-            </div>
-            {draft.isGradeChief ? (
-              <>
-                <CheckboxList
-                  options={eligibleGrades.map((grade) => ({ id: grade.id, label: grade.name }))}
-                  selectedIds={draft.chiefGradeIds}
-                  onChange={(ids) => onChange({ ...draft, chiefGradeIds: ids })}
-                />
-                {conflicts.map((conflict) => (
-                  <p key={conflict.gradeId} className="pds-type-body-s-regular assign-warning" role="alert">
-                    <Icon name="warning" size={16} />
-                    {t("chiefConflictWarning", {
-                      grade: conflict.gradeName,
-                      teacher: conflict.staffName
-                    })}
-                  </p>
-                ))}
-              </>
-            ) : null}
-          </section>
-
-          <section className="assign-block">
             <div className="teaching-setup__classroom-head">
               <div className="assign-block__intro">
                 <p className="pds-type-title-xxs-extrabold assign-block__title">{t("classroomAssignmentsLabel")}</p>
@@ -412,7 +380,9 @@ export function TeacherTeachingSetupFields({
               <div className="teaching-setup__table">
                 <div className="pds-type-caption-m teaching-setup__table-header">
                   <span>{t("classroomColumn")}</span>
-                  <span>{t("homeroomColumn")}</span>
+                  <span className="teaching-setup__col-homeroom" title={t("homeroomColumn")}>
+                    {t("homeroomColumnAbbr")}
+                  </span>
                   <span>{t("subjectColumn")}</span>
                   <span className="sr-only">{t("removeClassroomRow")}</span>
                 </div>
@@ -440,8 +410,10 @@ export function TeacherTeachingSetupFields({
                       showDescription={false}
                       label={t("homeroomColumn")}
                       onCheckedChange={(checked) => {
-                        const nextRows = [...draft.classroomRows];
-                        nextRows[index] = { ...row, homeroom: checked };
+                        const nextRows = draft.classroomRows.map((item, rowIndex) => ({
+                          ...item,
+                          homeroom: checked && rowIndex === index
+                        }));
                         onChange({ ...draft, classroomRows: nextRows });
                       }}
                       className="pds-type-body-s-regular teaching-setup__homeroom"
@@ -449,7 +421,10 @@ export function TeacherTeachingSetupFields({
                     <PdsSelectField
                       variant="form"
                       value={row.subjectId}
-                      disabled={!row.classroomId || draft.competentSubjectIds.length === 0}
+                      disabled={!row.classroomId}
+                      panelPosition={
+                        index === draft.classroomRows.length - 1 ? "top" : "bottom"
+                      }
                       onValueChange={(next) => {
                         const subjectId = typeof next === "string" ? next : "";
                         const nextRows = [...draft.classroomRows];
@@ -479,6 +454,50 @@ export function TeacherTeachingSetupFields({
                 ))}
               </div>
             )}
+            {homeroomConflictRows.map((conflict) => (
+              <p key={conflict.classroomId} className="pds-type-body-s-regular assign-warning" role="alert">
+                <Icon name="warning" size={16} />
+                {t("homeroomConflictWarning", { classroom: conflict.classroomName })}
+              </p>
+            ))}
+          </section>
+
+          <section className="assign-block">
+            <div className="assign-toggle">
+                <Toggle
+                checked={draft.isGradeChief}
+                onCheckedChange={(checked) =>
+                  onChange({
+                    ...draft,
+                    isGradeChief: checked,
+                    chiefGradeIds: checked ? draft.chiefGradeIds : []
+                  })
+                }
+                aria-label={t("gradeChiefToggle")}
+              />
+              <div>
+                <strong>{t("gradeChiefToggle")}</strong>
+                <p className="pds-type-body-s-regular muted assign-help">{t("gradeChiefHelp")}</p>
+              </div>
+            </div>
+            {draft.isGradeChief ? (
+              <>
+                <CheckboxList
+                  options={eligibleGrades.map((grade) => ({ id: grade.id, label: grade.name }))}
+                  selectedIds={draft.chiefGradeIds}
+                  onChange={(ids) => onChange({ ...draft, chiefGradeIds: selectSingleId(ids) })}
+                />
+                {conflicts.map((conflict) => (
+                  <p key={conflict.gradeId} className="pds-type-body-s-regular assign-warning" role="alert">
+                    <Icon name="warning" size={16} />
+                    {t("chiefConflictWarning", {
+                      grade: conflict.gradeName,
+                      teacher: conflict.staffName
+                    })}
+                  </p>
+                ))}
+              </>
+            ) : null}
           </section>
         </>
       )}

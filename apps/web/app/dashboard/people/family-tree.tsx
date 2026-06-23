@@ -24,10 +24,14 @@ export type FamilyTreeStudent = {
 
 export function FamilyTree({
   guardians,
-  students
+  students,
+  canManage = false,
+  onRemoveStudent
 }: {
   guardians: FamilyTreeGuardian[];
   students: FamilyTreeStudent[];
+  canManage?: boolean;
+  onRemoveStudent?: (student: FamilyTreeStudent) => void;
 }) {
   const t = useTranslations("households");
 
@@ -84,24 +88,35 @@ export function FamilyTree({
           <p className="pds-type-body-s-regular family-tree__level-label">{t("treeStudents")}</p>
           <div className="family-tree__nodes">
             {students.map((student) => (
-              <Link
+              <article
                 key={student.id}
-                href={`/dashboard/students/${student.id}`}
-                className="family-tree-node family-tree-node--student"
+                className="family-tree-node family-tree-node--student family-tree-node--interactive"
               >
-                <span className="family-tree-node__icon" aria-hidden>
-                  <Icon name="school" />
-                </span>
-                <span className="pds-type-body-m-medium family-tree-node__name">{student.fullName}</span>
-                <span className="pds-type-body-s-regular family-tree-node__meta">
-                  {student.admissionNumber} · {student.status}
-                </span>
-                {student.guardians.length > 0 ? (
-                  <span className="pds-type-body-s-regular family-tree-node__meta">
-                    {student.guardians.map((link) => relationshipLabel(link.relationship)).join(", ")}
+                <Link href={`/dashboard/students/${student.id}`} className="family-tree-node__link">
+                  <span className="family-tree-node__icon" aria-hidden>
+                    <Icon name="school" />
                   </span>
+                  <span className="pds-type-body-m-medium family-tree-node__name">{student.fullName}</span>
+                  <span className="pds-type-body-s-regular family-tree-node__meta">
+                    {student.admissionNumber} · {student.status}
+                  </span>
+                  {student.guardians.length > 0 ? (
+                    <span className="pds-type-body-s-regular family-tree-node__meta">
+                      {student.guardians.map((link) => relationshipLabel(link.relationship)).join(", ")}
+                    </span>
+                  ) : null}
+                </Link>
+                {canManage && onRemoveStudent ? (
+                  <button
+                    type="button"
+                    className="family-tree-node__action family-tree-node__action--remove"
+                    aria-label={t("removeStudentAria", { name: student.fullName })}
+                    onClick={() => onRemoveStudent(student)}
+                  >
+                    <Icon name="person_remove" size={18} />
+                  </button>
                 ) : null}
-              </Link>
+              </article>
             ))}
           </div>
         </div>

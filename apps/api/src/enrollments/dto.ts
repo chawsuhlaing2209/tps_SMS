@@ -44,6 +44,16 @@ export class PreviewEnrollmentDto {
   @IsString()
   @IsIn([...paymentMethods])
   paymentMethod?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID("4", { each: true })
+  excludedDiscountRuleIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID("4", { each: true })
+  forcedDiscountRuleIds?: string[];
 }
 
 export class CreateEnrollmentDto {
@@ -125,12 +135,38 @@ export class ConfirmEnrollmentDto {
   @IsOptional()
   @IsString()
   paymentNotes?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID("4", { each: true })
+  excludedDiscountRuleIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID("4", { each: true })
+  forcedDiscountRuleIds?: string[];
 }
 
 export class ListStudentServicesQueryDto {
   @IsOptional()
   @IsUUID()
   declare studentId?: string;
+}
+
+export class ListAvailableStudentServicesQueryDto {
+  @IsUUID()
+  declare studentId: string;
+}
+
+export class PreviewAddStudentServiceDto {
+  @IsUUID()
+  declare studentId: string;
+
+  @IsUUID()
+  declare feeItemId: string;
+
+  @IsString()
+  declare effectiveFrom: string;
 }
 
 export class CreateStudentServiceDto {
@@ -146,4 +182,8 @@ export class CreateStudentServiceDto {
   @IsOptional()
   @IsString()
   declare endDate?: string;
+
+  @IsOptional()
+  @IsString()
+  declare dueDate?: string;
 }

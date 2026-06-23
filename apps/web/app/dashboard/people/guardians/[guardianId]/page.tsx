@@ -4,8 +4,7 @@ import { FormInput } from "../../../../../components/shared/form-input";
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useState, use } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ApiError, useApiMutation, useApiQuery } from "../../../../lib/api";
@@ -18,6 +17,8 @@ import { RecordFormSheet } from "../../../../lib/record-sheet";
 import { getSession } from "../../../../lib/session";
 import { TablePanelBody, TablePanelHead } from "../../../../lib/table-panel";
 import { StatusBadge } from "../../../../../components/shared/badge";
+import { NavigationBackLink } from "../../../../../components/shared/navigation-back-link";
+import { TrailLink } from "../../../../../components/shared/trail-link";
 import { zodResolver } from "../../../../lib/zod-resolver";
 import { PageHeader } from "../../../page-header-context";
 
@@ -44,9 +45,12 @@ function guardianInitials(fullName: string) {
   return fullName.slice(0, 2).toUpperCase();
 }
 
-export default function GuardianDetailPage() {
-  const params = useParams<{ guardianId: string }>();
-  const guardianId = params.guardianId;
+export default function GuardianDetailPage({
+  params
+}: {
+  params: Promise<{ guardianId: string }>;
+}) {
+  const { guardianId } = use(params);
   const t = useTranslations("guardians");
   const s = useTranslations("students");
   const c = useTranslations("common");
@@ -166,11 +170,16 @@ export default function GuardianDetailPage() {
     <div className="student-profile-page">
       <PageHeader
         title={data.fullName}
+        segment={{ label: data.fullName, href: `/dashboard/people/guardians/${guardianId}` }}
         breadcrumbs={[
           { label: nav("group_school") },
           { label: p("directoryTitle"), href: "/dashboard/people" },
           { label: t("directoryTitle"), href: "/dashboard/people?tab=guardians" }
         ]}
+      />
+
+      <NavigationBackLink
+        fallback={{ label: t("directoryTitle"), href: "/dashboard/people?tab=guardians" }}
       />
 
       <section className="structure-room-banner student-profile-banner">
@@ -228,9 +237,12 @@ export default function GuardianDetailPage() {
           <span className="pds-type-body-s-regular student-profile-stat__label">{t("householdStat")}</span>
           <strong className="student-profile-stat__value">
             {data.household ? (
-              <Link href={`/dashboard/people/households/${data.household.id}`}>
+              <TrailLink
+                href={`/dashboard/people/households/${data.household.id}`}
+                from={{ label: data.fullName, href: `/dashboard/people/guardians/${guardianId}` }}
+              >
                 {data.household.name}
-              </Link>
+              </TrailLink>
             ) : (
               "—"
             )}
@@ -242,12 +254,13 @@ export default function GuardianDetailPage() {
         </article>
       </div>
 
-      <TablePanelBody loading={false} error={null} empty={!data.students.length}>
+      <TablePanelBody variant="card-plain" loading={false} error={null} empty={!data.students.length}>
         <DataTable
           columns={studentColumns}
           data={data.students}
           showUpdatedAt={false}
           getRowHref={(student) => `/dashboard/students/${student.id}`}
+          navigationFrom={{ label: data.fullName, href: `/dashboard/people/guardians/${guardianId}` }}
         />
       </TablePanelBody>
 

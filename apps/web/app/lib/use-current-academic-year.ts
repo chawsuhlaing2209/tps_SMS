@@ -1,6 +1,6 @@
 "use client";
 
-import { useApiQuery } from "./api";
+import { useReferenceApiQuery } from "./api";
 
 export type CurrentAcademicYear = {
   id: string;
@@ -11,7 +11,7 @@ export type CurrentAcademicYear = {
 };
 
 export function useCurrentAcademicYear() {
-  return useApiQuery<CurrentAcademicYear | null>(
+  return useReferenceApiQuery<CurrentAcademicYear | null>(
     (tenantId) => `/tenants/${tenantId}/dashboard/academic-year`
   );
 }

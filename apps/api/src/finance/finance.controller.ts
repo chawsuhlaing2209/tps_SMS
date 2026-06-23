@@ -16,6 +16,7 @@ import {
   InvoiceMetricsQueryDto,
   ListInvoicesQueryDto,
   ListPaymentsQueryDto,
+  FinanceOverviewQueryDto,
   MonthlyReportQueryDto,
   PaymentMetricsQueryDto,
   ReceivablesQueryDto,
@@ -345,6 +346,15 @@ export class FinanceController {
   }
 
   // ── Reports ────────────────────────────────────────────────────────────────
+
+  @Get('reports/overview')
+  @RequirePermissions('finance.manage')
+  getFinanceOverview(
+    @Param('tenantId') tenantId: string,
+    @Query() query: FinanceOverviewQueryDto,
+  ) {
+    return this.financeService.getFinanceOverview(tenantId, query)
+  }
 
   @Get('reports/monthly')
   @RequirePermissions('finance.manage')

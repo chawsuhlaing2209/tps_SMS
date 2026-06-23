@@ -1,8 +1,10 @@
 "use client";
 
+import "./invoice-modal.css";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useTranslations } from "next-intl";
-import { Icon } from "../../lib/material-icon";
+import { Invoice, type InvoiceDetailsSection } from "../../../components/pds/composites/invoice";
+import { printDocument } from "../../lib/print-document";
 import { formatReceiptAmount } from "./receipt-document";
 import {
   InvoiceVerifyPayments,
@@ -56,14 +58,58 @@ function billedToMeta(data: InvoiceDocumentData) {
   return [gradeRoom, guardian].filter(Boolean).join(" · ");
 }
 
-function formatPaidToDate(value: number) {
-  return `−${formatReceiptAmount(value)}`;
+function buildInvoiceDetailSections(
+  data: InvoiceDocumentData,
+  labels: { lineItems: string; discounts: string; paid: string; paidToDate: string },
+): InvoiceDetailsSection[] {
+  const sections: InvoiceDetailsSection[] = [
+    {
+      id: "items",
+      title: labels.lineItems,
+      lines: data.items.map((item) => ({
+        id: item.id,
+        label: item.description,
+        amount: item.amount,
+      })),
+    },
+  ];
+
+  if (data.discountLines.length > 0) {
+    sections.push({
+      id: "discounts",
+      title: labels.discounts,
+      emphasis: true,
+      lines: data.discountLines.map((line) => ({
+        id: line.id,
+        label: line.name,
+        amount: line.amount,
+        variant: "discount",
+      })),
+    });
+  }
+
+  sections.push({
+    id: "paid",
+    title: labels.paid,
+    emphasis: true,
+    lines: [
+      {
+        id: "paid-to-date",
+        label: labels.paidToDate,
+        amount: data.paidToDate,
+        variant: "credit",
+      },
+    ],
+  });
+
+  return sections;
 }
 
 export function InvoiceDocumentBody({
   data,
   showActions = true,
   isModal = false,
+  onClose,
   onPrint,
   onSend,
   sendPending = false,
@@ -72,6 +118,7 @@ export function InvoiceDocumentBody({
   data: InvoiceDocumentData;
   showActions?: boolean;
   isModal?: boolean;
+  onClose?: () => void;
   onPrint?: () => void;
   onSend?: () => void;
   sendPending?: boolean;
@@ -81,98 +128,57 @@ export function InvoiceDocumentBody({
   const dueLabel = data.dueDate ? t("dueOn", { date: formatInvoiceDate(data.dueDate) ?? data.dueDate }) : null;
   const contact = schoolContactLine(data.schoolAddress, data.schoolContactPhone);
 
-  const closeButton = isModal ? (
-    <DialogPrimitive.Close className="invoice-doc__close" aria-label={t("close")}>
-      <Icon name="close" size={17} />
-    </DialogPrimitive.Close>
-  ) : null;
+  const actions = showActions
+    ? [
+        {
+          id: "print",
+          label: t("print"),
+          icon: "print",
+          variant: "outline" as const,
+          onClick: onPrint,
+        },
+        {
+          id: "send",
+          label: sendPending ? "…" : t("sendToGuardian"),
+          icon: "send",
+          variant: "primary" as const,
+          disabled: sendPending,
+          onClick: onSend,
+        },
+      ]
+    : undefined;
 
   return (
-    <>
-      <header className="invoice-doc__header">
-        <div className="invoice-doc__header-main">
-          <div className="invoice-doc__header-top">
-            <span className="invoice-doc__logo" aria-hidden>
-              <span className="invoice-doc__logo-mark" />
-            </span>
-            <strong className="invoice-doc__school">{data.schoolName}</strong>
-          </div>
-          {contact ? <span className="invoice-doc__contact">{contact}</span> : null}
-        </div>
-        {closeButton}
-      </header>
-
-      <div className="invoice-doc__body">
-        <div className="invoice-doc__meta">
-          <div className="invoice-doc__billed">
-            <span className="invoice-doc__eyebrow">{t("billedTo")}</span>
-            <strong className="invoice-doc__student">{data.studentFullName}</strong>
-            <span className="invoice-doc__billed-meta">{billedToMeta(data) || "—"}</span>
-          </div>
-          <div className="invoice-doc__ref">
-            <strong className="invoice-doc__title">{t("title")}</strong>
-            <span className="invoice-doc__number">{data.invoiceNumber}</span>
-            {dueLabel ? <span className="invoice-doc__due">{dueLabel}</span> : null}
-          </div>
-        </div>
-
-        <section className="invoice-doc__table">
-          <ul className="invoice-doc__lines">
-            {data.items.map((item) => (
-              <li key={item.id}>
-                <span className="pds-type-body-s-semibold invoice-doc__line-label">{item.description}</span>
-                <strong className="pds-type-body-s-semibold invoice-doc__line-amount">{formatReceiptAmount(item.amount)}</strong>
-              </li>
-            ))}
-            {data.discountLines.map((line) => (
-              <li key={line.id} className="invoice-doc__line--discount">
-                <span className="pds-type-body-s-semibold invoice-doc__line-label">{line.name}</span>
-                <strong className="pds-type-body-s-semibold invoice-doc__line-amount">−{formatReceiptAmount(line.amount)}</strong>
-              </li>
-            ))}
-          </ul>
-          <div className="pds-type-body-s-semibold invoice-doc__subtotal">
-            <span>{t("subtotalBilled")}</span>
-            <strong>{formatReceiptAmount(data.subtotal)}</strong>
-          </div>
-        </section>
-
-        <div className="invoice-doc__summary">
-          <div className="pds-type-body-s-semibold invoice-doc__paid-row">
-            <span>{t("paidToDate")}</span>
-            <strong>{formatPaidToDate(data.paidToDate)}</strong>
-          </div>
-          <div className="pds-type-body-s-semibold invoice-doc__balance">
-            <span>{t("balanceDue")}</span>
-            <strong>{formatReceiptAmount(data.balanceDue)}</strong>
-          </div>
-        </div>
-
-        <InvoiceVerifyPayments
-          invoiceId={data.id}
-          payments={data.payments}
-          canVerify={canVerifyPayments}
-        />
-
-        {showActions ? (
-          <footer className="invoice-doc__actions">
-            <button type="button" className="invoice-doc__print" onClick={onPrint}>
-              <Icon name="print" size={17} />
-              {t("print")}
-            </button>
-            <button
-              type="button"
-              className="invoice-doc__send"
-              disabled={sendPending}
-              onClick={onSend}
-            >
-              <Icon name="send" size={17} />
-              {sendPending ? "…" : t("sendToGuardian")}
-            </button>
-          </footer>
-        ) : null}
-      </div>
-    </>
+    <Invoice
+      schoolName={data.schoolName}
+      schoolContact={contact || null}
+      billedToLabel={t("billedTo")}
+      studentName={data.studentFullName}
+      studentMeta={billedToMeta(data) || null}
+      documentTitle={t("title")}
+      invoiceNumber={data.invoiceNumber}
+      dueLabel={dueLabel}
+      details={{
+        sections: buildInvoiceDetailSections(data, {
+          lineItems: t("lineItemsSection"),
+          discounts: t("discountsSection"),
+          paid: t("paidSection"),
+          paidToDate: t("paidToDate"),
+        }),
+        totalDue: data.balanceDue,
+        totalLabel: t("balanceDue"),
+        formatAmount: formatReceiptAmount,
+      }}
+      actions={actions}
+      onClose={onClose}
+      closeLabel={t("close")}
+    >
+      <InvoiceVerifyPayments
+        invoiceId={data.id}
+        payments={data.payments}
+        canVerify={canVerifyPayments}
+      />
+    </Invoice>
   );
 }
 
@@ -180,11 +186,14 @@ export function InvoicePreviewModal({
   invoiceId,
   open,
   onOpenChange,
+  title,
   children
 }: {
-  invoiceId: string | null;
+  invoiceId?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Screen-reader title; defaults to finance invoice document title. */
+  title?: string;
   children: React.ReactNode;
 }) {
   const t = useTranslations("finance.invoiceDocument");
@@ -198,7 +207,7 @@ export function InvoicePreviewModal({
           aria-describedby={undefined}
           onOpenAutoFocus={(event) => event.preventDefault()}
         >
-          <DialogPrimitive.Title className="sr-only">{t("title")}</DialogPrimitive.Title>
+          <DialogPrimitive.Title className="sr-only">{title ?? t("title")}</DialogPrimitive.Title>
           <div className="invoice-doc invoice-doc--modal" data-invoice-id={invoiceId ?? undefined}>
             {children}
           </div>
@@ -210,7 +219,7 @@ export function InvoicePreviewModal({
 
 export function printInvoiceDocument(
   data: InvoiceDocumentData,
-  labels: {
+  _labels?: {
     billedTo: string;
     title: string;
     subtotalBilled: string;
@@ -219,70 +228,10 @@ export function printInvoiceDocument(
     dueOn: (date: string) => string;
   }
 ) {
-  const dueLabel = data.dueDate
-    ? labels.dueOn(formatInvoiceDate(data.dueDate) ?? data.dueDate)
-    : "";
-  const contact = schoolContactLine(data.schoolAddress, data.schoolContactPhone);
-  const billedMeta = billedToMeta(data);
-
-  const line = (left: string, right: string) =>
-    `<tr><td>${escapeHtml(left)}</td><td style="text-align:right;font-weight:700">${escapeHtml(right)}</td></tr>`;
-
-  const html = `<!doctype html><html><head><meta charset="utf-8" />
-<title>${escapeHtml(data.invoiceNumber)}</title>
-<style>
-  * { box-sizing: border-box; }
-  body { font-family: ui-sans-serif, system-ui, "Segoe UI", sans-serif; color: #0a2a1d; margin: 0; padding: 32px; }
-  .wrap { max-width: 520px; margin: 0 auto; border-radius: 24px; overflow: hidden; box-shadow: 0 40px 80px -30px rgba(0,0,0,0.5); }
-  .head { background: #0a2a1d; color: #fff; padding: 22px 26px; }
-  .school { font-size: 16px; font-weight: 800; }
-  .contact { color: #9fb3a6; font-size: 11px; margin-top: 8px; display: block; }
-  .body { padding: 24px 26px; }
-  .meta { display: flex; justify-content: space-between; gap: 24px; margin-bottom: 14px; }
-  .eyebrow { text-transform: uppercase; letter-spacing: .055em; font-size: 11px; color: #9fb3a6; font-weight: 700; }
-  .title { font-size: 20px; font-weight: 800; display: block; text-align: right; }
-  table { width: 100%; border-collapse: collapse; border: 1px solid #eef3ea; border-radius: 14px; overflow: hidden; }
-  td { padding: 12px 16px; border-bottom: 1px solid #f4f7f1; font-size: 13px; }
-  .subtotal td { background: #f7faf4; font-weight: 700; }
-  .paid { display: flex; justify-content: space-between; margin-top: 14px; font-size: 13px; color: #7c917f; }
-  .paid strong { color: #3a7d24; }
-  .balance { margin-top: 12px; padding-top: 12px; border-top: 1px solid #eef3ea; display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; }
-  .balance strong { color: #c0392b; font-size: 22px; }
-</style></head>
-<body><div class="wrap">
-  <div class="head">
-    <div class="school">${escapeHtml(data.schoolName)}</div>
-    ${contact ? `<span class="contact">${escapeHtml(contact)}</span>` : ""}
-  </div>
-  <div class="body">
-    <div class="meta">
-      <div>
-        <div class="eyebrow">${escapeHtml(labels.billedTo)}</div>
-        <strong style="font-size:15px">${escapeHtml(data.studentFullName)}</strong>
-        <div style="color:#7c917f;font-size:12px">${escapeHtml(billedMeta || "—")}</div>
-      </div>
-      <div>
-        <span class="title">${escapeHtml(labels.title)}</span>
-        <div style="color:#7c917f;font-size:12px;text-align:right">${escapeHtml(data.invoiceNumber)}</div>
-        ${dueLabel ? `<div style="color:#7c917f;font-size:12px;text-align:right">${escapeHtml(dueLabel)}</div>` : ""}
-      </div>
-    </div>
-    <table>
-      ${data.items.map((item) => line(item.description, formatReceiptAmount(item.amount))).join("")}
-      <tr class="subtotal"><td>${escapeHtml(labels.subtotalBilled)}</td><td style="text-align:right;font-weight:800">${formatReceiptAmount(data.subtotal)}</td></tr>
-    </table>
-    <div class="paid"><span>${escapeHtml(labels.paidToDate)}</span><strong>−${formatReceiptAmount(data.paidToDate)}</strong></div>
-    <div class="balance"><span>${escapeHtml(labels.balanceDue)}</span><strong>${formatReceiptAmount(data.balanceDue)}</strong></div>
-  </div>
-</div>
-<script>window.onload = function () { window.focus(); window.print(); };</script>
-</body></html>`;
-
-  const printWindow = window.open("", "_blank", "width=720,height=900");
-  if (!printWindow) return;
-  printWindow.document.open();
-  printWindow.document.write(html);
-  printWindow.document.close();
+  printDocument(".pds-invoice", {
+    title: data.invoiceNumber,
+    width: "narrow"
+  });
 }
 
 export function mapInvoiceDetailToDocument(
@@ -360,12 +309,4 @@ export function mapInvoiceDetailToDocument(
       verifiedAt: payment.verifiedAt ?? null
     }))
   };
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }

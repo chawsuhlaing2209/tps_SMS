@@ -1,8 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, use } from "react";
 import { useApiMutation, useApiQuery } from "../../../../lib/api";
 import { Icon } from "../../../../lib/material-icon";
 import { toastSuccess } from "../../../../lib/toast";
@@ -11,6 +10,7 @@ import { getSession } from "../../../../lib/session";
 import { PageHeader } from "../../../page-header-context";
 import { StatusBadge } from "../../../../../components/shared/badge";
 import { EmptyState } from "../../../../../components/shared/empty-state";
+import { NavigationBackLink } from "../../../../../components/shared/navigation-back-link";
 import {
   InvoiceDocumentBody,
   mapInvoiceDetailToDocument,
@@ -71,9 +71,12 @@ function formatDateTime(value: string | null) {
   return new Date(value).toLocaleString();
 }
 
-export default function InvoiceDetailPage() {
-  const params = useParams<{ invoiceId: string }>();
-  const invoiceId = params.invoiceId;
+export default function InvoiceDetailPage({
+  params
+}: {
+  params: Promise<{ invoiceId: string }>;
+}) {
+  const { invoiceId } = use(params);
   const t = useTranslations("finance");
   const tDoc = useTranslations("finance.invoiceDocument");
   const tPay = useTranslations("enrollments");
@@ -148,12 +151,15 @@ export default function InvoiceDetailPage() {
     <div className="page-stack invoice-page">
       <PageHeader
         title={data.invoiceNumber}
+        segment={{ label: data.invoiceNumber, href: `/dashboard/finance/invoices/${invoiceId}` }}
         breadcrumbs={[
           { label: nav("finance"), href: "/dashboard/finance/invoices" },
           { label: t("invoices"), href: "/dashboard/finance/invoices" },
           { label: data.invoiceNumber }
         ]}
       />
+
+      <NavigationBackLink fallback={{ label: t("invoices"), href: "/dashboard/finance/invoices" }} />
 
       <article className="invoice-doc invoice-doc--page">
         <InvoiceDocumentBody

@@ -1,21 +1,31 @@
 "use client";
-import { FormInput } from "../../../../components/shared/form-input";
+import { FormDatePicker, FormInput } from "../../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
+import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
-import { useApiMutation, useApiQuery } from "../../../lib/api";
+import { createPortal } from "react-dom";
+import { useApiMutation, useApiQuery, useLiveApiQuery, useReferenceApiQuery, apiFetch } from "../../../lib/api";
+import { useDashPageTitleActionsTarget } from "../../dashboard-page-title";
+import { getSession } from "../../../lib/session";
 import { DataTable } from "../../../lib/data-table";
 import { Field } from "../../../lib/form";
 import { Icon } from "../../../lib/material-icon";
-import { EntityList, EntityListItem, PdsSelectField } from "../../../../components/pds";
+import { EntityList, EntityListItem, PdsSelectField, SegmentedControl } from "../../../../components/pds";
+import { Button } from "../../../../components/ui/button";
 import { EmptyState } from "../../../../components/shared/empty-state";
+import { ExportCsvButton } from "../../../../components/shared/export-csv-button";
 import { hasAnyPermission } from "../../../lib/permissions";
 import { RecordFormSheet } from "../../../lib/record-sheet";
-import { getSession } from "../../../lib/session";
-import { TablePanelBody, TablePanelHead } from "../../../lib/table-panel";
+import { TablePanelBody } from "../../../lib/table-panel";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
-import { EnrollmentWizard } from "../../enrollments/enrollment-wizard";
+import { WorkspaceLoading } from "../../../lib/workspace-loading";
+
+const EnrollmentWizard = dynamic(
+  () => import("../../enrollments/enrollment-wizard").then((module) => module.EnrollmentWizard),
+  { loading: () => <WorkspaceLoading /> }
+);
 
 type ClassroomSubject = {
   subjectId: string;
@@ -102,6 +112,10 @@ export function ClassroomOpsTabs({
   const canLms = hasAnyPermission(permissions, ["lms.manage"]);
   const canEnroll = hasAnyPermission(permissions, ["student.manage"]);
   const currentYear = useCurrentAcademicYear();
+  const roomTrailFrom = {
+    label: classroomName ?? t("structureTitle"),
+    href: `/dashboard/structure/rooms/${classroomId}`
+  };
 
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"roster" | "attendance" | "lms">(initialTab);
@@ -112,18 +126,28 @@ export function ClassroomOpsTabs({
   const [markingSession, setMarkingSession] = useState<AttendanceSession | null>(null);
   const [marks, setMarks] = useState<Record<string, string>>({});
 
-  const subjects = useApiQuery<ClassroomSubject[]>(
-    (tenant) => `/tenants/${tenant}/classrooms/${classroomId}/subjects`
+  const subjects = useApiQuery<ClassroomSubject[]>((tenant) =>
+    activeTab === "attendance" || takeOpen || activeTab === "lms"
+      ? `/tenants/${tenant}/classrooms/${classroomId}/subjects`
+      : null
   );
-  const roster = useApiQuery<ClassroomStudent[]>(
-    (tenant) => `/tenants/${tenant}/classrooms/${classroomId}/students`
+  const roster = useApiQuery<ClassroomStudent[]>((tenant) =>
+    activeTab === "roster" || enrollOpen
+      ? `/tenants/${tenant}/classrooms/${classroomId}/students`
+      : null
   );
-  const grades = useApiQuery<Grade[]>((tenant) => `/tenants/${tenant}/academics/grades`);
-  const classrooms = useApiQuery<Classroom[]>((tenant) => `/tenants/${tenant}/classrooms`);
-  const sessions = useApiQuery<AttendanceSession[]>(
-    (tenant) => `/tenants/${tenant}/classrooms/${classroomId}/attendance-sessions`
+  const grades = useReferenceApiQuery<Grade[]>((tenant) =>
+    enrollOpen ? `/tenants/${tenant}/academics/grades` : null
   );
-  const sessionDetail = useApiQuery<AttendanceSessionDetail>((tenant) =>
+  const classrooms = useReferenceApiQuery<Classroom[]>((tenant) =>
+    enrollOpen ? `/tenants/${tenant}/classrooms` : null
+  );
+  const sessions = useLiveApiQuery<AttendanceSession[]>((tenant) =>
+    activeTab === "attendance" || takeOpen
+      ? `/tenants/${tenant}/classrooms/${classroomId}/attendance-sessions`
+      : null
+  );
+  const sessionDetail = useLiveApiQuery<AttendanceSessionDetail>((tenant) =>
     selectedSessionId ? `/tenants/${tenant}/attendance-sessions/${selectedSessionId}` : null
   );
   const materials = useApiQuery<LearningMaterial[]>((tenant) =>
@@ -252,47 +276,44 @@ export function ClassroomOpsTabs({
 
   return (
     <>
-      <div className="form-tabs" id="classroom-ops">
-        <button
-          type="button"
-          className={activeTab === "roster" ? "form-tab form-tab--active" : "form-tab"}
-          onClick={() => setActiveTab("roster")}
-        >
-          {t("rosterTitle")}
-        </button>
-        <button
-          type="button"
-          className={activeTab === "attendance" ? "form-tab form-tab--active" : "form-tab"}
-          onClick={() => setActiveTab("attendance")}
-        >
-          {t("attendanceTitle")}
-        </button>
-        {canLms ? (
-          <button
-            type="button"
-            className={activeTab === "lms" ? "form-tab form-tab--active" : "form-tab"}
-            onClick={() => setActiveTab("lms")}
-          >
-            {t("lmsTitle")}
-          </button>
-        ) : null}
-      </div>
+      <ClassroomOpsExportPortal
+        classroomId={classroomId}
+        activeTab={activeTab}
+        rosterLoading={roster.isLoading}
+        sessionsLoading={sessions.isLoading}
+        subjectName={subjectName}
+      />
+      <SegmentedControl
+        ariaLabel={t("classroomOpsTabs")}
+        value={activeTab}
+        onChange={(next) => setActiveTab(next as "roster" | "attendance" | "lms")}
+        options={[
+          { id: "roster", label: t("studentsTab") },
+          { id: "attendance", label: t("attendanceTab") },
+          ...(canLms ? [{ id: "lms", label: t("lmsTitle") }] : [])
+        ]}
+      />
 
       {activeTab === "roster" ? (
-        <section className="panel">
-          <TablePanelHead
-            title={t("rosterTitle")}
-            onRefresh={() => void roster.refetch()}
-            onAdd={canEnroll ? () => setEnrollOpen(true) : undefined}
-            addLabel={t("enrollStudent")}
-          />
-          <p className="pds-type-body-s-regular muted panel-help">{t("rosterHelp")}</p>
+        <section className="panel classroom-ops-panel">
+          <div className="classroom-ops-panel__head">
+            <div className="classroom-ops-panel__head-main">
+              <h3 className="pds-type-title-s-extrabold classroom-ops-panel__title">{t("classStudentsTitle")}</h3>
+              <p className="pds-type-body-s-regular classroom-ops-panel__help">{t("rosterHelp")}</p>
+            </div>
+            {canEnroll ? (
+              <Button buttonType="filled" buttonColor="primary" prefixIcon="add" onClick={() => setEnrollOpen(true)}>
+                {t("enrollStudent")}
+              </Button>
+            ) : null}
+          </div>
           <TablePanelBody
+            variant="plain"
             loading={roster.isLoading}
             error={roster.isError ? c("somethingWrong") : null}
             empty={!roster.data?.length}
           >
-            <EntityList>
+            <EntityList className="pds-entity-list--compact">
               {(roster.data ?? []).map((student) => (
                 <EntityListItem
                   key={student.id}
@@ -301,6 +322,7 @@ export function ClassroomOpsTabs({
                   initials={personInitials(student.fullName)}
                   nameForColor={student.fullName}
                   href={`/dashboard/students/${student.id}`}
+                  navigationFrom={roomTrailFrom}
                 />
               ))}
             </EntityList>
@@ -309,25 +331,31 @@ export function ClassroomOpsTabs({
       ) : null}
 
       {activeTab === "attendance" ? (
-        <section className="panel">
-          <TablePanelHead
-            title={t("attendanceTitle")}
-            onRefresh={() => void sessions.refetch()}
-            onAdd={
-              canMark
-                ? () => {
-                    setSessionDate(new Date().toISOString().slice(0, 10));
-                    setMarkSubjectId("");
-                    setTakeOpen(true);
-                  }
-                : undefined
-            }
-            addLabel={t("takeAttendance")}
-          />
+        <section className="panel classroom-ops-panel">
+          <div className="classroom-ops-panel__head">
+            <div className="classroom-ops-panel__head-main">
+              <h3 className="pds-type-title-s-extrabold classroom-ops-panel__title">{t("attendanceTitle")}</h3>
+            </div>
+            {canMark ? (
+              <Button
+                buttonType="filled"
+                buttonColor="primary"
+                prefixIcon="add"
+                onClick={() => {
+                  setSessionDate(new Date().toISOString().slice(0, 10));
+                  setMarkSubjectId("");
+                  setTakeOpen(true);
+                }}
+              >
+                {t("takeAttendance")}
+              </Button>
+            ) : null}
+          </div>
           <TablePanelBody
             loading={sessions.isLoading}
             error={sessions.isError ? c("somethingWrong") : null}
             empty={!sessions.data?.length}
+            unwrapEmpty
           >
             <DataTable columns={sessionColumns} data={sessions.data ?? []} />
           </TablePanelBody>
@@ -344,6 +372,7 @@ export function ClassroomOpsTabs({
                   columns={recordColumns}
                   data={sessionDetail.data?.records ?? []}
                   getRowHref={(record) => `/dashboard/students/${record.studentId}`}
+                  navigationFrom={roomTrailFrom}
                 />
               </TablePanelBody>
             </div>
@@ -354,25 +383,28 @@ export function ClassroomOpsTabs({
       {activeTab === "lms" && canLms ? (
         <>
           <section className="panel">
-            <TablePanelHead title={t("materialsTitle")} onRefresh={() => void materials.refetch()} />
+            <div className="dash-page-title">
+              <h3 className="pds-type-title-xs-bold dash-page-title__heading">{t("materialsTitle")}</h3>
+            </div>
             <TablePanelBody
               loading={materials.isLoading}
               error={materials.isError ? c("somethingWrong") : null}
               empty={!materials.data?.length}
+              unwrapEmpty
             >
               <DataTable columns={materialColumns} data={materials.data ?? []} />
             </TablePanelBody>
           </section>
 
           <section className="panel">
-            <TablePanelHead
-              title={t("assignmentsTitle")}
-              onRefresh={() => void assignments.refetch()}
-            />
+            <div className="dash-page-title">
+              <h3 className="pds-type-title-xs-bold dash-page-title__heading">{t("assignmentsTitle")}</h3>
+            </div>
             <TablePanelBody
               loading={assignments.isLoading}
               error={assignments.isError ? c("somethingWrong") : null}
               empty={!assignments.data?.length}
+              unwrapEmpty
             >
               <DataTable columns={assignmentColumns} data={assignments.data ?? []} />
             </TablePanelBody>
@@ -401,7 +433,14 @@ export function ClassroomOpsTabs({
         }
       >
         <Field label={t("sessionDate")}>
-          <FormInput type="date" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)} />
+          <FormDatePicker
+            type="day"
+            variant="form"
+            value={sessionDate}
+            onValueChange={setSessionDate}
+            placeholder={t("sessionDate")}
+            ariaLabel={t("sessionDate")}
+          />
         </Field>
         <Field label={t("subject")}>
           <PdsSelectField
@@ -512,5 +551,81 @@ export function ClassroomOpsTabs({
         />
       ) : null}
     </>
+  );
+}
+
+function ClassroomOpsExportPortal({
+  classroomId,
+  activeTab,
+  rosterLoading,
+  sessionsLoading,
+  subjectName
+}: {
+  classroomId: string;
+  activeTab: "roster" | "attendance" | "lms";
+  rosterLoading: boolean;
+  sessionsLoading: boolean;
+  subjectName: (id: string | null) => string;
+}) {
+  const t = useTranslations("classrooms");
+  const tStudents = useTranslations("students");
+  const c = useTranslations("common");
+  const target = useDashPageTitleActionsTarget();
+
+  if (!target || activeTab === "lms") {
+    return null;
+  }
+
+  const loading = activeTab === "roster" ? rosterLoading : sessionsLoading;
+
+  return createPortal(
+    <ExportCsvButton
+      disabled={loading}
+      onExport={async () => {
+        const tenantId = getSession()?.tenantId;
+        if (!tenantId) {
+          throw new Error(c("notSignedIn"));
+        }
+
+        if (activeTab === "roster") {
+          const rows = await apiFetch<ClassroomStudent[]>(
+            `/tenants/${tenantId}/classrooms/${classroomId}/students`
+          );
+          return {
+            filename: `classroom-roster-${classroomId.slice(0, 8)}.csv`,
+            columns: [
+              { key: "name", header: t("student") },
+              { key: "admissionNumber", header: tStudents("admissionNumber") },
+              { key: "status", header: c("status") }
+            ],
+            rows: rows.map((row) => ({
+              name: row.fullName,
+              admissionNumber: row.admissionNumber ?? "",
+              status: row.status ?? ""
+            }))
+          };
+        }
+
+        const sessions = await apiFetch<AttendanceSession[]>(
+          `/tenants/${tenantId}/classrooms/${classroomId}/attendance-sessions`
+        );
+        return {
+          filename: `attendance-sessions-${classroomId.slice(0, 8)}.csv`,
+          columns: [
+            { key: "date", header: t("sessionDate") },
+            { key: "subject", header: t("subject") },
+            { key: "submitted", header: t("submitted") }
+          ],
+          rows: sessions.map((session) => ({
+            date: session.sessionDate,
+            subject: subjectName(session.subjectId),
+            submitted: session.submittedAt
+              ? new Date(session.submittedAt).toLocaleString()
+              : t("notSubmitted")
+          }))
+        };
+      }}
+    />,
+    target
   );
 }

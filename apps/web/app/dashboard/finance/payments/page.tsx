@@ -2,9 +2,13 @@
 import { FormInput } from "../../../../components/shared/form-input";
 
 import { useTranslations } from "next-intl";
-import Link from "next/link";
+import { TrailLink } from "../../../../components/shared/trail-link";
 import { useEffect, useMemo, useState } from "react";
-import { useApiMutation, useApiQuery } from "../../../lib/api";
+import { createPortal } from "react-dom";
+import { useApiMutation, useLiveApiQuery } from "../../../lib/api";
+import { useDashPageTitleActionsTarget } from "../../dashboard-page-title";
+import { fetchAllPaginated } from "../../../lib/export-csv";
+import { getSession } from "../../../lib/session";
 import { DirectoryMemberCell } from "../../../lib/data-table";
 import { Field } from "../../../lib/form";
 import { Icon } from "../../../lib/material-icon";
@@ -14,6 +18,8 @@ import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
 import { PageHeader } from "../../page-header-context";
 import { FinanceTableShell } from "../finance-table-shell";
 import { formatBillingMonth, formatCreatedAt } from "../format-finance";
+import { PdsSearchBar, PdsSearchFiltersRow, SegmentedControl } from "../../../../components/pds";
+import { ExportCsvButton } from "../../../../components/shared/export-csv-button";
 
 type PaymentRow = {
   id: string;
@@ -89,6 +95,79 @@ function defaultPaidAtLocal() {
   return now.toISOString().slice(0, 16);
 }
 
+function PaymentsExportPortal({
+  academicYearId,
+  method,
+  searchDebounced,
+  loading,
+  methodLabel
+}: {
+  academicYearId: string;
+  method: MethodFilter;
+  searchDebounced: string;
+  loading: boolean;
+  methodLabel: (method: string) => string;
+}) {
+  const t = useTranslations("finance.paymentList");
+  const tFinance = useTranslations("finance");
+  const tPay = useTranslations("enrollments");
+  const target = useDashPageTitleActionsTarget();
+
+  if (!target) {
+    return null;
+  }
+
+  return createPortal(
+    <ExportCsvButton
+      disabled={loading || !academicYearId}
+      onExport={async () => {
+        const tenantId = getSession()?.tenantId;
+        if (!tenantId) {
+          throw new Error("Not signed in.");
+        }
+        const rows = await fetchAllPaginated<PaymentRow>(
+          (limit, offset) => {
+            const params = new URLSearchParams({
+              limit: String(limit),
+              offset: String(offset)
+            });
+            if (academicYearId) params.set("academicYearId", academicYearId);
+            if (method) params.set("method", method);
+            if (searchDebounced.trim()) params.set("search", searchDebounced.trim());
+            return `/tenants/${tenantId}/finance/payments?${params.toString()}`;
+          },
+          (json) => {
+            const payload = json as PaymentList;
+            return { rows: payload.data, total: payload.total };
+          }
+        );
+        return {
+          filename: "payments.csv",
+          columns: [
+            { key: "receipt", header: t("receipt") },
+            { key: "student", header: tFinance("student") },
+            { key: "invoice", header: tFinance("invoiceNumber") },
+            { key: "amount", header: tFinance("amount") },
+            { key: "method", header: tPay("paymentMethod") },
+            { key: "paidAt", header: t("date") },
+            { key: "billingMonth", header: tFinance("billingMonth") }
+          ],
+          rows: rows.map((row) => ({
+            receipt: row.receiptNumber ?? row.paymentNumber ?? row.id,
+            student: row.studentFullName ?? "",
+            invoice: row.invoiceNumber ?? "",
+            amount: row.amount,
+            method: methodLabel(row.method),
+            paidAt: row.paidAt ?? "",
+            billingMonth: row.billingMonth ?? ""
+          }))
+        };
+      }}
+    />,
+    target
+  );
+}
+
 export default function PaymentsPage() {
   const t = useTranslations("finance.paymentList");
   const tFinance = useTranslations("finance");
@@ -134,11 +213,11 @@ export default function PaymentsPage() {
     return `?${params.toString()}`;
   }, [academicYearId, method, page, searchDebounced]);
 
-  const metrics = useApiQuery<PaymentMetrics>((tenant) =>
+  const metrics = useLiveApiQuery<PaymentMetrics>((tenant) =>
     academicYearId ? `/tenants/${tenant}/finance/payments/metrics${metricsQuery}` : null
   );
 
-  const payments = useApiQuery<PaymentList>((tenant) =>
+  const payments = useLiveApiQuery<PaymentList>((tenant) =>
     academicYearId ? `/tenants/${tenant}/finance/payments${listQuery}` : null
   );
 
@@ -215,7 +294,14 @@ export default function PaymentsPage() {
 
   return (
     <div className="fees-page">
-      <PageHeader title={t("title")} breadcrumbs={[{ label: nav("financeCrumb") }]} />
+      <PageHeader title={t("title")} breadcrumbs={[{ label: nav("financeCrumb") }]} actionsPortal />
+      <PaymentsExportPortal
+        academicYearId={academicYearId}
+        method={method}
+        searchDebounced={searchDebounced}
+        loading={payments.isLoading || currentYear.isLoading}
+        methodLabel={(value) => tPay(`paymentMethods.${value}` as "paymentMethods.cash")}
+      />
 
       <section className="fees-metrics" aria-label={t("title")}>
         <article className="fees-metric fees-metric--accent">
@@ -272,11 +358,9 @@ export default function PaymentsPage() {
         </article>
       </section>
 
-      <section className="fees-toolbar">
-        <div className="pds-type-body-m-medium fees-search">
-          <Icon name="search" size={18} className="fees-search__icon" />
-          <FormInput
-            type="search"
+      <PdsSearchFiltersRow
+        filters={
+          <PdsSearchBar
             value={search}
             onChange={(event) => {
               setSearch(event.target.value);
@@ -285,25 +369,22 @@ export default function PaymentsPage() {
             placeholder={t("searchPlaceholder")}
             aria-label={t("searchPlaceholder")}
           />
-        </div>
-        <div className="fees-segmented" role="tablist" aria-label={tFinance("method")}>
-          {METHOD_FILTERS.map((value) => (
-            <button
-              key={value || "all"}
-              type="button"
-              role="tab"
-              aria-selected={method === value}
-              className={method === value ? "fees-segment fees-segment--active" : "fees-segment"}
-              onClick={() => {
-                setMethod(value);
-                setPage(0);
-              }}
-            >
-              {value ? t(`methodFilters.${value}`) : t("methodFilters.all")}
-            </button>
-          ))}
-        </div>
-      </section>
+        }
+        statusControl={
+          <SegmentedControl
+            ariaLabel={tFinance("method")}
+            value={method || "all"}
+            onChange={(id) => {
+              setMethod(id === "all" ? "" : (id as MethodFilter));
+              setPage(0);
+            }}
+            options={METHOD_FILTERS.map((value) => ({
+              id: value || "all",
+              label: value ? t(`methodFilters.${value}`) : t("methodFilters.all")
+            }))}
+          />
+        }
+      />
 
       <FinanceTableShell
         loading={payments.isLoading || currentYear.isLoading}
@@ -383,13 +464,14 @@ export default function PaymentsPage() {
                           </button>
                         ) : null}
                         {row.invoiceId ? (
-                          <Link
+                          <TrailLink
                             href={`/dashboard/finance/invoices/${row.invoiceId}`}
                             className="pds-type-body-s-semibold table-row-action"
+                            from={{ label: t("title"), href: "/dashboard/finance/payments" }}
                           >
                             <Icon name="visibility" size={16} />
                             {t("viewInvoice")}
-                          </Link>
+                          </TrailLink>
                         ) : null}
                       </div>
                     </td>

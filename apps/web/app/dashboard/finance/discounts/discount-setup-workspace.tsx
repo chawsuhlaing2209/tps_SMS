@@ -2,37 +2,28 @@
 
 import { discountPaymentPlanFrequencies } from "@sms/shared";
 import { useTranslations } from "next-intl";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
-import { FormField, FormInput, FormTextarea, PercentInput } from "../../../../components/shared/form-input";
-import { CheckboxList } from "../../../../components/pds";
-import { SegmentedControl } from "../../../../components/pds/composites/segmented-control";
+import { CheckBox, ToggleList, ToggleListItem } from "../../../../components/pds";
+import { InputWrapper, TextInput } from "../../../../components/shared/form-input";
 import { SelectionCard, SelectionCardGrid } from "../../../../components/shared/selection-card";
 import { Stepper } from "../../../../components/shared/stepper";
-import { Toggle } from "../../../../components/shared/toggle";
-import { EmptyState } from "../../../../components/shared/empty-state";
+import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
+import { cn } from "../../../../lib/utils";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { Icon } from "../../../lib/material-icon";
-import { hasAnyPermission } from "../../../lib/permissions";
-import { getSession } from "../../../lib/session";
-import { PageHeader } from "../../page-header-context";
+import { RecordFormModal } from "../../../lib/record-modal";
 import {
   emptyDiscountForm,
+  mergeDiscountForm,
   formToPayload,
   ruleToForm,
   type DiscountRuleFormValues,
   type DiscountRuleRecord
 } from "./discount-form";
-import {
-  buildSampleFeeLines,
-  sampleAmountForFeeType,
-  type DiscountPreviewSample
-} from "./discount-preview";
-import { DiscountLivePreview } from "./discount-live-preview";
+import "./discount-setup-modal.css";
 
-const DISCOUNT_SETUP_STEPS = ["type", "scope", "eligibility", "rules", "review"] as const;
+const DISCOUNT_SETUP_STEPS = ["information", "value", "eligibility", "rules", "review"] as const;
 type DiscountSetupStep = (typeof DISCOUNT_SETUP_STEPS)[number];
 
 const RULES_PATH = (tenant: string) => `/tenants/${tenant}/discounts/rules`;
@@ -45,34 +36,36 @@ const PAYMENT_PLAN_LABEL_KEYS = {
 
 type FeeItemOption = { id: string; name: string; feeType: string; status: string };
 type GradeOption = { id: string; name: string };
-type YearOption = { id: string; name: string; isActive?: boolean };
 
 type Props = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   mode: "create" | "edit";
   ruleId?: string;
+  onSaved?: () => void;
 };
 
-function formatMoney(value: number) {
-  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value);
+function SectionIntro({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="discount-section-intro">
+      <h2 className="pds-type-title-s-extrabold">{title}</h2>
+      <p className="pds-type-body-s-regular muted">{description}</p>
+    </div>
+  );
 }
 
-export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
-  const router = useRouter();
+export function DiscountSetupModal({ open, onOpenChange, mode, ruleId, onSaved }: Props) {
   const t = useTranslations("discounts");
-  const finance = useTranslations("finance");
-  const nav = useTranslations("nav");
   const c = useTranslations("common");
-  const permissions = getSession()?.permissions;
-  const canManage = hasAnyPermission(permissions, ["discount.approve"]);
 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<DiscountRuleFormValues>(emptyDiscountForm());
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof DiscountRuleFormValues, string>>>({});
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const rules = useApiQuery<DiscountRuleRecord[]>(canManage ? RULES_PATH : () => null);
+  const rules = useApiQuery<DiscountRuleRecord[]>(open ? RULES_PATH : () => null);
   const feeItems = useApiQuery<FeeItemOption[]>((tenant) => `/tenants/${tenant}/finance/fee-items`);
   const grades = useApiQuery<GradeOption[]>((tenant) => `/tenants/${tenant}/academics/grades`);
-  const years = useApiQuery<YearOption[]>((tenant) => `/tenants/${tenant}/academics/academic-years`);
 
   const editingRule = useMemo(
     () => (mode === "edit" && ruleId ? rules.data?.find((rule) => rule.id === ruleId) : null),
@@ -80,10 +73,23 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
   );
 
   useEffect(() => {
-    if (mode === "edit" && editingRule) {
-      setForm(ruleToForm(editingRule));
+    if (!open) {
+      setStep(0);
+      setForm(emptyDiscountForm());
+      setFormErrors({});
+      return;
     }
-  }, [mode, editingRule]);
+    if (mode === "edit" && editingRule) {
+      setForm(mergeDiscountForm(ruleToForm(editingRule)));
+      setStep(0);
+      setFormErrors({});
+    }
+    if (mode === "create") {
+      setForm(emptyDiscountForm());
+      setStep(0);
+      setFormErrors({});
+    }
+  }, [open, mode, editingRule]);
 
   const createRule = useApiMutation<Record<string, unknown>>(
     (body, tenant) => ({
@@ -97,6 +103,14 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
     ({ id, ...body }, tenant) => ({
       path: `${RULES_PATH(tenant)}/${id}`,
       init: { method: "PATCH", body: JSON.stringify(body) }
+    }),
+    { invalidatePaths: (_b, tenant) => [RULES_PATH(tenant)] }
+  );
+
+  const deactivateRule = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({
+      path: `${RULES_PATH(tenant)}/${id}/archive`,
+      init: { method: "POST" }
     }),
     { invalidatePaths: (_b, tenant) => [RULES_PATH(tenant)] }
   );
@@ -123,27 +137,6 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
     id: key,
     label: t(`setupStep_${key}`)
   }));
-
-  const previewSample = useMemo<DiscountPreviewSample>(() => {
-    const sampleGrade = grades.data?.[0]?.name ?? "Grade 9";
-    return {
-      studentName: t("previewSampleStudent"),
-      gradeName: sampleGrade,
-      invoiceLabel: t("previewSampleInvoice"),
-      feeLines: buildSampleFeeLines(
-        scopeFeeItems.map((item) => ({
-          id: item.id,
-          name: item.name,
-          feeType: item.feeType
-        }))
-      ),
-      siblingSummary: {
-        eligible: true,
-        enrolledSiblingCount: 1,
-        studentPosition: Number(form.siblingOrdinal || "2")
-      }
-    };
-  }, [form.siblingOrdinal, grades.data, scopeFeeItems, t]);
 
   const formSchema = useMemo(
     () =>
@@ -190,6 +183,13 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
+  function setGradeSelection(scope: "all" | "specific", gradeIds: string[]) {
+    setForm((current) => ({ ...current, gradeScope: scope, gradeIds }));
+    if (formErrors.gradeIds) {
+      setFormErrors((current) => ({ ...current, gradeIds: undefined }));
+    }
+  }
+
   function selectValueType(nextType: "percentage" | "fixed") {
     setForm((current) => ({
       ...current,
@@ -206,23 +206,17 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
     setFormErrors({});
   }
 
-  function setFeeItemIds(feeItemIds: string[]) {
-    setForm((current) => ({ ...current, feeItemIds }));
+  function toggleFeeItem(feeItemId: string) {
+    setForm((current) => {
+      const selected = current.feeItemIds.includes(feeItemId);
+      const feeItemIds = selected
+        ? current.feeItemIds.filter((id) => id !== feeItemId)
+        : [...current.feeItemIds, feeItemId];
+      return { ...current, feeItemIds };
+    });
     if (formErrors.feeItemIds) {
       setFormErrors((current) => ({ ...current, feeItemIds: undefined }));
     }
-  }
-
-  function togglePaymentPlan(frequency: (typeof discountPaymentPlanFrequencies)[number]) {
-    setForm((current) => {
-      const selected = current.paymentPlanFrequencies.includes(frequency);
-      return {
-        ...current,
-        paymentPlanFrequencies: selected
-          ? current.paymentPlanFrequencies.filter((value) => value !== frequency)
-          : [...current.paymentPlanFrequencies, frequency]
-      };
-    });
   }
 
   function validateStep(index: number): boolean {
@@ -264,9 +258,7 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
   }
 
   function goNext() {
-    if (!validateStep(step)) {
-      return;
-    }
+    if (!validateStep(step)) return;
     if (step < DISCOUNT_SETUP_STEPS.length - 1) {
       setStep((current) => current + 1);
       return;
@@ -274,12 +266,16 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
     void saveRule();
   }
 
+  function closeModal() {
+    onOpenChange(false);
+  }
+
   function goBack() {
     if (step > 0) {
       setStep((current) => current - 1);
       return;
     }
-    router.push("/dashboard/finance/discounts");
+    closeModal();
   }
 
   async function saveRule() {
@@ -297,342 +293,491 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
       await createRule.mutateAsync(payload);
     }
 
-    router.push("/dashboard/finance/discounts");
+    closeModal();
+    onSaved?.();
   }
-
-  if (!canManage) {
-    return <EmptyState icon="lock" title={t("noAccess")} />;
-  }
-
-  if (mode === "edit" && rules.isLoading) {
-    return <p className="pds-type-body-s-regular muted">{c("loading")}</p>;
-  }
-
-  if (mode === "edit" && !editingRule && !rules.isLoading) {
-    return (
-      <div className="page-stack">
-        <p className="pds-type-body-m-medium error-text">{t("ruleNotFound")}</p>
-      </div>
-    );
-  }
-
-  const pageTitle = mode === "edit" ? form.name || t("editRuleTitle") : t("configureDiscount");
+  const modalTitle = mode === "edit" ? t("editComponent") : t("addDiscount");
   const saving = createRule.isPending || updateRule.isPending;
   const gradeList = grades.data ?? [];
+  const allGradesSelected =
+    form.gradeScope === "all" ||
+    (gradeList.length > 0 && gradeList.every((grade) => form.gradeIds.includes(grade.id)));
+  const someGradesSelected = !allGradesSelected && form.gradeIds.length > 0;
+  const amountSuffix =
+    form.valueType === "percentage" ? t("percentOffEligible") : "MMK";
+  const editLoading = mode === "edit" && rules.isLoading;
+  const editMissing = mode === "edit" && Boolean(ruleId) && !rules.isLoading && !editingRule;
 
   return (
-    <div className="discount-setup-page">
-      <PageHeader
-        title={pageTitle}
-        segment={{
-          label: pageTitle,
-          href:
-            mode === "edit" && ruleId
-              ? `/dashboard/finance/discounts/${ruleId}`
-              : "/dashboard/finance/discounts/new"
-        }}
-        breadcrumbs={[
-          { label: nav("finance"), href: "/dashboard/finance/discounts" },
-          { label: t("pageTitle"), href: "/dashboard/finance/discounts" },
-          { label: pageTitle }
-        ]}
-      />
-
-      <div className="discount-setup-shell">
-        <div className="discount-setup-workspace">
+    <>
+      <RecordFormModal
+        open={open}
+        size="wide"
+        contentClassName="record-modal--discount-setup"
+        headerVariant="withStepper"
+        closeLabel={c("close")}
+        title={modalTitle}
+        stepper={
           <Stepper
-            className="stepper--plain"
+            variant="ceremony"
             steps={setupSteps}
             currentStep={step}
             ariaLabel={t("setupProgress")}
             onStepClick={(index) => {
-              if (index <= step) {
-                setStep(index);
-              }
+              if (index <= step) setStep(index);
             }}
           />
-
-          <div className="discount-setup-main">
-            {currentStep === "type" ? (
+        }
+        onOpenChange={onOpenChange}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (step === DISCOUNT_SETUP_STEPS.length - 1) return;
+          goNext();
+        }}
+        footerStart={
+          mode === "edit" && editingRule && editingRule.status === "active" ? (
+            <button
+              type="button"
+              className="pds-type-body-m-bold btn-ghost discount-setup-footer__delete"
+              onClick={() => setDeleteOpen(true)}
+            >
+              <Icon name="delete" />
+              {c("delete")}
+            </button>
+          ) : null
+        }
+        footer={
+          <>
+            {step === 0 ? (
+              <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={closeModal}>
+                {c("cancel")}
+              </button>
+            ) : (
+              <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={goBack}>
+                <Icon name="arrow_back" />
+                {c("previous")}
+              </button>
+            )}
+            {step === DISCOUNT_SETUP_STEPS.length - 1 ? (
+              <button
+                type="button"
+                className="pds-type-body-m-bold btn-primary"
+                disabled={saving || editLoading || editMissing}
+                onClick={() => void goNext()}
+              >
+                {saving ? c("loading") : mode === "edit" ? c("save") : t("createDiscount")}
+              </button>
+            ) : (
+              <button
+                type="submit"
+                className="pds-type-body-m-bold btn-primary"
+                disabled={editLoading || editMissing}
+              >
+                {t("setupContinue")}
+                <Icon name="arrow_forward" />
+              </button>
+            )}
+          </>
+        }
+      >
+        {editLoading ? (
+          <p className="pds-type-body-s-regular muted">{c("loading")}</p>
+        ) : editMissing ? (
+          <p className="pds-type-body-m-medium error-text">{t("ruleNotFound")}</p>
+        ) : (
+          <>
+            {currentStep === "information" ? (
               <section className="discount-setup-section">
-                <div className="discount-setup-section-header">
-                  <h2 className="pds-type-title-xs-bold">{t("setupTypeTitle")}</h2>
-                  <p className="pds-type-body-s-regular discount-setup-section__intro muted">
-                    {t("setupTypeHelpCustom")}
-                  </p>
-                </div>
-               
+                <SectionIntro title={t("setupInformationTitle")} description={t("setupTypeHelpCustom")} />
 
-                <FormField label={t("ruleName")} required labelStyle="caps" error={formErrors.name}>
-                  <FormInput
+                <InputWrapper label={t("ruleName")} required error={formErrors.name}>
+                  <TextInput
                     value={form.name}
                     onChange={(event) => setField("name", event.target.value)}
                     placeholder={t("ruleNamePlaceholder")}
                   />
-                </FormField>
+                </InputWrapper>
 
-                <FormField label={t("calculationMethodLabel")} labelStyle="caps">
-                  <SelectionCardGrid>
-                    <SelectionCard
-                      selected={form.valueType === "percentage"}
-                      icon={<Icon name="percent" />}
-                      title={t("calcMethodPercentageTitle")}
-                      description={t("calcMethodPercentageDesc")}
+                <div>
+                  <p className="pds-type-label-s-medium discount-field-label">{t("awardBasisLabel")}</p>
+                  <div className="award-basis-grid">
+                    <button
+                      type="button"
+                      className={cn("award-basis-card", form.valueType === "percentage" && "award-basis-card--selected")}
                       onClick={() => selectValueType("percentage")}
-                    />
-                    <SelectionCard
-                      selected={form.valueType === "fixed"}
-                      icon={<Icon name="payments" />}
-                      title={t("calcMethodFixedTitle")}
-                      description={t("calcMethodFixedDesc")}
+                    >
+                      <Icon name="percent" size={22} className="award-basis-card__icon" />
+                      <span className="award-basis-card__copy">
+                        <strong className="pds-type-body-s-bold">{t("calcMethodPercentageTitle")}</strong>
+                        <span className="pds-type-body-s-regular muted">{t("calcMethodPercentageDesc")}</span>
+                      </span>
+                      {form.valueType === "percentage" ? (
+                        <CheckBox checked disabled showLabel={false} showDescription={false} />
+                      ) : null}
+                    </button>
+                    <button
+                      type="button"
+                      className={cn("award-basis-card", form.valueType === "fixed" && "award-basis-card--selected")}
                       onClick={() => selectValueType("fixed")}
-                    />
-                  </SelectionCardGrid>
-                </FormField>
+                    >
+                      <Icon name="payments" size={22} className="award-basis-card__icon" />
+                      <span className="award-basis-card__copy">
+                        <strong className="pds-type-body-s-bold">{t("calcMethodFixedTitle")}</strong>
+                        <span className="pds-type-body-s-regular muted">{t("calcMethodFixedDesc")}</span>
+                      </span>
+                      {form.valueType === "fixed" ? (
+                        <CheckBox checked disabled showLabel={false} showDescription={false} />
+                      ) : null}
+                    </button>
+                  </div>
+                </div>
 
-                <FormField
+                <InputWrapper
                   label={form.valueType === "percentage" ? t("discountPercentage") : t("fixedAmountLabel")}
                   required
-                  labelStyle="caps"
                   error={formErrors.value}
                 >
-                  {form.valueType === "percentage" ? (
-                    <div className="discount-rule-sheet__percent-row">
-                      <PercentInput
-                        value={form.value}
-                        onChange={(event) => setField("value", event.target.value)}
-                        aria-label={t("discountPercentage")}
-                      />
-                      <span className="pds-type-body-s-regular muted">{t("percentOffEligible")}</span>
-                    </div>
-                  ) : (
-                    <div className="amount-input">
-                      <FormInput
-                        type="number"
-                        min={1}
-                        step={1000}
-                        value={form.value}
-                        onChange={(event) => setField("value", event.target.value)}
-                        aria-label={t("fixedAmountLabel")}
-                        inputClassName="amount-input__field"
-                      />
-                      <span className="pds-type-body-m-medium amount-input__suffix">MMK</span>
-                    </div>
-                  )}
-                </FormField>
+                  <TextInput
+                    type="number"
+                    min={form.valueType === "percentage" ? 0 : 1}
+                    max={form.valueType === "percentage" ? 100 : undefined}
+                    step={form.valueType === "fixed" ? 1000 : 1}
+                    value={form.value}
+                    onChange={(event) => setField("value", event.target.value)}
+                    suffix={amountSuffix}
+                  />
+                </InputWrapper>
               </section>
             ) : null}
 
-            {currentStep === "scope" ? (
+            {currentStep === "value" ? (
               <section className="discount-setup-section">
-                <h2 className="pds-type-title-xs-bold">{t("setupScopeTitle")}</h2>
-                <p className="pds-type-body-s-regular discount-setup-section__intro muted">
-                  {t("setupScopeHelpCustom")}
-                </p>
+                <SectionIntro title={t("setupScopeTitle")} description={t("setupScopeHelpCustom")} />
 
-                <FormField
-                  label={t("feeComponentsLabel")}
-                  required
-                  labelStyle="caps"
-                  error={formErrors.feeItemIds}
-                >
-                  <CheckboxList
-                    title={finance("feeComponents")}
-                    options={scopeFeeItems.map((item) => ({
-                      id: item.id,
-                      label: item.name,
-                      description: t(`feeComponentDescriptions.${item.feeType}`),
-                      amount: sampleAmountForFeeType(item.feeType),
-                    }))}
-                    selectedIds={form.feeItemIds}
-                    onChange={setFeeItemIds}
-                    disabled={feeItems.isLoading}
-                  />
-                  <p className="pds-type-body-s-regular discount-setup-section__note muted">
-                    {t("feeComponentsHelp")}
-                  </p>
-                </FormField>
-
-                <FormField label={t("gradeLevelsLabel")} labelStyle="caps">
-                  <SegmentedControl
-                    ariaLabel={t("gradeLevelsLabel")}
-                    value={form.gradeScope}
-                    onChange={(next) => {
-                      setField("gradeScope", next as "all" | "specific");
-                      if (next === "all") {
-                        setField("gradeIds", []);
-                      }
-                    }}
-                    options={[
-                      { id: "all", label: t("gradeScopeAll") },
-                      { id: "specific", label: t("gradeScopeSpecific") }
-                    ]}
-                  />
-                  {form.gradeScope === "all" ? (
-                    <p className="scope-summary-callout muted">{t("gradeScopeAllSummary")}</p>
-                  ) : (
-                    <div className="discount-pill-grid">
-                      {gradeList.map((grade) => {
-                        const selected = form.gradeIds.includes(grade.id);
-                        return (
-                          <button
-                            key={grade.id}
-                            type="button"
-                            className={`discount-pill${selected ? " discount-pill--selected" : ""}`}
-                            onClick={() =>
-                              setField(
-                                "gradeIds",
-                                selected
-                                  ? form.gradeIds.filter((id) => id !== grade.id)
-                                  : [...form.gradeIds, grade.id]
-                              )
-                            }
-                          >
-                            {selected ? <Icon name="check" size={16} /> : null}
-                            {grade.name}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                  {formErrors.gradeIds ? (
-                    <span className="pds-type-body-s-regular field-error">{formErrors.gradeIds}</span>
-                  ) : null}
-                </FormField>
-
-                <FormField label={t("paymentPlansLabel")} labelStyle="caps">
-                  <SelectionCardGrid>
-                    {discountPaymentPlanFrequencies.map((frequency) => {
-                      const selected = form.paymentPlanFrequencies.includes(frequency);
-                      const iconName =
-                        frequency === "annual"
-                          ? "savings"
-                          : frequency === "monthly"
-                            ? "calendar_month"
-                            : "date_range";
+                <div>
+                  <p className="pds-type-label-s-medium discount-field-label">{t("feeComponentsLabel")}</p>
+                  <p className="pds-type-body-s-regular muted discount-field-hint">{t("feeComponentsHelp")}</p>
+                  <div className="fee-component-chip-row">
+                    {scopeFeeItems.map((item) => {
+                      const selected = form.feeItemIds.includes(item.id);
                       return (
-                        <SelectionCard
-                          key={frequency}
-                          selected={selected}
-                          icon={<Icon name={iconName} />}
-                          title={t(PAYMENT_PLAN_LABEL_KEYS[frequency])}
-                          description={t(`paymentPlanDesc_${frequency}`)}
-                          onClick={() => togglePaymentPlan(frequency)}
-                        />
+                        <button
+                          key={item.id}
+                          type="button"
+                          className={cn("fee-component-chip", selected && "fee-component-chip--selected")}
+                          onClick={() => toggleFeeItem(item.id)}
+                        >
+                          <span
+                            className={cn("fee-component-chip__check", selected && "fee-component-chip__check--on")}
+                            aria-hidden
+                          >
+                            {selected ? <Icon name="check" size={14} /> : null}
+                          </span>
+                          <span className="pds-type-body-s-semibold">{item.name}</span>
+                        </button>
                       );
                     })}
-                  </SelectionCardGrid>
-                </FormField>
+                  </div>
+                  {formErrors.feeItemIds ? (
+                    <p className="pds-type-body-s-regular error-text">{formErrors.feeItemIds}</p>
+                  ) : null}
+                </div>
+
+                <div>
+                  <div className="discount-grade-head">
+                    <p className="pds-type-label-s-medium discount-field-label">{t("selectGradeLabel")}</p>
+                    <CheckBox
+                      checked={allGradesSelected}
+                      indeterminate={someGradesSelected}
+                      label={t("selectAllGrades")}
+                      showDescription={false}
+                      size="sm"
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setGradeSelection("all", []);
+                        } else {
+                          setGradeSelection("specific", []);
+                        }
+                      }}
+                    />
+                  </div>
+                  <div className="discount-pill-grid">
+                    {gradeList.map((grade) => {
+                      const selected =
+                        form.gradeScope === "all" || form.gradeIds.includes(grade.id);
+                      return (
+                        <button
+                          key={grade.id}
+                          type="button"
+                          aria-pressed={selected}
+                          className={cn("discount-pill", selected && "discount-pill--selected")}
+                          onClick={() => {
+                            if (form.gradeScope === "all") {
+                              setGradeSelection("specific", [grade.id]);
+                              return;
+                            }
+                            if (selected) {
+                              const next = form.gradeIds.filter((id) => id !== grade.id);
+                              if (
+                                gradeList.length > 0 &&
+                                next.length > 0 &&
+                                gradeList.every((entry) => next.includes(entry.id))
+                              ) {
+                                setGradeSelection("all", []);
+                              } else {
+                                setGradeSelection("specific", next);
+                              }
+                              return;
+                            }
+                            const next = [...form.gradeIds, grade.id];
+                            if (
+                              gradeList.length > 0 &&
+                              gradeList.every((entry) => next.includes(entry.id))
+                            ) {
+                              setGradeSelection("all", []);
+                            } else {
+                              setGradeSelection("specific", next);
+                            }
+                          }}
+                        >
+                          {grade.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {formErrors.gradeIds ? (
+                    <p className="pds-type-body-s-regular error-text">{formErrors.gradeIds}</p>
+                  ) : null}
+                </div>
               </section>
             ) : null}
 
             {currentStep === "eligibility" ? (
               <section className="discount-setup-section">
-                <h2 className="pds-type-title-xs-bold">{t("setupEligibilityTitle")}</h2>
-                <p className="pds-type-body-s-regular muted">{t("setupEligibilityHelpCustom")}</p>
+                <SectionIntro
+                  title={t("setupEligibilityTitle")}
+                  description={t("setupEligibilityHelpCustom")}
+                />
 
-                <FormField label={t("applicationModeLabel")} labelStyle="caps">
-                  <SegmentedControl
-                    ariaLabel={t("applicationModeLabel")}
-                    value={form.triggerMode}
-                    onChange={(next) => setField("triggerMode", next as "auto" | "request")}
-                    options={[
-                      { id: "auto", label: t("tagAuto") },
-                      { id: "request", label: t("tagRequest") }
-                    ]}
+                <div className="eligibility-match-row" role="group" aria-label={t("eligibilityMatchLabel")}>
+                  <span className="eligibility-match-row__prefix">{t("eligibilityMatchPrefix")}</span>
+                  <button
+                    type="button"
+                    className={cn(
+                      "eligibility-match-row__option",
+                      form.eligibilityMatchMode === "all" && "eligibility-match-row__option--active"
+                    )}
+                    aria-pressed={form.eligibilityMatchMode === "all"}
+                    onClick={() => setField("eligibilityMatchMode", "all")}
+                  >
+                    {t("eligibilityMatchAll")}
+                  </button>
+                  <span className="eligibility-match-row__sep">{t("eligibilityMatchOr")}</span>
+                  <button
+                    type="button"
+                    className={cn(
+                      "eligibility-match-row__option",
+                      form.eligibilityMatchMode === "any" && "eligibility-match-row__option--active"
+                    )}
+                    aria-pressed={form.eligibilityMatchMode === "any"}
+                    onClick={() => setField("eligibilityMatchMode", "any")}
+                  >
+                    {t("eligibilityMatchAny")}
+                  </button>
+                  <span className="eligibility-match-row__suffix">{t("eligibilityMatchSuffix")}</span>
+                </div>
+
+                <ToggleList aria-label={t("conditionsLabel")}>
+                  <ToggleListItem
+                    variant="expandable"
+                    icon="family_restroom"
+                    iconTone="info"
+                    title={t("criterionSiblingTitle")}
+                    description={t("criterionSiblingDesc")}
+                    checked={form.requireSiblingMatch}
+                    onCheckedChange={(checked) => setField("requireSiblingMatch", checked)}
+                  >
+                    <div className="pds-toggle-list__expandable-fields">
+                      <InputWrapper label={t("minEnrolledSiblings")}>
+                        <TextInput
+                          inputMode="numeric"
+                          value={form.minEnrolledSiblings}
+                          onChange={(event) => setField("minEnrolledSiblings", event.target.value)}
+                        />
+                      </InputWrapper>
+                      <InputWrapper label={t("siblingOrdinal")}>
+                        <TextInput
+                          inputMode="numeric"
+                          value={form.siblingOrdinal}
+                          onChange={(event) => setField("siblingOrdinal", event.target.value)}
+                          placeholder={t("siblingOrdinalPlaceholder")}
+                        />
+                      </InputWrapper>
+                    </div>
+                  </ToggleListItem>
+
+                  <ToggleListItem
+                    variant="expandable"
+                    icon="history"
+                    iconTone="success"
+                    title={t("criterionEnrollmentYearsTitle", { years: form.minEnrollmentYears })}
+                    description={t("criterionEnrollmentYearsDesc")}
+                    checked={form.requireMinEnrollmentYears}
+                    onCheckedChange={(checked) => setField("requireMinEnrollmentYears", checked)}
+                  >
+                    <InputWrapper label={t("enrollmentYearsLabel")}>
+                      <TextInput
+                        inputMode="numeric"
+                        min={1}
+                        value={form.minEnrollmentYears}
+                        onChange={(event) => setField("minEnrollmentYears", event.target.value)}
+                        suffix={t("enrollmentYearsSuffix")}
+                      />
+                    </InputWrapper>
+                  </ToggleListItem>
+
+                  <ToggleListItem
+                    variant="expandable"
+                    icon="badge"
+                    iconTone="warning"
+                    title={t("criterionStaffParentTitle")}
+                    description={t("criterionStaffParentDesc")}
+                    checked={form.requireParentFullTimeStaff}
+                    onCheckedChange={(checked) => setField("requireParentFullTimeStaff", checked)}
                   />
-                  <p className="pds-type-body-s-regular muted">
-                    {form.triggerMode === "auto" ? t("autoApplyHelp") : t("requestOnlyHelp")}
-                  </p>
-                </FormField>
 
-                <FormField label={t("conditionsLabel")} labelStyle="caps">
-                  <div className="form-stack">
-                    <div className="form-inline-toggle">
-                      <Toggle
-                        checked={form.requireSiblingMatch}
-                        onCheckedChange={(checked) => setField("requireSiblingMatch", checked)}
-                        aria-label={t("requireSiblingMatch")}
+                  <ToggleListItem
+                    variant="expandable"
+                    icon="emoji_events"
+                    iconTone="warning"
+                    title={t("criterionTopRankTitle", { rank: form.topRankInGrade })}
+                    description={t("criterionTopRankDesc")}
+                    checked={form.requireTopRankInGrade}
+                    onCheckedChange={(checked) => setField("requireTopRankInGrade", checked)}
+                  >
+                    <InputWrapper label={t("rankingLabel")}>
+                      <TextInput
+                        inputMode="numeric"
+                        min={1}
+                        value={form.topRankInGrade}
+                        onChange={(event) => setField("topRankInGrade", event.target.value)}
                       />
-                      <span className="pds-type-body-s-regular muted">{t("requireSiblingMatchHelp")}</span>
-                    </div>
-                    {form.requireSiblingMatch ? (
-                      <div className="form-grid-2">
-                        <FormField label={t("minEnrolledSiblings")} labelStyle="caps">
-                          <FormInput
-                            inputMode="numeric"
-                            value={form.minEnrolledSiblings}
-                            onChange={(event) => setField("minEnrolledSiblings", event.target.value)}
-                          />
-                        </FormField>
-                        <FormField label={t("siblingOrdinal")} labelStyle="caps">
-                          <FormInput
-                            inputMode="numeric"
-                            value={form.siblingOrdinal}
-                            onChange={(event) => setField("siblingOrdinal", event.target.value)}
-                            placeholder={t("siblingOrdinalPlaceholder")}
-                          />
-                        </FormField>
-                      </div>
-                    ) : null}
+                    </InputWrapper>
+                  </ToggleListItem>
 
-                    <div className="form-inline-toggle">
-                      <Toggle
-                        checked={form.requiresPaymentAtEnrollment}
-                        onCheckedChange={(checked) => setField("requiresPaymentAtEnrollment", checked)}
-                        aria-label={t("requiresPaymentAtEnrollment")}
-                      />
-                      <span className="pds-type-body-s-regular muted">{t("requiresPaymentAtEnrollmentHelp")}</span>
-                    </div>
-
-                    <div className="form-inline-toggle">
-                      <Toggle
-                        checked={form.requiresDocumentation}
-                        onCheckedChange={(checked) => setField("requiresDocumentation", checked)}
-                        aria-label={t("requiresDocumentation")}
-                      />
-                      <span className="pds-type-body-s-regular muted">{t("requiresDocumentationHelp")}</span>
-                    </div>
-                  </div>
-                </FormField>
-
-                <FormField label={t("notesLabel")} labelStyle="caps">
-                  <FormTextarea
-                    value={form.notes}
-                    onChange={(event) => setField("notes", event.target.value)}
-                    placeholder={t("notesPlaceholder")}
-                    rows={3}
+                  <ToggleListItem
+                    variant="expandable"
+                    icon="person_add"
+                    iconTone="info"
+                    title={t("criterionNewEnrollmentTitle")}
+                    description={t("criterionNewEnrollmentDesc")}
+                    checked={form.requireNewEnrollmentThisYear}
+                    onCheckedChange={(checked) => setField("requireNewEnrollmentThisYear", checked)}
                   />
-                </FormField>
+                </ToggleList>
               </section>
             ) : null}
 
             {currentStep === "rules" ? (
               <section className="discount-setup-section">
-                <h2 className="pds-type-title-xs-bold">{t("setupRulesTitle")}</h2>
-                <p className="pds-type-body-s-regular muted">{t("setupRulesHelp")}</p>
+                <SectionIntro title={t("setupRulesApplicationTitle")} description={t("setupRulesHelp")} />
 
-                <FormField label={t("stackableLabel")} labelStyle="caps">
-                  <div className="form-inline-toggle">
-                    <Toggle
-                      checked={form.stackable}
-                      onCheckedChange={(checked) => setField("stackable", checked)}
-                      aria-label={t("stackableLabel")}
+                <SelectionCardGrid className="application-mode-grid">
+                  <SelectionCard
+                    variant="stack"
+                    selected={form.triggerMode === "auto"}
+                    icon={<Icon name="bolt" size={20} />}
+                    title={t("applicationAutomaticTitle")}
+                    description={t("applicationAutomaticDesc")}
+                    onClick={() => setField("triggerMode", "auto")}
+                  />
+                  <SelectionCard
+                    variant="stack"
+                    selected={form.triggerMode === "manual"}
+                    icon={<Icon name="touch_app" size={20} />}
+                    title={t("applicationManualTitle")}
+                    description={t("applicationManualDesc")}
+                    onClick={() => setField("triggerMode", "manual")}
+                  />
+                  <SelectionCard
+                    variant="stack"
+                    selected={form.triggerMode === "request"}
+                    icon={<Icon name="description" size={20} />}
+                    title={t("applicationRequestTitle")}
+                    description={t("applicationRequestDesc")}
+                    onClick={() => setField("triggerMode", "request")}
+                  />
+                </SelectionCardGrid>
+
+                <ToggleList aria-label={t("setupRulesTitle")}>
+                  <ToggleListItem
+                    variant="expandable"
+                    icon="verified_user"
+                    iconTone="info"
+                    title={t("requiresPaymentAtEnrollment")}
+                    description={t("requiresPaymentAtEnrollmentHelp")}
+                    checked={form.requiresPaymentAtEnrollment}
+                    onCheckedChange={(checked) => setField("requiresPaymentAtEnrollment", checked)}
+                  />
+                  <ToggleListItem
+                    variant="expandable"
+                    icon="layers"
+                    iconTone="success"
+                    title={t("stackableLabel")}
+                    description={t("stackableHelp")}
+                    checked={form.stackable}
+                    onCheckedChange={(checked) => setField("stackable", checked)}
+                  />
+                  <ToggleListItem
+                    variant="expandable"
+                    icon="account_balance_wallet"
+                    iconTone="warning"
+                    title={t("prorateLabel")}
+                    description={t("prorateHelp")}
+                    checked={form.prorateAcrossInstallments}
+                    onCheckedChange={(checked) => setField("prorateAcrossInstallments", checked)}
+                  />
+                </ToggleList>
+
+                <div className="discount-rules-config-grid">
+                  <div className="discount-rules-config-card">
+                    <p className="pds-type-body-s-bold">{t("maxCombinedLabel")}</p>
+                    <p className="pds-type-body-s-regular muted">{t("maxCombinedHelp")}</p>
+                    <TextInput
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={form.maxCombinedPercent ?? ""}
+                      onChange={(event) => setField("maxCombinedPercent", event.target.value)}
+                      suffix={t("maxCombinedSuffix")}
                     />
-                    <span className="pds-type-body-s-regular muted">
-                      {form.stackable ? t("stackableHelp") : t("bestWinsHelp")}
-                    </span>
                   </div>
-                </FormField>
-
-                <p className="pds-type-body-s-regular muted">{t("stackCapNote")}</p>
+                  <div className="discount-rules-config-card">
+                    <p className="pds-type-body-s-bold">{t("priorityOrderLabel")}</p>
+                    <p className="pds-type-body-s-regular muted">{t("priorityOrderHelp")}</p>
+                    <div className="priority-order-row">
+                      {[1, 2, 3, 4].map((order) => (
+                        <button
+                          key={order}
+                          type="button"
+                          className={cn(
+                            "priority-order-pill",
+                            Number(form.priorityOrder) === order && "priority-order-pill--selected"
+                          )}
+                          onClick={() => setField("priorityOrder", String(order))}
+                        >
+                          {order}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </section>
             ) : null}
 
             {currentStep === "review" ? (
               <section className="discount-setup-section">
-                <h2 className="pds-type-title-xs-bold">{t("setupReviewTitle")}</h2>
-                <p className="pds-type-body-s-regular muted">{t("setupReviewHelp")}</p>
+                <SectionIntro title={t("setupReviewTitle")} description={t("setupReviewHelp")} />
 
                 <dl className="pds-type-body-s-regular discount-review-list">
                   <div>
@@ -655,7 +800,13 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
                   </div>
                   <div>
                     <dt>{t("applicationModeLabel")}</dt>
-                    <dd>{form.triggerMode === "auto" ? t("tagAuto") : t("tagRequest")}</dd>
+                    <dd>
+                      {form.triggerMode === "auto"
+                        ? t("applicationAutomaticTitle")
+                        : form.triggerMode === "manual"
+                          ? t("applicationManualTitle")
+                          : t("applicationRequestTitle")}
+                    </dd>
                   </div>
                   <div>
                     <dt>{t("stackableLabel")}</dt>
@@ -687,38 +838,48 @@ export function DiscountSetupWorkspace({ mode, ruleId }: Props) {
                         .join(" · ")}
                     </dd>
                   </div>
+                  <div>
+                    <dt>{t("conditionsLabel")}</dt>
+                    <dd>
+                      {[
+                        form.requireSiblingMatch && t("criterionSiblingTitle"),
+                        form.requireMinEnrollmentYears &&
+                          t("criterionEnrollmentYearsTitle", { years: form.minEnrollmentYears }),
+                        form.requireParentFullTimeStaff && t("criterionStaffParentTitle"),
+                        form.requireTopRankInGrade &&
+                          t("criterionTopRankTitle", { rank: form.topRankInGrade }),
+                        form.requireNewEnrollmentThisYear && t("criterionNewEnrollmentTitle")
+                      ]
+                        .filter(Boolean)
+                        .join(" · ") || t("noEligibilityCriteria")}
+                    </dd>
+                  </div>
                 </dl>
               </section>
             ) : null}
+          </>
+        )}
+      </RecordFormModal>
 
-            <footer className="discount-setup-footer">
-              <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={goBack}>
-                <Icon name="arrow_back" />
-                {step === 0 ? c("cancel") : c("previous")}
-              </button>
-              <span className="pds-type-body-m-medium discount-setup-footer__meta">
-                {t("setupStepMeta", {
-                  current: step + 1,
-                  total: DISCOUNT_SETUP_STEPS.length,
-                  label: t(`setupStep_${currentStep}`)
-                })}
-              </span>
-              <button type="button" className="pds-type-body-m-bold btn-primary" disabled={saving} onClick={() => void goNext()}>
-                {step === DISCOUNT_SETUP_STEPS.length - 1 ? (
-                  saving ? t("creating") : mode === "edit" ? c("save") : t("createDiscount")
-                ) : (
-                  <>
-                    {c("next")}
-                    <Icon name="arrow_forward" />
-                  </>
-                )}
-              </button>
-            </footer>
-          </div>
-        </div>
-
-        <DiscountLivePreview form={form} sample={previewSample} feeTypesByItemId={feeTypesByItemId} />
-      </div>
-    </div>
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title={t("deleteDiscountTitle")}
+        description={t("deleteDiscountHelp", { name: editingRule?.name ?? "" })}
+        confirmLabel={c("delete")}
+        destructive
+        loading={deactivateRule.isPending}
+        onConfirm={async () => {
+          if (!editingRule) return;
+          await deactivateRule.mutateAsync({ id: editingRule.id });
+          setDeleteOpen(false);
+          closeModal();
+          onSaved?.();
+        }}
+      />
+    </>
   );
 }
+
+/** @deprecated Use {@link DiscountSetupModal}. */
+export const DiscountSetupWorkspace = DiscountSetupModal;

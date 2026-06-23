@@ -2,14 +2,14 @@
 
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useMemo } from "react";
+import { useMemo, use } from "react";
 import { useApiQuery } from "../../../../../../lib/api";
 import { RecordList, RecordListItem, RecordListPanel } from "../../../../../../lib/record-list";
 import { PanelHead } from "../../../../../../lib/panel";
 import { useCurrentAcademicYear } from "../../../../../../lib/use-current-academic-year";
 import { PageHeader } from "../../../../../page-header-context";
 import { EmptyState } from "../../../../../../../components/shared/empty-state";
+import { NavigationBackLink } from "../../../../../../../components/shared/navigation-back-link";
 import { subjectColor } from "../../../../subject-colors";
 
 type Classroom = {
@@ -45,9 +45,12 @@ type Assignment = {
 
 type StaffMember = { id: string; fullName: string };
 
-export default function StructureSubjectClassroomPage() {
-  const params = useParams<{ classroomId: string; subjectId: string }>();
-  const { classroomId, subjectId } = params;
+export default function StructureSubjectClassroomPage({
+  params
+}: {
+  params: Promise<{ classroomId: string; subjectId: string }>;
+}) {
+  const { classroomId, subjectId } = use(params);
   const t = useTranslations("academics");
   const c = useTranslations("common");
   const currentYear = useCurrentAcademicYear();
@@ -57,7 +60,9 @@ export default function StructureSubjectClassroomPage() {
   const subjects = useApiQuery<ClassroomSubject[]>((tenant) =>
     `/tenants/${tenant}/classrooms/${classroomId}/subjects`
   );
-  const staff = useApiQuery<StaffMember[]>((tenant) => `/tenants/${tenant}/hr/staff?employmentRole=teacher`);
+  const staff = useApiQuery<{ data: StaffMember[] }>((tenant) =>
+    `/tenants/${tenant}/hr/staff?employmentRole=teacher&limit=200`
+  );
   const materials = useApiQuery<LearningMaterial[]>((tenant) =>
     `/tenants/${tenant}/lms/classrooms/${classroomId}/materials`
   );
@@ -68,7 +73,7 @@ export default function StructureSubjectClassroomPage() {
   const subjectRow = subjects.data?.find((row) => row.subjectId === subjectId);
   const grade = grades.data?.find((row) => row.id === classroom.data?.gradeId);
   const teacherName = subjectRow?.teacherStaffId
-    ? (staff.data?.find((member) => member.id === subjectRow.teacherStaffId)?.fullName ?? "—")
+    ? (staff.data?.data?.find((member) => member.id === subjectRow.teacherStaffId)?.fullName ?? "—")
     : "—";
 
   const subjectMaterials = useMemo(
@@ -107,6 +112,13 @@ export default function StructureSubjectClassroomPage() {
           },
           { label: subjectRow.subjectName }
         ]}
+      />
+
+      <NavigationBackLink
+        fallback={{
+          label: classroom.data.name,
+          href: `/dashboard/structure/rooms/${classroomId}`
+        }}
       />
 
       <section className="structure-room-hero">

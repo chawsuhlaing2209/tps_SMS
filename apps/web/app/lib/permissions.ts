@@ -27,7 +27,8 @@ export type DashboardNavKey =
   | "audit"
   | "settings"
   | "team"
-  | "departments";
+  | "departments"
+  | "facilities";
 
 export type DashboardNavGroupKey = "school" | "academics" | "business" | "admin";
 
@@ -55,6 +56,7 @@ export const DASHBOARD_NAV: DashboardNavItem[] = [
     anyOf: ["hr.manage", "classroom.manage"]
   },
   { href: "/dashboard/structure", key: "structure", anyOf: ["academic_setup.manage"] },
+  { href: "/dashboard/facilities", key: "facilities", anyOf: ["facility.manage"] },
   { href: "/dashboard/academic-setup", key: "academicSetup", anyOf: ["academic_setup.manage"] },
   { href: "/dashboard/admissions", key: "admissions", anyOf: ["admissions.manage"] },
   { href: "/dashboard/enrollments", key: "enrollments", anyOf: ["student.manage"] },
@@ -98,7 +100,7 @@ export const DASHBOARD_NAV_GROUPS: DashboardNavGroup[] = [
   {
     key: "academics",
     items: DASHBOARD_NAV.filter((item) =>
-      ["structure", "academicSetup", "calendar", "timetable", "exams"].includes(item.key)
+      ["structure", "academicSetup", "facilities", "calendar", "timetable", "exams"].includes(item.key)
     )
   },
   {

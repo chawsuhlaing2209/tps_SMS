@@ -14,6 +14,7 @@ export default function TeamPage() {
         title={t("title")}
         description={t("description")}
         breadcrumbs={[{ label: nav("group_admin") }, { label: nav("team") }]}
+        actionsPortal
       />
       <TeamEditor />
     </div>
