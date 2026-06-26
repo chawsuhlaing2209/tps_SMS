@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { useApiMutation } from "../../lib/api";
+import { TextAreaInput } from "../../../components/shared/form-input";
 import { Field } from "../../lib/form";
 import { Icon } from "../../lib/material-icon";
 import { RecordFormSheet } from "../../lib/record-sheet";
@@ -51,6 +52,7 @@ export function InvoiceVerifyPayments({
     {
       invalidatePaths: (_id, tenant) => [
         `/tenants/${tenant}/finance/invoices/${invoiceId}`,
+        `/tenants/${tenant}/finance/invoices/${invoiceId}/activity`,
         `/tenants/${tenant}/finance/invoices`,
         `/tenants/${tenant}/finance/payments`
       ],
@@ -144,8 +146,9 @@ export function InvoiceVerifyPayments({
           }
         >
           <Field label={t("verifyReason")}>
-            <textarea
+            <TextAreaInput
               rows={3}
+              showCount={false}
               value={verifyReason}
               placeholder={t("verifyReasonPlaceholder")}
               onChange={(e) => setVerifyReason(e.target.value)}

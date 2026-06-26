@@ -1080,6 +1080,7 @@
       "collectionViewHelp": "Row တစ်ခုစီတွင် student တစ်ဦး၏ နှစ်စဉ် fee စုစုပေါင်းဖြစ်သည်။ Cashier desk တွင် payment အမြန် ကောက်ခံရန် သုံးပါ။",
       "collect": "ကောက်ခံ",
       "settled": "ပြီးစီး",
+      "pendingVerification": "Verification စောင့်ဆိုင်းနေသည်",
       "empty": "ဤစစ်ထုတ်မှုများနှင့် ကိုက်ညီသော ကျောင်းသားမရှိပါ။",
       "statusFilters": {
         "all": "အခြေအနေ အားလုံး",
@@ -1437,6 +1438,23 @@
     "refundReason": "ပြန်အမ်းရခြင်း အကြောင်းရင်း",
     "refundReasonPlaceholder": "ဤ payment ကို ပြန်အမ်းရခြင်း အကြောင်းရင်း",
     "refundOnPaymentsTab": "Verify လုပ်ပြီးသော payment ကို ပြန်အမ်းရန် Payments tab တွင် Refund ကို သုံးပါ။",
+    "recordPaymentFullyPending": "ကျန်ရှိငွေအပြည့်ကို verification စောင့်နေသော payment များက ဖုံးအုပ်ထားသည် — ထပ်မံမှတ်မီ verify လုပ်ပါ။",
+    "recordPaymentPartialPending": "{pending} က verification စောင့်နေသည်။ ကျန်ရှိငွေအတွက် {recordable} အထိသာ ထပ်မှတ်နိုင်သည်။",
+    "invoiceRefundedNotice": "ဤ invoice ကို ပြန်အမ်းပြီးဖြစ်သည် — ကျန်ရှိငွေ မရှိတော့ပါ။",
+    "activityLogTitle": "လုပ်ဆောင်မှု မှတ်တမ်း",
+    "activityLogEmpty": "Payment သို့မဟုတ် collection လုပ်ဆောင်မှု မရှိသေးပါ။",
+    "activityActions": {
+      "invoice": {
+        "create": "Invoice ဖန်တီးခဲ့သည်",
+        "send_guardian": "Guardian ထံ ပို့ခဲ့သည်"
+      },
+      "payment": {
+        "record": "Payment မှတ်ခဲ့သည်",
+        "collect": "Payment ကောက်ခံခဲ့သည်",
+        "verify": "Payment verify လုပ်ခဲ့သည်",
+        "refund": "Payment ပြန်အမ်းခဲ့သည်"
+      }
+    },
     "actions": "လုပ်ဆောင်ချက်များ",
     "reason": "အကြောင်းပြချက်",
     "monthlyReport": "Monthly report",

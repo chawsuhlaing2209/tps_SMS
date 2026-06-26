@@ -1080,6 +1080,7 @@
       "collectionViewHelp": "Each row is one student’s total fees for the year. Use this at the cashier desk to collect payments quickly.",
       "collect": "Collect",
       "settled": "Settled",
+      "pendingVerification": "Pending verification",
       "empty": "No students match these filters.",
       "statusFilters": {
         "all": "All Status",
@@ -1438,6 +1439,23 @@
     "refundReason": "Refund reason",
     "refundReasonPlaceholder": "Why this payment is being refunded",
     "refundOnPaymentsTab": "To reverse a verified payment, use Refund on the Payments tab.",
+    "recordPaymentFullyPending": "The full balance is covered by payment(s) awaiting verification. Verify them before recording more.",
+    "recordPaymentPartialPending": "{pending} is awaiting verification. You can record up to {recordable} for the remaining balance.",
+    "invoiceRefundedNotice": "This invoice has been fully refunded — no balance remains due.",
+    "activityLogTitle": "Activity log",
+    "activityLogEmpty": "No payment or collection activity recorded yet.",
+    "activityActions": {
+      "invoice": {
+        "create": "Invoice created",
+        "send_guardian": "Sent to guardian"
+      },
+      "payment": {
+        "record": "Payment recorded",
+        "collect": "Payment collected",
+        "verify": "Payment verified",
+        "refund": "Payment refunded"
+      }
+    },
     "actions": "Actions",
     "reason": "Reason",
     "monthlyReport": "Monthly report",

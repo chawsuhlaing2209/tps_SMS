@@ -1,5 +1,4 @@
 "use client";
-import { FormInput } from "../../../../../components/shared/form-input";
 import { formatMMK } from "../../../../lib/money";
 
 import * as DialogPrimitive from "@radix-ui/react-dialog";
@@ -9,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useApiMutation, useApiQuery } from "../../../../lib/api";
 import { Icon } from "../../../../lib/material-icon";
 import { toastError, toastSuccess } from "../../../../lib/toast";
+import { TextInput } from "../../../../../components/shared/form-input";
 import { PdsSelectField } from "../../../../../components/pds";
 import { EmptyState } from "../../../../../components/shared/empty-state";
 import { type PaymentReceiptPayload } from "../../receipt-document";
@@ -25,6 +25,8 @@ export type RosterRow = {
   billed: number;
   paid: number;
   balance: number;
+  pendingVerification: number;
+  recordableBalance: number;
   status: "paid" | "partial" | "due" | "overdue";
   primaryInvoiceId: string | null;
 };
@@ -35,6 +37,8 @@ export type InvoicePaymentContext = {
   balanceDue: number;
   billed: number;
   paid: number;
+  pendingVerification?: number;
+  recordableBalance?: number;
 };
 
 type CollectResult = { payment: { id: string; invoiceId: string }; receipt: PaymentReceiptPayload };
@@ -115,13 +119,23 @@ export function RecordPaymentModal(props: RecordPaymentModalProps) {
   const [method, setMethod] = useState<PaymentMethod>("cash");
   const [reference, setReference] = useState("");
 
+  const collectableRows = useMemo(
+    () =>
+      props.variant === "roster"
+        ? owingRows.filter((row) => (row.recordableBalance ?? row.balance) > 0)
+        : owingRows,
+    [owingRows, props.variant]
+  );
+
   const selectedRosterRow = useMemo(() => {
     if (props.variant !== "roster") return null;
-    return owingRows.find((row) => row.studentId === studentId) ?? owingRows[0] ?? null;
-  }, [owingRows, props.variant, studentId]);
+    return collectableRows.find((row) => row.studentId === studentId) ?? collectableRows[0] ?? null;
+  }, [collectableRows, props.variant, studentId]);
 
   const maxAmount =
-    props.variant === "invoice" ? props.context.balanceDue : (selectedRosterRow?.balance ?? 0);
+    props.variant === "invoice"
+      ? (props.context.recordableBalance ?? props.context.balanceDue)
+      : (selectedRosterRow?.recordableBalance ?? selectedRosterRow?.balance ?? 0);
 
   const billed =
     props.variant === "invoice" ? props.context.billed : (selectedRosterRow?.billed ?? 0);
@@ -130,6 +144,11 @@ export function RecordPaymentModal(props: RecordPaymentModalProps) {
 
   const balance =
     props.variant === "invoice" ? props.context.balanceDue : (selectedRosterRow?.balance ?? 0);
+
+  const pendingVerification =
+    props.variant === "invoice"
+      ? (props.context.pendingVerification ?? 0)
+      : (selectedRosterRow?.pendingVerification ?? 0);
 
   useEffect(() => {
     if (!open) return;
@@ -142,11 +161,11 @@ export function RecordPaymentModal(props: RecordPaymentModalProps) {
   useEffect(() => {
     if (!open || props.variant !== "roster") return;
     const target =
-      initialStudentId && owingRows.some((row) => row.studentId === initialStudentId)
+      initialStudentId && collectableRows.some((row) => row.studentId === initialStudentId)
         ? initialStudentId
-        : (owingRows[0]?.studentId ?? "");
+        : (collectableRows[0]?.studentId ?? "");
     setStudentId(target);
-  }, [open, props.variant, initialStudentId, owingRows]);
+  }, [open, props.variant, initialStudentId, collectableRows]);
 
   useEffect(() => {
     if (!open) return;
@@ -194,6 +213,7 @@ export function RecordPaymentModal(props: RecordPaymentModalProps) {
         if (props.variant !== "invoice") return [];
         return [
           `/tenants/${tenant}/finance/invoices/${props.invoiceId}`,
+          `/tenants/${tenant}/finance/invoices/${props.invoiceId}/activity`,
           `/tenants/${tenant}/finance/invoices`,
           `/tenants/${tenant}/finance/payments`,
           `/tenants/${tenant}/finance/billing/roster`
@@ -247,7 +267,8 @@ export function RecordPaymentModal(props: RecordPaymentModalProps) {
     }
   };
 
-  const showEmpty = props.variant === "roster" && !selectedRosterRow;
+  const showEmpty =
+    props.variant === "roster" && !selectedRosterRow;
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -274,22 +295,22 @@ export function RecordPaymentModal(props: RecordPaymentModalProps) {
               ) : null}
 
               {props.variant === "roster" && selectedRosterRow ? (
-                <label className="pay-field">
+                <div className="pay-field">
                   <span className="pds-type-body-s-semibold pay-field__label">{t("selectStudent")}</span>
                   <PdsSelectField
                     variant="form"
                     value={selectedRosterRow.studentId}
                     onValueChange={(value) => setStudentId(typeof value === "string" ? value : "")}
-                    options={owingRows.map((row) => ({
+                    options={collectableRows.map((row) => ({
                       value: row.studentId,
                       label: t("studentOption", {
                         name: row.studentFullName,
                         room: row.classroomName ?? row.gradeName,
-                        due: fullNumber(row.balance)
+                        due: fullNumber(row.recordableBalance)
                       })
                     }))}
                   />
-                </label>
+                </div>
               ) : null}
 
               <div className="pay-tiles">
@@ -307,9 +328,22 @@ export function RecordPaymentModal(props: RecordPaymentModalProps) {
                 </div>
               </div>
 
-              <label className="pay-field">
-                <span className="pds-type-body-s-semibold pay-field__label">{t("amountReceived")}</span>
-                <input
+              {pendingVerification > 0 && maxAmount > 0 ? (
+                <p className="pds-type-body-s-regular muted">
+                  {tFinance("recordPaymentPartialPending", {
+                    pending: fullNumber(pendingVerification),
+                    recordable: fullNumber(maxAmount)
+                  })}
+                </p>
+              ) : null}
+
+              <div className="pay-field">
+                <label htmlFor="pay-modal-amount" className="pds-type-body-s-semibold pay-field__label">
+                  {t("amountReceived")}
+                </label>
+                <TextInput
+                  unwrapped
+                  id="pay-modal-amount"
                   className="pay-amount"
                   type="number"
                   inputMode="numeric"
@@ -318,7 +352,7 @@ export function RecordPaymentModal(props: RecordPaymentModalProps) {
                   value={amount}
                   onChange={(event) => setAmount(event.target.value)}
                 />
-              </label>
+              </div>
 
               <div className="pay-field">
                 <span className="pds-type-body-s-semibold pay-field__label">{t("paymentMethod")}</span>
@@ -338,14 +372,18 @@ export function RecordPaymentModal(props: RecordPaymentModalProps) {
               </div>
 
               {needsReference ? (
-                <label className="pay-field">
-                  <span className="pds-type-body-s-semibold pay-field__label">{t("receiptReference")}</span>
-                  <FormInput
-                    className="pds-type-body-m-medium pay-input"
+                <div className="pay-field">
+                  <label htmlFor="pay-modal-reference" className="pds-type-body-s-semibold pay-field__label">
+                    {t("receiptReference")}
+                  </label>
+                  <TextInput
+                    unwrapped
+                    id="pay-modal-reference"
+                    className="pay-input"
                     value={reference}
                     onChange={(event) => setReference(event.target.value)}
                   />
-                </label>
+                </div>
               ) : null}
 
               <div className="pay-balance-after">

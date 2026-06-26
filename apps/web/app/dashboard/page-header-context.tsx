@@ -3,11 +3,10 @@
 import { useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
 import {
-  createContext,
-  useContext,
   useEffect,
   useMemo,
   useState,
+  useSyncExternalStore,
   type ReactNode
 } from "react";
 import {
@@ -33,25 +32,63 @@ export type PageHeaderValue = {
 
 type StoredHeader = PageHeaderValue & { pathname: string };
 
-type PageHeaderContextType = {
+type PageHeaderStore = {
   header: StoredHeader | null;
-  setHeader: (value: StoredHeader | null) => void;
+  listeners: Set<() => void>;
 };
 
-const PageHeaderContext = createContext<PageHeaderContextType | null>(null);
+const PAGE_HEADER_STORE_KEY = "__sms_page_header_store__";
 
-export function PageHeaderProvider({ children }: { children: ReactNode }) {
-  const [header, setHeader] = useState<StoredHeader | null>(null);
-  const value = useMemo(() => ({ header, setHeader }), [header]);
-  return <PageHeaderContext.Provider value={value}>{children}</PageHeaderContext.Provider>;
+function getPageHeaderStore(): PageHeaderStore {
+  const globalRef = globalThis as typeof globalThis & {
+    [PAGE_HEADER_STORE_KEY]?: PageHeaderStore;
+  };
+
+  if (!globalRef[PAGE_HEADER_STORE_KEY]) {
+    globalRef[PAGE_HEADER_STORE_KEY] = {
+      header: null,
+      listeners: new Set()
+    };
+  }
+
+  return globalRef[PAGE_HEADER_STORE_KEY];
 }
 
-function usePageHeaderContext(): PageHeaderContextType {
-  const ctx = useContext(PageHeaderContext);
-  if (!ctx) {
-    throw new Error("usePageHeaderContext must be used within a PageHeaderProvider");
-  }
-  return ctx;
+function subscribePageHeader(listener: () => void) {
+  const store = getPageHeaderStore();
+  store.listeners.add(listener);
+  return () => {
+    store.listeners.delete(listener);
+  };
+}
+
+function getPageHeaderSnapshot() {
+  return getPageHeaderStore().header;
+}
+
+function setPageHeader(value: StoredHeader | null) {
+  const store = getPageHeaderStore();
+  store.header = value;
+  store.listeners.forEach((listener) => listener());
+}
+
+function usePageHeaderState() {
+  const header = useSyncExternalStore(subscribePageHeader, getPageHeaderSnapshot, () => null);
+
+  return useMemo(
+    () => ({
+      header,
+      setHeader: setPageHeader
+    }),
+    [header]
+  );
+}
+
+/** Mount boundary for dashboard chrome; clears published header on unmount. */
+export function PageHeaderProvider({ children }: { children: ReactNode }) {
+  useEffect(() => () => setPageHeader(null), []);
+
+  return children;
 }
 
 /**
@@ -78,7 +115,7 @@ export function PageHeader({
   segment?: NavigationSegment;
   resetTrail?: NavigationSegment[];
 }) {
-  const { setHeader } = usePageHeaderContext();
+  const { setHeader } = usePageHeaderState();
   const pathname = usePathname();
   const resolvedSegment = segment ?? { label: title, href: pathname };
   const resetTrailKey = resetTrail?.map((item) => `${item.label}:${item.href}`).join("|") ?? "";
@@ -143,7 +180,7 @@ function useRouteHeaderFallback(): PageHeaderValue {
 }
 
 export function useResolvedPageHeader(): PageHeaderValue {
-  const { header } = usePageHeaderContext();
+  const { header } = usePageHeaderState();
   const pathname = usePathname();
   const fallback = useRouteHeaderFallback();
   const trail = useNavigationTrailForHeader();

@@ -1,5 +1,5 @@
 "use client";
-import { FormInput } from "../../../../components/shared/form-input";
+import { FormInput, TextAreaInput } from "../../../../components/shared/form-input";
 
 import { useTranslations } from "next-intl";
 import { TrailLink } from "../../../../components/shared/trail-link";
@@ -517,8 +517,9 @@ export default function PaymentsPage() {
           }
         >
           <Field label={tFinance("verifyReason")}>
-            <textarea
+            <TextAreaInput
               rows={3}
+              showCount={false}
               value={verifyReason}
               placeholder={tFinance("verifyReasonPlaceholder")}
               onChange={(e) => setVerifyReason(e.target.value)}
