@@ -1,18 +1,19 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { cn } from "../../../lib/utils";
+import { StatusPill, type StatusPillProps } from "./status-pill";
 
 export type DetailCardStatusProps = {
   children: ReactNode;
+  tone?: StatusPillProps["tone"];
   className?: string;
 };
 
-/** Success-toned status chip shown beside a DetailCard title. */
-export function DetailCardStatus({ children, className }: DetailCardStatusProps) {
+/** Status chip beside a DetailCard title — uses canonical StatusPill styling. */
+export function DetailCardStatus({ children, tone = "active", className }: DetailCardStatusProps) {
   return (
-    <span className={cn("pds-type-body-s-bold pds-detail-card-status", className)}>
+    <StatusPill tone={tone} className={className}>
       {children}
-    </span>
+    </StatusPill>
   );
 }

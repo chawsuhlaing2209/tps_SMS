@@ -4,7 +4,10 @@
   background: var(--pds-background-frame);
   border-bottom: 1px solid var(--pds-border-color-primary);
   flex-shrink: 0;
+  position: sticky;
+  top: 0;
   width: 100%;
+  z-index: 20;
 }
 
 .pds-top-nav-bar__inner {

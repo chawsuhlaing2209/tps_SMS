@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Icon } from "../../../app/lib/material-icon";
 import { cn } from "../../../lib/utils";
-import { Options, type OptionsItem, type OptionsProps } from "./options";
+import { type OptionsItem, type OptionsProps } from "./options";
 import { SelectItemPosition } from "./select-item-position";
 import { registerOpenSelect, unregisterOpenSelect } from "./select-open-coordinator";
 import type { OptionItemVariant } from "./option-item";
@@ -31,6 +31,8 @@ export type PdsSelectProps = {
   onSearchChange?: (query: string) => void;
   onClear?: () => void;
   onOkay?: () => void;
+  /** Shown when `items` is empty (e.g. no catalog rows for this filter). */
+  emptyLabel?: string;
 };
 
 function displayValue(
@@ -84,8 +86,11 @@ export function PdsSelect({
   onSearchChange,
   onClear,
   onOkay,
+  emptyLabel,
 }: PdsSelectProps) {
   const selectId = React.useId();
+  const rootRef = React.useRef<HTMLDivElement>(null);
+  const panelContainerRef = React.useRef<HTMLDivElement>(null);
   const isControlled = value !== undefined;
   const [uncontrolledValue, setUncontrolledValue] = React.useState<string | string[]>(
     defaultValue ?? (multiple ? [] : "")
@@ -111,6 +116,20 @@ export function PdsSelect({
   React.useEffect(() => {
     return () => unregisterOpenSelect(selectId);
   }, [selectId]);
+
+  // Panel is portaled out of the trigger's subtree, so close on clicks outside
+  // both the trigger and the portaled panel.
+  React.useEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target)) return;
+      if (panelContainerRef.current?.contains(target)) return;
+      closePanel();
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [open, closePanel]);
 
   const togglePanel = React.useCallback(() => {
     if (disabled) return;
@@ -179,12 +198,14 @@ export function PdsSelect({
       onOkay?.();
       closePanel();
     },
+    emptyLabel,
   };
 
   const showingPlaceholder = !selected;
 
   return (
     <div
+      ref={rootRef}
       className={cn(
         "pds-select",
         variant === "form" && "pds-select--form",
@@ -237,7 +258,13 @@ export function PdsSelect({
         )}
         <Icon name={open ? "expand_less" : "expand_more"} size={20} />
       </button>
-      <SelectItemPosition position={panelPosition} open={open} optionsProps={optionsProps} />
+      <SelectItemPosition
+        position={panelPosition}
+        open={open}
+        anchorRef={rootRef}
+        containerRef={panelContainerRef}
+        optionsProps={optionsProps}
+      />
     </div>
   );
 }

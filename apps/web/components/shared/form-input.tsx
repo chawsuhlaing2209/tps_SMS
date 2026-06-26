@@ -74,7 +74,7 @@ export const TextAreaInput = React.forwardRef<HTMLTextAreaElement, TextAreaInput
     {
       className,
       textareaClassName,
-      rows = 3,
+      rows,
       inputState = "enabled",
       disabled,
       languageTag,
@@ -121,22 +121,23 @@ export const TextAreaInput = React.forwardRef<HTMLTextAreaElement, TextAreaInput
           </div>
         ) : null}
         <div className="text-area-input__body">
-          <textarea
-            ref={ref}
-            rows={rows}
-            disabled={isDisabled}
-            maxLength={maxLength}
-            value={value}
-            defaultValue={defaultValue}
-            onChange={handleChange}
-            className={cn(
-              "pds-type-body-m-medium form-input text-area-input__field",
-              textareaClassName
-            )}
-            aria-invalid={inputState === "error" ? true : undefined}
-            {...props}
-          />
-          {counter ? <span className="pds-type-body-s-regular text-area-input__count">{counter}</span> : null}
+          <div className="text-area-input__content">
+            <textarea
+              ref={ref}
+              rows={rows}
+              disabled={isDisabled}
+              maxLength={maxLength}
+              value={value}
+              defaultValue={defaultValue}
+              onChange={handleChange}
+              className={cn("pds-type-body-m-medium text-area-input__field", textareaClassName)}
+              aria-invalid={inputState === "error" ? true : undefined}
+              {...props}
+            />
+            {counter ? (
+              <span className="pds-type-body-s-regular text-area-input__count">{counter}</span>
+            ) : null}
+          </div>
         </div>
       </div>
     );

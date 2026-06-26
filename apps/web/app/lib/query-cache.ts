@@ -146,7 +146,11 @@ export function prefetchPathsForDashboardRoute(
   }
 
   if (pathname.startsWith("/dashboard/salary")) {
-    paths.push(`${base}/salary/components`, `${base}/salary/records?limit=50&offset=0`);
+    paths.push(
+      `${base}/pay-components`,
+      `${base}/salary/components`,
+      `${base}/salary/records?limit=50&offset=0`
+    );
   }
 
   if (pathname.startsWith("/dashboard/communication")) {

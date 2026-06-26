@@ -476,7 +476,24 @@ async function seedInvoiceForStudent(
     .where(
       and(eq(invoices.tenantId, tenantId), eq(invoices.studentId, input.studentId), eq(invoices.enrollmentId, input.enrollmentId))
     );
-  if (existingInvoice) return;
+
+  const linkEnrollmentToInvoice = async (invoiceId: string) => {
+    await db
+      .update(enrollments)
+      .set({
+        invoiceId,
+        status: "approved",
+        confirmedAt: new Date()
+      })
+      .where(
+        and(eq(enrollments.tenantId, tenantId), eq(enrollments.id, input.enrollmentId))
+      );
+  };
+
+  if (existingInvoice) {
+    await linkEnrollmentToInvoice(existingInvoice.id);
+    return;
+  }
 
   const total = TUITION_BY_GRADE[input.gradeName] ?? 500_000;
   const issueDate = "2026-06-05";
@@ -543,6 +560,8 @@ async function seedInvoiceForStudent(
       issuedAt: new Date("2026-06-12T03:00:00Z")
     });
   }
+
+  await linkEnrollmentToInvoice(invoice!.id);
 }
 
 export async function seedDemoAlpha(
@@ -799,7 +818,6 @@ export async function seedDemoAlpha(
             gradeId,
             classroomId,
             status: "approved",
-            confirmedAt: new Date(),
             billingSnapshot: { optionalFeeItemIds: [] }
           })
           .returning({ id: enrollments.id });

@@ -1,6 +1,7 @@
 "use client";
 
 import { FormDatePicker } from "../../../../components/shared/form-input";
+import { formatMMK } from "../../../lib/money";
 import { PdsSearchBar, PdsSearchFiltersRow, PdsSelectField } from "../../../../components/pds";
 import { StatCard, StatGrid } from "../../../../components/shared/stat-card";
 import { StatusBadge } from "../../../../components/shared/badge";
@@ -51,8 +52,8 @@ type DepartmentOption = { id: string; name: string };
 const runsPath = (tenant: string, month: string) =>
   `/tenants/${tenant}/payroll-runs?month=${encodeURIComponent(month)}`;
 
-function formatMoney(value: number) {
-  return Math.round(value).toLocaleString();
+function formatMoney(value: number): string {
+  return formatMMK(value);
 }
 
 export default function RunPayrollPage() {

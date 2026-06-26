@@ -1,5 +1,6 @@
 "use client";
 
+import { formatMMK } from "../../../lib/money";
 import {
   defaultTriggerMode,
   normalizeDiscountType,
@@ -58,10 +59,8 @@ const TYPE_ICON_TONES: Record<string, string> = {
   custom: "need"
 };
 
-function compactMMK(value: number) {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `${Math.round(value / 1_000)}K`;
-  return String(Math.round(value));
+function compactMMK(value: number): string {
+  return formatMMK(value);
 }
 
 function appliesToFor(rule: DiscountRuleRecord): DiscountAppliesTo | undefined {

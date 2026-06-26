@@ -203,14 +203,10 @@ export class EnrollmentsService {
   confirmEnrollment(
     tenantId: string,
     enrollmentId: string,
-    actorUserId: string | undefined,
+    actorUserId: string,
     dto: ConfirmEnrollmentDto,
     actorPermissions: string[]
   ) {
-    if (!actorUserId) {
-      throw new UnauthorizedException("Missing actor user id.");
-    }
-
     return this.enrollmentBillingService.confirm(
       tenantId,
       enrollmentId,
@@ -241,7 +237,7 @@ export class EnrollmentsService {
       );
     }
 
-    if (existing[0].confirmedAt) {
+    if (existing[0].invoiceId) {
       throw new BadRequestException("Confirmed enrollments cannot be edited.");
     }
 

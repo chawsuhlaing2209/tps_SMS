@@ -188,6 +188,12 @@ export const DASHBOARD_NAV_SUBMODULES: Partial<
           exact: true
         },
         {
+          href: "/dashboard/salary/pay-components",
+          icon: "account_balance_wallet",
+          labelNs: "salary",
+          labelKey: "payComponentsNav"
+        },
+        {
           href: "/dashboard/salary/benefits",
           icon: "card_giftcard",
           labelNs: "salary",

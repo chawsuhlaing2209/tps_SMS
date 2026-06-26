@@ -90,15 +90,6 @@
   line-height: 1;
 }
 
-.pds-detail-card-status {
-  background: var(--pds-notification-background-success);
-  border-radius: var(--pds-radius-pill);
-  color: var(--pds-notification-foreground-success);
-  display: inline-flex;
-  max-height: 1.5rem;
-  padding: var(--pds-gap-xx-small) var(--pds-gap-small);
-}
-
 .pds-detail-card-tag {
   align-items: center;
   background: var(--pds-shell-raise);

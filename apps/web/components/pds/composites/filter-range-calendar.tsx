@@ -28,7 +28,7 @@ export type FilterRangeCalendarProps = {
   weekStartsOn?: WeekStartsOn;
   presetLabels?: FilterRangeCalendarPresetLabels;
   presets?: DateRangePresetId[];
-  onRangeChange: (range: { start: DateParts; end: DateParts }) => void;
+  onRangeChange: (range: { start: DateParts; end?: DateParts }) => void;
   onConfirm?: () => void;
   prevLabel?: string;
   nextLabel?: string;

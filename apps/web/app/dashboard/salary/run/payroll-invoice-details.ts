@@ -1,4 +1,5 @@
 import type { InvoiceDetailsSection } from "../../../../components/pds/composites/invoice-details";
+import { formatMMK } from "../../../lib/money";
 import type { PayrollComponentOption, PayrollIncentiveOption, PayrollPackageOption } from "./payroll-staff-config-modal";
 
 export type PayrollInvoiceDetailLabels = {
@@ -10,8 +11,8 @@ export type PayrollInvoiceDetailLabels = {
   deductionsStatutory: string;
 };
 
-export function formatPayrollAmount(value: number) {
-  return Math.round(value).toLocaleString();
+export function formatPayrollAmount(value: number): string {
+  return formatMMK(value);
 }
 
 export function computePayrollBreakdownTotals({

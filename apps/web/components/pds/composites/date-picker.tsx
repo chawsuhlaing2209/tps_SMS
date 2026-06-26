@@ -197,10 +197,10 @@ export function PdsDatePicker({
     }
   };
 
-  const handleRangeChange = (range: { start: DateParts; end: DateParts }) => {
+  const handleRangeChange = (range: { start: DateParts; end?: DateParts }) => {
     setDraftRange(range);
     if (!resolvedConfirmOnSelect && range.start && range.end) {
-      commitRange(range);
+      commitRange({ start: range.start, end: range.end });
     }
   };
 

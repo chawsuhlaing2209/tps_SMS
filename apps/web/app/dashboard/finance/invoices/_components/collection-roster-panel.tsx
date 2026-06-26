@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { formatMMK } from "../../../../lib/money";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLiveApiQuery } from "../../../../lib/api";
@@ -52,14 +53,12 @@ const STATUS_TONES: Record<import("./record-payment-modal").RosterRow["status"],
   overdue: "danger"
 };
 
-function compactMMK(value: number) {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `${Math.round(value / 1_000)}K`;
-  return String(Math.round(value));
+function compactMMK(value: number): string {
+  return formatMMK(value);
 }
 
-function fullNumber(value: number) {
-  return Math.round(value).toLocaleString("en-US");
+function fullNumber(value: number): string {
+  return formatMMK(value);
 }
 
 type CollectionSortKey = "student" | "status" | "balance";

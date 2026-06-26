@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { formatMMK } from "../../../lib/money";
 import { useMemo } from "react";
 import { Icon } from "../../../lib/material-icon";
 import { buildDiscountPreview, type DiscountPreviewSample } from "./discount-preview";
@@ -12,8 +13,8 @@ type Props = {
   feeTypesByItemId: Record<string, string>;
 };
 
-function formatMoney(value: number) {
-  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value);
+function formatMoney(value: number): string {
+  return formatMMK(value);
 }
 
 export function DiscountLivePreview({ form, sample, feeTypesByItemId }: Props) {

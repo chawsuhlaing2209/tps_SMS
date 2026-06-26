@@ -104,7 +104,10 @@ const CLASSROOM_FACILITY_NAMES: Record<string, string> = {
   "Room B": "Main Building — Room 102",
   "KG-A": "Kindergarten Wing — Room A",
   "G8-A": "Computer Lab",
-  "G9-A": "Science Lab A"
+  "G9-A": "Science Lab A",
+  "G10-A": "Science Lab A",
+  "G11-A": "Main Building — Room 101",
+  "G12-A": "Main Building — Room 102"
 };
 
 async function loadFacilityRoomIds(db: Db, tenantId: string) {
@@ -234,7 +237,7 @@ async function ensureTeacherStaff(
   return createdStaff!.id;
 }
 
-/** Classrooms for KG–Grade 9, homeroom teachers, and a sample attendance session. */
+/** Classrooms for KG–Grade 12, homeroom teachers, and a sample attendance session. */
 export async function seedDemoTeachers(
   db: Db,
   tenantId: string,

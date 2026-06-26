@@ -57,13 +57,13 @@ const HOMEROOM_TEACHER_KEY: Record<string, TeacherKey> = {
   "G6-A": "eiMon",
   "G7-A": "zawBo",
   "G8-A": "soeWin",
-  "G9-A": "heinZaw"
+  "G9-A": "heinZaw",
+  "G10-A": "heinZaw",
+  "G11-A": "heinZaw",
+  "G12-A": "heinZaw"
 };
 
-/**
- * Canonical demo competencies — single source of truth for teacher profiles.
- * High-school specialists (PHY/CHEM/BIO) only cover G10–12; demo classrooms stop at G9.
- */
+/** Canonical demo competencies — single source of truth for teacher profiles. */
 const TEACHER_COMPETENCIES: Record<TeacherKey, { grades: string[]; subjects: string[] }> = {
   niNi: { grades: ["Grade 1"], subjects: ["MATH", "ART", "MUS"] },
   pyone: { grades: ["KG"], subjects: ["MATH", "ENG", "MYA", "ART", "MUS"] },

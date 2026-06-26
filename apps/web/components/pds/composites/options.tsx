@@ -24,13 +24,13 @@ export type OptionsProps = {
   onOkay?: () => void;
   clearLabel?: string;
   okayLabel?: string;
+  emptyLabel?: string;
 };
-
-export const OPTIONS_MAX_PANEL_HEIGHT = 320;
 
 /** Dropdown list panel — Figma node 35:13598.
  *  Standalone reusable: popovers, filter menus, action sheets, or inside PdsSelect.
- *  Composes OptionItem rows and optional Button footer — not exclusive to Select. */
+ *  Composes OptionItem rows and optional Button footer — not exclusive to Select.
+ *  The list scrolls via CSS (device-aware max-height) once options overflow. */
 export function Options({
   items,
   variant = "default",
@@ -42,40 +42,25 @@ export function Options({
   onOkay,
   clearLabel = "Clear",
   okayLabel = "Okay",
+  emptyLabel,
 }: OptionsProps) {
-  const listRef = React.useRef<HTMLDivElement>(null);
-  const [scrollable, setScrollable] = React.useState(false);
   const showFooter = hasFooter && items.length >= 7;
-
-  React.useLayoutEffect(() => {
-    const list = listRef.current;
-    if (!list) return;
-
-    const measure = () => {
-      setScrollable(list.scrollHeight > OPTIONS_MAX_PANEL_HEIGHT);
-    };
-
-    const observer = new ResizeObserver(measure);
-    observer.observe(list);
-    measure();
-
-    return () => observer.disconnect();
-  }, [items]);
 
   return (
     <div
       className={cn(
         "pds-options",
         fillWidth && "pds-options--fill",
-        scrollable && "pds-options--scrollable",
         showFooter && "pds-options--with-footer",
         className
       )}
       data-figma-node="35:13598"
-      style={scrollable ? { maxHeight: `${OPTIONS_MAX_PANEL_HEIGHT}px` } : undefined}
       role="listbox"
     >
-      <div ref={listRef} className="pds-options__list">
+      <div className="pds-options__list">
+        {items.length === 0 && emptyLabel ? (
+          <p className="pds-type-body-s-regular pds-options__empty">{emptyLabel}</p>
+        ) : null}
         {items.map((item, index) => (
           <OptionItem
             key={item.id}
@@ -89,7 +74,6 @@ export function Options({
           />
         ))}
       </div>
-      {scrollable ? <div className="pds-options__scrollbar" aria-hidden="true" /> : null}
       {showFooter ? (
         <div className="pds-options__footer">
           <Button

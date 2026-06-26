@@ -1,6 +1,7 @@
 "use client";
 
 import { Button, SegmentedControl } from "../../../../components/pds";
+import { formatMMK } from "../../../lib/money";
 import { EmptyState } from "../../../../components/shared/empty-state";
 import { ExportCsvButton } from "../../../../components/shared/export-csv-button";
 import { useTranslations } from "next-intl";
@@ -77,20 +78,12 @@ const EXPENSE_COLORS: Record<string, string> = {
   salaries: "var(--pds-primary)",
 };
 
-function formatAmount(value: number) {
-  return Math.round(value).toLocaleString();
+function formatAmount(value: number): string {
+  return formatMMK(value);
 }
 
-function formatCompactAmount(value: number) {
-  const abs = Math.abs(value);
-  if (abs >= 1_000_000) {
-    const compact = value / 1_000_000;
-    return `${compact % 1 === 0 ? compact.toFixed(0) : compact.toFixed(1)}M`;
-  }
-  if (abs >= 1_000) {
-    return `${Math.round(value / 1_000)}K`;
-  }
-  return formatAmount(value);
+function formatCompactAmount(value: number): string {
+  return formatMMK(value);
 }
 
 function formatTrend(value: number) {
@@ -528,7 +521,7 @@ export function FinanceOverviewWorkspace() {
                     </div>
                     <div className={styles.deptAmount}>
                       <strong className="pds-type-title-xs-bold">
-                        {formatCompactAmount(dept.amount)} MMK
+                        {formatCompactAmount(dept.amount)}
                       </strong>
                       <span className="pds-type-caption-s muted">
                         {t("deptPaidPending", {

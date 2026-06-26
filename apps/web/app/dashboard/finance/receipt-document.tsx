@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { formatMMK } from "../../lib/money";
 import { Icon } from "../../lib/material-icon";
 import { printDocument } from "../../lib/print-document";
 
@@ -26,8 +27,8 @@ export type PaymentReceiptPayload = {
   invoiceNumber?: string | null;
 };
 
-export function formatReceiptAmount(value: number) {
-  return Math.round(value).toLocaleString("en-US");
+export function formatReceiptAmount(value: number): string {
+  return formatMMK(value);
 }
 
 export function shortAcademicYear(name: string) {

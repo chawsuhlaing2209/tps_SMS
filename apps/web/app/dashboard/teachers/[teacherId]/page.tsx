@@ -2,6 +2,8 @@
 
 import { updateTeacherTeachingSetupSchema } from "@sms/shared";
 import { cn } from "../../../../lib/utils";
+import { StatusPill } from "../../../../components/pds/subcomponents/status-pill";
+import { StatusBadge, Badge } from "../../../../components/shared/badge";
 import { useTranslations } from "next-intl";
 import { NavigationBackLink } from "../../../../components/shared/navigation-back-link";
 import { TrailLink } from "../../../../components/shared/trail-link";
@@ -24,12 +26,15 @@ import {
   draftToTeachingSetup,
   emptyTeachingSetupDraft,
   homeroomConflicts,
-  TeacherTeachingSetupFields,
+  TeacherClassroomsSetupFields,
+  TeacherGradesSetupFields,
+  TeacherSubjectsSetupFields,
   teachingSetupToDraft,
   type TeachingSetupDraft,
   type TeachingSetupOptions
 } from "../teacher-teaching-setup";
 import styles from "../teacher-profile.module.css";
+import "../teacher-teaching-setup-modal.css";
 import { StaffCompensationSection } from "../../salary/staff-compensation-section";
 
 type TeacherProfile = {
@@ -86,6 +91,50 @@ type AssignmentRow = {
   gradeName: string;
 };
 
+type AssignedGradeRow = {
+  gradeId: string;
+  gradeName: string;
+  academicYearName?: string;
+  isGradeChief: boolean;
+};
+
+function aggregateAssignedGrades(teacher: TeacherProfile): AssignedGradeRow[] {
+  const byGrade = new Map<string, AssignedGradeRow>();
+
+  for (const row of teacher.assignments.gradeChief) {
+    byGrade.set(row.gradeId, {
+      gradeId: row.gradeId,
+      gradeName: row.gradeName,
+      academicYearName: row.academicYearName,
+      isGradeChief: true
+    });
+  }
+
+  for (const row of teacher.assignments.homeroom) {
+    if (byGrade.has(row.gradeId)) {
+      continue;
+    }
+    byGrade.set(row.gradeId, {
+      gradeId: row.gradeId,
+      gradeName: row.gradeName,
+      isGradeChief: false
+    });
+  }
+
+  for (const row of teacher.assignments.subjectTeaching) {
+    if (byGrade.has(row.gradeId)) {
+      continue;
+    }
+    byGrade.set(row.gradeId, {
+      gradeId: row.gradeId,
+      gradeName: row.gradeName,
+      isGradeChief: false
+    });
+  }
+
+  return [...byGrade.values()].sort((left, right) => left.gradeName.localeCompare(right.gradeName));
+}
+
 type ProfileTab = "overview" | "teaching" | "salary";
 
 function subjectIconName(subject: string): string {
@@ -101,6 +150,41 @@ function classroomBadgeLabel(classroomName: string): string {
   const trimmed = classroomName.trim();
   const segment = trimmed.split(/[\s·-]+/).pop() ?? trimmed;
   return segment.charAt(0).toUpperCase();
+}
+
+function formatProfileDate(value: string | null) {
+  if (!value) {
+    return "—";
+  }
+  const date = new Date(value.includes("T") ? value : `${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+  }).format(date);
+}
+
+function teacherStatusLabel(
+  status: string,
+  t: (key: "statusActive" | "statusInactive" | "statusProbation" | "statusResigned" | "statusTerminated" | "statusArchived") => string
+) {
+  switch (status) {
+    case "active":
+      return t("statusActive");
+    case "probation":
+      return t("statusProbation");
+    case "resigned":
+      return t("statusResigned");
+    case "terminated":
+      return t("statusTerminated");
+    case "archived":
+      return t("statusArchived");
+    default:
+      return t("statusInactive");
+  }
 }
 
 function buildHeroMeta(
@@ -228,6 +312,8 @@ function flattenAssignments(teacher: TeacherProfile): AssignmentRow[] {
   return [...rows.values()];
 }
 
+type TeachingSetupModal = "subjects" | "grades" | "classrooms" | null;
+
 export default function TeacherProfilePage({
   params
 }: {
@@ -242,8 +328,9 @@ export default function TeacherProfilePage({
   const canViewTeacher = canManageHr || hasAnyPermission(permissions, ["classroom.manage"]);
 
   const [editOpen, setEditOpen] = useState(false);
-  const [teachingOpen, setTeachingOpen] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [setupModal, setSetupModal] = useState<TeachingSetupModal>(null);
+  const [confirmSaveKind, setConfirmSaveKind] = useState<"grades" | "classrooms" | null>(null);
+  const [statusConfirm, setStatusConfirm] = useState<"deactivate" | "activate" | null>(null);
   const [activeTab, setActiveTab] = useState<ProfileTab>("overview");
   const [draft, setDraft] = useState<TeachingSetupDraft>(emptyTeachingSetupDraft);
   const [formError, setFormError] = useState<string | null>(null);
@@ -275,12 +362,25 @@ export default function TeacherProfilePage({
     }
   );
 
+  const updateStaffStatus = useApiMutation(
+    (body: { employmentStatus: string }, tenant) => ({
+      path: `/tenants/${tenant}/hr/staff/${teacherId}/provision`,
+      init: { method: "PATCH", body: JSON.stringify(body) }
+    }),
+    {
+      invalidatePaths: (_b, tenant) => [
+        profilePath(tenant, teacherId),
+        `/tenants/${tenant}/hr/staff/overview?employmentRole=teacher`
+      ]
+    }
+  );
+
   useEffect(() => {
-    if (!teachingOpen || !existingSetup.data) {
+    if (!setupModal || !existingSetup.data) {
       return;
     }
     setDraft(teachingSetupToDraft(existingSetup.data, options.data));
-  }, [teachingOpen, existingSetup.data, options.data]);
+  }, [setupModal, existingSetup.data, options.data]);
 
   const assignmentRows = useMemo(
     () => (profile.data ? flattenAssignments(profile.data) : []),
@@ -328,10 +428,19 @@ export default function TeacherProfilePage({
 
   const chiefConflictRows = chiefConflicts(draft, options.data, teacherId);
   const homeroomConflictRows = homeroomConflicts(draft, options.data, teacherId);
-  const hasRoleConflicts = chiefConflictRows.length > 0 || homeroomConflictRows.length > 0;
+  const setupFieldsLoading = options.isLoading || existingSetup.isLoading;
 
-  async function saveTeachingSetup() {
+  async function saveTeachingSetup(kind: "subjects" | "grades" | "classrooms", skipConfirm = false) {
     setFormError(null);
+    if (!skipConfirm && kind === "grades" && chiefConflictRows.length > 0) {
+      setConfirmSaveKind("grades");
+      return;
+    }
+    if (!skipConfirm && kind === "classrooms" && homeroomConflictRows.length > 0) {
+      setConfirmSaveKind("classrooms");
+      return;
+    }
+
     const parsed = updateTeacherTeachingSetupSchema.safeParse(
       draftToTeachingSetup(draft, options.data)
     );
@@ -341,8 +450,8 @@ export default function TeacherProfilePage({
     }
     try {
       await updateTeachingSetup.mutateAsync(parsed.data);
-      setConfirmOpen(false);
-      setTeachingOpen(false);
+      setConfirmSaveKind(null);
+      setSetupModal(null);
       void profile.refetch();
     } catch (error) {
       setFormError(error instanceof Error ? error.message : c("somethingWrong"));
@@ -377,12 +486,23 @@ export default function TeacherProfilePage({
     }
   }
 
-  function openTeachingSetup() {
+  function openSetupModal(kind: TeachingSetupModal) {
     setFormError(null);
     if (existingSetup.data) {
       setDraft(teachingSetupToDraft(existingSetup.data, options.data));
     }
-    setTeachingOpen(true);
+    setSetupModal(kind);
+  }
+
+  async function confirmStatusChange() {
+    if (!statusConfirm) {
+      return;
+    }
+    await updateStaffStatus.mutateAsync({
+      employmentStatus: statusConfirm === "activate" ? "active" : "archived"
+    });
+    setStatusConfirm(null);
+    void profile.refetch();
   }
 
   if (profile.isLoading) {
@@ -401,6 +521,7 @@ export default function TeacherProfilePage({
     label: `${item.title}${item.institution ? ` — ${item.institution}` : ""}`,
     icon: "workspace_premium" as const
   }));
+  const assignedGrades = aggregateAssignedGrades(teacher);
 
   return (
     <div className={styles.teacherProfilePage}>
@@ -421,14 +542,9 @@ export default function TeacherProfilePage({
         avatar={{ initials: initials(teacher.fullName), tone: "teacher" }}
         title={teacher.fullName}
         status={
-          <span
-            className={cn(
-              "pds-detail-card-status",
-              isTeacherActive && styles.teacherProfileStatusActive
-            )}
-          >
+          <StatusPill tone={isTeacherActive ? "active" : "inactive"}>
             {isTeacherActive ? t("statusActive") : t("statusInactive")}
-          </span>
+          </StatusPill>
         }
         meta={metaLine || undefined}
         tags={qualificationTags.length ? qualificationTags : undefined}
@@ -439,10 +555,10 @@ export default function TeacherProfilePage({
                 label={t("moreActions")}
                 items={[
                   {
-                    id: "manage-teaching",
-                    label: t("manageTeaching"),
-                    icon: "school",
-                    onSelect: () => openTeachingSetup()
+                    id: "status",
+                    label: isTeacherActive ? t("setAsInactive") : t("markActive"),
+                    icon: isTeacherActive ? "pause_circle" : "check_circle",
+                    onSelect: () => setStatusConfirm(isTeacherActive ? "deactivate" : "activate")
                   },
                   ...(teacher.email
                     ? [
@@ -509,7 +625,105 @@ export default function TeacherProfilePage({
       />
 
       {activeTab === "overview" ? (
-        <div className={styles.teacherProfileTabGrid}>
+        <>
+          <section className={cn(styles.teacherProfileCard, styles.teacherProfileCardCompact)}>
+            <div className={styles.teacherProfileCardHead}>
+              <h2 className={cn("pds-type-title-xs-bold", styles.teacherProfileCardTitle)}>
+                {t("profileSummaryTitle")}
+              </h2>
+            </div>
+            <dl className={styles.teacherProfileSummaryGrid}>
+              <div className={styles.teacherProfileSummaryItem}>
+                <dt className={cn("pds-type-body-s-regular", styles.teacherProfileSummaryLabel)}>
+                  {t("email")}
+                </dt>
+                <dd className={cn("pds-type-body-m-medium", styles.teacherProfileSummaryValue)}>
+                  {teacher.email ?? "—"}
+                </dd>
+              </div>
+              <div className={styles.teacherProfileSummaryItem}>
+                <dt className={cn("pds-type-body-s-regular", styles.teacherProfileSummaryLabel)}>
+                  {t("phone")}
+                </dt>
+                <dd className={cn("pds-type-body-m-medium", styles.teacherProfileSummaryValue)}>
+                  {teacher.phone ?? "—"}
+                </dd>
+              </div>
+              <div className={styles.teacherProfileSummaryItem}>
+                <dt className={cn("pds-type-body-s-regular", styles.teacherProfileSummaryLabel)}>
+                  {t("department")}
+                </dt>
+                <dd className={cn("pds-type-body-m-medium", styles.teacherProfileSummaryValue)}>
+                  {teacher.department ?? "—"}
+                </dd>
+              </div>
+              <div className={styles.teacherProfileSummaryItem}>
+                <dt className={cn("pds-type-body-s-regular", styles.teacherProfileSummaryLabel)}>
+                  {t("joinDate")}
+                </dt>
+                <dd className={cn("pds-type-body-m-medium", styles.teacherProfileSummaryValue)}>
+                  {formatProfileDate(teacher.joinDate)}
+                </dd>
+              </div>
+              <div className={styles.teacherProfileSummaryItem}>
+                <dt className={cn("pds-type-body-s-regular", styles.teacherProfileSummaryLabel)}>
+                  {t("summaryStaffId")}
+                </dt>
+                <dd className={cn("pds-type-body-m-medium", styles.teacherProfileSummaryValue)}>
+                  {teacher.employeeNumber ?? "—"}
+                </dd>
+              </div>
+              <div className={styles.teacherProfileSummaryItem}>
+                <dt className={cn("pds-type-body-s-regular", styles.teacherProfileSummaryLabel)}>
+                  {t("summaryLoginAccount")}
+                </dt>
+                <dd className={cn("pds-type-body-m-medium", styles.teacherProfileSummaryValue)}>
+                  {teacher.loginEmail ?? t("loginNone")}
+                </dd>
+              </div>
+              <div className={styles.teacherProfileSummaryItem}>
+                <dt className={cn("pds-type-body-s-regular", styles.teacherProfileSummaryLabel)}>
+                  {t("promotionTitle")}
+                </dt>
+                <dd className={cn("pds-type-body-m-medium", styles.teacherProfileSummaryValue)}>
+                  {teacher.promotionTitle ?? "—"}
+                </dd>
+              </div>
+              <div className={styles.teacherProfileSummaryItem}>
+                <dt className={cn("pds-type-body-s-regular", styles.teacherProfileSummaryLabel)}>
+                  {c("status")}
+                </dt>
+                <dd className={styles.teacherProfileSummaryValue}>
+                  <StatusBadge
+                    status={teacher.status}
+                    label={teacherStatusLabel(teacher.status, t)}
+                  />
+                </dd>
+              </div>
+              <div className={styles.teacherProfileSummaryItem}>
+                <dt className={cn("pds-type-body-s-regular", styles.teacherProfileSummaryLabel)}>
+                  {t("summaryExperience")}
+                </dt>
+                <dd className={cn("pds-type-body-m-medium", styles.teacherProfileSummaryValue)}>
+                  {teacher.yearsExperience != null
+                    ? t("yearsExperience", { count: teacher.yearsExperience })
+                    : "—"}
+                </dd>
+              </div>
+              <div className={styles.teacherProfileSummaryItem}>
+                <dt className={cn("pds-type-body-s-regular", styles.teacherProfileSummaryLabel)}>
+                  {t("qualificationsTitle")}
+                </dt>
+                <dd className={cn("pds-type-body-m-medium", styles.teacherProfileSummaryValue)}>
+                  {teacher.qualifications.length
+                    ? t("summaryCredentialsCount", { count: teacher.qualifications.length })
+                    : "—"}
+                </dd>
+              </div>
+            </dl>
+          </section>
+
+          <div className={styles.teacherProfileTabGrid}>
           <section className={styles.teacherProfileCard}>
             <div className={styles.teacherProfileCardHead}>
               <div>
@@ -601,86 +815,167 @@ export default function TeacherProfilePage({
             </section>
           </div>
         </div>
+        </>
       ) : null}
 
       {activeTab === "teaching" ? (
         <div className={styles.teacherProfileTabGrid}>
-          <section className={styles.teacherProfileCard}>
-            <div className={styles.teacherProfileCardHead}>
-              <div>
-                <h2 className={cn("pds-type-title-xs-bold", styles.teacherProfileCardTitle)}>
-                  {t("subjectsAndLanguagesTaught")}
-                </h2>
-                {taughtSubjects.length ? (
-                  <p className={cn("pds-type-body-s-regular", styles.teacherProfileCardSubtitle)}>
-                    {t("taughtSubjectSummary", { count: taughtSubjects.length })}
-                  </p>
+          <div className={styles.teacherProfileStack}>
+            <section className={styles.teacherProfileCard}>
+              <div className={styles.teacherProfileCardHead}>
+                <div>
+                  <h2 className={cn("pds-type-title-xs-bold", styles.teacherProfileCardTitle)}>
+                    {t("subjectsAndLanguagesTaught")}
+                  </h2>
+                  {taughtSubjects.length ? (
+                    <p className={cn("pds-type-body-s-regular", styles.teacherProfileCardSubtitle)}>
+                      {t("taughtSubjectSummary", { count: taughtSubjects.length })}
+                    </p>
+                  ) : null}
+                </div>
+                {canManageHr ? (
+                  <Button
+                    type="button"
+                    buttonType="filled"
+                    buttonColor="secondary"
+                    prefixIcon="add"
+                    onClick={() => openSetupModal("subjects")}
+                  >
+                    {t("addSubjectCompetency")}
+                  </Button>
                 ) : null}
               </div>
-              {canManageHr ? (
-                <Button
-                  type="button"
-                  buttonType="filled"
-                  buttonColor="secondary"
-                  prefixIcon="add"
-                  onClick={openTeachingSetup}
-                >
-                  {t("addSubjectCompetency")}
-                </Button>
-              ) : null}
-            </div>
 
-            {taughtSubjects.length === 0 ? (
-              <p className={cn("pds-type-body-s-regular", styles.teacherProfileEmpty)}>{t("noTaughtSubjects")}</p>
-            ) : (
-              <ul className={styles.teacherProfileSubjectList}>
-                {taughtSubjects.map((row) => (
-                  <li key={row.subjectId} className={styles.teacherProfileSubjectRow}>
-                    <span className={styles.teacherProfileSubjectIcon} aria-hidden>
-                      <Icon name={subjectIconName(row.subjectName)} size={18} />
-                    </span>
-                    <span className={cn("pds-type-body-m-bold", styles.teacherProfileSubjectName)}>
-                      {row.subjectName}
-                    </span>
-                    {canManageHr ? (
-                      <RowMoreActionsMenu
-                        ariaLabel={c("moreActions")}
-                        items={[
-                          {
-                            id: "edit",
-                            label: c("edit"),
-                            icon: "edit",
-                            onSelect: openTeachingSetup
-                          },
-                          {
-                            id: "remove",
-                            label: c("remove"),
-                            icon: "delete",
-                            destructive: true,
-                            disabled: removingSubjectId === row.subjectId || updateTeachingSetup.isPending,
-                            onSelect: () => void removeTaughtSubject(row.subjectId)
-                          }
-                        ]}
-                      />
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {formError && !teachingOpen ? (
-              <p className="pds-type-body-m-medium error-text">{formError}</p>
-            ) : null}
-          </section>
+              {taughtSubjects.length === 0 ? (
+                <p className={cn("pds-type-body-s-regular", styles.teacherProfileEmpty)}>{t("noTaughtSubjects")}</p>
+              ) : (
+                <ul className={styles.teacherProfileSubjectList}>
+                  {taughtSubjects.map((row) => (
+                    <li key={row.subjectId} className={styles.teacherProfileSubjectRow}>
+                      <span className={styles.teacherProfileSubjectIcon} aria-hidden>
+                        <Icon name={subjectIconName(row.subjectName)} size={18} />
+                      </span>
+                      <span className={cn("pds-type-body-m-bold", styles.teacherProfileSubjectName)}>
+                        {row.subjectName}
+                      </span>
+                      {canManageHr ? (
+                        <RowMoreActionsMenu
+                          ariaLabel={c("moreActions")}
+                          items={[
+                            {
+                              id: "edit",
+                              label: c("edit"),
+                              icon: "edit",
+                              onSelect: () => openSetupModal("subjects")
+                            },
+                            {
+                              id: "remove",
+                              label: c("remove"),
+                              icon: "delete",
+                              destructive: true,
+                              disabled: removingSubjectId === row.subjectId || updateTeachingSetup.isPending,
+                              onSelect: () => void removeTaughtSubject(row.subjectId)
+                            }
+                          ]}
+                        />
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {formError && !setupModal ? (
+                <p className="pds-type-body-m-medium error-text">{formError}</p>
+              ) : null}
+            </section>
+
+            <section className={styles.teacherProfileCard}>
+              <div className={styles.teacherProfileCardHead}>
+                <div>
+                  <h2 className={cn("pds-type-title-xs-bold", styles.teacherProfileCardTitle)}>
+                    {t("teachingAssignments")}
+                  </h2>
+                  {assignmentRows.length ? (
+                    <p className={cn("pds-type-body-s-regular", styles.teacherProfileCardSubtitle)}>
+                      {assignmentSummary}
+                    </p>
+                  ) : null}
+                </div>
+                {canManageHr ? (
+                  <button
+                    type="button"
+                    className={cn("pds-type-body-m-medium", styles.teacherProfileManageBtn)}
+                    onClick={() => openSetupModal("classrooms")}
+                  >
+                    <Icon name="edit" size={18} />
+                    {t("manageClassrooms")}
+                  </button>
+                ) : null}
+              </div>
+              {assignmentRows.length === 0 ? (
+                <p className={cn("pds-type-body-s-regular", styles.teacherProfileEmpty)}>{t("noAssignments")}</p>
+              ) : (
+                <ul className={styles.teacherProfileRowList}>
+                  {assignmentRows.map((row) => (
+                    <li key={row.classroomId} className={styles.teacherProfileAssignmentRow}>
+                      <span className={styles.teacherProfileClassBadge} aria-hidden>
+                        {classroomBadgeLabel(row.classroomName)}
+                      </span>
+                      <div className={styles.teacherProfileRowBody}>
+                        <span className={cn("pds-type-body-m-bold", styles.teacherProfileRowTitle)}>
+                          {row.gradeName} · {row.classroomName}
+                        </span>
+                        <span className={cn("pds-type-body-s-regular", styles.teacherProfileRowMeta)}>
+                          {t("assignmentRowMeta", {
+                            students: teacher.stats.students || "—",
+                            periods: teacher.stats.periodsPerWeek || "—"
+                          })}
+                        </span>
+                      </div>
+                      {canManageHr ? (
+                        <RowMoreActionsMenu
+                          ariaLabel={c("moreActions")}
+                          items={[
+                            {
+                              id: "edit",
+                              label: c("edit"),
+                              icon: "edit",
+                              onSelect: () => openSetupModal("classrooms")
+                            },
+                            {
+                              id: "open",
+                              label: t("openClass"),
+                              icon: "open_in_new",
+                              onSelect: () => {
+                                window.location.href = `/dashboard/structure/rooms/${row.classroomId}`;
+                              }
+                            }
+                          ]}
+                        />
+                      ) : (
+                        <TrailLink
+                          href={`/dashboard/structure/rooms/${row.classroomId}`}
+                          className={cn("pds-type-body-m-medium", styles.teacherProfileRowAction)}
+                          from={{ label: teacher.fullName, href: teacherHref }}
+                        >
+                          {t("openClass")} ›
+                        </TrailLink>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
 
           <section className={styles.teacherProfileCard}>
             <div className={styles.teacherProfileCardHead}>
               <div>
                 <h2 className={cn("pds-type-title-xs-bold", styles.teacherProfileCardTitle)}>
-                  {t("teachingAssignments")}
+                  {t("assignedGradesTitle")}
                 </h2>
-                {assignmentRows.length ? (
+                {assignedGrades.length ? (
                   <p className={cn("pds-type-body-s-regular", styles.teacherProfileCardSubtitle)}>
-                    {assignmentSummary}
+                    {t("assignedGradesSummary", { count: assignedGrades.length })}
                   </p>
                 ) : null}
               </div>
@@ -688,62 +983,37 @@ export default function TeacherProfilePage({
                 <button
                   type="button"
                   className={cn("pds-type-body-m-medium", styles.teacherProfileManageBtn)}
-                  onClick={openTeachingSetup}
+                  onClick={() => openSetupModal("grades")}
                 >
                   <Icon name="edit" size={18} />
-                  {t("manageTeaching")}
+                  {t("manageGrades")}
                 </button>
               ) : null}
             </div>
-            {assignmentRows.length === 0 ? (
-              <p className={cn("pds-type-body-s-regular", styles.teacherProfileEmpty)}>{t("noAssignments")}</p>
+            {assignedGrades.length === 0 ? (
+              <p className={cn("pds-type-body-s-regular", styles.teacherProfileEmpty)}>
+                {t("assignedGradesEmpty")}
+              </p>
             ) : (
-              <ul className={styles.teacherProfileRowList}>
-                {assignmentRows.map((row) => (
-                  <li key={row.classroomId} className={styles.teacherProfileAssignmentRow}>
-                    <span className={styles.teacherProfileClassBadge} aria-hidden>
-                      {classroomBadgeLabel(row.classroomName)}
+              <ul className={styles.teacherProfileAssignedGradeList}>
+                {assignedGrades.map((row) => (
+                  <li key={row.gradeId} className={styles.teacherProfileAssignedGradeRow}>
+                    <span className={styles.teacherProfileGradeIcon}>
+                      <Icon name="school" size={18} />
                     </span>
                     <div className={styles.teacherProfileRowBody}>
                       <span className={cn("pds-type-body-m-bold", styles.teacherProfileRowTitle)}>
-                        {row.gradeName} · {row.classroomName}
+                        {row.gradeName}
                       </span>
-                      <span className={cn("pds-type-body-s-regular", styles.teacherProfileRowMeta)}>
-                        {t("assignmentRowMeta", {
-                          students: teacher.stats.students || "—",
-                          periods: teacher.stats.periodsPerWeek || "—"
-                        })}
-                      </span>
+                      {row.academicYearName ? (
+                        <span className={cn("pds-type-body-s-regular", styles.teacherProfileRowMeta)}>
+                          {row.academicYearName}
+                        </span>
+                      ) : null}
                     </div>
-                    {canManageHr ? (
-                      <RowMoreActionsMenu
-                        ariaLabel={c("moreActions")}
-                        items={[
-                          {
-                            id: "edit",
-                            label: c("edit"),
-                            icon: "edit",
-                            onSelect: openTeachingSetup
-                          },
-                          {
-                            id: "open",
-                            label: t("openClass"),
-                            icon: "open_in_new",
-                            onSelect: () => {
-                              window.location.href = `/dashboard/structure/rooms/${row.classroomId}`;
-                            }
-                          }
-                        ]}
-                      />
-                    ) : (
-                      <TrailLink
-                        href={`/dashboard/structure/rooms/${row.classroomId}`}
-                        className={cn("pds-type-body-m-medium", styles.teacherProfileRowAction)}
-                        from={{ label: teacher.fullName, href: teacherHref }}
-                      >
-                        {t("openClass")} ›
-                      </TrailLink>
-                    )}
+                    <Badge tone={row.isGradeChief ? "brand" : "neutral"}>
+                      {row.isGradeChief ? t("gradeChiefBadge") : t("notGradeChiefRole")}
+                    </Badge>
                   </li>
                 ))}
               </ul>
@@ -764,63 +1034,194 @@ export default function TeacherProfilePage({
       />
 
       <RecordFormSheet
-        open={teachingOpen}
-        onOpenChange={setTeachingOpen}
-        title={t("manageTeachingTitle")}
-        help={t("manageTeachingHelp")}
+        open={setupModal === "subjects"}
+        contentClassName="record-modal--teaching-setup"
+        onOpenChange={(open) => {
+          if (!open) {
+            setSetupModal((current) => (current === "subjects" ? null : current));
+          }
+        }}
+        onOpenAutoFocus={(event) => event.preventDefault()}
+        title={t("manageSubjectsTitle")}
+        help={t("manageSubjectsHelp")}
         onSubmit={(event) => {
           event.preventDefault();
-          if (hasRoleConflicts) {
-            setConfirmOpen(true);
-            return;
-          }
-          void saveTeachingSetup();
+          void saveTeachingSetup("subjects");
         }}
         footer={
           <>
-            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setTeachingOpen(false)}>
+            <button
+              type="button"
+              className="pds-type-body-m-bold btn-ghost"
+              onClick={() => setSetupModal(null)}
+            >
               {c("cancel")}
             </button>
-            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={updateTeachingSetup.isPending}>
+            <button
+              type="submit"
+              className="pds-type-body-m-bold btn-primary"
+              disabled={updateTeachingSetup.isPending}
+            >
               {updateTeachingSetup.isPending ? c("loading") : c("save")}
             </button>
           </>
         }
       >
-        <TeacherTeachingSetupFields
+        <TeacherSubjectsSetupFields
+          draft={draft}
+          onChange={setDraft}
+          options={options.data}
+          loading={setupFieldsLoading}
+        />
+        {formError && setupModal === "subjects" ? (
+          <p className="pds-type-body-m-medium error-text">{formError}</p>
+        ) : null}
+      </RecordFormSheet>
+
+      <RecordFormSheet
+        open={setupModal === "grades"}
+        contentClassName="record-modal--teaching-setup"
+        onOpenChange={(open) => {
+          if (!open) {
+            setSetupModal((current) => (current === "grades" ? null : current));
+          }
+        }}
+        onOpenAutoFocus={(event) => event.preventDefault()}
+        title={t("manageGradesTitle")}
+        help={t("manageGradesHelp")}
+        onSubmit={(event) => {
+          event.preventDefault();
+          void saveTeachingSetup("grades");
+        }}
+        footer={
+          <>
+            <button
+              type="button"
+              className="pds-type-body-m-bold btn-ghost"
+              onClick={() => setSetupModal(null)}
+            >
+              {c("cancel")}
+            </button>
+            <button
+              type="submit"
+              className="pds-type-body-m-bold btn-primary"
+              disabled={updateTeachingSetup.isPending}
+            >
+              {updateTeachingSetup.isPending ? c("loading") : c("save")}
+            </button>
+          </>
+        }
+      >
+        <TeacherGradesSetupFields
           draft={draft}
           onChange={setDraft}
           options={options.data}
           currentStaffId={teacherId}
-          loading={options.isLoading || existingSetup.isLoading}
+          loading={setupFieldsLoading}
         />
-        {formError ? <p className="pds-type-body-m-medium error-text">{formError}</p> : null}
+        {formError && setupModal === "grades" ? (
+          <p className="pds-type-body-m-medium error-text">{formError}</p>
+        ) : null}
+      </RecordFormSheet>
+
+      <RecordFormSheet
+        open={setupModal === "classrooms"}
+        contentClassName="record-modal--teaching-setup"
+        onOpenChange={(open) => {
+          if (!open) {
+            setSetupModal((current) => (current === "classrooms" ? null : current));
+          }
+        }}
+        onOpenAutoFocus={(event) => event.preventDefault()}
+        title={t("manageClassroomsTitle")}
+        help={t("manageClassroomsHelp")}
+        onSubmit={(event) => {
+          event.preventDefault();
+          void saveTeachingSetup("classrooms");
+        }}
+        footer={
+          <>
+            <button
+              type="button"
+              className="pds-type-body-m-bold btn-ghost"
+              onClick={() => setSetupModal(null)}
+            >
+              {c("cancel")}
+            </button>
+            <button
+              type="submit"
+              className="pds-type-body-m-bold btn-primary"
+              disabled={updateTeachingSetup.isPending}
+            >
+              {updateTeachingSetup.isPending ? c("loading") : c("save")}
+            </button>
+          </>
+        }
+      >
+        <TeacherClassroomsSetupFields
+          draft={draft}
+          onChange={setDraft}
+          options={options.data}
+          currentStaffId={teacherId}
+          loading={setupFieldsLoading}
+        />
+        {formError && setupModal === "classrooms" ? (
+          <p className="pds-type-body-m-medium error-text">{formError}</p>
+        ) : null}
       </RecordFormSheet>
 
       <ConfirmDialog
-        open={confirmOpen}
-        onOpenChange={setConfirmOpen}
+        open={confirmSaveKind !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setConfirmSaveKind(null);
+          }
+        }}
         title={t("roleConflictTitle")}
-        description={[
-          chiefConflictRows.length
+        description={
+          confirmSaveKind === "grades" && chiefConflictRows.length
             ? t("chiefConflictConfirm", {
                 items: chiefConflictRows
                   .map((item) => `${item.gradeName} (${item.staffName})`)
                   .join(", ")
               })
-            : null,
-          homeroomConflictRows.length
-            ? t("homeroomConflictConfirm", {
-                items: homeroomConflictRows.map((item) => item.classroomName).join(", ")
-              })
-            : null
-        ]
-          .filter(Boolean)
-          .join(" ")}
+            : confirmSaveKind === "classrooms" && homeroomConflictRows.length
+              ? t("homeroomConflictConfirm", {
+                  items: homeroomConflictRows.map((item) => item.classroomName).join(", ")
+                })
+              : ""
+        }
         confirmLabel={t("roleConflictOverride")}
         cancelLabel={c("cancel")}
         loading={updateTeachingSetup.isPending}
-        onConfirm={() => void saveTeachingSetup()}
+        onConfirm={() => {
+          if (confirmSaveKind === "grades") {
+            void saveTeachingSetup("grades", true);
+            return;
+          }
+          if (confirmSaveKind === "classrooms") {
+            void saveTeachingSetup("classrooms", true);
+          }
+        }}
+      />
+
+      <ConfirmDialog
+        open={statusConfirm !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setStatusConfirm(null);
+          }
+        }}
+        title={statusConfirm === "deactivate" ? t("deactivateTitle") : t("activateTitle")}
+        description={
+          statusConfirm === "deactivate" ? t("deactivateHelp") : t("activateHelp")
+        }
+        confirmLabel={
+          statusConfirm === "deactivate" ? t("deactivateConfirm") : t("activateConfirm")
+        }
+        cancelLabel={c("cancel")}
+        loading={updateStaffStatus.isPending}
+        onConfirm={() => void confirmStatusChange()}
       />
     </div>
   );

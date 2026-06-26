@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Inject,
   Injectable,
@@ -441,7 +442,15 @@ export class AcademicsService {
     return this.db.select().from(grades).where(eq(grades.tenantId, tenantId));
   }
 
+  private assertValidAgeRange(minAge: number | null, maxAge: number | null) {
+    if (minAge !== null && maxAge !== null && minAge > maxAge) {
+      throw new BadRequestException("Grade minimum age cannot be greater than maximum age.");
+    }
+  }
+
   async createGrade(tenantId: string, dto: CreateGradeDto, actorUserId?: string) {
+    this.assertValidAgeRange(dto.minAge ?? null, dto.maxAge ?? null);
+
     const [grade] = await this.db
       .insert(grades)
       .values({
@@ -511,12 +520,16 @@ export class AcademicsService {
   ) {
     const previous = await this.getGradeOrThrow(tenantId, gradeId);
 
+    const nextMinAge = dto.minAge === undefined ? previous.minAge : dto.minAge;
+    const nextMaxAge = dto.maxAge === undefined ? previous.maxAge : dto.maxAge;
+    this.assertValidAgeRange(nextMinAge, nextMaxAge);
+
     const [grade] = await this.db
       .update(grades)
       .set({
         name: dto.name ?? previous.name,
-        minAge: dto.minAge === undefined ? previous.minAge : dto.minAge,
-        maxAge: dto.maxAge === undefined ? previous.maxAge : dto.maxAge,
+        minAge: nextMinAge,
+        maxAge: nextMaxAge,
         updatedBy: actorUserId,
         updatedAt: new Date()
       })

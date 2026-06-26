@@ -5,7 +5,7 @@ import {
   NotFoundException,
   StreamableFile
 } from "@nestjs/common";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
 import {
@@ -43,6 +43,21 @@ import type {
 } from "./dto.js";
 
 type MonthParts = { year: number; month: number };
+
+/** Reserved — base salary is stored on staff compensation profiles, not as a pay component. */
+const BASE_SALARY_PAY_COMPONENT_CODE = "basic";
+
+function isBaseSalaryPayComponentCode(code: string) {
+  return code.trim().toLowerCase() === BASE_SALARY_PAY_COMPONENT_CODE;
+}
+
+function assertAssignablePayComponentCode(code: string) {
+  if (isBaseSalaryPayComponentCode(code)) {
+    throw new BadRequestException(
+      "Base salary is set on each staff profile, not as a pay component."
+    );
+  }
+}
 
 function parseMonth(value: string): MonthParts {
   const match = /^(\d{4})-(\d{2})$/.exec(value.trim());
@@ -93,8 +108,7 @@ export class PayrollService {
       .then((rows) =>
         rows.map((row) => ({
           ...row,
-          componentType:
-            row.kind === "deduction" ? "deduction" : row.code === "basic" ? "basic" : "allowance"
+          componentType: row.kind === "deduction" ? "deduction" : "allowance"
         }))
       );
   }
@@ -106,6 +120,7 @@ export class PayrollService {
   ) {
     const calculation = dto.calculation ?? "fixed";
     assertPercentAmount(dto.defaultAmount, calculation);
+    assertAssignablePayComponentCode(dto.code);
 
     const [component] = await this.db
       .insert(payComponents)
@@ -140,6 +155,23 @@ export class PayrollService {
       .where(and(eq(payComponents.id, id), eq(payComponents.tenantId, tenantId)));
     if (!row) throw new NotFoundException("Pay component not found.");
     return row;
+  }
+
+  private async filterStaffAssignableComponentIds(tenantId: string, componentIds: string[]) {
+    if (componentIds.length === 0) {
+      return [];
+    }
+
+    const rows = await this.db
+      .select({ id: payComponents.id, code: payComponents.code })
+      .from(payComponents)
+      .where(
+        and(eq(payComponents.tenantId, tenantId), inArray(payComponents.id, componentIds))
+      );
+
+    return rows
+      .filter((row) => !isBaseSalaryPayComponentCode(row.code))
+      .map((row) => row.id);
   }
 
   private async getIncentiveProgramOrThrow(tenantId: string, id: string) {
@@ -197,6 +229,56 @@ export class PayrollService {
       .returning();
     if (!component) throw new NotFoundException("Pay component not found.");
     return component;
+  }
+
+  async deletePayComponent(tenantId: string, id: string, actorUserId: string | undefined) {
+    const previous = await this.getPayComponentOrThrow(tenantId, id);
+    if (previous.status !== "archived") {
+      throw new BadRequestException("Only archived pay components can be deleted.");
+    }
+
+    if (isBaseSalaryPayComponentCode(previous.code)) {
+      await this.db
+        .delete(staffCompensationComponents)
+        .where(
+          and(
+            eq(staffCompensationComponents.tenantId, tenantId),
+            eq(staffCompensationComponents.componentId, id)
+          )
+        );
+    } else {
+      const [assigned] = await this.db
+        .select({ id: staffCompensationComponents.id })
+        .from(staffCompensationComponents)
+        .where(
+          and(
+            eq(staffCompensationComponents.tenantId, tenantId),
+            eq(staffCompensationComponents.componentId, id)
+          )
+        )
+        .limit(1);
+
+      if (assigned) {
+        throw new BadRequestException(
+          "This pay component is assigned to staff compensation profiles and cannot be deleted."
+        );
+      }
+    }
+
+    await this.db
+      .delete(payComponents)
+      .where(and(eq(payComponents.id, id), eq(payComponents.tenantId, tenantId)));
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "pay_component.delete",
+      recordType: "PayComponent",
+      recordId: id,
+      before: { name: previous.name, code: previous.code }
+    });
+
+    return { ok: true as const };
   }
 
   // --- Benefit packages ---
@@ -557,7 +639,12 @@ export class PayrollService {
           })
           .from(staffCompensationComponents)
           .innerJoin(payComponents, eq(staffCompensationComponents.componentId, payComponents.id))
-          .where(eq(staffCompensationComponents.profileId, profile.id))
+          .where(
+            and(
+              eq(staffCompensationComponents.profileId, profile.id),
+              ne(payComponents.code, BASE_SALARY_PAY_COMPONENT_CODE)
+            )
+          )
       : [];
 
     const enrollments = await this.db
@@ -675,9 +762,19 @@ export class PayrollService {
         .delete(staffCompensationComponents)
         .where(eq(staffCompensationComponents.profileId, profileId));
 
-      if (dto.components.length > 0) {
+      const assignableComponents = await this.filterStaffAssignableComponentIds(
+        tenantId,
+        dto.components.map((component) => component.componentId)
+      );
+      const allowedComponentIds = new Set(assignableComponents);
+
+      const componentsToInsert = dto.components.filter((component) =>
+        allowedComponentIds.has(component.componentId)
+      );
+
+      if (componentsToInsert.length > 0) {
         await this.db.insert(staffCompensationComponents).values(
-          dto.components.map((c) => ({
+          componentsToInsert.map((c) => ({
             tenantId,
             profileId,
             componentId: c.componentId,
@@ -697,9 +794,14 @@ export class PayrollService {
         .delete(staffCompensationComponents)
         .where(eq(staffCompensationComponents.profileId, profileId));
 
-      if (dto.payComponentIds.length > 0) {
+      const assignableComponentIds = await this.filterStaffAssignableComponentIds(
+        tenantId,
+        dto.payComponentIds
+      );
+
+      if (assignableComponentIds.length > 0) {
         await this.db.insert(staffCompensationComponents).values(
-          dto.payComponentIds.map((componentId) => ({
+          assignableComponentIds.map((componentId) => ({
             tenantId,
             profileId,
             componentId,

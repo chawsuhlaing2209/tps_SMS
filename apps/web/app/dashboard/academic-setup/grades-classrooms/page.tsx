@@ -127,6 +127,8 @@ export default function GradesClassroomsPage() {
   const subjects = useReferenceApiQuery<Subject[]>((tn) => `/tenants/${tn}/academics/subjects`);
   const homeroomIncludeStaffId =
     roomFormMode?.type === "edit" ? roomFormMode.room.classTeacherStaffId ?? undefined : undefined;
+  const gradeChiefIncludeStaffId =
+    gradeFormMode?.type === "edit" ? gradeFormMode.grade.gradeChiefStaffId ?? undefined : undefined;
 
   const teachers = useReferenceApiQuery<{ data: StaffMember[] }>((tn) => {
     if (!selectedGradeId) {
@@ -137,8 +139,9 @@ export default function GradesClassroomsPage() {
       eligibleGradeId: selectedGradeId,
       limit: "200"
     });
-    if (homeroomIncludeStaffId) {
-      params.set("includeStaffId", homeroomIncludeStaffId);
+    const includeStaffId = homeroomIncludeStaffId ?? gradeChiefIncludeStaffId;
+    if (includeStaffId) {
+      params.set("includeStaffId", includeStaffId);
     }
     return `/tenants/${tn}/hr/staff?${params.toString()}`;
   });

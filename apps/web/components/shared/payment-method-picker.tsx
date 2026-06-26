@@ -5,7 +5,6 @@ import { paymentMethods, type PaymentMethod } from "@sms/shared";
 import { useTranslations } from "next-intl";
 import { Icon } from "../../app/lib/material-icon";
 import { cn } from "../../lib/utils";
-import { FormInput } from "./form-input";
 
 export const PAYMENT_METHOD_ICONS: Partial<Record<PaymentMethod, string>> = {
   kbzpay: "qr_code_2",
@@ -65,8 +64,9 @@ export function PaymentMethodPicker({
       {onReferenceChange && needsReference ? (
         <label className="pay-field">
           <span className="pds-type-body-s-semibold pay-field__label">{tFinance("receiptReference")}</span>
-          <FormInput
-            className="pds-type-body-m-medium pay-input"
+          <input
+            className="pds-type-body-m-medium form-input text-input__field"
+            type="text"
             value={reference}
             onChange={(event) => onReferenceChange(event.target.value)}
           />

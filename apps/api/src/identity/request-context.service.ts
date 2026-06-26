@@ -91,7 +91,7 @@ export class RequestContextService {
 
   async resolve(tenantId: string, actorUserId: string | undefined): Promise<TenantContext> {
     if (!actorUserId) {
-      throw new UnauthorizedException("Missing actor user id.");
+      throw new UnauthorizedException("Missing or expired session.");
     }
 
     const cached = this.tenantContextCache.get(tenantId, actorUserId);
