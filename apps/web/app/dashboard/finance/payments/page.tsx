@@ -6,6 +6,7 @@ import { TrailLink } from "../../../../components/shared/trail-link";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useApiMutation, useLiveApiQuery } from "../../../lib/api";
+import { formatMMK } from "../../../lib/money";
 import { useDashPageTitleActionsTarget } from "../../dashboard-page-title";
 import { fetchAllPaginated } from "../../../lib/export-csv";
 import { getSession } from "../../../lib/session";
@@ -70,15 +71,8 @@ const METHOD_ICONS: Record<string, string> = {
   cash: "payments"
 };
 
-function compactMMK(value: number) {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `${Math.round(value / 1_000)}K`;
-  return String(Math.round(value));
-}
-
-function fullNumber(value: number) {
-  return Math.round(value).toLocaleString("en-US");
-}
+const compactMMK = formatMMK;
+const fullNumber = formatMMK;
 
 function formatDate(value: string | null) {
   if (!value) return "—";

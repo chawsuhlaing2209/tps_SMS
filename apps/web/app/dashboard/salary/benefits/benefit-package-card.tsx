@@ -1,14 +1,15 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { formatMMK } from "../../../lib/money";
 import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
 import { Icon } from "../../../lib/material-icon";
 import { cn } from "../../../../lib/utils";
 import { benefitIconTone } from "./benefit-icon-themes";
 import type { BenefitPackageRecord } from "./benefit-package-form-sheet";
 
-function formatMoney(value: number) {
-  return Math.round(value).toLocaleString();
+function formatMoney(value: number): string {
+  return formatMMK(value);
 }
 
 type Props = {

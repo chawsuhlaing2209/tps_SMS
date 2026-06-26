@@ -1,5 +1,6 @@
 "use client";
 import { InputWrapper, TextInput } from "../../../../components/shared/form-input";
+import { formatMMK } from "../../../lib/money";
 import { Toggle } from "../../../../components/shared/toggle";
 
 import { mandatoryEnrollmentFeeTypes } from "@sms/shared";
@@ -69,8 +70,8 @@ const FEE_ITEMS_PATH = (tenant: string) => `/tenants/${tenant}/finance/fee-items
 const SUMMARY_PATH = (tenant: string, yearId: string) =>
   `/tenants/${tenant}/finance/fee-structures/summary?academicYearId=${yearId}`;
 
-function formatMmk(value: number) {
-  return `${Math.round(value).toLocaleString()} MMK`;
+function formatMmk(value: number): string {
+  return formatMMK(value);
 }
 
 function formatAmount(value: number) {
@@ -466,7 +467,7 @@ export default function FeeStructuresPage() {
                     <p className={cn("pds-type-caption-m", styles.heroEyebrow)}>
                       {t("annualLabel")} · {selectedGrade.name}
                     </p>
-                    <p className={cn("pds-type-display-m", styles.heroTotal)}>{formatAmount(totalAnnual)}</p>
+                    <p className={cn("pds-type-display-m", styles.heroTotal)}>{formatMmk(totalAnnual)}</p>
                     <p className={cn("pds-type-body-m-medium", styles.heroSub)}>{t("annualCurrencyHint")}</p>
                   </div>
                   <div className={styles.heroStats}>
@@ -555,7 +556,7 @@ export default function FeeStructuresPage() {
                             </span>
                           </div>
                           <span className={cn("pds-type-body-m-bold", styles.componentAmount)}>
-                            {formatAmount(row.annualAmount)}
+                            {formatMmk(row.annualAmount)}
                           </span>
                           <div className={styles.shareCell}>
                             <div className={styles.shareBar}>

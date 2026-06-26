@@ -4,6 +4,7 @@ import { FormDatePicker, FormInput } from "../../../components/shared/form-input
 import { myanmarPhoneSchema, type StaffQualification } from "@sms/shared";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
+import { useEffect, useMemo } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { z } from "zod";
 import { useApiMutation, useApiQuery } from "../../lib/api";
@@ -26,6 +27,7 @@ type FormValues = {
 };
 
 const DEPARTMENTS_PATH = (tenant: string) => `/tenants/${tenant}/departments/active`;
+const TEACHING_DEPARTMENT_NAME = "Teaching";
 
 export function TeacherCreateSheet({
   open,
@@ -42,6 +44,11 @@ export function TeacherCreateSheet({
 
   const departments = useApiQuery<Department[]>((tenant) =>
     open ? DEPARTMENTS_PATH(tenant) : null
+  );
+
+  const teachingDepartmentId = useMemo(
+    () => departments.data?.find((department) => department.name === TEACHING_DEPARTMENT_NAME)?.id ?? "",
+    [departments.data]
   );
 
   const schema = z.object({
@@ -74,6 +81,17 @@ export function TeacherCreateSheet({
   });
 
   const qualifications = useFieldArray({ control: form.control, name: "qualifications" });
+
+  useEffect(() => {
+    if (!open || !teachingDepartmentId) {
+      return;
+    }
+    const current = form.getValues("departmentId");
+    if (current && departments.data?.some((department) => department.id === current)) {
+      return;
+    }
+    form.setValue("departmentId", teachingDepartmentId, { shouldValidate: true });
+  }, [open, teachingDepartmentId, departments.data, form]);
 
   const provision = useApiMutation<
     {

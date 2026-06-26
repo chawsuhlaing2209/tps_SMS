@@ -8,11 +8,6 @@
   border-radius: var(--pds-radius-24);
 }
 
-.teacherProfileStatusActive {
-  background: var(--pds-compliment-brand);
-  color: var(--pds-text-primary);
-}
-
 .teacherProfileStats {
   display: grid;
   gap: var(--pds-gap-medium);
@@ -85,6 +80,54 @@
   gap: var(--pds-gap-medium);
   min-height: 240px;
   padding: var(--pds-padding-large);
+}
+
+.teacherProfileCardCompact {
+  min-height: auto;
+}
+
+.teacherProfileSummaryGrid {
+  display: grid;
+  gap: var(--pds-gap-medium) var(--pds-gap-x-large);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+}
+
+.teacherProfileSummaryItem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pds-gap-xx-small);
+  margin: 0;
+}
+
+.teacherProfileSummaryLabel {
+  color: var(--pds-text-secondary);
+  margin: 0;
+}
+
+.teacherProfileSummaryValue {
+  color: var(--pds-text-primary);
+  margin: 0;
+}
+
+.teacherProfileAssignedGradeList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pds-gap-small);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.teacherProfileAssignedGradeRow {
+  align-items: center;
+  background: var(--pds-background-layout-primary);
+  border: 1px solid var(--pds-border-color-primary);
+  border-radius: var(--pds-radius-12);
+  display: flex;
+  gap: var(--pds-gap-medium);
+  min-height: 60px;
+  padding: var(--pds-padding-small) var(--pds-padding-medium);
 }
 
 .teacherProfileSalaryPanel {
@@ -350,7 +393,17 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .teacherProfileSummaryGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .teacherProfileTabGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .teacherProfileSummaryGrid {
     grid-template-columns: 1fr;
   }
 }

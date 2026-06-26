@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { formatMMK } from "../../lib/money";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -46,8 +47,8 @@ type Props = {
   onAdded: () => void;
 };
 
-function formatAmount(value: number) {
-  return Math.round(value).toLocaleString("en-US");
+function formatAmount(value: number): string {
+  return formatMMK(value);
 }
 
 export function StudentAddServiceSheet({ studentId, open, onOpenChange, onAdded }: Props) {
@@ -142,7 +143,7 @@ export function StudentAddServiceSheet({ studentId, open, onOpenChange, onAdded 
 
   const serviceOptions = (available.data ?? []).map((row) => ({
     value: row.feeItemId,
-    label: `${row.name} · ${formatAmount(row.unitAmount)} MMK`
+    label: `${row.name} · ${formatAmount(row.unitAmount)}`
   }));
 
   async function onSubmit(values: z.infer<typeof schema>) {
@@ -244,17 +245,17 @@ export function StudentAddServiceSheet({ studentId, open, onOpenChange, onAdded 
               <div className="invoice-preview__totals">
                 <div>
                   <span>{tEnroll("subtotal")}</span>
-                  <span>{formatAmount(preview.subtotal)} MMK</span>
+                  <span>{formatAmount(preview.subtotal)}</span>
                 </div>
                 {preview.discountTotal > 0 ? (
                   <div>
                     <span>{tEnroll("discountTotal")}</span>
-                    <span>-{formatAmount(preview.discountTotal)} MMK</span>
+                    <span>-{formatAmount(preview.discountTotal)}</span>
                   </div>
                 ) : null}
                 <div className="invoice-preview__grand">
                   <span>{tEnroll("totalDue")}</span>
-                  <span>{formatAmount(preview.total)} MMK</span>
+                  <span>{formatAmount(preview.total)}</span>
                 </div>
               </div>
               <p className="pds-type-body-s-regular muted">

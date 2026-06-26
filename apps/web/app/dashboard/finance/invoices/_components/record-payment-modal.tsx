@@ -1,5 +1,6 @@
 "use client";
 import { FormInput } from "../../../../../components/shared/form-input";
+import { formatMMK } from "../../../../lib/money";
 
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { paymentMethods, type PaymentMethod } from "@sms/shared";
@@ -53,8 +54,10 @@ const METHOD_ICONS: Partial<Record<PaymentMethod, string>> = {
   other: "credit_card"
 };
 
-function fullNumber(value: number) {
-  return Math.round(value).toLocaleString("en-US");
+const EMPTY_ROSTER: RosterRow[] = [];
+
+function fullNumber(value: number): string {
+  return formatMMK(value);
 }
 
 type RecordPaymentModalProps = {
@@ -99,8 +102,13 @@ export function RecordPaymentModal(props: RecordPaymentModalProps) {
         : null
   );
 
-  const owing =
-    props.variant === "roster" ? (owingRoster.data?.rows ?? []) : [];
+  const owingRows = useMemo(
+    () =>
+      props.variant === "roster"
+        ? (owingRoster.data?.rows ?? EMPTY_ROSTER)
+        : EMPTY_ROSTER,
+    [props.variant, owingRoster.data?.rows]
+  );
 
   const [studentId, setStudentId] = useState("");
   const [amount, setAmount] = useState("");
@@ -109,8 +117,8 @@ export function RecordPaymentModal(props: RecordPaymentModalProps) {
 
   const selectedRosterRow = useMemo(() => {
     if (props.variant !== "roster") return null;
-    return owing.find((row) => row.studentId === studentId) ?? owing[0] ?? null;
-  }, [owing, props.variant, studentId]);
+    return owingRows.find((row) => row.studentId === studentId) ?? owingRows[0] ?? null;
+  }, [owingRows, props.variant, studentId]);
 
   const maxAmount =
     props.variant === "invoice" ? props.context.balanceDue : (selectedRosterRow?.balance ?? 0);
@@ -127,14 +135,18 @@ export function RecordPaymentModal(props: RecordPaymentModalProps) {
     if (!open) return;
     setReference("");
     setMethod("cash");
-    if (props.variant === "roster") {
-      const target =
-        props.initialStudentId && owing.some((row) => row.studentId === props.initialStudentId)
-          ? props.initialStudentId
-          : (owing[0]?.studentId ?? "");
-      setStudentId(target);
-    }
-  }, [open, owing, props]);
+  }, [open]);
+
+  const initialStudentId = props.variant === "roster" ? props.initialStudentId : null;
+
+  useEffect(() => {
+    if (!open || props.variant !== "roster") return;
+    const target =
+      initialStudentId && owingRows.some((row) => row.studentId === initialStudentId)
+        ? initialStudentId
+        : (owingRows[0]?.studentId ?? "");
+    setStudentId(target);
+  }, [open, props.variant, initialStudentId, owingRows]);
 
   useEffect(() => {
     if (!open) return;
@@ -268,7 +280,7 @@ export function RecordPaymentModal(props: RecordPaymentModalProps) {
                     variant="form"
                     value={selectedRosterRow.studentId}
                     onValueChange={(value) => setStudentId(typeof value === "string" ? value : "")}
-                    options={owing.map((row) => ({
+                    options={owingRows.map((row) => ({
                       value: row.studentId,
                       label: t("studentOption", {
                         name: row.studentFullName,
@@ -297,7 +309,7 @@ export function RecordPaymentModal(props: RecordPaymentModalProps) {
 
               <label className="pay-field">
                 <span className="pds-type-body-s-semibold pay-field__label">{t("amountReceived")}</span>
-                <FormInput
+                <input
                   className="pay-amount"
                   type="number"
                   inputMode="numeric"

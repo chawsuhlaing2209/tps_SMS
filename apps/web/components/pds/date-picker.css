@@ -86,14 +86,16 @@
   position: absolute;
   top: calc(100% + var(--pds-gap-x-small));
   width: max-content;
-  z-index: 40;
+  z-index: var(--pds-z-popover, 1000);
 }
 
 .pds-date-picker-position--fixed {
   left: auto;
+  pointer-events: auto;
   position: fixed;
   top: auto;
   width: auto;
+  z-index: var(--pds-z-popover, 1000);
 }
 
 .pds-date-picker-position__panel {

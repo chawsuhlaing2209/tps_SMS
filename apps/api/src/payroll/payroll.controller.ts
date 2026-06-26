@@ -82,6 +82,15 @@ export class PayrollController {
     return this.payrollService.reactivatePayComponent(tenantId, componentId, actorUserId);
   }
 
+  @Delete("pay-components/:componentId")
+  deletePayComponent(
+    @Param("tenantId") tenantId: string,
+    @Param("componentId") componentId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.payrollService.deletePayComponent(tenantId, componentId, actorUserId);
+  }
+
   @Get("benefit-packages")
   listBenefitPackages(@Param("tenantId") tenantId: string) {
     return this.payrollService.listBenefitPackages(tenantId);

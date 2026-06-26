@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p .claude/skills/run-sms && echo created)",
+      "Edit(/.claude/skills/run-sms/**)",
+      "Bash(node .claude/skills/run-sms/driver.mjs login /private/tmp/claude-501/-Users-chawsuhlaing-Desktop-SMS/9bb5a389-5158-48bc-8f50-805071f2efa4/scratchpad/dash.png)",
+      "Bash(node .claude/skills/run-sms/driver.mjs login __TRACKED_VAR__/dash.png)",
+      "Bash(node .claude/skills/run-sms/driver.mjs login __TRACKED_VAR__/fin.png /dashboard/finance/invoices)",
+      "Bash(curl -s -o /dev/null -w \"web: %{http_code}\\\\n\" http://localhost:3000/)",
+      "Bash(curl -s http://localhost:4000/health -w \" <- api/health\\\\n\")",
+      "Bash(node .claude/skills/run-sms/driver.mjs shot __TRACKED_VAR__/shot-login.png /)",
+      "Bash(awk '{print $5, $9}')",
+      "Bash(curl -s -X POST http://localhost:4000/tenants/demo-alpha/auth/login -H \"Content-Type: application/json\" -d '{\"identifier\":\"owner@demo-alpha.example.edu.mm\",\"password\":\"ChangeMe123!\"}' -w \"\\\\nHTTP %{http_code}\\\\n\")",
+      "Bash(node -e \"const s=require\\('./package.json'\\).scripts; ['db:up','dev','db:migrate','db:seed','dev:web','dev:api'].forEach\\(k=>console.log\\(k, '->', s[k]||'MISSING'\\)\\)\")"
+    ],
+    "additionalDirectories": [
+      "/Users/chawsuhlaing/Desktop/SMS/.claude/skills"
+    ]
+  },
+  "enabledPlugins": {
+    "ponytail@ponytail": true
+  }
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import "./payroll-staff-config-modal.css";
+import { formatMMK } from "../../../lib/money";
 import "./payroll-config-row.css";
 import type { PaymentMethod } from "@sms/shared";
 import { useTranslations } from "next-intl";
@@ -84,8 +85,8 @@ type Props = {
 const recordPath = (tenant: string, recordId: string) =>
   `/tenants/${tenant}/payroll-runs/records/${recordId}`;
 
-function formatMoney(value: number) {
-  return Math.round(value).toLocaleString();
+function formatMoney(value: number): string {
+  return formatMMK(value);
 }
 
 function personInitials(name: string | null | undefined) {

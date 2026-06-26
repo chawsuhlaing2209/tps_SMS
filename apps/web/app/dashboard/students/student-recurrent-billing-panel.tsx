@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { formatMMK } from "../../lib/money";
 import Link from "next/link";
 import { TrailLink } from "../../../components/shared/trail-link";
 import { useState } from "react";
@@ -39,8 +40,8 @@ export type StudentRecurrentBillingData = {
   activeServices: RecurrentBillingService[];
 };
 
-function formatMoney(value: number) {
-  return Math.round(value).toLocaleString();
+function formatMoney(value: number): string {
+  return formatMMK(value);
 }
 
 const DEFAULT_CURRENCY = "MMK";

@@ -6065,6 +6065,30 @@ button.btn-hero-outline:hover {
 }.teaching-setup__remove {
   align-self: center;
   justify-self: center;
+}.teaching-setup__grade-chief {
+  margin-top: var(--pds-gap-small);
+}.teaching-setup__grade-groups {
+  display: grid;
+  gap: var(--pds-gap-medium);
+}.teaching-setup__grade-group {
+  background: var(--pds-background-layout-primary);
+  border: 1px solid var(--pds-border-color-primary);
+  border-radius: var(--pds-radius-12);
+  display: grid;
+  gap: var(--pds-gap-medium);
+  padding: var(--pds-gap-medium);
+}.teaching-setup__grade-group-head {
+  align-items: center;
+  display: flex;
+  gap: var(--pds-gap-medium);
+  justify-content: space-between;
+}.teaching-setup__grade-group-title {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--pds-gap-x-small);
+}.teaching-setup__grade-empty {
+  margin: 0;
 }.teacher-assignment-sections {
   display: grid;
   gap: var(--pds-gap-large);
@@ -6374,6 +6398,7 @@ button.btn-hero-outline:hover {
 }
 
 .text-area-input:focus-within {
+  background: var(--pds-input-background-default);
   border-color: var(--pds-border-color-active);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--pds-states-focus) 18%, transparent);
 }
@@ -6408,19 +6433,20 @@ button.btn-hero-outline:hover {
 }
 
 .text-area-input__body {
-  display: grid;
-  flex: 1 1 auto;
-  gap: var(--pds-gap-x-small);
+  background: var(--pds-background-layout-secondary);
   min-width: 0;
   padding: var(--pds-padding-small) var(--pds-padding-medium);
-  position: relative;
+  width: 100%;
 }
 
-.text-area-input--sm .text-area-input__body {
-  min-height: 88px;
+.text-area-input__content {
+  display: grid;
+  grid-template-rows: minmax(44px, 1fr) auto;
+  min-height: 72px;
+  width: 100%;
 }
 
-.text-area-input--lg .text-area-input__body {
+.text-area-input--lg .text-area-input__content {
   min-height: 186px;
 }
 
@@ -6428,19 +6454,37 @@ button.btn-hero-outline:hover {
   background: transparent;
   border: 0;
   box-shadow: none;
-  min-height: 0;
+  color: var(--pds-text-primary);
+  height: 100%;
+  min-height: 44px;
+  outline: none;
+  overflow: auto;
   padding: 0;
-  resize: vertical;
+  resize: none;
   width: 100%;
+}
+
+.text-area-input__field::placeholder {
+  color: var(--pds-text-placeholder);
 }
 
 .text-area-input__field:focus {
   box-shadow: none;
+  outline: none;
+}
+
+.text-area-input--disabled .text-area-input__field {
+  color: var(--pds-text-disabled-2nd);
+  cursor: not-allowed;
+}
+
+.text-area-input--disabled .text-area-input__field::placeholder {
+  color: var(--pds-text-disabled-2nd);
 }
 
 .text-area-input__count {
   color: var(--pds-text-secondary);
-  justify-self: end;
+  padding-top: var(--pds-gap-x-small);
   text-align: right;
 }
 
@@ -8770,6 +8814,8 @@ button.btn-hero-outline:hover {
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.22);
   display: flex;
   flex-direction: column;
+  /* Device-aware cap: clamps to the viewport so the list scrolls on short screens. */
+  max-height: min(20rem, calc(100dvh - 6rem));
   overflow: hidden;
   position: relative;
   width: 200px;
@@ -8785,18 +8831,16 @@ button.btn-hero-outline:hover {
   flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
-  overflow: hidden;
-}.pds-options--scrollable .pds-options__list {
   overflow-x: clip;
   overflow-y: auto;
-}.pds-options__scrollbar {
-  background: color-mix(in srgb, var(--pds-foreground-contrast-lower) 100%, transparent);
-  border-radius: var(--pds-radius-pill);
-  height: 3px;
-  position: absolute;
-  right: var(--pds-padding-x-small);
-  top: var(--pds-padding-medium);
-  width: 11px;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.pds-options__empty {
+  color: var(--pds-text-secondary);
+  margin: 0;
+  padding: var(--pds-space-12) var(--pds-space-16);
 }.pds-options__footer {
   align-items: center;
   background: var(--pds-background-canvas);
@@ -8889,6 +8933,25 @@ button.btn-hero-outline:hover {
   position: absolute;
   right: 0;
   z-index: 50;
+}.pds-select-item-position--fixed {
+  display: block;
+  left: auto;
+  min-height: 0;
+  pointer-events: auto;
+  right: auto;
+  top: auto;
+  z-index: var(--pds-z-popover);
+}.pds-select-item-position--fixed .pds-select-item-position__spacer {
+  display: none;
+}.pds-select-item-position__panel--constrained {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  width: 100%;
+}.pds-select-item-position__panel--constrained .pds-options {
+  flex: 1 1 auto;
+  max-height: none;
+  min-height: 0;
 }.pds-select-item-position--bottom {
   justify-content: flex-end;
   top: calc(100% + var(--pds-gap-x-small));
@@ -8983,6 +9046,7 @@ button.btn-hero-outline:hover {
 :root {
   --pds-z-overlay: 100;
   --pds-z-modal: 101;
+  --pds-z-popover: 1000;
 }
 .pds-modal__overlay {
   background: rgb(10 42 29 / 40%);
@@ -9678,27 +9742,7 @@ button.btn-hero-outline:hover {
   outline-offset: 2px;
 }
 
-/* Keep PdsSelect options fully visible inside modals (above footer, outside scroll clip). */
-.pds-modal__footer {
-  position: relative;
-  z-index: 1;
-}
-
-.pds-modal .pds-select-item-position {
-  z-index: 10;
-}
-
-.pds-modal:has(.pds-select[data-state="focus"]),
-.pds-modal:has(.pds-select[data-state="focus"]) .record-modal__form,
-.pds-modal:has(.pds-select[data-state="focus"]) .entity-form--modal,
-.pds-modal:has(.pds-select[data-state="focus"]) .pds-modal__body {
-  overflow: visible;
-}
-
-.form-field-block:has(.pds-select[data-state="focus"]) {
-  position: relative;
-  z-index: 2;
-}
+/* PdsSelect panels portal to document.body (see SelectItemPosition); no overflow overrides needed. */
 
 /* ── Payroll staff config modal ── */
 .payroll-staff-config-modal {

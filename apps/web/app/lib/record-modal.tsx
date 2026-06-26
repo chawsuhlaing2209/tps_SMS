@@ -1,6 +1,6 @@
 "use client";
 
-import type { FormEventHandler, ReactNode } from "react";
+import type { ComponentProps, FormEventHandler, ReactNode } from "react";
 import {
   Modal,
   ModalBody,
@@ -32,6 +32,7 @@ export function RecordFormModal({
   size = "default",
   closeLabel,
   contentClassName,
+  onOpenAutoFocus,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -52,6 +53,7 @@ export function RecordFormModal({
   closeLabel?: string;
   /** Extra class on modal shell (e.g. domain-specific scroll/layout). */
   contentClassName?: string;
+  onOpenAutoFocus?: ComponentProps<typeof ModalContent>["onOpenAutoFocus"];
 }) {
   const hasHelp = Boolean(help);
   const ceremonyHeader = headerVariant === "withStepper";
@@ -63,8 +65,9 @@ export function RecordFormModal({
           "record-modal",
           size === "wide" && "record-modal--wide",
           ceremonyHeader && "record-modal--ceremony",
-          ceremonyHeader && contentClassName,
+          contentClassName,
         )}
+        onOpenAutoFocus={onOpenAutoFocus}
         {...(hasHelp || ceremonyHeader ? {} : { "aria-describedby": undefined })}
       >
         <form
@@ -75,6 +78,7 @@ export function RecordFormModal({
           {ceremonyHeader ? (
             <ModalHeaderShell
               variant="withStepper"
+              useDialogSemantics
               title={title}
               description={description}
               stepper={stepper}

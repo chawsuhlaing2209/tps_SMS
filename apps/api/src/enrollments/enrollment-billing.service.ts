@@ -259,7 +259,7 @@ export class EnrollmentBillingService {
       throw new NotFoundException("Enrollment not found.");
     }
 
-    if (enrollment.invoiceId || enrollment.confirmedAt) {
+    if (enrollment.invoiceId) {
       throw new ConflictException("Enrollment is already confirmed.");
     }
 

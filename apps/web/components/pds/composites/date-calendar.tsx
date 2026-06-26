@@ -23,7 +23,7 @@ export type DateCalendarProps = {
   showFooter?: boolean;
   onMonthChange: (year: number, month: number) => void;
   onDaySelect?: (date: DateParts) => void;
-  onRangeChange?: (range: { start: DateParts; end: DateParts }) => void;
+  onRangeChange?: (range: { start: DateParts; end?: DateParts }) => void;
   onToday?: () => void;
   onConfirm?: () => void;
   prevLabel?: string;

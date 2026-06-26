@@ -13,6 +13,13 @@ export type DatePickerPlacement = {
 const VIEWPORT_PADDING = 12;
 const ANCHOR_GAP = 8;
 
+export type PlacementConstraints = {
+  /** Cap available space below the anchor (e.g. modal footer). */
+  maxSpaceBelow?: number;
+  /** Cap available space above the anchor. */
+  maxSpaceAbove?: number;
+};
+
 function fitsHorizontally(left: number, width: number, viewportWidth: number) {
   return left >= VIEWPORT_PADDING && left + width <= viewportWidth - VIEWPORT_PADDING;
 }
@@ -21,7 +28,9 @@ function fitsHorizontally(left: number, width: number, viewportWidth: number) {
 export function computeDatePickerPlacement(
   anchorRect: DOMRect,
   panelWidth: number,
-  panelHeight: number
+  panelHeight: number,
+  preferredVertical: DatePickerVerticalAlign | "auto" = "auto",
+  constraints?: PlacementConstraints
 ): DatePickerPlacement {
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
@@ -30,15 +39,28 @@ export function computeDatePickerPlacement(
   const maxHeight = Math.max(200, viewportHeight - VIEWPORT_PADDING * 2);
   const effectiveHeight = Math.min(Math.max(panelHeight, 1), maxHeight);
 
-  const spaceBelow = viewportHeight - VIEWPORT_PADDING - (anchorRect.bottom + ANCHOR_GAP);
-  const spaceAbove = anchorRect.top - ANCHOR_GAP - VIEWPORT_PADDING;
+  let spaceBelow = viewportHeight - VIEWPORT_PADDING - (anchorRect.bottom + ANCHOR_GAP);
+  let spaceAbove = anchorRect.top - ANCHOR_GAP - VIEWPORT_PADDING;
+  if (constraints?.maxSpaceBelow !== undefined) {
+    spaceBelow = Math.min(spaceBelow, Math.max(0, constraints.maxSpaceBelow));
+  }
+  if (constraints?.maxSpaceAbove !== undefined) {
+    spaceAbove = Math.min(spaceAbove, Math.max(0, constraints.maxSpaceAbove));
+  }
   const vertical: DatePickerVerticalAlign =
-    spaceBelow >= effectiveHeight || spaceBelow >= spaceAbove ? "bottom" : "top";
+    preferredVertical !== "auto"
+      ? preferredVertical
+      : spaceBelow >= effectiveHeight || spaceBelow >= spaceAbove
+        ? "bottom"
+        : "top";
+
+  const availableHeight = vertical === "bottom" ? spaceBelow : spaceAbove;
+  const panelMaxHeight = Math.min(maxHeight, Math.max(availableHeight, 120));
 
   const top =
     vertical === "bottom"
       ? anchorRect.bottom + ANCHOR_GAP
-      : anchorRect.top - ANCHOR_GAP - effectiveHeight;
+      : anchorRect.top - ANCHOR_GAP - Math.min(effectiveHeight, panelMaxHeight);
 
   const startLeft = anchorRect.left;
   const endLeft = anchorRect.right - effectiveWidth;
@@ -70,14 +92,14 @@ export function computeDatePickerPlacement(
 
   const clampedTop = Math.max(
     VIEWPORT_PADDING,
-    Math.min(top, viewportHeight - VIEWPORT_PADDING - effectiveHeight)
+    Math.min(top, viewportHeight - VIEWPORT_PADDING - Math.min(effectiveHeight, panelMaxHeight))
   );
 
   return {
     top: clampedTop,
     left,
     maxWidth,
-    maxHeight,
+    maxHeight: panelMaxHeight,
     vertical,
     horizontal,
   };

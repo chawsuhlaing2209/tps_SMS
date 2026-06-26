@@ -1,0 +1,4 @@
+- [Notion test-report location](notion_location.md) — where to publish SMS test plans/reports
+- [Test commands & gotchas](test_commands.md) — scoped vitest/typecheck commands and the tee exit-code trap
+- [Known failing checks](known_failures.md) — web typecheck + ResizeObserver test-env gaps (FIXED 2026-06-25)
+- [Grade/classroom invariants](grade_classroom_invariants.md) — active-grade + homeroom + age-range rules enforced in api services

@@ -16,18 +16,45 @@ import {
 type Db = ReturnType<typeof drizzle>;
 
 const DEFAULT_COMPONENTS = [
-  { code: "basic", name: "Basic salary", kind: "earning" as const, defaultAmount: "0" },
   { code: "meal", name: "Meal allowance", kind: "earning" as const, defaultAmount: "50000" },
   { code: "ferry", name: "Ferry allowance", kind: "earning" as const, defaultAmount: "80000" },
   { code: "ssb", name: "SSB", kind: "deduction" as const, defaultAmount: "30000" },
   { code: "health", name: "Health insurance", kind: "deduction" as const, defaultAmount: "20000" }
 ];
 
+/** Base salary lives on staff_compensation_profiles.base_salary, not pay_components. */
+async function removeLegacyBasicPayComponent(db: Db, tenantId: string) {
+  const [basic] = await db
+    .select({ id: payComponents.id })
+    .from(payComponents)
+    .where(and(eq(payComponents.tenantId, tenantId), eq(payComponents.code, "basic")))
+    .limit(1);
+
+  if (!basic) {
+    return;
+  }
+
+  await db
+    .delete(staffCompensationComponents)
+    .where(
+      and(
+        eq(staffCompensationComponents.tenantId, tenantId),
+        eq(staffCompensationComponents.componentId, basic.id)
+      )
+    );
+
+  await db
+    .delete(payComponents)
+    .where(and(eq(payComponents.tenantId, tenantId), eq(payComponents.id, basic.id)));
+}
+
 function num(value: string | null | undefined): number {
   return Number(value ?? 0);
 }
 
 export async function seedDemoPayroll(db: Db, tenantId: string, staffIds: string[]) {
+  await removeLegacyBasicPayComponent(db, tenantId);
+
   const componentIds = new Map<string, string>();
 
   for (const component of DEFAULT_COMPONENTS) {

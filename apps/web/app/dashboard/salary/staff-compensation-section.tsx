@@ -183,7 +183,10 @@ export function StaffCompensationSection({ staffId, className }: Props) {
   }, [compensation.data]);
 
   const activePayComponents = useMemo(
-    () => (payComponents.data ?? []).filter((item) => item.status === "active"),
+    () =>
+      (payComponents.data ?? []).filter(
+        (item) => item.status === "active" && item.code !== "basic"
+      ),
     [payComponents.data]
   );
 

@@ -23,13 +23,44 @@ export type ModalContentProps = React.ComponentPropsWithoutRef<typeof DialogPrim
   "aria-describedby"?: string | undefined;
 };
 
+function isModalPopoverTarget(target: EventTarget | null) {
+  return (
+    target instanceof Element &&
+    Boolean(target.closest(".pds-date-picker-position, .pds-select-item-position"))
+  );
+}
+
 const ModalContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   ModalContentProps
->(({ className, children, ...props }, ref) => (
+>(({ className, children, onPointerDownOutside, onInteractOutside, ...props }, ref) => (
   <ModalPortal>
     <ModalOverlay />
-    <DialogPrimitive.Content ref={ref} className={cn("pds-modal", className)} {...props}>
+    <DialogPrimitive.Content
+      ref={ref}
+      className={cn("pds-modal", className)}
+      onPointerDownOutside={(event) => {
+        if (isModalPopoverTarget(event.target)) {
+          event.preventDefault();
+          return;
+        }
+        onPointerDownOutside?.(event);
+      }}
+      onFocusOutside={(event) => {
+        if (isModalPopoverTarget(event.target)) {
+          event.preventDefault();
+          return;
+        }
+      }}
+      onInteractOutside={(event) => {
+        if (isModalPopoverTarget(event.target)) {
+          event.preventDefault();
+          return;
+        }
+        onInteractOutside?.(event);
+      }}
+      {...props}
+    >
       {children}
     </DialogPrimitive.Content>
   </ModalPortal>

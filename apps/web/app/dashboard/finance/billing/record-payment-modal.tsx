@@ -1,6 +1,7 @@
 "use client";
 
 import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { formatMMK } from "../../../lib/money";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 import { useApiMutation } from "../../../lib/api";
@@ -38,8 +39,8 @@ const METHOD_ICONS: Record<(typeof PAYMENT_METHODS)[number], string> = {
   cash: "payments"
 };
 
-function fullNumber(value: number) {
-  return Math.round(value).toLocaleString("en-US");
+function fullNumber(value: number): string {
+  return formatMMK(value);
 }
 
 export function RecordPaymentModal({

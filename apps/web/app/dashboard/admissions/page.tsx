@@ -1,5 +1,5 @@
 "use client";
-import { FormInput } from "../../../components/shared/form-input";
+import { FormInput, TextAreaInput } from "../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
@@ -236,7 +236,7 @@ export default function AdmissionsPage() {
           <FormInput {...form.register("source")} />
         </Field>
         <Field label={t("notes")}>
-          <textarea rows={2} {...form.register("notes")} />
+          <TextAreaInput maxLength={300} placeholder={t("notes")} {...form.register("notes")} />
         </Field>
       </RecordFormSheet>
     </div>

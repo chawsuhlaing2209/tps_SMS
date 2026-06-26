@@ -1,9 +1,10 @@
 "use client";
 
 import "./modal-header-shell.css";
-import type { ReactNode } from "react";
+import type { ElementType, ReactNode } from "react";
 import { Icon } from "../../../app/lib/material-icon";
 import { cn } from "../../../lib/utils";
+import { ModalDescription, ModalTitle } from "./modal";
 
 export type ModalHeaderShellVariant = "default" | "withStepper" | "invoice";
 
@@ -16,6 +17,8 @@ export type ModalHeaderShellProps = {
   onClose?: () => void;
   closeLabel?: string;
   className?: string;
+  /** Use Radix dialog title/description when the shell is inside `ModalContent`. */
+  useDialogSemantics?: boolean;
 };
 
 function ModalHeaderCloseButton({
@@ -44,7 +47,11 @@ export function ModalHeaderShell({
   onClose,
   closeLabel = "Close",
   className,
+  useDialogSemantics = false,
 }: ModalHeaderShellProps) {
+  const TitleTag: ElementType = useDialogSemantics ? ModalTitle : "h2";
+  const DescriptionTag: ElementType = useDialogSemantics ? ModalDescription : "p";
+
   if (variant === "invoice") {
     return (
       <header
@@ -56,10 +63,10 @@ export function ModalHeaderShell({
             <span className="pds-modal-header-shell__logo" aria-hidden>
               <span className="pds-modal-header-shell__logo-mark" />
             </span>
-            <h2 className="pds-type-title-m-extrabold pds-modal-header-shell__title">{title}</h2>
+            <TitleTag className="pds-type-title-m-extrabold pds-modal-header-shell__title">{title}</TitleTag>
           </div>
           {description ? (
-            <p className="pds-modal-header-shell__description">{description}</p>
+            <DescriptionTag className="pds-modal-header-shell__description">{description}</DescriptionTag>
           ) : null}
         </div>
         <ModalHeaderCloseButton onClose={onClose} closeLabel={closeLabel} />
@@ -78,9 +85,11 @@ export function ModalHeaderShell({
     >
       <div className="pds-modal-header-shell__top">
         <div className="pds-modal-header-shell__copy">
-          <h2 className="pds-type-title-m-extrabold pds-modal-header-shell__title">{title}</h2>
+          <TitleTag className="pds-type-title-m-extrabold pds-modal-header-shell__title">{title}</TitleTag>
           {description ? (
-            <p className="pds-type-body-s-regular pds-modal-header-shell__description">{description}</p>
+            <DescriptionTag className="pds-type-body-s-regular pds-modal-header-shell__description">
+              {description}
+            </DescriptionTag>
           ) : null}
         </div>
         <ModalHeaderCloseButton onClose={onClose} closeLabel={closeLabel} />

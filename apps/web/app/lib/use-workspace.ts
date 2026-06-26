@@ -58,6 +58,7 @@ export function useWorkspace() {
     if (meQuery.data) {
       return {
         ...localSession,
+        userId: meQuery.data.userId,
         tenantId: meQuery.data.tenantId,
         displayName: meQuery.data.displayName ?? localSession.displayName,
         roles: meQuery.data.roles,

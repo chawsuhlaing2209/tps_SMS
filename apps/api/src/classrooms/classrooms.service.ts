@@ -152,12 +152,15 @@ export class ClassroomsService {
     }
 
     const [grade] = await this.db
-      .select({ id: grades.id })
+      .select({ id: grades.id, status: grades.status })
       .from(grades)
       .where(and(eq(grades.tenantId, tenantId), eq(grades.id, dto.gradeId)));
 
     if (!grade) {
       throw new NotFoundException("Grade not found.");
+    }
+    if (grade.status !== "active") {
+      throw new BadRequestException("Cannot create a classroom for an archived grade.");
     }
 
     if (dto.classTeacherStaffId) {
@@ -240,14 +243,20 @@ export class ClassroomsService {
 
     if (dto.gradeId) {
       const [grade] = await this.db
-        .select({ id: grades.id })
+        .select({ id: grades.id, status: grades.status })
         .from(grades)
         .where(and(eq(grades.tenantId, tenantId), eq(grades.id, dto.gradeId)));
 
       if (!grade) {
         throw new NotFoundException("Grade not found.");
       }
+      if (grade.status !== "active") {
+        throw new BadRequestException("Cannot move a classroom to an archived grade.");
+      }
     }
+
+    const effectiveGradeId = dto.gradeId ?? previous.gradeId;
+    const gradeIsChanging = dto.gradeId !== undefined && dto.gradeId !== previous.gradeId;
 
     if (dto.classTeacherStaffId) {
       const [teacher] = await this.db
@@ -259,10 +268,21 @@ export class ClassroomsService {
         throw new NotFoundException("Staff member not found.");
       }
 
-      const effectiveGradeId = dto.gradeId ?? previous.gradeId;
       await this.assertTeacherEligibleForHomeroom(
         tenantId,
         dto.classTeacherStaffId,
+        effectiveGradeId
+      );
+    } else if (
+      dto.classTeacherStaffId === undefined &&
+      gradeIsChanging &&
+      previous.classTeacherStaffId
+    ) {
+      // Grade is changing but the existing homeroom teacher is being kept. Re-check
+      // that they are still eligible to be homeroom for the new grade level.
+      await this.assertTeacherEligibleForHomeroom(
+        tenantId,
+        previous.classTeacherStaffId,
         effectiveGradeId
       );
     }

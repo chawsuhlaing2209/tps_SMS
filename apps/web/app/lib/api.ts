@@ -9,7 +9,7 @@ import {
   type UseQueryResult
 } from "@tanstack/react-query";
 import { useCallback } from "react";
-import { getSession, isPlatformSession } from "./session";
+import { getSession, isPlatformSession, clearSession } from "./session";
 import { toastError, toastSuccess } from "./toast";
 
 // All requests go to the Next.js origin under /api and are proxied to the API
@@ -46,6 +46,18 @@ export class ApiError extends Error {
   }
 }
 
+function handleExpiredTenantSession(status: number): void {
+  if (status !== 401 || typeof window === "undefined") {
+    return;
+  }
+  const session = getSession();
+  if (!session || isPlatformSession(session)) {
+    return;
+  }
+  clearSession();
+  window.location.replace("/");
+}
+
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Content-Type", "application/json");
@@ -74,6 +86,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     const message = Array.isArray(rawMessage)
       ? rawMessage.join(" ")
       : rawMessage ?? `Request failed (${response.status})`;
+    handleExpiredTenantSession(response.status);
     throw new ApiError(message, response.status);
   }
 
@@ -110,6 +123,7 @@ export async function apiUpload<T>(path: string, file: File): Promise<T> {
     const message = Array.isArray(rawMessage)
       ? rawMessage.join(" ")
       : rawMessage ?? `Request failed (${response.status})`;
+    handleExpiredTenantSession(response.status);
     throw new ApiError(message, response.status);
   }
 

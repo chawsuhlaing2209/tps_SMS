@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { formatMMK } from "../../../lib/money";
 import "./payroll-net-summary.css";
 
 export type PayrollNetSummaryProps = {
@@ -11,8 +12,8 @@ export type PayrollNetSummaryProps = {
   netPay: number;
 };
 
-function formatMoney(value: number) {
-  return Math.round(value).toLocaleString();
+function formatMoney(value: number): string {
+  return formatMMK(value);
 }
 
 export function PayrollNetSummary({

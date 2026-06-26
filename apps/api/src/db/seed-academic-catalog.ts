@@ -24,7 +24,7 @@ export const STANDARD_GRADES = [
 export const DEMO_OPERATIONAL_GRADES = STANDARD_GRADES.filter((grade) => {
   if (grade.name === "KG") return true;
   const match = /^Grade (\d+)$/.exec(grade.name);
-  return match ? Number(match[1]) <= 9 : false;
+  return match ? Number(match[1]) <= 12 : false;
 });
 
 export const STANDARD_SUBJECTS = [

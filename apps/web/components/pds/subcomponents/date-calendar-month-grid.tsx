@@ -31,7 +31,7 @@ export type DateCalendarMonthGridProps = {
   range?: { start?: DateParts; end?: DateParts };
   onMonthChange: (year: number, month: number) => void;
   onDaySelect?: (date: DateParts) => void;
-  onRangeChange?: (range: { start: DateParts; end: DateParts }) => void;
+  onRangeChange?: (range: { start: DateParts; end?: DateParts }) => void;
   prevLabel?: string;
   nextLabel?: string;
   className?: string;
@@ -93,12 +93,14 @@ export function DateCalendarMonthGrid({
     if (variant === "range") {
       const currentStart = range?.start;
       const currentEnd = range?.end;
-      if (!currentStart || (currentStart && currentEnd)) {
-        onRangeChange?.({ start: cell, end: cell });
+      // First click (or restart after a complete range) sets the start only, with
+      // no end yet — so the next click extends it into a real range. Setting end
+      // here would make every click look "complete" and never extend.
+      if (!currentStart || currentEnd) {
+        onRangeChange?.({ start: cell });
         return;
       }
-      const normalized = normalizeDayRange(currentStart, cell);
-      onRangeChange?.(normalized);
+      onRangeChange?.(normalizeDayRange(currentStart, cell));
       return;
     }
 

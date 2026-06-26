@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { formatMMK } from "../../../../lib/money";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -58,8 +59,8 @@ const STATUS_TONES: Record<string, BadgeTone> = {
   overdue: "danger"
 };
 
-function fullNumber(value: number) {
-  return Math.round(value).toLocaleString("en-US");
+function fullNumber(value: number): string {
+  return formatMMK(value);
 }
 
 function formatDueDate(value: string | null) {

@@ -101,7 +101,7 @@ export const DayRangeFilter: Story = {
 
 export const FilterRangeCalendarStandalone: StoryObj<typeof FilterRangeCalendar> = {
   render: function FilterRangeCalendarDemo() {
-    const [range, setRange] = useState({
+    const [range, setRange] = useState<{ start: { year: number; month: number; day: number }; end?: { year: number; month: number; day: number } }>({
       start: { year: 2026, month: 1, day: 10 },
       end: { year: 2026, month: 2, day: 17 },
     });
@@ -169,7 +169,7 @@ export const CalendarSingle: StoryObj<typeof DateCalendar> = {
 
 export const CalendarRange: StoryObj<typeof DateCalendar> = {
   render: function CalendarRangeDemo() {
-    const [range, setRange] = useState({
+    const [range, setRange] = useState<{ start: { year: number; month: number; day: number }; end?: { year: number; month: number; day: number } }>({
       start: { year: 2026, month: 6, day: 11 },
       end: { year: 2026, month: 6, day: 17 },
     });

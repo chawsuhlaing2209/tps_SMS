@@ -1,0 +1,11 @@
+/* Subject / grade / classroom assignment modals on teacher profile */
+
+.record-modal.record-modal--teaching-setup {
+  max-width: min(680px, calc(100vw - var(--pds-padding-x-large)));
+  width: min(680px, calc(100vw - var(--pds-padding-x-large)));
+}
+
+.record-modal--teaching-setup .pds-modal__body {
+  max-height: min(560px, 68vh);
+  min-height: min(320px, 52vh);
+}

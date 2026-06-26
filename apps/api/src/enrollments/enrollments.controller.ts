@@ -1,8 +1,8 @@
-import { Body, Controller, Delete, Get, Headers, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
-import type { Request } from "express";
-import type { TenantContext } from "../tenancy/tenant-context.js";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { RequirePermissions } from "../identity/permissions.decorator.js";
 import { PermissionsGuard } from "../identity/permissions.guard.js";
+import { ReqTenantContext } from "../identity/tenant-context.decorator.js";
+import type { TenantContext } from "../tenancy/tenant-context.js";
 import {
   ConfirmEnrollmentDto,
   CreateEnrollmentDto,
@@ -15,8 +15,6 @@ import {
   UpdateEnrollmentDto
 } from "./dto.js";
 import { EnrollmentsService } from "./enrollments.service.js";
-
-type GuardedRequest = Request & { tenantContext?: TenantContext };
 
 @Controller("tenants/:tenantId")
 @UseGuards(PermissionsGuard)
@@ -50,51 +48,54 @@ export class EnrollmentsController {
   @Post("enrollments")
   @RequirePermissions("student.manage")
   createEnrollment(
+    @ReqTenantContext() context: TenantContext,
     @Param("tenantId") tenantId: string,
-    @Body() dto: CreateEnrollmentDto,
-    @Headers("x-user-id") actorUserId?: string
+    @Body() dto: CreateEnrollmentDto
   ) {
-    return this.enrollmentsService.createEnrollment(tenantId, actorUserId, dto);
+    return this.enrollmentsService.createEnrollment(tenantId, context.actorUserId, dto);
   }
 
   @Post("enrollments/:enrollmentId/confirm")
   @RequirePermissions("student.manage")
   confirmEnrollment(
+    @ReqTenantContext() context: TenantContext,
     @Param("tenantId") tenantId: string,
     @Param("enrollmentId") enrollmentId: string,
-    @Body() dto: ConfirmEnrollmentDto,
-    @Req() req: GuardedRequest
+    @Body() dto: ConfirmEnrollmentDto
   ) {
-    const actorUserId = req.tenantContext?.actorUserId;
-    const permissions = req.tenantContext?.permissions ?? [];
     return this.enrollmentsService.confirmEnrollment(
       tenantId,
       enrollmentId,
-      actorUserId,
+      context.actorUserId,
       dto,
-      permissions
+      context.permissions
     );
   }
 
   @Patch("enrollments/:enrollmentId")
   @RequirePermissions("student.manage")
   updateEnrollment(
+    @ReqTenantContext() context: TenantContext,
     @Param("tenantId") tenantId: string,
     @Param("enrollmentId") enrollmentId: string,
-    @Body() dto: UpdateEnrollmentDto,
-    @Headers("x-user-id") actorUserId?: string
+    @Body() dto: UpdateEnrollmentDto
   ) {
-    return this.enrollmentsService.updateEnrollment(tenantId, enrollmentId, actorUserId, dto);
+    return this.enrollmentsService.updateEnrollment(
+      tenantId,
+      enrollmentId,
+      context.actorUserId,
+      dto
+    );
   }
 
   @Delete("enrollments/:enrollmentId")
   @RequirePermissions("student.manage")
   deleteEnrollment(
+    @ReqTenantContext() context: TenantContext,
     @Param("tenantId") tenantId: string,
-    @Param("enrollmentId") enrollmentId: string,
-    @Headers("x-user-id") actorUserId?: string
+    @Param("enrollmentId") enrollmentId: string
   ) {
-    return this.enrollmentsService.deleteEnrollment(tenantId, enrollmentId, actorUserId);
+    return this.enrollmentsService.deleteEnrollment(tenantId, enrollmentId, context.actorUserId);
   }
 
   @Get("student-services/available")
@@ -127,20 +128,20 @@ export class EnrollmentsController {
   @Post("student-services")
   @RequirePermissions("student.manage")
   createStudentService(
+    @ReqTenantContext() context: TenantContext,
     @Param("tenantId") tenantId: string,
-    @Body() dto: CreateStudentServiceDto,
-    @Headers("x-user-id") actorUserId?: string
+    @Body() dto: CreateStudentServiceDto
   ) {
-    return this.enrollmentsService.createStudentService(tenantId, actorUserId, dto);
+    return this.enrollmentsService.createStudentService(tenantId, context.actorUserId, dto);
   }
 
   @Delete("student-services/:serviceId")
   @RequirePermissions("student.manage")
   removeStudentService(
+    @ReqTenantContext() context: TenantContext,
     @Param("tenantId") tenantId: string,
-    @Param("serviceId") serviceId: string,
-    @Headers("x-user-id") actorUserId?: string
+    @Param("serviceId") serviceId: string
   ) {
-    return this.enrollmentsService.removeStudentService(tenantId, serviceId, actorUserId);
+    return this.enrollmentsService.removeStudentService(tenantId, serviceId, context.actorUserId);
   }
 }
