@@ -2,6 +2,11 @@
 
 import { useTranslations } from "next-intl";
 import { useMemo, useState, use } from "react";
+import {
+  canRecordInvoicePayment,
+  computeRecordablePaymentBalance,
+  sumPendingVerificationAmount
+} from "@sms/shared";
 import { useApiMutation, useApiQuery } from "../../../../lib/api";
 import { Icon } from "../../../../lib/material-icon";
 import { toastSuccess } from "../../../../lib/toast";
@@ -21,6 +26,7 @@ import {
   RecordPaymentModal,
   type InvoicePaymentContext
 } from "../_components/record-payment-modal";
+import { InvoiceActivityPanel } from "../_components/invoice-activity-panel";
 
 type InvoiceDetail = {
   id: string;
@@ -79,6 +85,7 @@ export default function InvoiceDetailPage({
   const { invoiceId } = use(params);
   const t = useTranslations("finance");
   const tDoc = useTranslations("finance.invoiceDocument");
+  const tFees = useTranslations("finance.feesBilling");
   const tPay = useTranslations("enrollments");
   const c = useTranslations("common");
   const nav = useTranslations("nav");
@@ -103,7 +110,19 @@ export default function InvoiceDetailPage({
 
   const verifiedTotal = document?.paidToDate ?? 0;
   const remaining = document?.balanceDue ?? 0;
-  const canRecordPayment = data ? !CLOSED_STATUSES.has(data.status) && remaining > 0 : false;
+  const pendingVerification = useMemo(
+    () => (data ? sumPendingVerificationAmount(data.payments) : 0),
+    [data]
+  );
+  const recordableBalance = computeRecordablePaymentBalance(remaining, pendingVerification);
+  const canRecordPayment = data
+    ? canRecordInvoicePayment({
+        balanceDue: remaining,
+        pendingVerificationAmount: pendingVerification,
+        isClosed: CLOSED_STATUSES.has(data.status)
+      })
+    : false;
+  const pendingBlocksRecord = Boolean(data && remaining > 0 && !canRecordPayment && pendingVerification > 0);
 
   const paymentContext: InvoicePaymentContext | null = useMemo(() => {
     if (!data || !document) return null;
@@ -112,9 +131,11 @@ export default function InvoiceDetailPage({
       studentFullName: data.studentFullName,
       balanceDue: remaining,
       billed: document.subtotal,
-      paid: verifiedTotal
+      paid: verifiedTotal,
+      pendingVerification,
+      recordableBalance
     };
-  }, [data, document, remaining, verifiedTotal]);
+  }, [data, document, remaining, verifiedTotal, pendingVerification, recordableBalance]);
 
   const printLabels = {
     billedTo: tDoc("billedTo"),
@@ -147,6 +168,10 @@ export default function InvoiceDetailPage({
     );
   }
 
+  const invoiceStatusLabel = tFees.has(`statusLabels.${data.status}`)
+    ? tFees(`statusLabels.${data.status}`)
+    : data.status;
+
   return (
     <div className="page-stack invoice-page">
       <PageHeader
@@ -160,6 +185,13 @@ export default function InvoiceDetailPage({
       />
 
       <NavigationBackLink fallback={{ label: t("invoices"), href: "/dashboard/finance/invoices" }} />
+
+      <div className="invoice-page__meta">
+        <StatusBadge status={data.status} label={invoiceStatusLabel} />
+        {data.status === "refunded" ? (
+          <p className="pds-type-body-s-regular muted">{t("invoiceRefundedNotice")}</p>
+        ) : null}
+      </div>
 
       <article className="invoice-doc invoice-doc--page">
         <InvoiceDocumentBody
@@ -226,8 +258,23 @@ export default function InvoiceDetailPage({
         {!canRecordPayment && CLOSED_STATUSES.has(data.status) ? (
           <p className="pds-type-body-s-regular muted">{t("invoiceClosedNoPayment")}</p>
         ) : null}
-        {canRecordPayment ? <p className="pds-type-body-s-regular muted">{t("refundOnPaymentsTab")}</p> : null}
+        {pendingBlocksRecord ? (
+          <p className="pds-type-body-s-regular muted">{t("recordPaymentFullyPending")}</p>
+        ) : null}
+        {canRecordPayment && pendingVerification > 0 ? (
+          <p className="pds-type-body-s-regular muted">
+            {t("recordPaymentPartialPending", {
+              pending: formatReceiptAmount(pendingVerification),
+              recordable: formatReceiptAmount(recordableBalance)
+            })}
+          </p>
+        ) : null}
+        {canRecordPayment && pendingVerification <= 0 ? (
+          <p className="pds-type-body-s-regular muted">{t("refundOnPaymentsTab")}</p>
+        ) : null}
       </section>
+
+      <InvoiceActivityPanel invoiceId={invoiceId} />
 
       <RecordPaymentModal
         open={payModalOpen}

@@ -8084,6 +8084,9 @@ button.btn-hero-outline:hover {
   border-color: var(--pds-status-error-lower, rgba(239, 68, 68, 0.3));
 }.pay-tile--balance .pay-tile__value {
   color: var(--pds-status-error);
+}.pay-amount,
+.pay-input {
+  box-sizing: border-box;
 }.pay-amount {
   background: var(--pds-background-card);
   border: 1px solid var(--pds-border-color-primary);

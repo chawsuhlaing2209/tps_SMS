@@ -32,6 +32,7 @@ type Roster = {
     outstanding: number;
     overdue: number;
     owingStudents: number;
+    collectibleStudents: number;
     overdueStudents: number;
     collectionRate: number;
     totalStudents: number;
@@ -336,7 +337,7 @@ export function CollectionRosterPanel() {
           <button
             type="button"
             className="pds-type-body-m-bold btn-primary fees-record-btn"
-            disabled={!metrics?.owingStudents}
+            disabled={!metrics?.collectibleStudents}
             onClick={() => openCollect(null)}
           >
             <Icon name="point_of_sale" size={18} />
@@ -427,11 +428,18 @@ export function CollectionRosterPanel() {
                             {tFees("invoice")}
                           </span>
                         )}
-                        {row.status === "paid" ? (
+                        {row.status === "paid" || (row.recordableBalance ?? row.balance) <= 0 ? (
+                          row.status === "paid" ? (
                           <span className="pds-type-body-s-semibold table-row-settled">
                             <Icon name="check_circle" size={16} filled />
                             {tFees("settled")}
                           </span>
+                          ) : (
+                          <span className="pds-type-body-s-semibold table-row-action table-row-action--disabled">
+                            <Icon name="hourglass_top" size={16} />
+                            {tFees("pendingVerification")}
+                          </span>
+                          )
                         ) : (
                           <button
                             type="button"

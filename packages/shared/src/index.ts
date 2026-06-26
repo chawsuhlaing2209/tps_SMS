@@ -7,6 +7,7 @@ export * from "./role-display.js";
 export * from "./roles.js";
 export * from "./discounts.js";
 export * from "./finance-display.js";
+export * from "./finance-balance.js";
 export * from "./invoice-numbers.js";
 export * from "./payment-numbers.js";
 export * from "./school-schedule.js";

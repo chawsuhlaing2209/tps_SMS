@@ -32,9 +32,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   if (!ready || !session || session.isPlatform || session.tenantId === null) {
     return (
-      <div className="dash-loading">
-        <span>{t("loadingWorkspace")}</span>
-      </div>
+      <PageHeaderProvider>
+        <div className="dash-loading">
+          <span>{t("loadingWorkspace")}</span>
+        </div>
+      </PageHeaderProvider>
     );
   }
 

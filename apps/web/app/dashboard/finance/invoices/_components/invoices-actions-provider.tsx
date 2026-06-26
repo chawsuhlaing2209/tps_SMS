@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useDashPageTitleActionsTarget } from "../../../dashboard-page-title";
 import { Button } from "../../../../../components/ui/button";
-import { FormInput } from "../../../../../components/shared/form-input";
+import { FormInput, FormTextarea } from "../../../../../components/shared/form-input";
 import { PdsDatePickerField } from "../../../../../components/pds";
 import { useApiMutation } from "../../../../lib/api";
 import { Field } from "../../../../lib/form";
@@ -308,7 +308,7 @@ export function InvoicesActionsProvider({
           <FormInput type="number" step="0.01" {...form.register("unitAmount")} />
         </Field>
         <Field label={t("chargeReason")} error={form.formState.errors.reason?.message}>
-          <textarea rows={2} {...form.register("reason")} placeholder={t("chargeReasonPlaceholder")} />
+          <FormTextarea rows={2} {...form.register("reason")} placeholder={t("chargeReasonPlaceholder")} />
         </Field>
       </RecordFormSheet>
     </InvoicesActionsContext.Provider>

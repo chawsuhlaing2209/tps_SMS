@@ -240,6 +240,15 @@ export class FinanceController {
     return this.financeService.getInvoice(tenantId, invoiceId)
   }
 
+  @Get('invoices/:invoiceId/activity')
+  @RequirePermissions('finance.manage')
+  getInvoiceActivity(
+    @Param('tenantId') tenantId: string,
+    @Param('invoiceId') invoiceId: string,
+  ) {
+    return this.financeService.getInvoiceActivity(tenantId, invoiceId)
+  }
+
   @Post('invoices/:invoiceId/send-guardian')
   @RequirePermissions('finance.manage')
   sendInvoiceToGuardian(

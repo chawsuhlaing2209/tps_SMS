@@ -1,10 +1,10 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common'
-import { buildInvoiceNumber, buildPaymentNumber, billingMonthFromIssueDate, paymentPlanKeyFromInvoiceSource } from '@sms/shared'
+import { buildInvoiceNumber, buildPaymentNumber, billingMonthFromIssueDate, computeRecordablePaymentBalance, paymentPlanKeyFromInvoiceSource } from '@sms/shared'
 import { and, eq, gte, lte, inArray, isNotNull, isNull, ne, sql, sum, count, asc, desc, exists, ilike, or } from 'drizzle-orm'
 import { AuditService } from '../audit/audit.service.js'
 import { DB, type Database } from '../db/db.module.js'
 import {
-  academicYears, classrooms, discountRules, enrollmentFeePlans, enrollmentFeePlanGrades, enrollments, familyGroups, feeItems, grades, guardians, invoices, invoiceDiscountLines, invoiceItems,
+  academicYears, auditLogs, classrooms, discountRules, enrollmentFeePlans, enrollmentFeePlanGrades, enrollments, familyGroups, feeItems, grades, guardians, invoices, invoiceDiscountLines, invoiceItems,
   payments, paymentPlanInstallments, paymentPlans, payrollRecords, receipts, studentDiscounts, studentServices, students, tenants, tenantSettings, terms, users,
 } from '../db/schema.js'
 import type {
@@ -936,6 +936,50 @@ export class FinanceService {
     return { ...invoice, items, discountLines, payments: invoicePayments, ...context }
   }
 
+  async getInvoiceActivity(tenantId: string, invoiceId: string) {
+    const [invoice] = await this.db
+      .select({ id: invoices.id })
+      .from(invoices)
+      .where(and(eq(invoices.id, invoiceId), eq(invoices.tenantId, tenantId)))
+    if (!invoice) throw new NotFoundException('Invoice not found')
+
+    const paymentRows = await this.db
+      .select({ id: payments.id })
+      .from(payments)
+      .where(and(eq(payments.invoiceId, invoiceId), eq(payments.tenantId, tenantId)))
+
+    const paymentIds = paymentRows.map((row) => row.id)
+    const recordFilters = [
+      and(eq(auditLogs.recordType, 'invoice'), eq(auditLogs.recordId, invoiceId)),
+    ]
+    if (paymentIds.length) {
+      recordFilters.push(
+        and(eq(auditLogs.recordType, 'payment'), inArray(auditLogs.recordId, paymentIds)),
+      )
+    }
+
+    const rows = await this.db
+      .select({
+        id: auditLogs.id,
+        action: auditLogs.action,
+        recordType: auditLogs.recordType,
+        recordId: auditLogs.recordId,
+        actorUserId: auditLogs.actorUserId,
+        actorName: users.displayName,
+        reason: auditLogs.reason,
+        before: auditLogs.before,
+        after: auditLogs.after,
+        createdAt: auditLogs.createdAt,
+      })
+      .from(auditLogs)
+      .leftJoin(users, eq(auditLogs.actorUserId, users.id))
+      .where(and(eq(auditLogs.tenantId, tenantId), or(...recordFilters)!))
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(100)
+
+    return { data: rows }
+  }
+
   async createInvoice(tenantId: string, actorUserId: string, dto: CreateInvoiceDto) {
     const invoiceNumber = buildInvoiceNumber(new Date())
     const subtotal = dto.items.reduce((s, i) => s + (i.unitAmount * (i.quantity ?? 1)), 0)
@@ -1049,6 +1093,19 @@ export class FinanceService {
       const amount = Number(row.amount)
       return row.kind === 'refund' ? sum - amount : sum + amount
     }, 0)
+  }
+
+  private async getPendingVerificationTotal(invoiceId: string): Promise<number> {
+    const rows = await this.db
+      .select({ amount: payments.amount })
+      .from(payments)
+      .where(and(
+        eq(payments.invoiceId, invoiceId),
+        eq(payments.kind, 'payment'),
+        isNull(payments.verifiedAt),
+      ))
+
+    return rows.reduce((sum, row) => sum + Number(row.amount), 0)
   }
 
   private async getRefundedTotalForPayment(paymentId: string): Promise<number> {
@@ -1292,13 +1349,22 @@ export class FinanceService {
 
     const invoiceTotal = Number(invoice.total)
     const verifiedTotal = await this.getVerifiedNetPaid(invoiceId)
-    const remaining = invoiceTotal - verifiedTotal
+    const pendingVerification = await this.getPendingVerificationTotal(invoiceId)
+    const balanceDue = invoiceTotal - verifiedTotal
+    const recordable = computeRecordablePaymentBalance(balanceDue, pendingVerification)
 
-    if (remaining <= 0) {
+    if (balanceDue <= 0) {
       throw new BadRequestException('This invoice is already fully paid.')
     }
-    if (dto.amount > remaining) {
-      throw new BadRequestException(`Payment amount exceeds remaining balance (${remaining}).`)
+    if (recordable <= 0) {
+      throw new BadRequestException(
+        'The outstanding balance is fully covered by payment(s) awaiting verification.',
+      )
+    }
+    if (dto.amount > recordable) {
+      throw new BadRequestException(
+        `Payment amount exceeds recordable balance (${recordable}).`,
+      )
     }
 
     const paidAt = dto.paidAt ? new Date(dto.paidAt) : new Date()
@@ -1726,15 +1792,33 @@ export class FinanceService {
 
     const invoiceIds = invoiceRows.map((row) => row.id)
     const paidByInvoice = new Map<string, number>()
+    const pendingByInvoice = new Map<string, number>()
     if (invoiceIds.length) {
       const paymentRows = await this.db
-        .select({ invoiceId: payments.invoiceId, amount: payments.amount, kind: payments.kind })
+        .select({
+          invoiceId: payments.invoiceId,
+          amount: payments.amount,
+          kind: payments.kind,
+          verifiedAt: payments.verifiedAt,
+        })
         .from(payments)
-        .where(and(inArray(payments.invoiceId, invoiceIds), isNotNull(payments.verifiedAt)))
+        .where(inArray(payments.invoiceId, invoiceIds))
       for (const row of paymentRows) {
-        const prev = paidByInvoice.get(row.invoiceId) ?? 0
         const amount = Number(row.amount)
-        paidByInvoice.set(row.invoiceId, row.kind === 'refund' ? prev - amount : prev + amount)
+        if (row.kind === 'refund') {
+          if (row.verifiedAt) {
+            const prev = paidByInvoice.get(row.invoiceId) ?? 0
+            paidByInvoice.set(row.invoiceId, prev - amount)
+          }
+          continue
+        }
+        if (row.verifiedAt) {
+          const prev = paidByInvoice.get(row.invoiceId) ?? 0
+          paidByInvoice.set(row.invoiceId, prev + amount)
+        } else {
+          const prev = pendingByInvoice.get(row.invoiceId) ?? 0
+          pendingByInvoice.set(row.invoiceId, prev + amount)
+        }
       }
     }
 
@@ -1758,6 +1842,8 @@ export class FinanceService {
       billed: number
       paid: number
       balance: number
+      pendingVerification: number
+      recordableBalance: number
       status: 'paid' | 'partial' | 'due' | 'overdue'
       primaryInvoiceId: string | null
       primaryInvoiceCreatedAt: string | null
@@ -1772,6 +1858,7 @@ export class FinanceService {
       outstanding: 0,
       overdue: 0,
       owingStudents: 0,
+      collectibleStudents: 0,
       overdueStudents: 0,
     }
 
@@ -1781,6 +1868,7 @@ export class FinanceService {
       const studentInvoices = invoicesByStudent.get(studentId) ?? []
       let billed = 0
       let paid = 0
+      let pendingVerification = 0
       let hasOverdue = false
       let primaryInvoiceId: string | null = null
       let primaryInvoiceCreatedAt: string | null = null
@@ -1793,6 +1881,7 @@ export class FinanceService {
         billed += Number(inv.total)
         const net = paidByInvoice.get(inv.id) ?? 0
         paid += net
+        pendingVerification += pendingByInvoice.get(inv.id) ?? 0
         latestInvoiceId = inv.id
         latestInvoice = inv
         const open = !this.CLOSED_STATUSES.includes(inv.status)
@@ -1818,6 +1907,7 @@ export class FinanceService {
       }
 
       const balance = Math.max(0, billed - paid)
+      const recordableBalance = computeRecordablePaymentBalance(balance, pendingVerification)
       let status: RosterRow['status']
       if (billed > 0 && balance <= 0) status = 'paid'
       else if (hasOverdue) status = 'overdue'
@@ -1828,6 +1918,7 @@ export class FinanceService {
       metrics.collected += paid
       metrics.outstanding += balance
       if (balance > 0) metrics.owingStudents += 1
+      if (recordableBalance > 0) metrics.collectibleStudents += 1
       if (status === 'overdue') {
         metrics.overdue += balance
         metrics.overdueStudents += 1
@@ -1846,6 +1937,8 @@ export class FinanceService {
           billed,
           paid,
           balance,
+          pendingVerification,
+          recordableBalance,
           status,
           primaryInvoiceId: resolvedPrimaryId,
           primaryInvoiceCreatedAt,
@@ -2123,18 +2216,40 @@ export class FinanceService {
       throw new BadRequestException('Transaction ID is required for non-cash payments.')
     }
 
+    type ApplicableInvoice = { id: string; total: string; recordable: number }
+    const applicableInvoices: ApplicableInvoice[] = []
+    let totalRecordable = 0
+
+    for (const invoice of openInvoices) {
+      const net = await this.getVerifiedNetPaid(invoice.id)
+      const pendingVerification = await this.getPendingVerificationTotal(invoice.id)
+      const balanceDue = Number(invoice.total) - net
+      const recordable = computeRecordablePaymentBalance(balanceDue, pendingVerification)
+      if (recordable > 0) {
+        applicableInvoices.push({ id: invoice.id, total: invoice.total, recordable })
+        totalRecordable += recordable
+      }
+    }
+
+    if (totalRecordable <= 0) {
+      throw new BadRequestException(
+        'The outstanding balance is fully covered by payment(s) awaiting verification.',
+      )
+    }
+    if (dto.amount > totalRecordable) {
+      throw new BadRequestException(
+        `Payment amount exceeds recordable balance (${totalRecordable}).`,
+      )
+    }
+
     // Spread the amount across open invoices, oldest first.
     let remainingToApply = dto.amount
     let lastPaymentId: string | null = null
     let lastInvoiceId: string | null = null
 
-    for (const invoice of openInvoices) {
+    for (const invoice of applicableInvoices) {
       if (remainingToApply <= 0) break
-      const net = await this.getVerifiedNetPaid(invoice.id)
-      const invoiceRemaining = Number(invoice.total) - net
-      if (invoiceRemaining <= 0) continue
-
-      const applied = Math.min(remainingToApply, invoiceRemaining)
+      const applied = Math.min(remainingToApply, invoice.recordable)
       const [payment] = await this.db
         .insert(payments)
         .values({
@@ -2189,7 +2304,8 @@ export class FinanceService {
     let remainingBalance = 0
     for (const invoice of periodInvoices) {
       const net = await this.getVerifiedNetPaid(invoice.id)
-      remainingBalance += Math.max(0, Number(invoice.total) - net)
+      const pendingVerification = await this.getPendingVerificationTotal(invoice.id)
+      remainingBalance += computeRecordablePaymentBalance(Number(invoice.total) - net, pendingVerification)
     }
 
     const receipt = await this.issueReceiptForPayment(tenantId, actorUserId, lastPaymentId, {

@@ -52,6 +52,7 @@ type InvoicesTableProps = {
 
 export function InvoicesTable({ gradeId, academicYearId }: InvoicesTableProps) {
   const t = useTranslations("finance");
+  const tFees = useTranslations("finance.feesBilling");
   const c = useTranslations("common");
   const [sourceFilter, setSourceFilter] = useState<"all" | InvoiceSource>("all");
   const [page, setPage] = useState(0);
@@ -95,7 +96,13 @@ export function InvoicesTable({ gradeId, academicYearId }: InvoicesTableProps) {
       id: "status",
       header: c("status"),
       accessorKey: "status",
-      cell: ({ row }) => <StatusBadge status={row.original.status} />,
+      cell: ({ row }) => {
+        const status = row.original.status;
+        const label = tFees.has(`statusLabels.${status}`)
+          ? tFees(`statusLabels.${status}`)
+          : status;
+        return <StatusBadge status={status} label={label} />;
+      },
     },
     { id: "due", header: t("dueDate"), accessorFn: (i) => i.dueDate ?? "—" },
   ];
