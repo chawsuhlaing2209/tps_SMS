@@ -2468,6 +2468,7 @@
     "status_rejected": "Rejected",
     "allGrades": "All grades",
     "enrolledFrom": "Enrolled from",
+    "alreadyActiveEnrollment": "This student already has an active enrollment for this academic year.",
     "allYears": "All years",
     "legacyBillingNote": "This enrollment was approved before unified billing. Continue the ceremony to generate the invoice.",
     "noMandatoryFees": "No enrollment fee plans are configured for this classroom's academic year and grade. Add plans under Finance → Enrollment fee plans.",

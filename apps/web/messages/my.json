@@ -2467,6 +2467,7 @@
     "status_rejected": "Rejected",
     "allGrades": "အတန်းအားလုံး",
     "enrolledFrom": "စာရင်းသွင်းသည့်နေ့မှ",
+    "alreadyActiveEnrollment": "ဤကျောင်းသားသည် ဤပညာသင်နှစ်အတွက် လက်ရှိစာရင်းသွင်းထားပြီး ဖြစ်သည်။",
     "allYears": "နှစ်အားလုံး",
     "legacyBillingNote": "Unified billing မရှိခင်က approve လုပ်ထားသော enrollment ဖြစ်သည်။ Invoice ထုတ်ရန် ceremony ကို ဆက်လုပ်ပါ။",
     "noMandatoryFees": "ဤ classroom ၏ academic year နှင့် grade အတွက် enrollment fee plans မရှိပါ။ Finance → Enrollment fee plans တွင် ထည့်ပါ။",
