@@ -210,7 +210,7 @@
 .pillActive {
   background: var(--pds-shell);
   border: 1.5px solid var(--pds-shell);
-  color: var(--pds-foreground-contrast-high);
+  color: var(--pds-text-invert-primary);
 }
 
 .requiredToggle {
