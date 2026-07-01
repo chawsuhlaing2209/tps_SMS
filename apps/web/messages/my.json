@@ -1274,6 +1274,8 @@
     "whereItApplies": "သက်ဆိုင်သည့် အတန်းများ",
     "renameComponent": "အမည်ပြောင်းမည်",
     "archiveComponent": "Archive လုပ်မည်",
+    "deleteComponent": "Component ဖျက်မည်",
+    "deleteComponentHelp": "\"{name}\" ကို အပြီးအပိုင် ဖျက်မလား? အတန်းအားလုံးမှ ဖယ်ရှားမည်ဖြစ်ပြီး ပြန်ပြင်၍မရပါ။ ယခင် invoice များ၏ စာသားမှာ ဆက်ရှိနေမည်။ တက်ကြွသော recurring service ရှိသည့် component ကို ၎င်းတို့ မပြီးဆုံးမချင်း ဖျက်၍မရပါ။",
     "archiveComponentHelp": "\"{name}\" ကို archive လုပ်မလား? အတန်းအားလုံးမှ ဖယ်ရှားပြီး ကောက်ခံတော့မည်မဟုတ်ပါ။ ယခင် invoice များ မထိခိုက်ပါ။",
     "componentSaved": "ကြေးအစိတ်အပိုင်း သိမ်းဆည်းပြီးပါပြီ။",
     "sameAmountPlaceholder": "အတန်းအားလုံးအတွက် ပမာဏ",

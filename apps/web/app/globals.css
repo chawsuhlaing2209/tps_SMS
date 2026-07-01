@@ -6678,7 +6678,9 @@ button.btn-hero-outline:hover {
   transition: background-color 0.15s ease;
   width: 44px;
 }.form-toggle[data-state="checked"] {
-  background: var(--pds-compliment-brand);
+  background: var(--pds-brand-accent);
+}.form-toggle--secondary[data-state="checked"] {
+  background: var(--pds-brand-dark);
 }.form-toggle[data-state="checked"] .form-toggle__thumb {
   background: var(--pds-text-invert-primary);
 }.form-toggle:focus-visible {

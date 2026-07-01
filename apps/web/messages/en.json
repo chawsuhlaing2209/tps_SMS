@@ -1274,6 +1274,8 @@
     "whereItApplies": "Applies to grades",
     "renameComponent": "Rename component",
     "archiveComponent": "Archive component",
+    "deleteComponent": "Delete component",
+    "deleteComponentHelp": "Permanently delete \"{name}\"? This removes it from all grades and cannot be undone. Past invoices keep their line text. A component with active recurring services can't be deleted until those are ended.",
     "archiveComponentHelp": "Archive \"{name}\"? It will be removed from all grades and no longer billed. Past invoices are unaffected.",
     "componentSaved": "Fee component saved.",
     "sameAmountPlaceholder": "Amount for all grades",

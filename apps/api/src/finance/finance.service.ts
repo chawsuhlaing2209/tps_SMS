@@ -98,6 +98,69 @@ export class FinanceService {
     return item
   }
 
+  /**
+   * Hard-delete a fee component. Blocked when the component still has active
+   * recurring services (deleting would strand live billing). Historical invoice
+   * lines keep their text but lose the link; ended services, fee plans, and
+   * discount references are cleaned up.
+   */
+  async deleteFeeItem(tenantId: string, feeItemId: string, actorUserId: string) {
+    const previous = await this.getFeeItemOrThrow(tenantId, feeItemId)
+
+    const today = new Date().toISOString().slice(0, 10)
+    const [activeRow] = await this.db
+      .select({ value: count() })
+      .from(studentServices)
+      .where(and(
+        eq(studentServices.tenantId, tenantId),
+        eq(studentServices.feeItemId, feeItemId),
+        or(isNull(studentServices.effectiveTo), gte(studentServices.effectiveTo, today)),
+      ))
+    const activeServices = Number(activeRow?.value ?? 0)
+    if (activeServices > 0) {
+      throw new BadRequestException(
+        `This component has ${activeServices} active recurring service(s). End them before deleting.`,
+      )
+    }
+
+    await this.db.transaction(async (tx) => {
+      // Preserve historical invoice lines — keep the description, drop the link.
+      await tx.update(invoiceItems)
+        .set({ feeItemId: null })
+        .where(and(eq(invoiceItems.tenantId, tenantId), eq(invoiceItems.feeItemId, feeItemId)))
+
+      // Remove ended recurring services (feeItemId is NOT NULL, so they can't be kept).
+      await tx.delete(studentServices)
+        .where(and(eq(studentServices.tenantId, tenantId), eq(studentServices.feeItemId, feeItemId)))
+
+      // Drop enrollment fee plans (grade links cascade via the junction FK).
+      await tx.delete(enrollmentFeePlans)
+        .where(and(eq(enrollmentFeePlans.tenantId, tenantId), eq(enrollmentFeePlans.feeItemId, feeItemId)))
+
+      // Scrub the fee item from any discount criteria that reference it.
+      const rules = await tx
+        .select({ id: discountRules.id, criteria: discountRules.criteria })
+        .from(discountRules)
+        .where(eq(discountRules.tenantId, tenantId))
+      for (const rule of rules) {
+        const criteria = (rule.criteria ?? {}) as { appliesTo?: { feeItemIds?: string[] } }
+        const ids = criteria.appliesTo?.feeItemIds
+        if (!Array.isArray(ids) || !ids.includes(feeItemId)) continue
+        await tx.update(discountRules)
+          .set({ criteria: { ...criteria, appliesTo: { ...criteria.appliesTo, feeItemIds: ids.filter((id) => id !== feeItemId) } } })
+          .where(eq(discountRules.id, rule.id))
+      }
+
+      await tx.delete(feeItems)
+        .where(and(eq(feeItems.id, feeItemId), eq(feeItems.tenantId, tenantId)))
+    })
+
+    await this.auditService.recordEvent(
+      this.auditService.createEvent({ tenantId, actorUserId, action: 'fee_item.delete', recordType: 'fee_item', recordId: feeItemId, before: { name: previous.name, feeType: previous.feeType, status: previous.status }, after: { deleted: true } })
+    )
+    return { deleted: true, feeItemId }
+  }
+
   // ── Enrollment Fee Plans ───────────────────────────────────────────────────
 
   private async listPlanGradeMap(tenantId: string) {

@@ -28,12 +28,6 @@ import styles from "./fee-structures.module.css";
 type Grade = { id: string; name: string; status?: string; sortOrder?: number };
 type FeeItem = { id: string; name: string; feeType: string; billingType: string; status: string };
 type FeePlan = { id: string; academicYearId: string; gradeIds: string[]; feeItemId: string; amount: string };
-type Summary = {
-  academicYearId: string;
-  maxTotal: number;
-  grades: Array<{ gradeId: string; gradeName: string; totalAnnual: number; componentCount: number; studentCount: number }>;
-};
-
 type ComponentFormValues = { name: string; billingType: string; required: boolean };
 
 const BILLING_TYPES = ["annual", "monthly", "term", "one_time"] as const;
@@ -100,22 +94,22 @@ export default function FeeStructuresPage() {
 
   const [selectedFeeItemId, setSelectedFeeItemId] = useState<string | null>(null);
   const [draft, setDraft] = useState<GradeDraft>({});
-  const [bulkAmount, setBulkAmount] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [renaming, setRenaming] = useState<FeeItem | null>(null);
   const [renameValue, setRenameValue] = useState("");
-  const [archiving, setArchiving] = useState<FeeItem | null>(null);
+  const [deleting, setDeleting] = useState<FeeItem | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [lastEditedGrade, setLastEditedGrade] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
   const grades = useApiQuery<Grade[]>((tenant) => `/tenants/${tenant}/academics/grades`);
   const feeItems = useApiQuery<FeeItem[]>(FEE_ITEMS_PATH);
   const plans = useApiQuery<FeePlan[]>(PLANS_PATH);
-  const summary = useApiQuery<Summary>((tenant) => (workingYearId ? SUMMARY_PATH(tenant, workingYearId) : null));
 
-  const dataError = grades.isError || feeItems.isError || plans.isError || summary.isError;
+  const dataError = grades.isError || feeItems.isError || plans.isError;
   const dataLoading =
     !dataError &&
-    (grades.isLoading || feeItems.isLoading || plans.isLoading || summary.isLoading) &&
+    (grades.isLoading || feeItems.isLoading || plans.isLoading) &&
     !(grades.data && feeItems.data && plans.data);
 
   const activeGrades = useMemo(
@@ -156,7 +150,7 @@ export default function FeeStructuresPage() {
       }
     }
     setDraft(next);
-    setBulkAmount("");
+    setLastEditedGrade(null);
   }, [selectedFeeItemId, yearPlans, activeGrades]);
 
   // Per-grade annual totals across all components (for the comparison chart + left rail counts).
@@ -194,19 +188,20 @@ export default function FeeStructuresPage() {
       for (const grade of activeGrades) {
         next[grade.id] = {
           included: checked,
-          amount: checked ? next[grade.id]?.amount || bulkAmount : next[grade.id]?.amount || ""
+          amount: next[grade.id]?.amount || ""
         };
       }
       return next;
     });
   };
 
-  const applyBulkAmount = () => {
-    if (!Number(bulkAmount)) return;
+  // Copy one grade's amount to every grade (contextual "apply to all").
+  const applyAmountToAll = (amount: string) => {
+    if (!Number(amount)) return;
     setDraft((prev) => {
       const next: GradeDraft = { ...prev };
       for (const grade of activeGrades) {
-        next[grade.id] = { included: true, amount: bulkAmount };
+        next[grade.id] = { included: true, amount };
       }
       return next;
     });
@@ -222,9 +217,9 @@ export default function FeeStructuresPage() {
     { invalidatePaths: (_b, tenant) => [FEE_ITEMS_PATH(tenant)] }
   );
 
-  const archiveFeeItem = useApiMutation<{ id: string }>(
-    ({ id }, tenant) => ({ path: `${FEE_ITEMS_PATH(tenant)}/${id}/archive`, init: { method: "POST" } }),
-    { invalidatePaths: (_b, tenant) => [FEE_ITEMS_PATH(tenant), PLANS_PATH(tenant)] }
+  const deleteFeeItem = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({ path: `${FEE_ITEMS_PATH(tenant)}/${id}`, init: { method: "DELETE" } }),
+    { showErrorToast: false, invalidatePaths: (_b, tenant) => [FEE_ITEMS_PATH(tenant), PLANS_PATH(tenant)] }
   );
 
   const reconcile = useApiMutation<{ academicYearId: string; entries: Array<{ gradeId: string; amount: number }> }>(
@@ -368,33 +363,48 @@ export default function FeeStructuresPage() {
                   <div className={styles.componentsHead}>
                     <h2 className={cn("pds-type-title-xs-bold", styles.componentsTitle)}>{t("whereItApplies")}</h2>
                     {canManage ? (
-                      <RowMoreActionsMenu
-                        ariaLabel={c("moreActions")}
-                        items={[
-                          {
-                            id: "rename",
-                            label: t("renameComponent"),
-                            icon: "edit",
-                            onSelect: () => {
-                              setRenaming(selectedComponent);
-                              setRenameValue(selectedComponent.name);
+                      <div className={styles.headActions}>
+                        <Button
+                          type="button"
+                          size="sm"
+                          buttonType="filled"
+                          buttonColor="primary"
+                          onClick={() => void saveGrades()}
+                          disabled={isSaving}
+                        >
+                          <Icon name="check" size={16} />
+                          {isSaving ? c("loading") : t("saveChanges")}
+                        </Button>
+                        <RowMoreActionsMenu
+                          ariaLabel={c("moreActions")}
+                          items={[
+                            {
+                              id: "rename",
+                              label: t("renameComponent"),
+                              icon: "edit",
+                              onSelect: () => {
+                                setRenaming(selectedComponent);
+                                setRenameValue(selectedComponent.name);
+                              }
+                            },
+                            {
+                              id: "delete",
+                              label: t("deleteComponent"),
+                              icon: "delete",
+                              destructive: true,
+                              onSelect: () => {
+                                setDeleteError(null);
+                                setDeleting(selectedComponent);
+                              }
                             }
-                          },
-                          {
-                            id: "archive",
-                            label: t("archiveComponent"),
-                            icon: "archive",
-                            destructive: true,
-                            onSelect: () => setArchiving(selectedComponent)
-                          }
-                        ]}
-                      />
+                          ]}
+                        />
+                      </div>
                     ) : null}
                   </div>
 
                   <div className={styles.componentsBody}>
-                  {canManage ? (
-                    <div className={styles.bulkRow}>
+                    {canManage ? (
                       <CheckBox
                         checked={allGradesIncluded}
                         indeterminate={includedCount > 0 && !allGradesIncluded}
@@ -403,97 +413,61 @@ export default function FeeStructuresPage() {
                         size="sm"
                         onCheckedChange={(checked) => toggleAllGrades(Boolean(checked))}
                       />
-                      <div className={styles.bulkAmount}>
-                        <TextInput
-                          type="number"
-                          min="0"
-                          value={bulkAmount}
-                          onChange={(e) => setBulkAmount(e.target.value)}
-                          placeholder={t("sameAmountPlaceholder")}
-                          suffix={amountSuffix}
-                        />
-                        <Button
-                          type="button"
-                          size="sm"
-                          buttonType="ghost"
-                          buttonColor="primary"
-                          onClick={applyBulkAmount}
-                          disabled={!Number(bulkAmount)}
-                        >
-                          {t("applyToAllGrades")}
-                        </Button>
-                      </div>
+                    ) : null}
+
+                    <div className={styles.gradeEditor}>
+                      {activeGrades.map((grade) => {
+                        const d = draft[grade.id] ?? { included: false, amount: "" };
+                        const showApplyAll = canManage && lastEditedGrade === grade.id && Number(d.amount) > 0;
+                        const allShareAmount =
+                          Number(d.amount) > 0 &&
+                          activeGrades.every((g) => draft[g.id]?.included && draft[g.id]?.amount === d.amount);
+                        return (
+                          <div key={grade.id} className={styles.gradeEditorGroup}>
+                            <div className={cn(styles.gradeEditorRow, d.included && styles.gradeEditorRowActive)}>
+                              <CheckBox
+                                size="sm"
+                                label={grade.name}
+                                checked={d.included}
+                                disabled={!canManage}
+                                onCheckedChange={(checked) => setGrade(grade.id, { included: checked })}
+                              />
+                              <TextInput
+                                type="number"
+                                min="0"
+                                value={d.amount}
+                                disabled={!canManage || !d.included}
+                                onChange={(e) => {
+                                  setGrade(grade.id, { amount: e.target.value });
+                                  setLastEditedGrade(grade.id);
+                                }}
+                                suffix={amountSuffix}
+                                className={styles.gradeEditorAmount}
+                              />
+                            </div>
+                            {showApplyAll ? (
+                              <CheckBox
+                                size="sm"
+                                className={styles.applyAllRow}
+                                label={t("applyToAllGrades")}
+                                checked={allShareAmount}
+                                onCheckedChange={(checked) => {
+                                  if (checked) applyAmountToAll(d.amount);
+                                }}
+                              />
+                            ) : null}
+                          </div>
+                        );
+                      })}
                     </div>
-                  ) : null}
 
-                  <div className={styles.gradeEditor}>
-                    {activeGrades.map((grade) => {
-                      const d = draft[grade.id] ?? { included: false, amount: "" };
-                      return (
-                        <div key={grade.id} className={cn(styles.gradeEditorRow, d.included && styles.gradeEditorRowActive)}>
-                          <CheckBox
-                            size="sm"
-                            label={grade.name}
-                            checked={d.included}
-                            disabled={!canManage}
-                            onCheckedChange={(checked) =>
-                              setGrade(grade.id, { included: checked, amount: checked && !d.amount ? bulkAmount : d.amount })
-                            }
-                          />
-                          <TextInput
-                            type="number"
-                            min="0"
-                            value={d.amount}
-                            disabled={!canManage || !d.included}
-                            onChange={(e) => setGrade(grade.id, { amount: e.target.value })}
-                            suffix={amountSuffix}
-                            className={styles.gradeEditorAmount}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {formError ? <p className="pds-type-body-s-regular error-text">{formError}</p> : null}
-
-                  {canManage ? (
-                    <div className={styles.saveBar}>
-                      <button
-                        type="button"
-                        className="pds-type-body-m-bold btn-primary"
-                        onClick={() => void saveGrades()}
-                        disabled={isSaving}
-                      >
-                        <Icon name="check" />
-                        {isSaving ? c("loading") : t("saveChanges")}
-                      </button>
-                    </div>
-                  ) : null}
+                    {formError ? <p className="pds-type-body-s-regular error-text">{formError}</p> : null}
                   </div>
                 </section>
               </>
             ) : (
               <EmptyState compact icon="receipt_long" title={t("noComponentsYet")} />
             )}
-
-            <section className={styles.comparisonPanel}>
-              <h2 className={cn("pds-type-title-s-extrabold", styles.comparisonTitle)}>{t("annualComparisonTitle")}</h2>
-              {(summary.data?.grades ?? []).map((row) => {
-                const width =
-                  summary.data?.maxTotal && summary.data.maxTotal > 0
-                    ? Math.round((row.totalAnnual / summary.data.maxTotal) * 100)
-                    : 0;
-                return (
-                  <div key={row.gradeId} className={styles.comparisonRow}>
-                    <span className="pds-type-body-m-medium">{row.gradeName}</span>
-                    <div className={styles.comparisonBar}>
-                      <div className={styles.comparisonFill} style={{ width: `${width}%` }} />
-                    </div>
-                    <span className={cn("pds-type-body-m-bold", styles.comparisonValue)}>{formatMmk(row.totalAnnual)}</span>
-                  </div>
-                );
-              })}
-            </section>
           </div>
         </div>
       )}
@@ -557,7 +531,7 @@ export default function FeeStructuresPage() {
               <p className={cn("pds-type-body-m-bold", styles.requiredToggleTitle)}>{t("markRequired")}</p>
               <p className={cn("pds-type-body-s-regular", styles.requiredToggleHelp)}>{t("markRequiredAutoApplied")}</p>
             </div>
-            <Toggle checked={requiredValue} onCheckedChange={(checked) => form.setValue("required", checked)} />
+            <Toggle surface="secondary" checked={requiredValue} onCheckedChange={(checked) => form.setValue("required", checked)} />
           </div>
 
           {formError ? <p className="pds-type-body-s-regular error-text">{formError}</p> : null}
@@ -594,21 +568,29 @@ export default function FeeStructuresPage() {
       </RecordFormSheet>
 
       <ConfirmDialog
-        open={archiving !== null}
+        open={deleting !== null}
         onOpenChange={(open) => {
-          if (!open) setArchiving(null);
+          if (!open) {
+            setDeleting(null);
+            setDeleteError(null);
+          }
         }}
-        title={t("archiveComponent")}
-        description={archiving ? t("archiveComponentHelp", { name: archiving.name }) : ""}
-        confirmLabel={t("archiveComponent")}
+        title={t("deleteComponent")}
+        description={deleteError ?? (deleting ? t("deleteComponentHelp", { name: deleting.name }) : "")}
+        confirmLabel={t("deleteComponent")}
         cancelLabel={c("cancel")}
         destructive
-        loading={archiveFeeItem.isPending}
+        loading={deleteFeeItem.isPending}
         onConfirm={async () => {
-          if (!archiving) return;
-          await archiveFeeItem.mutateAsync({ id: archiving.id });
-          if (selectedFeeItemId === archiving.id) setSelectedFeeItemId(null);
-          setArchiving(null);
+          if (!deleting) return;
+          setDeleteError(null);
+          try {
+            await deleteFeeItem.mutateAsync({ id: deleting.id });
+            if (selectedFeeItemId === deleting.id) setSelectedFeeItemId(null);
+            setDeleting(null);
+          } catch (error) {
+            setDeleteError(error instanceof ApiError ? error.message : c("somethingWrong"));
+          }
         }}
       />
     </div>
