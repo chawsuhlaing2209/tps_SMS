@@ -14,6 +14,7 @@ import { useApiMutation } from "../../lib/api";
 import { Icon } from "../../lib/material-icon";
 import { toastSuccess } from "../../lib/toast";
 import { BillingInvoicePreviewModal } from "../finance/invoices/_components/invoice-preview-modal";
+import { RecordPaymentModal } from "../finance/invoices/_components/record-payment-modal";
 import { StudentAddServiceSheet } from "./student-add-service-sheet";
 
 export type RecurrentBillingInvoice = {
@@ -36,6 +37,7 @@ export type RecurrentBillingService = {
 export type StudentRecurrentBillingData = {
   totalOutstanding: number;
   totalPaid: number;
+  recordable: number;
   invoices: RecurrentBillingInvoice[];
   activeServices: RecurrentBillingService[];
 };
@@ -60,6 +62,7 @@ function serviceIcon(name: string) {
 type Props = {
   studentId: string;
   studentName: string;
+  academicYearId: string | null;
   data: StudentRecurrentBillingData | undefined;
   loading: boolean;
   error: boolean;
@@ -70,6 +73,7 @@ type Props = {
 export function StudentRecurrentBillingPanel({
   studentId,
   studentName,
+  academicYearId,
   data,
   loading,
   error,
@@ -84,6 +88,36 @@ export function StudentRecurrentBillingPanel({
   const [addOpen, setAddOpen] = useState(false);
   const [removeId, setRemoveId] = useState<string | null>(null);
   const [previewInvoiceId, setPreviewInvoiceId] = useState<string | null>(null);
+  const [collectOpen, setCollectOpen] = useState(false);
+  const [billingRecurring, setBillingRecurring] = useState(false);
+
+  // Generate the current month's recurring invoice on demand, so collecting
+  // recurring fees is one click — no manual "generate monthly invoices" run.
+  const billRecurring = useApiMutation<void, { invoiceId: string | null }>(
+    (_body, tenant) => ({
+      path: `/tenants/${tenant}/finance/students/${studentId}/bill-recurring`,
+      init: { method: "POST", body: JSON.stringify({}) }
+    }),
+    {
+      invalidatePaths: (_, tenant) => [
+        `/tenants/${tenant}/finance/students/${studentId}/summary`
+      ],
+      showSuccessToast: false
+    }
+  );
+
+  async function openCollect() {
+    setBillingRecurring(true);
+    try {
+      await billRecurring.mutateAsync();
+    } catch {
+      // Non-fatal: still open the modal to collect any existing balance.
+    } finally {
+      setBillingRecurring(false);
+      onRefresh();
+      setCollectOpen(true);
+    }
+  }
 
   const removeService = useApiMutation<string, { removed: boolean }>(
     (serviceId, tenant) => ({
@@ -137,6 +171,24 @@ export function StudentRecurrentBillingPanel({
             hint={DEFAULT_CURRENCY}
           />
         </StatGrid>
+
+        {canManage && academicYearId && (data.recordable > 0 || data.activeServices.length > 0) ? (
+          <div className="student-recurrent-billing__collect">
+            <button
+              type="button"
+              className="pds-type-body-m-bold btn-primary"
+              onClick={() => void openCollect()}
+              disabled={billingRecurring}
+            >
+              <Icon name="point_of_sale" size={18} />
+              {billingRecurring ? c("loading") : f("collectPayment")}
+            </button>
+          </div>
+        ) : canManage && data.totalOutstanding > 0 ? (
+          <p className="pds-type-body-s-regular muted student-recurrent-billing__collect">
+            {f("recordPaymentFullyPending")}
+          </p>
+        ) : null}
 
         <h3 className="pds-type-caption-s student-recurrent-billing__section-label">
           {t("invoiceHistory")}
@@ -274,6 +326,17 @@ export function StudentRecurrentBillingPanel({
           }
         }}
       />
+
+      {academicYearId ? (
+        <RecordPaymentModal
+          variant="roster"
+          open={collectOpen}
+          onOpenChange={setCollectOpen}
+          initialStudentId={studentId}
+          academicYearId={academicYearId}
+          onCollected={onRefresh}
+        />
+      ) : null}
     </>
   );
 }

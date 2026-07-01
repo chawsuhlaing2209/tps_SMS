@@ -26,25 +26,17 @@ export type TextInputProps = Omit<React.InputHTMLAttributes<HTMLInputElement>, "
   inputState?: InputState;
   /** Trailing unit or hint inside the control border (e.g. "MMK / mo"). */
   suffix?: React.ReactNode;
-  /** Render only the native input — no `.text-input` shell (e.g. pay modal amount field). */
+  /**
+   * Render only the bare `<input>` (no `.text-input` wrapper). `className` is then
+   * applied directly to the input — for call sites that style the element itself
+   * (e.g. `.pay-amount`, `.pay-input`). Not compatible with `suffix`.
+   */
   unwrapped?: boolean;
 };
 
 /** Single-line text control — swap content for {@link InputWrapper} (Figma 124:8752). */
 export const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>(
-  (
-    {
-      className,
-      inputClassName,
-      type = "text",
-      inputState = "enabled",
-      disabled,
-      suffix,
-      unwrapped = false,
-      ...props
-    },
-    ref
-  ) => {
+  ({ className, inputClassName, type = "text", inputState = "enabled", disabled, suffix, unwrapped, ...props }, ref) => {
     const isDisabled = disabled || inputState === "disabled";
 
     if (unwrapped) {

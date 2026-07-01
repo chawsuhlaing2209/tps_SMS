@@ -12,6 +12,7 @@ import { z } from "zod";
 import { ApiError, useApiMutation, useApiQuery } from "../../../lib/api";
 import { Icon } from "../../../lib/material-icon";
 import { RecordFormSheet } from "../../../lib/record-sheet";
+import { toastSuccess } from "../../../lib/toast";
 import { zodResolver } from "../../../lib/zod-resolver";
 import { PageHeader } from "../../page-header-context";
 import { hasAnyPermission } from "../../../lib/permissions";
@@ -20,49 +21,20 @@ import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
 import { CheckBox } from "../../../../components/pds";
 import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
 import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
-import { isPadaukRowInteractiveTarget } from "../../../lib/table-row-interaction";
 import { EmptyState } from "../../../../components/shared/empty-state";
 import styles from "./fee-structures.module.css";
 
 type Grade = { id: string; name: string; status?: string; sortOrder?: number };
-type FeeItem = {
-  id: string;
-  name: string;
-  feeType: string;
-  billingType: string;
-  status: string;
-};
-type FeePlan = {
-  id: string;
-  academicYearId: string;
-  gradeIds: string[];
-  feeItemId: string;
-  amount: string;
-};
+type FeeItem = { id: string; name: string; feeType: string; billingType: string; status: string };
+type FeePlan = { id: string; academicYearId: string; gradeIds: string[]; feeItemId: string; amount: string };
 type Summary = {
   academicYearId: string;
   maxTotal: number;
-  grades: Array<{
-    gradeId: string;
-    gradeName: string;
-    totalAnnual: number;
-    componentCount: number;
-    studentCount: number;
-  }>;
+  grades: Array<{ gradeId: string; gradeName: string; totalAnnual: number; componentCount: number; studentCount: number }>;
 };
 
-type ComponentFormValues = {
-  name: string;
-  billingType: string;
-  feeType: string;
-  amount: string;
-  gradeIds: string[];
-  required: boolean;
-};
+type ComponentFormValues = { name: string; billingType: string; required: boolean };
 
-type FormMode = { type: "create" } | { type: "edit"; planId: string; feeItemId: string };
-
-const FEE_TYPES = ["tuition", "registration", "transport", "other"] as const;
 const BILLING_TYPES = ["annual", "monthly", "term", "one_time"] as const;
 
 const PLANS_PATH = (tenant: string) => `/tenants/${tenant}/finance/enrollment-fee-plans`;
@@ -74,20 +46,15 @@ function formatMmk(value: number): string {
   return formatMMK(value);
 }
 
-function formatAmount(value: number) {
-  return Math.round(value).toLocaleString();
-}
-
-function annualizeAmount(amount: string, billingType: string): number {
-  const base = Number(amount);
-  if (!Number.isFinite(base)) return 0;
+function annualizeAmount(amount: number, billingType: string): number {
+  if (!Number.isFinite(amount)) return 0;
   switch (billingType) {
     case "monthly":
-      return base * 12;
+      return amount * 12;
     case "term":
-      return base * 3;
+      return amount * 3;
     default:
-      return base;
+      return amount;
   }
 }
 
@@ -104,13 +71,6 @@ function billingAmountSuffixKey(billingType: string): "monthly" | "term" | "once
   }
 }
 
-function resolveFeeType(required: boolean, feeType: string): string {
-  if (required) {
-    return (mandatoryEnrollmentFeeTypes as readonly string[]).includes(feeType) ? feeType : "tuition";
-  }
-  return "other";
-}
-
 function feeTypeColor(feeType: string): string {
   switch (feeType) {
     case "tuition":
@@ -124,32 +84,36 @@ function feeTypeColor(feeType: string): string {
   }
 }
 
+type GradeDraft = Record<string, { included: boolean; amount: string }>;
+
 export default function FeeStructuresPage() {
   const t = useTranslations("finance");
   const nav = useTranslations("nav");
-  const a = useTranslations("academics");
   const c = useTranslations("common");
   const permissions = getSession()?.permissions;
   const canManage = hasAnyPermission(permissions, ["finance.manage"]);
   const currentYear = useCurrentAcademicYear();
-
   const workingYearId = currentYear.data?.id ?? "";
-  const [selectedGradeId, setSelectedGradeId] = useState<string | null>(null);
-  const [formMode, setFormMode] = useState<FormMode | null>(null);
+
+  const [selectedFeeItemId, setSelectedFeeItemId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<GradeDraft>({});
+  const [bulkAmount, setBulkAmount] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
+  const [renaming, setRenaming] = useState<FeeItem | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [archiving, setArchiving] = useState<FeeItem | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const [deletingComponent, setDeletingComponent] = useState<{
-    planId: string;
-    feeItemId: string;
-    name: string;
-    gradeOnly: boolean;
-  } | null>(null);
 
   const grades = useApiQuery<Grade[]>((tenant) => `/tenants/${tenant}/academics/grades`);
   const feeItems = useApiQuery<FeeItem[]>(FEE_ITEMS_PATH);
   const plans = useApiQuery<FeePlan[]>(PLANS_PATH);
-  const summary = useApiQuery<Summary>((tenant) =>
-    workingYearId ? SUMMARY_PATH(tenant, workingYearId) : null
-  );
+  const summary = useApiQuery<Summary>((tenant) => (workingYearId ? SUMMARY_PATH(tenant, workingYearId) : null));
+
+  const dataError = grades.isError || feeItems.isError || plans.isError || summary.isError;
+  const dataLoading =
+    !dataError &&
+    (grades.isLoading || feeItems.isLoading || plans.isLoading || summary.isLoading) &&
+    !(grades.data && feeItems.data && plans.data);
 
   const activeGrades = useMemo(
     () =>
@@ -159,265 +123,153 @@ export default function FeeStructuresPage() {
     [grades.data]
   );
 
-  useEffect(() => {
-    if (!selectedGradeId && activeGrades.length) {
-      setSelectedGradeId(activeGrades[0]!.id);
-    }
-  }, [activeGrades, selectedGradeId]);
+  const activeComponents = useMemo(
+    () => (feeItems.data ?? []).filter((item) => item.status === "active"),
+    [feeItems.data]
+  );
 
   const yearPlans = useMemo(
     () => plans.data?.filter((plan) => plan.academicYearId === workingYearId) ?? [],
     [plans.data, workingYearId]
   );
 
-  const itemById = useMemo(
-    () => new Map((feeItems.data ?? []).map((item) => [item.id, item])),
-    [feeItems.data]
+  const selectedComponent = activeComponents.find((item) => item.id === selectedFeeItemId) ?? null;
+  const amountSuffix = t(`amountSuffix.${billingAmountSuffixKey(selectedComponent?.billingType ?? "annual")}`);
+
+  useEffect(() => {
+    if (!selectedFeeItemId && activeComponents.length) {
+      setSelectedFeeItemId(activeComponents[0]!.id);
+    }
+  }, [activeComponents, selectedFeeItemId]);
+
+  // Build the grade/amount editor state from the selected component's plans.
+  useEffect(() => {
+    if (!selectedFeeItemId) return;
+    const next: GradeDraft = {};
+    for (const grade of activeGrades) next[grade.id] = { included: false, amount: "" };
+    for (const plan of yearPlans.filter((p) => p.feeItemId === selectedFeeItemId)) {
+      for (const gradeId of plan.gradeIds) {
+        if (next[gradeId]) next[gradeId] = { included: true, amount: plan.amount };
+      }
+    }
+    setDraft(next);
+    setBulkAmount("");
+  }, [selectedFeeItemId, yearPlans, activeGrades]);
+
+  // Per-grade annual totals across all components (for the comparison chart + left rail counts).
+  const componentTotals = useMemo(() => {
+    const map = new Map<string, { grades: number; annual: number }>();
+    for (const item of activeComponents) map.set(item.id, { grades: 0, annual: 0 });
+    for (const plan of yearPlans) {
+      const item = feeItems.data?.find((f) => f.id === plan.feeItemId);
+      const entry = map.get(plan.feeItemId);
+      if (!item || !entry) continue;
+      entry.grades += plan.gradeIds.length;
+      entry.annual += annualizeAmount(Number(plan.amount), item.billingType) * plan.gradeIds.length;
+    }
+    return map;
+  }, [activeComponents, yearPlans, feeItems.data]);
+
+  const includedCount = Object.values(draft).filter((d) => d.included).length;
+  const editorAnnualTotal = useMemo(
+    () =>
+      Object.values(draft)
+        .filter((d) => d.included && Number(d.amount) > 0)
+        .reduce((sum, d) => sum + annualizeAmount(Number(d.amount), selectedComponent?.billingType ?? "annual"), 0),
+    [draft, selectedComponent?.billingType]
   );
 
-  const selectedGrade = activeGrades.find((grade) => grade.id === selectedGradeId) ?? null;
-  const selectedSummary = summary.data?.grades.find((row) => row.gradeId === selectedGradeId);
+  const allGradesIncluded = activeGrades.length > 0 && activeGrades.every((g) => draft[g.id]?.included);
 
-  const gradeComponents = useMemo(() => {
-    if (!selectedGradeId) return [];
+  const setGrade = (gradeId: string, patch: Partial<{ included: boolean; amount: string }>) => {
+    setDraft((prev) => ({ ...prev, [gradeId]: { ...(prev[gradeId] ?? { included: false, amount: "" }), ...patch } }));
+  };
 
-    const rows = yearPlans
-      .filter((plan) => plan.gradeIds.includes(selectedGradeId))
-      .map((plan) => {
-        const item = itemById.get(plan.feeItemId);
-        if (!item || item.status === "archived") return null;
-        const annualAmount = annualizeAmount(plan.amount, item.billingType);
-        return {
-          planId: plan.id,
-          feeItemId: item.id,
-          name: item.name,
-          feeType: item.feeType,
-          billingType: item.billingType,
-          annualAmount,
-          planAmount: plan.amount
+  const toggleAllGrades = (checked: boolean) => {
+    setDraft((prev) => {
+      const next: GradeDraft = { ...prev };
+      for (const grade of activeGrades) {
+        next[grade.id] = {
+          included: checked,
+          amount: checked ? next[grade.id]?.amount || bulkAmount : next[grade.id]?.amount || ""
         };
-      })
-      .filter(Boolean) as Array<{
-      planId: string;
-      feeItemId: string;
-      name: string;
-      feeType: string;
-      billingType: string;
-      annualAmount: number;
-      planAmount: string;
-    }>;
+      }
+      return next;
+    });
+  };
 
-    const total = rows.reduce((sum, row) => sum + row.annualAmount, 0);
-    return rows.map((row) => ({
-      ...row,
-      share: total > 0 ? Math.round((row.annualAmount / total) * 100) : 0
-    }));
-  }, [itemById, selectedGradeId, yearPlans]);
+  const applyBulkAmount = () => {
+    if (!Number(bulkAmount)) return;
+    setDraft((prev) => {
+      const next: GradeDraft = { ...prev };
+      for (const grade of activeGrades) {
+        next[grade.id] = { included: true, amount: bulkAmount };
+      }
+      return next;
+    });
+  };
 
-  const totalAnnual =
-    selectedSummary?.totalAnnual ??
-    gradeComponents.reduce((sum, row) => sum + row.annualAmount, 0);
-
-  const createFeeItem = useApiMutation<
-    { name: string; feeType: string; billingType: string },
-    FeeItem
-  >(
-    (body, tenant) => ({
-      path: FEE_ITEMS_PATH(tenant),
-      init: { method: "POST", body: JSON.stringify(body) }
-    }),
+  const createFeeItem = useApiMutation<{ name: string; feeType: string; billingType: string }, FeeItem>(
+    (body, tenant) => ({ path: FEE_ITEMS_PATH(tenant), init: { method: "POST", body: JSON.stringify(body) } }),
     { invalidatePaths: (_b, tenant) => [FEE_ITEMS_PATH(tenant)] }
   );
 
-  const createPlan = useApiMutation<{
-    academicYearId: string;
-    gradeIds: string[];
-    feeItemId: string;
-    amount: number;
-  }>(
-    (body, tenant) => ({
-      path: PLANS_PATH(tenant),
-      init: { method: "POST", body: JSON.stringify(body) }
-    }),
-    {
-      invalidatePaths: (_b, tenant) => [
-        PLANS_PATH(tenant),
-        workingYearId ? SUMMARY_PATH(tenant, workingYearId) : PLANS_PATH(tenant)
-      ]
-    }
-  );
-
-  const updatePlan = useApiMutation<{ id: string; gradeIds: string[]; amount: number }>(
-    ({ id, ...body }, tenant) => ({
-      path: `${PLANS_PATH(tenant)}/${id}`,
-      init: { method: "PATCH", body: JSON.stringify(body) }
-    }),
-    {
-      invalidatePaths: (_b, tenant) => [
-        PLANS_PATH(tenant),
-        FEE_ITEMS_PATH(tenant),
-        workingYearId ? SUMMARY_PATH(tenant, workingYearId) : PLANS_PATH(tenant)
-      ]
-    }
-  );
-
-  const updateFeeItem = useApiMutation<
-    { id: string; name?: string; feeType?: string; billingType?: string },
-    FeeItem
-  >(
-    ({ id, ...body }, tenant) => ({
-      path: `${FEE_ITEMS_PATH(tenant)}/${id}`,
-      init: { method: "PATCH", body: JSON.stringify(body) }
-    }),
-    {
-      invalidatePaths: (_b, tenant) => [
-        FEE_ITEMS_PATH(tenant),
-        PLANS_PATH(tenant),
-        workingYearId ? SUMMARY_PATH(tenant, workingYearId) : PLANS_PATH(tenant)
-      ]
-    }
-  );
-
-  const deletePlan = useApiMutation<{ id: string }>(
-    ({ id }, tenant) => ({
-      path: `${PLANS_PATH(tenant)}/${id}`,
-      init: { method: "DELETE" }
-    }),
-    {
-      invalidatePaths: (_b, tenant) => [
-        PLANS_PATH(tenant),
-        FEE_ITEMS_PATH(tenant),
-        workingYearId ? SUMMARY_PATH(tenant, workingYearId) : PLANS_PATH(tenant)
-      ]
-    }
+  const updateFeeItem = useApiMutation<{ id: string; name?: string }, FeeItem>(
+    ({ id, ...body }, tenant) => ({ path: `${FEE_ITEMS_PATH(tenant)}/${id}`, init: { method: "PATCH", body: JSON.stringify(body) } }),
+    { invalidatePaths: (_b, tenant) => [FEE_ITEMS_PATH(tenant)] }
   );
 
   const archiveFeeItem = useApiMutation<{ id: string }>(
-    ({ id }, tenant) => ({
-      path: `${FEE_ITEMS_PATH(tenant)}/${id}/archive`,
-      init: { method: "POST" }
-    }),
+    ({ id }, tenant) => ({ path: `${FEE_ITEMS_PATH(tenant)}/${id}/archive`, init: { method: "POST" } }),
     { invalidatePaths: (_b, tenant) => [FEE_ITEMS_PATH(tenant), PLANS_PATH(tenant)] }
   );
 
+  const reconcile = useApiMutation<{ academicYearId: string; entries: Array<{ gradeId: string; amount: number }> }>(
+    (body, tenant) => ({
+      path: `${FEE_ITEMS_PATH(tenant)}/${selectedFeeItemId}/grade-amounts`,
+      init: { method: "PUT", body: JSON.stringify(body) }
+    }),
+    {
+      invalidatePaths: (_b, tenant) => [
+        PLANS_PATH(tenant),
+        FEE_ITEMS_PATH(tenant),
+        workingYearId ? SUMMARY_PATH(tenant, workingYearId) : PLANS_PATH(tenant)
+      ]
+    }
+  );
+
+  async function saveGrades() {
+    if (!selectedFeeItemId) return;
+    setFormError(null);
+    const entries = Object.entries(draft)
+      .filter(([, d]) => d.included && Number(d.amount) > 0)
+      .map(([gradeId, d]) => ({ gradeId, amount: Number(d.amount) }));
+    try {
+      await reconcile.mutateAsync({ academicYearId: workingYearId, entries });
+      toastSuccess(t("componentSaved"));
+    } catch (error) {
+      setFormError(error instanceof ApiError ? error.message : c("somethingWrong"));
+    }
+  }
+
+  // ── Add component modal ──
   const schema = useMemo(
     () =>
       z.object({
         name: z.string().trim().min(1, c("required")),
         billingType: z.string().min(1),
-        feeType: z.string().min(1),
-        amount: z.string().min(1, c("required")),
-        gradeIds: z.array(z.string()).min(1, t("selectGradesRequired")),
         required: z.boolean()
       }),
-    [c, t]
+    [c]
   );
-
-  const defaultValues: ComponentFormValues = {
-    name: "",
-    billingType: "annual",
-    feeType: "tuition",
-    amount: "",
-    gradeIds: selectedGradeId ? [selectedGradeId] : [],
-    required: true
-  };
-
   const form = useForm<ComponentFormValues>({
     resolver: zodResolver(schema),
-    defaultValues
+    defaultValues: { name: "", billingType: "annual", required: false }
   });
-
   const billingType = form.watch("billingType");
-  const amountValue = form.watch("amount");
-  const nameValue = form.watch("name");
-  const gradeIdsValue = form.watch("gradeIds");
   const requiredValue = form.watch("required");
-  const amountSuffix = t(`amountSuffix.${billingAmountSuffixKey(billingType)}`);
-  const allGradesSelected =
-    activeGrades.length > 0 && activeGrades.every((grade) => gradeIdsValue.includes(grade.id));
-  const someGradesSelected = gradeIdsValue.length > 0 && !allGradesSelected;
-  const previewName = nameValue.trim() || t("componentPreviewPlaceholder");
-  const previewAmount =
-    Number.isFinite(Number(amountValue)) && Number(amountValue) > 0
-      ? `${formatAmount(Number(amountValue))} ${amountSuffix}`
-      : `— ${amountSuffix}`;
 
-  const openCreate = () => {
-    form.reset({
-      ...defaultValues,
-      gradeIds: selectedGradeId ? [selectedGradeId] : []
-    });
-    setFormError(null);
-    setFormMode({ type: "create" });
-  };
-
-  const openEdit = (planId: string, feeItemId: string) => {
-    const plan = yearPlans.find((row) => row.id === planId);
-    const item = itemById.get(feeItemId);
-    if (!plan || !item) return;
-
-    form.reset({
-      name: item.name,
-      billingType: item.billingType,
-      feeType: item.feeType,
-      amount: plan.amount,
-      gradeIds: plan.gradeIds,
-      required: (mandatoryEnrollmentFeeTypes as readonly string[]).includes(item.feeType)
-    });
-    setFormError(null);
-    setFormMode({ type: "edit", planId, feeItemId });
-  };
-
-  const toggleGrade = (gradeId: string) => {
-    const current = form.getValues("gradeIds");
-    const next = current.includes(gradeId)
-      ? current.filter((id) => id !== gradeId)
-      : [...current, gradeId];
-    form.setValue("gradeIds", next, { shouldValidate: true, shouldDirty: true });
-  };
-
-  const selectAllGrades = () => {
-    form.setValue(
-      "gradeIds",
-      activeGrades.map((grade) => grade.id),
-      { shouldValidate: true, shouldDirty: true }
-    );
-  };
-
-  const confirmRemoveComponent = async () => {
-    if (!deletingComponent || !selectedGradeId) return;
-
-    const plan = yearPlans.find((row) => row.id === deletingComponent.planId);
-    if (!plan) {
-      setDeletingComponent(null);
-      return;
-    }
-
-    try {
-      if (deletingComponent.gradeOnly) {
-        await updatePlan.mutateAsync({
-          id: plan.id,
-          gradeIds: plan.gradeIds.filter((gradeId) => gradeId !== selectedGradeId),
-          amount: Number(plan.amount)
-        });
-      } else {
-        await deletePlan.mutateAsync({ id: plan.id });
-        const hasOtherPlans = yearPlans.some(
-          (row) => row.feeItemId === deletingComponent.feeItemId && row.id !== plan.id
-        );
-        if (!hasOtherPlans) {
-          await archiveFeeItem.mutateAsync({ id: deletingComponent.feeItemId });
-        }
-      }
-      setDeletingComponent(null);
-    } catch {
-      // Keep dialog open; mutation error surfaces via query invalidation / toast if configured.
-    }
-  };
-
-  const summaryByGrade = new Map(
-    (summary.data?.grades ?? []).map((row) => [row.gradeId, row.totalAnnual])
-  );
+  const isSaving = reconcile.isPending;
 
   return (
     <div className={styles.page}>
@@ -433,60 +285,75 @@ export default function FeeStructuresPage() {
 
       {!workingYearId ? (
         <p className="pds-type-body-s-regular muted">{t("selectAcademicYear")}</p>
+      ) : dataError ? (
+        <EmptyState embedded icon="error" title={c("somethingWrong")} />
+      ) : dataLoading ? (
+        <p className="pds-type-body-s-regular muted">{c("loading")}</p>
       ) : (
         <div className={styles.layout}>
           <aside className={styles.gradeNav}>
-            <p className={cn("pds-type-label-s-medium", styles.gradeNavLabel)}>{t("gradeLevelNav")}</p>
-            {activeGrades.map((grade) => {
-              const total = summaryByGrade.get(grade.id) ?? 0;
-              const active = grade.id === selectedGradeId;
-              return (
+            <div className={styles.componentsHead}>
+              <p className={cn("pds-type-label-s-medium", styles.gradeNavLabel)}>{t("feeComponents")}</p>
+              {canManage ? (
                 <button
-                  key={grade.id}
                   type="button"
-                  className={`${styles.gradeNavItem} ${active ? styles.gradeNavItemActive : ""}`}
-                  onClick={() => setSelectedGradeId(grade.id)}
+                  className={cn("pds-type-body-s-semibold", styles.componentsAdd)}
+                  onClick={() => {
+                    form.reset({ name: "", billingType: "annual", required: false });
+                    setFormError(null);
+                    setAddOpen(true);
+                  }}
                 >
-                  <span>
-                    <span className={cn("pds-type-body-m-bold", styles.gradeNavName)}>{grade.name}</span>
-                    <span className={cn("pds-type-body-s-regular", styles.gradeNavAmount)}>{formatMmk(total)}</span>
-                  </span>
-                  {active ? (
-                    <Icon name="check_circle" size={18} className={styles.gradeNavCheck} />
-                  ) : null}
+                  <Icon name="add" size={18} />
+                  {t("addComponent")}
                 </button>
-              );
-            })}
+              ) : null}
+            </div>
+            {!activeComponents.length ? (
+              <p className="pds-type-body-s-regular muted">{t("noComponentsYet")}</p>
+            ) : (
+              activeComponents.map((item) => {
+                const active = item.id === selectedFeeItemId;
+                const totals = componentTotals.get(item.id);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`${styles.gradeNavItem} ${active ? styles.gradeNavItemActive : ""}`}
+                    onClick={() => setSelectedFeeItemId(item.id)}
+                  >
+                    <span>
+                      <span className={cn("pds-type-body-m-bold", styles.gradeNavName)}>
+                        <span className={styles.componentDot} style={{ background: feeTypeColor(item.feeType) }} aria-hidden />
+                        {item.name}
+                      </span>
+                      <span className={cn("pds-type-body-s-regular", styles.gradeNavAmount)}>
+                        {t(`billingTypes.${item.billingType}`)} · {t("appliesToGrades", { count: totals?.grades ?? 0 })}
+                      </span>
+                    </span>
+                    {active ? <Icon name="check_circle" size={18} className={styles.gradeNavCheck} /> : null}
+                  </button>
+                );
+              })
+            )}
           </aside>
 
           <div className={styles.main}>
-            {selectedGrade ? (
+            {selectedComponent ? (
               <>
                 <section className={styles.hero}>
                   <div>
                     <p className={cn("pds-type-caption-m", styles.heroEyebrow)}>
-                      {t("annualLabel")} · {selectedGrade.name}
+                      {t(`billingTypes.${selectedComponent.billingType}`)} · {selectedComponent.name}
                     </p>
-                    <p className={cn("pds-type-display-m", styles.heroTotal)}>{formatMmk(totalAnnual)}</p>
-                    <p className={cn("pds-type-body-m-medium", styles.heroSub)}>{t("annualCurrencyHint")}</p>
+                    <p className={cn("pds-type-display-m", styles.heroTotal)}>{formatMmk(editorAnnualTotal)}</p>
+                    <p className={cn("pds-type-body-m-medium", styles.heroSub)}>{t("componentAnnualHint")}</p>
                   </div>
                   <div className={styles.heroStats}>
                     <div className={styles.heroStat}>
-                      <span className={cn("pds-type-label-s-bold", styles.heroStatLabel)}>{t("perTerm")}</span>
+                      <span className={cn("pds-type-label-s-bold", styles.heroStatLabel)}>{t("appliedGradesStat")}</span>
                       <strong className={cn("pds-type-title-s-extrabold", styles.heroStatValue)}>
-                        {formatMmk(totalAnnual / 3)}
-                      </strong>
-                    </div>
-                    <div className={styles.heroStat}>
-                      <span className={cn("pds-type-label-s-bold", styles.heroStatLabel)}>{t("perMonth")}</span>
-                      <strong className={cn("pds-type-title-s-extrabold", styles.heroStatValue)}>
-                        {formatMmk(totalAnnual / 12)}
-                      </strong>
-                    </div>
-                    <div className={styles.heroStat}>
-                      <span className={cn("pds-type-label-s-bold", styles.heroStatLabel)}>{t("estRevenue")}</span>
-                      <strong className={cn("pds-type-title-s-extrabold", styles.heroStatValue)}>
-                        {formatMmk(totalAnnual * (selectedSummary?.studentCount ?? 0))}
+                        {includedCount} / {activeGrades.length}
                       </strong>
                     </div>
                   </div>
@@ -494,133 +361,112 @@ export default function FeeStructuresPage() {
 
                 <section className={styles.componentsPanel}>
                   <div className={styles.componentsHead}>
-                    <h2 className={cn("pds-type-title-xs-bold", styles.componentsTitle)}>{t("feeComponents")}</h2>
+                    <h2 className={cn("pds-type-title-xs-bold", styles.componentsTitle)}>{t("whereItApplies")}</h2>
                     {canManage ? (
-                      <button type="button" className={cn("pds-type-body-m-bold", styles.componentsAdd)} onClick={openCreate}>
-                        <Icon name="add" />
-                        {t("addComponent")}
-                      </button>
+                      <RowMoreActionsMenu
+                        ariaLabel={c("moreActions")}
+                        items={[
+                          {
+                            id: "rename",
+                            label: t("renameComponent"),
+                            icon: "edit",
+                            onSelect: () => {
+                              setRenaming(selectedComponent);
+                              setRenameValue(selectedComponent.name);
+                            }
+                          },
+                          {
+                            id: "archive",
+                            label: t("archiveComponent"),
+                            icon: "archive",
+                            destructive: true,
+                            onSelect: () => setArchiving(selectedComponent)
+                          }
+                        ]}
+                      />
                     ) : null}
                   </div>
 
-                  {!gradeComponents.length ? (
-                    <EmptyState compact embedded icon="receipt_long" title={t("noFeeComponents")} />
-                  ) : (
-                    <div className={styles.componentTable}>
-                      <div className={cn("pds-type-caption-s", styles.componentTableHead)}>
-                        <span>{t("feeComponentColumn")}</span>
-                        <span className={styles.componentTableAnnualHead}>
-                          {t("feeAnnualColumn")}
-                        </span>
-                        <span>{t("feeShareColumn")}</span>
-                        <span className="sr-only">{a("actions")}</span>
-                      </div>
-                      {gradeComponents.map((row) => {
-                        const isRequired = (
-                          mandatoryEnrollmentFeeTypes as readonly string[]
-                        ).includes(row.feeType);
-                        return (
-                        <div
-                          key={row.planId}
-                          className={cn(styles.componentRow, canManage && styles.componentRowClickable)}
-                          tabIndex={canManage ? 0 : undefined}
-                          onClick={
-                            canManage
-                              ? (event) => {
-                                  if (isPadaukRowInteractiveTarget(event.target)) return;
-                                  openEdit(row.planId, row.feeItemId);
-                                }
-                              : undefined
-                          }
-                          onKeyDown={
-                            canManage
-                              ? (event) => {
-                                  if (event.key !== "Enter" && event.key !== " ") return;
-                                  event.preventDefault();
-                                  openEdit(row.planId, row.feeItemId);
-                                }
-                              : undefined
-                          }
+                  <div className={styles.componentsBody}>
+                  {canManage ? (
+                    <div className={styles.bulkRow}>
+                      <CheckBox
+                        checked={allGradesIncluded}
+                        indeterminate={includedCount > 0 && !allGradesIncluded}
+                        label={t("selectAllGrades")}
+                        showDescription={false}
+                        size="sm"
+                        onCheckedChange={(checked) => toggleAllGrades(Boolean(checked))}
+                      />
+                      <div className={styles.bulkAmount}>
+                        <TextInput
+                          type="number"
+                          min="0"
+                          value={bulkAmount}
+                          onChange={(e) => setBulkAmount(e.target.value)}
+                          placeholder={t("sameAmountPlaceholder")}
+                          suffix={amountSuffix}
+                        />
+                        <button
+                          type="button"
+                          className={cn("pds-type-body-s-semibold", styles.componentsAdd)}
+                          onClick={applyBulkAmount}
+                          disabled={!Number(bulkAmount)}
                         >
-                          <div className={styles.componentName}>
-                            <span
-                              className={styles.componentDot}
-                              style={{ background: feeTypeColor(row.feeType) }}
-                              aria-hidden
-                            />
-                            <span className={styles.componentTitleRow}>
-                              <span className={cn("pds-type-body-m-bold", styles.componentTitle)}>{row.name}</span>
-                              {isRequired ? (
-                                <span className={cn("pds-type-label-s-bold", styles.requiredBadge)}>{t("requiredBadge")}</span>
-                              ) : null}
-                            </span>
-                          </div>
-                          <span className={cn("pds-type-body-m-bold", styles.componentAmount)}>
-                            {formatMmk(row.annualAmount)}
-                          </span>
-                          <div className={styles.shareCell}>
-                            <div className={styles.shareBar}>
-                              <div
-                                className={styles.shareFill}
-                                style={{
-                                  width: `${row.share}%`,
-                                  background: feeTypeColor(row.feeType)
-                                }}
-                              />
-                            </div>
-                            <span className={cn("pds-type-body-s-semibold", styles.sharePct)}>{row.share}%</span>
-                          </div>
-                          {canManage ? (
-                            <RowMoreActionsMenu
-                              ariaLabel={c("moreActions")}
-                              items={[
-                                {
-                                  id: "view",
-                                  label: c("view"),
-                                  icon: "visibility",
-                                  onSelect: () => openEdit(row.planId, row.feeItemId)
-                                },
-                                {
-                                  id: "edit",
-                                  label: c("edit"),
-                                  icon: "edit",
-                                  onSelect: () => openEdit(row.planId, row.feeItemId)
-                                },
-                                ...(!isRequired
-                                  ? [
-                                      {
-                                        id: "delete",
-                                        label: c("delete"),
-                                        icon: "delete",
-                                        destructive: true,
-                                        onSelect: () => {
-                                          const plan = yearPlans.find((entry) => entry.id === row.planId);
-                                          setDeletingComponent({
-                                            planId: row.planId,
-                                            feeItemId: row.feeItemId,
-                                            name: row.name,
-                                            gradeOnly: Boolean(
-                                              plan &&
-                                                selectedGradeId &&
-                                                plan.gradeIds.length > 1 &&
-                                                plan.gradeIds.includes(selectedGradeId)
-                                            )
-                                          });
-                                        }
-                                      }
-                                    ]
-                                  : [])
-                              ]}
-                            />
-                          ) : null}
-                        </div>
-                        );
-                      })}
+                          {t("applyToAllGrades")}
+                        </button>
+                      </div>
                     </div>
-                  )}
+                  ) : null}
+
+                  <div className={styles.gradeEditor}>
+                    {activeGrades.map((grade) => {
+                      const d = draft[grade.id] ?? { included: false, amount: "" };
+                      return (
+                        <div key={grade.id} className={cn(styles.gradeEditorRow, d.included && styles.gradeEditorRowActive)}>
+                          <Toggle
+                            checked={d.included}
+                            disabled={!canManage}
+                            onCheckedChange={(checked) =>
+                              setGrade(grade.id, { included: checked, amount: checked && !d.amount ? bulkAmount : d.amount })
+                            }
+                          />
+                          <span className={cn("pds-type-body-m-bold", styles.gradeEditorName)}>{grade.name}</span>
+                          <TextInput
+                            type="number"
+                            min="0"
+                            value={d.amount}
+                            disabled={!canManage || !d.included}
+                            onChange={(e) => setGrade(grade.id, { amount: e.target.value })}
+                            suffix={amountSuffix}
+                            className={styles.gradeEditorAmount}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {formError ? <p className="pds-type-body-s-regular error-text">{formError}</p> : null}
+
+                  {canManage ? (
+                    <div className={styles.saveBar}>
+                      <button
+                        type="button"
+                        className="pds-type-body-m-bold btn-primary"
+                        onClick={() => void saveGrades()}
+                        disabled={isSaving}
+                      >
+                        <Icon name="check" />
+                        {isSaving ? c("loading") : t("saveChanges")}
+                      </button>
+                    </div>
+                  ) : null}
+                  </div>
                 </section>
               </>
-            ) : null}
+            ) : (
+              <EmptyState compact icon="receipt_long" title={t("noComponentsYet")} />
+            )}
 
             <section className={styles.comparisonPanel}>
               <h2 className={cn("pds-type-title-s-extrabold", styles.comparisonTitle)}>{t("annualComparisonTitle")}</h2>
@@ -631,7 +477,7 @@ export default function FeeStructuresPage() {
                     : 0;
                 return (
                   <div key={row.gradeId} className={styles.comparisonRow}>
-                    <span className={cn("pds-type-body-m-medium", styles.comparisonLabel)}>{row.gradeName}</span>
+                    <span className="pds-type-body-m-medium">{row.gradeName}</span>
                     <div className={styles.comparisonBar}>
                       <div className={styles.comparisonFill} style={{ width: `${width}%` }} />
                     </div>
@@ -644,54 +490,32 @@ export default function FeeStructuresPage() {
         </div>
       )}
 
+      {/* Add component */}
       <RecordFormSheet
-        open={formMode !== null}
+        open={addOpen}
         onOpenChange={(open) => {
-          if (!open) {
-            form.reset(defaultValues);
-            setFormError(null);
-            setFormMode(null);
-          }
+          setAddOpen(open);
+          if (!open) setFormError(null);
         }}
-        title={formMode?.type === "edit" ? t("editComponent") : t("addComponent")}
+        title={t("addComponent")}
         onSubmit={form.handleSubmit(async (values) => {
           setFormError(null);
-          const feeType = resolveFeeType(values.required, values.feeType);
-          const payload = {
-            gradeIds: values.gradeIds,
-            amount: Number(values.amount)
-          };
-
+          const feeType = values.required ? "tuition" : "other";
           try {
-            if (formMode?.type === "edit") {
-              await updateFeeItem.mutateAsync({
-                id: formMode.feeItemId,
-                name: values.name.trim(),
-                billingType: values.billingType,
-                feeType
-              });
-              await updatePlan.mutateAsync({ id: formMode.planId, ...payload });
-            } else {
-              const item = await createFeeItem.mutateAsync({
-                name: values.name.trim(),
-                feeType,
-                billingType: values.billingType
-              });
-              await createPlan.mutateAsync({
-                academicYearId: workingYearId,
-                feeItemId: item.id,
-                ...payload
-              });
-            }
-            form.reset(defaultValues);
-            setFormMode(null);
+            const item = await createFeeItem.mutateAsync({
+              name: values.name.trim(),
+              feeType,
+              billingType: values.billingType
+            });
+            setSelectedFeeItemId(item.id);
+            setAddOpen(false);
           } catch (error) {
             setFormError(error instanceof ApiError ? error.message : c("somethingWrong"));
           }
         })}
         footer={
           <>
-            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setFormMode(null)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setAddOpen(false)}>
               {c("cancel")}
             </button>
             <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={form.formState.isSubmitting}>
@@ -701,25 +525,12 @@ export default function FeeStructuresPage() {
         }
       >
         <div className={styles.formStack}>
-          <div className={styles.componentPreview}>
-            <p className={cn("pds-type-body-m-bold", styles.componentPreviewName)}>{previewName}</p>
-            <p className={cn("pds-type-title-s-extrabold", styles.componentPreviewAmount)}>{previewAmount}</p>
-            {requiredValue ? (
-              <span className={cn("pds-type-label-s-bold", styles.componentPreviewBadge)}>
-                {t("markRequiredAutoApplied")}
-              </span>
-            ) : null}
-          </div>
-
           <InputWrapper label={t("componentName")} error={form.formState.errors.name?.message}>
-            <TextInput
-              {...form.register("name")}
-              placeholder={t("componentNamePlaceholder")}
-            />
+            <TextInput {...form.register("name")} placeholder={t("componentNamePlaceholder")} />
           </InputWrapper>
 
           <div>
-            <p className={cn("pds-type-label-s-medium", styles.modalSectionLabel)}>{t("billingFrequency")}</p>
+            <p className={cn("pds-type-label-s-medium")}>{t("billingFrequency")}</p>
             <div className={styles.pillRow}>
               {BILLING_TYPES.map((value) => (
                 <button
@@ -734,99 +545,64 @@ export default function FeeStructuresPage() {
             </div>
           </div>
 
-          <InputWrapper label={t("amount")} error={form.formState.errors.amount?.message}>
-            <TextInput
-              type="number"
-              step="1"
-              min="0"
-              {...form.register("amount")}
-              suffix={amountSuffix}
-            />
-          </InputWrapper>
-
-          <div className={styles.gradeSection}>
-            <div className={styles.gradeSectionHead}>
-              <p className={cn("pds-type-label-s-medium", styles.gradeSectionLabel)}>{t("applyToGrades")}</p>
-              <CheckBox
-                checked={allGradesSelected}
-                indeterminate={someGradesSelected}
-                label={t("selectAllGrades")}
-                showDescription={false}
-                size="sm"
-                onCheckedChange={(checked) => {
-                  if (checked) {
-                    selectAllGrades();
-                  } else {
-                    form.setValue("gradeIds", [], { shouldValidate: true, shouldDirty: true });
-                  }
-                }}
-              />
-            </div>
-            <div className={cn(styles.pillRow, styles.gradePillRow)}>
-              {activeGrades.map((grade) => {
-                const selected = gradeIdsValue.includes(grade.id);
-                return (
-                  <button
-                    key={grade.id}
-                    type="button"
-                    className={cn("pds-type-body-s-semibold", styles.gradePill, selected && styles.gradePillActive)}
-                    onClick={() => toggleGrade(grade.id)}
-                  >
-                    {grade.name}
-                  </button>
-                );
-              })}
-            </div>
-            {form.formState.errors.gradeIds ? (
-              <p className="pds-type-body-m-medium error-text">{form.formState.errors.gradeIds.message}</p>
-            ) : null}
-          </div>
-
           <div className={styles.requiredToggle}>
             <div className={styles.requiredToggleCopy}>
-              <div className={styles.requiredToggleHeader}>
-                <span className={cn("pds-type-body-m-medium", styles.requiredToggleTitle)}>{t("markRequired")}</span>
-                {requiredValue ? (
-                  <span className={cn("pds-type-label-s-bold", styles.requiredToggleBadge)}>
-                    {t("markRequiredAutoApplied")}
-                  </span>
-                ) : null}
-              </div>
-              <span className={cn("pds-type-body-s-regular", styles.requiredToggleHelp)}>{t("markRequiredHelp")}</span>
+              <p className={cn("pds-type-body-m-bold", styles.requiredToggleTitle)}>{t("markRequired")}</p>
+              <p className={cn("pds-type-body-s-regular", styles.requiredToggleHelp)}>{t("markRequiredAutoApplied")}</p>
             </div>
-            <Toggle
-              checked={requiredValue}
-              onCheckedChange={(checked) => form.setValue("required", checked, { shouldValidate: true })}
-              aria-label={t("markRequired")}
-            />
+            <Toggle checked={requiredValue} onCheckedChange={(checked) => form.setValue("required", checked)} />
           </div>
 
-          {formError ? (
-            <p className="pds-type-body-m-medium error-text" role="alert">
-              {formError}
-            </p>
-          ) : null}
+          {formError ? <p className="pds-type-body-s-regular error-text">{formError}</p> : null}
         </div>
       </RecordFormSheet>
 
-      <ConfirmDialog
-        open={deletingComponent !== null}
+      {/* Rename component */}
+      <RecordFormSheet
+        open={renaming !== null}
         onOpenChange={(open) => {
-          if (!open) setDeletingComponent(null);
+          if (!open) setRenaming(null);
         }}
-        title={t("deleteComponentTitle")}
-        description={
-          deletingComponent?.gradeOnly
-            ? t("deleteComponentGradeHelp", {
-                name: deletingComponent.name,
-                grade: selectedGrade?.name ?? ""
-              })
-            : t("deleteComponentHelp", { name: deletingComponent?.name ?? "" })
+        title={t("renameComponent")}
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (!renaming || !renameValue.trim()) return;
+          await updateFeeItem.mutateAsync({ id: renaming.id, name: renameValue.trim() });
+          setRenaming(null);
+        }}
+        footer={
+          <>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setRenaming(null)}>
+              {c("cancel")}
+            </button>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={updateFeeItem.isPending}>
+              {updateFeeItem.isPending ? c("loading") : c("save")}
+            </button>
+          </>
         }
-        confirmLabel={c("delete")}
+      >
+        <InputWrapper label={t("componentName")}>
+          <TextInput value={renameValue} onChange={(e) => setRenameValue(e.target.value)} />
+        </InputWrapper>
+      </RecordFormSheet>
+
+      <ConfirmDialog
+        open={archiving !== null}
+        onOpenChange={(open) => {
+          if (!open) setArchiving(null);
+        }}
+        title={t("archiveComponent")}
+        description={archiving ? t("archiveComponentHelp", { name: archiving.name }) : ""}
+        confirmLabel={t("archiveComponent")}
+        cancelLabel={c("cancel")}
         destructive
-        loading={deletePlan.isPending || updatePlan.isPending || archiveFeeItem.isPending}
-        onConfirm={() => void confirmRemoveComponent()}
+        loading={archiveFeeItem.isPending}
+        onConfirm={async () => {
+          if (!archiving) return;
+          await archiveFeeItem.mutateAsync({ id: archiving.id });
+          if (selectedFeeItemId === archiving.id) setSelectedFeeItemId(null);
+          setArchiving(null);
+        }}
       />
     </div>
   );

@@ -20,7 +20,9 @@ import { StatusBadge } from "../../../../../components/shared/badge";
 import { NavigationBackLink } from "../../../../../components/shared/navigation-back-link";
 import { TrailLink } from "../../../../../components/shared/trail-link";
 import { zodResolver } from "../../../../lib/zod-resolver";
+import { useCurrentAcademicYear } from "../../../../lib/use-current-academic-year";
 import { PageHeader } from "../../../page-header-context";
+import { PeopleBillingPanel, type BillingMember } from "../../people-billing-panel";
 
 type GuardianDetail = {
   id: string;
@@ -58,11 +60,19 @@ export default function GuardianDetailPage({
   const p = useTranslations("people");
   const permissions = getSession()?.permissions;
   const canManage = hasAnyPermission(permissions, ["student.manage"]);
+  const canCollect = hasAnyPermission(permissions, ["finance.manage"]);
+  const currentYear = useCurrentAcademicYear();
   const [editOpen, setEditOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   const guardian = useApiQuery<GuardianDetail>(
     (tenant) => `/tenants/${tenant}/students/guardians/${guardianId}`
+  );
+
+  const billing = useApiQuery<{ students: BillingMember[] }>((tenant) =>
+    canCollect && guardian.data?.household?.id
+      ? `/tenants/${tenant}/finance/family-groups/${guardian.data.household.id}/billing`
+      : null
   );
 
   const update = useApiMutation<
@@ -263,6 +273,20 @@ export default function GuardianDetailPage({
           navigationFrom={{ label: data.fullName, href: `/dashboard/people/guardians/${guardianId}` }}
         />
       </TablePanelBody>
+
+      {canCollect && data.household ? (
+        <PeopleBillingPanel
+          title={t("householdBalanceTitle")}
+          members={billing.data?.students ?? []}
+          academicYearId={currentYear.data?.id ?? null}
+          loading={billing.isLoading}
+          error={billing.isError}
+          canCollect={canCollect}
+          fromLabel={data.fullName}
+          fromHref={`/dashboard/people/guardians/${guardianId}`}
+          onRefresh={() => void billing.refetch()}
+        />
+      ) : null}
 
       <RecordFormSheet
         open={editOpen}

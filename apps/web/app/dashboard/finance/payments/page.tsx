@@ -516,6 +516,31 @@ export default function PaymentsPage() {
             </>
           }
         >
+          <dl className="verify-summary">
+            <div className="verify-summary__row">
+              <dt className="pds-type-body-s-regular muted">{tFinance("amount")}</dt>
+              <dd className="pds-type-title-xxs-extrabold verify-summary__amount">
+                {fullNumber(Number(verifyTarget.amount))}
+              </dd>
+            </div>
+            <div className="verify-summary__row">
+              <dt className="pds-type-body-s-regular muted">{tFinance("method")}</dt>
+              <dd className="pds-type-body-m-medium verify-summary__method">
+                <Icon name={METHOD_ICONS[verifyTarget.method] ?? "payments"} size={16} />
+                {tPay(`paymentMethods.${verifyTarget.method}`)}
+              </dd>
+            </div>
+            <div className="verify-summary__row">
+              <dt className="pds-type-body-s-regular muted">{tFinance("transactionId")}</dt>
+              <dd className="pds-type-body-m-medium">{verifyTarget.referenceNumber ?? "—"}</dd>
+            </div>
+            <div className="verify-summary__row">
+              <dt className="pds-type-body-s-regular muted">{tFinance("paidAt")}</dt>
+              <dd className="pds-type-body-m-medium">
+                {verifyTarget.paidAt ? new Date(verifyTarget.paidAt).toLocaleString() : "—"}
+              </dd>
+            </div>
+          </dl>
           <Field label={tFinance("verifyReason")}>
             <TextAreaInput
               rows={3}

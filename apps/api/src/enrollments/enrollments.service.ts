@@ -10,6 +10,7 @@ import {
   students
 } from "../db/schema.js";
 import type {
+  CancelEnrollmentDto,
   CreateEnrollmentDto,
   CreateStudentServiceDto,
   ListAvailableStudentServicesQueryDto,
@@ -139,6 +140,7 @@ export class EnrollmentsService {
         gradeId: enrollments.gradeId,
         invoiceId: enrollments.invoiceId,
         status: enrollments.status,
+        cancelledAt: enrollments.cancelledAt,
         billingSnapshot: enrollments.billingSnapshot,
         createdAt: enrollments.createdAt,
         updatedAt: enrollments.updatedAt,
@@ -358,6 +360,22 @@ export class EnrollmentsService {
     return { id: enrollmentId };
   }
 
+  /** Cancel (withdraw) an enrollment with refund / forfeit / void handling. */
+  async cancelEnrollment(
+    tenantId: string,
+    enrollmentId: string,
+    actorUserId: string,
+    dto: CancelEnrollmentDto
+  ) {
+    return this.enrollmentBillingService.cancelEnrollment(tenantId, enrollmentId, actorUserId, {
+      refundMode: dto.refundMode,
+      refundAmount: dto.refundAmount,
+      method: dto.method,
+      referenceNumber: dto.referenceNumber,
+      reason: dto.reason
+    });
+  }
+
   /** Places the student in the classroom when an enrollment is approved. */
   private async syncClassroomPlacement(
     tenantId: string,
@@ -424,18 +442,29 @@ export class EnrollmentsService {
   async createStudentService(
     tenantId: string,
     actorUserId: string | undefined,
-    dto: CreateStudentServiceDto
+    dto: CreateStudentServiceDto,
+    actorPermissions: string[] = []
   ) {
     if (!actorUserId) {
       throw new UnauthorizedException("Actor user id is required.");
     }
 
-    return this.enrollmentBillingService.confirmAddStudentService(tenantId, actorUserId, {
-      studentId: dto.studentId,
-      feeItemId: dto.feeItemId,
-      startDate: dto.startDate,
-      dueDate: dto.dueDate
-    });
+    return this.enrollmentBillingService.confirmAddStudentService(
+      tenantId,
+      actorUserId,
+      {
+        studentId: dto.studentId,
+        feeItemIds: dto.feeItemIds,
+        startDate: dto.startDate,
+        dueDate: dto.dueDate,
+        collectPayment: dto.collectPayment,
+        paymentMethod: dto.paymentMethod,
+        paymentAmount: dto.paymentAmount,
+        paymentReference: dto.paymentReference,
+        paymentNotes: dto.paymentNotes
+      },
+      actorPermissions
+    );
   }
 
   listAvailableOptionalServices(tenantId: string, studentId: string) {
@@ -443,7 +472,11 @@ export class EnrollmentsService {
   }
 
   previewAddStudentService(tenantId: string, dto: PreviewAddStudentServiceDto) {
-    return this.enrollmentBillingService.previewAddStudentService(tenantId, dto);
+    return this.enrollmentBillingService.previewAddStudentService(tenantId, {
+      studentId: dto.studentId,
+      feeItemIds: dto.feeItemIds,
+      effectiveFrom: dto.effectiveFrom
+    });
   }
 
   async removeStudentService(

@@ -4,6 +4,7 @@ import { PermissionsGuard } from "../identity/permissions.guard.js";
 import { ReqTenantContext } from "../identity/tenant-context.decorator.js";
 import type { TenantContext } from "../tenancy/tenant-context.js";
 import {
+  CancelEnrollmentDto,
   ConfirmEnrollmentDto,
   CreateEnrollmentDto,
   CreateStudentServiceDto,
@@ -98,6 +99,22 @@ export class EnrollmentsController {
     return this.enrollmentsService.deleteEnrollment(tenantId, enrollmentId, context.actorUserId);
   }
 
+  @Post("enrollments/:enrollmentId/cancel")
+  @RequirePermissions("finance.manage")
+  cancelEnrollment(
+    @ReqTenantContext() context: TenantContext,
+    @Param("tenantId") tenantId: string,
+    @Param("enrollmentId") enrollmentId: string,
+    @Body() dto: CancelEnrollmentDto
+  ) {
+    return this.enrollmentsService.cancelEnrollment(
+      tenantId,
+      enrollmentId,
+      context.actorUserId,
+      dto
+    );
+  }
+
   @Get("student-services/available")
   @RequirePermissions("student.manage")
   listAvailableOptionalServices(
@@ -132,7 +149,12 @@ export class EnrollmentsController {
     @Param("tenantId") tenantId: string,
     @Body() dto: CreateStudentServiceDto
   ) {
-    return this.enrollmentsService.createStudentService(tenantId, context.actorUserId, dto);
+    return this.enrollmentsService.createStudentService(
+      tenantId,
+      context.actorUserId,
+      dto,
+      context.permissions
+    );
   }
 
   @Delete("student-services/:serviceId")

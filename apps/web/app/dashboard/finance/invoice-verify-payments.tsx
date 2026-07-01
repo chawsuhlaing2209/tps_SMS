@@ -20,6 +20,15 @@ export type InvoicePaymentRow = {
   verifiedAt: string | null;
 };
 
+const METHOD_ICONS: Record<string, string> = {
+  kbzpay: "qr_code_2",
+  wavepay: "account_balance_wallet",
+  aya_pay: "account_balance_wallet",
+  cb_pay: "account_balance_wallet",
+  bank_transfer: "account_balance",
+  cash: "payments"
+};
+
 function formatDateTime(value: string | null) {
   if (!value) return "—";
   return new Date(value).toLocaleString();
@@ -112,6 +121,9 @@ export function InvoiceVerifyPayments({
       </section>
 
       {verifyTargetId ? (
+        (() => {
+          const target = unverified.find((payment) => payment.id === verifyTargetId) ?? null;
+          return (
         <RecordFormSheet
           open={Boolean(verifyTargetId)}
           onOpenChange={(open) => {
@@ -145,6 +157,31 @@ export function InvoiceVerifyPayments({
             </>
           }
         >
+          {target ? (
+            <dl className="verify-summary">
+              <div className="verify-summary__row">
+                <dt className="pds-type-body-s-regular muted">{t("amount")}</dt>
+                <dd className="pds-type-title-xxs-extrabold verify-summary__amount">
+                  {formatReceiptAmount(Number(target.amount))}
+                </dd>
+              </div>
+              <div className="verify-summary__row">
+                <dt className="pds-type-body-s-regular muted">{t("method")}</dt>
+                <dd className="pds-type-body-m-medium verify-summary__method">
+                  <Icon name={METHOD_ICONS[target.method] ?? "payments"} size={16} />
+                  {tPay(`paymentMethods.${target.method}`)}
+                </dd>
+              </div>
+              <div className="verify-summary__row">
+                <dt className="pds-type-body-s-regular muted">{t("transactionId")}</dt>
+                <dd className="pds-type-body-m-medium">{target.referenceNumber ?? "—"}</dd>
+              </div>
+              <div className="verify-summary__row">
+                <dt className="pds-type-body-s-regular muted">{t("paidAt")}</dt>
+                <dd className="pds-type-body-m-medium">{formatDateTime(target.paidAt)}</dd>
+              </div>
+            </dl>
+          ) : null}
           <Field label={t("verifyReason")}>
             <TextAreaInput
               rows={3}
@@ -155,6 +192,8 @@ export function InvoiceVerifyPayments({
             />
           </Field>
         </RecordFormSheet>
+          );
+        })()
       ) : null}
     </>
   );

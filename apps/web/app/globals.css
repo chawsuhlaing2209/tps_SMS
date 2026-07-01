@@ -4423,6 +4423,87 @@ button.btn-hero-outline:hover {
   width: 100%;
 }
 
+.student-recurrent-billing__collect {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--pds-gap-medium);
+}
+
+.people-billing__list {
+  display: grid;
+  gap: var(--pds-gap-small);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.people-billing__row {
+  align-items: center;
+  border: 1px solid var(--pds-border-color-primary);
+  border-radius: var(--pds-border-radius-12, 12px);
+  display: flex;
+  gap: var(--pds-gap-medium);
+  justify-content: space-between;
+  padding: var(--pds-padding-medium, 16px);
+}
+
+.people-billing__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.people-billing__trailing {
+  align-items: center;
+  display: flex;
+  gap: var(--pds-gap-medium);
+}
+
+.people-billing__amount {
+  display: flex;
+  flex-direction: column;
+  text-align: right;
+}
+
+.row-action-group {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--pds-gap-medium);
+}
+
+.row-action--danger {
+  color: var(--pds-status-error);
+}
+
+.cancel-enrollment__summary {
+  align-items: baseline;
+  display: flex;
+  gap: var(--pds-gap-small);
+  justify-content: space-between;
+  margin-bottom: var(--pds-gap-small);
+}
+
+.cancel-enrollment__preview {
+  margin-top: var(--pds-gap-small);
+}
+
+.add-service-collect {
+  border-top: 1px solid var(--pds-border-color-primary);
+  display: flex;
+  flex-direction: column;
+  gap: var(--pds-gap-small);
+  margin-top: var(--pds-gap-medium);
+  padding-top: var(--pds-gap-medium);
+}
+
+.add-service-collect__toggle {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: var(--pds-gap-small);
+}
+
 .student-recurrent-billing__invoices {
   display: grid;
   list-style: none;
@@ -7187,6 +7268,11 @@ button.btn-hero-outline:hover {
   min-width: 0;
 }
 
+.award-basis-card__check {
+  color: var(--pds-compliment-brand);
+  flex-shrink: 0;
+}
+
 .fee-component-chip-row {
   display: flex;
   flex-wrap: wrap;
@@ -8330,7 +8416,48 @@ button.btn-hero-outline:hover {
   background: var(--pds-background-card);
   border-radius: var(--pds-border-radius-16);
   padding: var(--pds-padding-large);
-}.invoice-doc {
+}
+
+/* Read-only payment summary shown inside the Verify payment modal so the
+   operator can match amount / method / reference against the bank or wallet. */
+.verify-summary {
+  background: var(--pds-background-subtle, var(--pds-background-card));
+  border: 1px solid var(--pds-border-color-primary);
+  border-radius: var(--pds-border-radius-12, 12px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--pds-gap-small);
+  margin: 0 0 var(--pds-gap-medium);
+  padding: var(--pds-padding-medium, 16px);
+}
+
+.verify-summary__row {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+}
+
+.verify-summary__row dt {
+  margin: 0;
+}
+
+.verify-summary__row dd {
+  margin: 0;
+  text-align: right;
+}
+
+.verify-summary__amount {
+  color: var(--pds-text-primary);
+}
+
+.verify-summary__method {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.invoice-doc {
   background: var(--pds-background-card);
   border-radius: var(--pds-border-radius-16);
   box-shadow: 0 40px 80px -30px color-mix(in srgb, var(--pds-primary) 50%, transparent);

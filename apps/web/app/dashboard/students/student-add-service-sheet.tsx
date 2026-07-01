@@ -1,17 +1,32 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { formatMMK } from "../../lib/money";
 import { useEffect, useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { PdsDatePickerField, PdsSelectField } from "../../../components/pds";
+import { type PaymentMethod } from "@sms/shared";
+import {
+  InvoiceDetails,
+  PdsDatePickerField,
+  ToggleList,
+  ToggleListItem,
+  ToggleListSectionHead,
+  type InvoiceDetailsSection
+} from "../../../components/pds";
+import { Button } from "../../../components/ui/button";
+import { EmptyState } from "../../../components/shared/empty-state";
+import {
+  PaymentMethodPicker,
+  paymentMethodNeedsReference
+} from "../../../components/shared/payment-method-picker";
 import { useApiMutation, useApiQuery } from "../../lib/api";
 import { Field } from "../../lib/form";
+import { formatMMK } from "../../lib/money";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { toastSuccess } from "../../lib/toast";
-import { zodResolver } from "../../lib/zod-resolver";
-import { Button } from "../../../components/ui/button";
+import {
+  EnrollmentConfirmOption,
+  formatEnrollmentAmount,
+  resolveOptionalFeeIcon
+} from "../enrollments/enrollment-ceremony-ui";
 
 type AvailableService = {
   feeItemId: string;
@@ -23,22 +38,20 @@ type AvailableService = {
 };
 
 type AddServicePreview = {
-  feeItemId: string;
-  feeItemName: string;
-  billingType: string;
-  effectiveFrom: string;
-  isRecurring: boolean;
+  feeLines: Array<{ feeItemId: string; description: string; lineTotal: number }>;
+  discounts: Array<{ id: string; name: string; amount: number; source: string }>;
   subtotal: number;
   discountTotal: number;
   total: number;
-  createsInvoice: boolean;
 };
 
 type AddServiceResult = {
   kind: "recurring" | "one_time";
-  studentService: { id: string } | null;
   invoice: { id: string; invoiceNumber: string } | null;
+  paymentId: string | null;
 };
+
+type ConfirmMode = "pay" | "confirm" | "draft";
 
 type Props = {
   studentId: string;
@@ -47,14 +60,9 @@ type Props = {
   onAdded: () => void;
 };
 
-function formatAmount(value: number): string {
-  return formatMMK(value);
-}
-
 export function StudentAddServiceSheet({ studentId, open, onOpenChange, onAdded }: Props) {
   const t = useTranslations("finance.studentServices");
-  const tFinance = useTranslations("finance");
-  const tEnroll = useTranslations("enrollments");
+  const e = useTranslations("enrollments");
   const c = useTranslations("common");
 
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -66,33 +74,37 @@ export function StudentAddServiceSheet({ studentId, open, onOpenChange, onAdded 
         : null
   );
 
+  const [selected, setSelected] = useState<string[]>([]);
+  const [startDate, setStartDate] = useState(today);
+  const [dueDate, setDueDate] = useState(today);
   const [preview, setPreview] = useState<AddServicePreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
-
-  const schema = z.object({
-    feeItemId: z.string().min(1, c("required")),
-    startDate: z.string().min(1, c("required")),
-    dueDate: z.string().optional()
-  });
-
-  const form = useForm<z.infer<typeof schema>>({
-    resolver: zodResolver(schema),
-    defaultValues: { feeItemId: "", startDate: today, dueDate: today }
-  });
-
-  const feeItemId = form.watch("feeItemId");
-  const startDate = form.watch("startDate");
+  const [mode, setMode] = useState<ConfirmMode>("confirm");
+  const [method, setMethod] = useState<PaymentMethod>("cash");
+  const [reference, setReference] = useState("");
 
   const previewMutation = useApiMutation<
-    { studentId: string; feeItemId: string; effectiveFrom: string },
+    { studentId: string; feeItemIds: string[]; effectiveFrom: string },
     AddServicePreview
-  >(({ studentId: sid, feeItemId: fid, effectiveFrom }, tenant) => ({
-    path: `/tenants/${tenant}/student-services/preview`,
-    init: { method: "POST", body: JSON.stringify({ studentId: sid, feeItemId: fid, effectiveFrom }) }
-  }));
+  >(
+    (body, tenant) => ({
+      path: `/tenants/${tenant}/student-services/preview`,
+      init: { method: "POST", body: JSON.stringify(body) }
+    }),
+    { showSuccessToast: false, showErrorToast: false }
+  );
 
   const addService = useApiMutation<
-    { studentId: string; feeItemId: string; startDate: string; dueDate?: string },
+    {
+      studentId: string;
+      feeItemIds: string[];
+      startDate: string;
+      dueDate?: string;
+      collectPayment?: boolean;
+      paymentMethod?: string;
+      paymentAmount?: number;
+      paymentReference?: string;
+    },
     AddServiceResult
   >(
     (body, tenant) => ({
@@ -109,22 +121,28 @@ export function StudentAddServiceSheet({ studentId, open, onOpenChange, onAdded 
 
   useEffect(() => {
     if (!open) {
-      form.reset({ feeItemId: "", startDate: today, dueDate: today });
+      setSelected([]);
+      setStartDate(today);
+      setDueDate(today);
       setPreview(null);
       setPreviewError(null);
+      setMode("confirm");
+      setMethod("cash");
+      setReference("");
     }
-  }, [form, open, today]);
+  }, [open, today]);
 
+  // Debounced multi-service preview whenever the selection changes.
   useEffect(() => {
-    if (!open || !feeItemId || !startDate) {
+    if (!open) return;
+    if (selected.length === 0) {
       setPreview(null);
       setPreviewError(null);
       return;
     }
-
     const timer = window.setTimeout(() => {
       void previewMutation
-        .mutateAsync({ studentId, feeItemId, effectiveFrom: startDate })
+        .mutateAsync({ studentId, feeItemIds: selected, effectiveFrom: startDate })
         .then((result) => {
           setPreview(result);
           setPreviewError(null);
@@ -134,27 +152,84 @@ export function StudentAddServiceSheet({ studentId, open, onOpenChange, onAdded 
           setPreviewError(error.message);
         });
     }, 250);
-
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- debounced preview on selection
-  }, [feeItemId, open, startDate, studentId]);
+  }, [open, selected, startDate, studentId]);
 
-  const selectedService = available.data?.find((row) => row.feeItemId === feeItemId);
+  const toggle = (feeItemId: string, checked: boolean) => {
+    setSelected((prev) =>
+      checked ? [...prev, feeItemId] : prev.filter((id) => id !== feeItemId)
+    );
+  };
 
-  const serviceOptions = (available.data ?? []).map((row) => ({
-    value: row.feeItemId,
-    label: `${row.name} · ${formatAmount(row.unitAmount)}`
-  }));
+  const selectedTotal = useMemo(
+    () =>
+      (available.data ?? [])
+        .filter((s) => selected.includes(s.feeItemId))
+        .reduce((sum, s) => sum + s.unitAmount, 0),
+    [available.data, selected]
+  );
 
-  async function onSubmit(values: z.infer<typeof schema>) {
+  const invoiceSections: InvoiceDetailsSection[] = useMemo(() => {
+    if (!preview) return [];
+    const sections: InvoiceDetailsSection[] = [
+      {
+        id: "services",
+        title: t("invoiceBreakdownTitle"),
+        lines: preview.feeLines.map((line) => ({
+          id: line.feeItemId,
+          label: line.description,
+          amount: line.lineTotal
+        }))
+      }
+    ];
+    if (preview.discounts.length > 0) {
+      sections.push({
+        id: "discounts",
+        title: e("discountTotal"),
+        emphasis: true,
+        lines: preview.discounts.map((d) => ({
+          id: `${d.source}-${d.id}`,
+          label: d.name,
+          amount: d.amount,
+          variant: "discount" as const
+        }))
+      });
+    }
+    sections.push({
+      id: "paid",
+      title: t("paidSection"),
+      emphasis: true,
+      lines: [{ id: "paid-to-date", label: t("paidToDate"), amount: 0, variant: "credit" as const }]
+    });
+    return sections;
+  }, [preview, t, e]);
+
+  const needsReference = mode === "pay" && paymentMethodNeedsReference(method);
+  const canSubmit =
+    selected.length > 0 &&
+    !addService.isPending &&
+    (mode !== "pay" || (Boolean(preview) && (!needsReference || reference.trim().length > 0)));
+
+  async function submit() {
+    if (mode === "draft") {
+      onOpenChange(false);
+      return;
+    }
     const result = await addService.mutateAsync({
       studentId,
-      feeItemId: values.feeItemId,
-      startDate: values.startDate,
-      dueDate: preview?.createsInvoice ? values.dueDate || values.startDate : undefined
+      feeItemIds: selected,
+      startDate,
+      dueDate: dueDate || startDate,
+      collectPayment: mode === "pay" || undefined,
+      paymentMethod: mode === "pay" ? method : undefined,
+      paymentAmount: mode === "pay" ? preview?.total : undefined,
+      paymentReference: needsReference ? reference.trim() : undefined
     });
 
-    if (result.kind === "one_time" && result.invoice) {
+    if (result.invoice && mode === "pay") {
+      toastSuccess(t("addedWithPayment", { number: result.invoice.invoiceNumber }));
+    } else if (result.invoice) {
       toastSuccess(t("addedWithInvoice", { number: result.invoice.invoiceNumber }));
     } else {
       toastSuccess(t("addedRecurring"));
@@ -164,13 +239,23 @@ export function StudentAddServiceSheet({ studentId, open, onOpenChange, onAdded 
     onAdded();
   }
 
+  const submitLabel =
+    mode === "pay"
+      ? t("confirmPayTitle")
+      : mode === "draft"
+        ? t("saveDraftTitle")
+        : t("confirmServiceTitle");
+
   return (
     <RecordFormSheet
       open={open}
       onOpenChange={onOpenChange}
       title={t("addService")}
       help={t("addServiceHelp")}
-      onSubmit={form.handleSubmit(onSubmit)}
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (canSubmit || mode === "draft") void submit();
+      }}
       footer={
         <>
           <Button type="button" buttonType="outlined" buttonColor="secondary" onClick={() => onOpenChange(false)}>
@@ -180,9 +265,9 @@ export function StudentAddServiceSheet({ studentId, open, onOpenChange, onAdded 
             type="submit"
             buttonType="filled"
             buttonColor="primary"
-            disabled={!preview || Boolean(previewError) || !feeItemId || addService.isPending}
+            disabled={mode !== "draft" && !canSubmit}
           >
-            {addService.isPending ? c("loading") : t("addServiceSubmit")}
+            {addService.isPending ? c("loading") : submitLabel}
           </Button>
         </>
       }
@@ -190,80 +275,110 @@ export function StudentAddServiceSheet({ studentId, open, onOpenChange, onAdded 
       {available.isLoading ? (
         <p className="pds-type-body-s-regular muted">{c("loading")}</p>
       ) : !available.data?.length ? (
-        <p className="pds-type-body-s-regular muted">{t("noAvailableServices")}</p>
+        <EmptyState compact embedded icon="inventory_2" title={t("noAvailableServices")} />
       ) : (
-        <>
-          <Field label={t("service")} error={form.formState.errors.feeItemId?.message}>
-            <PdsSelectField
-              variant="form"
-              value={feeItemId}
-              onValueChange={(value) =>
-                form.setValue("feeItemId", typeof value === "string" ? value : "", {
-                  shouldValidate: true
-                })
-              }
-              placeholder={t("selectService")}
-              options={serviceOptions}
+        <div className="enrollment-ceremony__stack">
+          <div className="enrollment-ceremony__section">
+            <ToggleListSectionHead
+              title={e("optionalAddOns")}
+              summary={t("addonsSummary", {
+                count: selected.length,
+                amount: formatMMK(selectedTotal)
+              })}
             />
-          </Field>
+            <ToggleList aria-label={e("optionalAddOns")}>
+              {available.data.map((service) => {
+                const { icon, tone } = resolveOptionalFeeIcon(service.name, service.feeType);
+                return (
+                  <ToggleListItem
+                    key={service.feeItemId}
+                    variant="toggle"
+                    icon={icon}
+                    iconTone={tone}
+                    title={service.name}
+                    amount={service.unitAmount}
+                    checked={selected.includes(service.feeItemId)}
+                    onCheckedChange={(checked) => toggle(service.feeItemId, checked)}
+                  />
+                );
+              })}
+            </ToggleList>
+          </div>
 
-          {selectedService ? (
-            <p className="pds-type-body-s-regular muted">
-              {tFinance(`billingTypes.${selectedService.billingType}`)}
-              {selectedService.isRecurring ? ` · ${t("recurringNote")}` : ` · ${t("oneTimeNote")}`}
-            </p>
-          ) : null}
-
-          <Field label={t("effectiveFrom")} error={form.formState.errors.startDate?.message}>
+          <Field label={t("effectiveFrom")}>
             <PdsDatePickerField
               type="day"
               variant="form"
               value={startDate}
-              onValueChange={(value) =>
-                form.setValue("startDate", value, { shouldValidate: true })
-              }
+              onValueChange={setStartDate}
               ariaLabel={t("effectiveFrom")}
             />
           </Field>
 
-          {preview?.createsInvoice ? (
-            <Field label={t("dueDate")} error={form.formState.errors.dueDate?.message}>
-              <PdsDatePickerField
-                type="day"
-                variant="form"
-                value={form.watch("dueDate") ?? startDate}
-                onValueChange={(value) => form.setValue("dueDate", value)}
-                ariaLabel={t("dueDate")}
-              />
-            </Field>
+          {previewError ? (
+            <p className="pds-type-body-s-regular error-text">{previewError}</p>
           ) : null}
-
-          {previewError ? <p className="pds-type-body-s-regular error-text">{previewError}</p> : null}
 
           {preview ? (
-            <div className="invoice-preview">
-              <div className="invoice-preview__totals">
-                <div>
-                  <span>{tEnroll("subtotal")}</span>
-                  <span>{formatAmount(preview.subtotal)}</span>
-                </div>
-                {preview.discountTotal > 0 ? (
-                  <div>
-                    <span>{tEnroll("discountTotal")}</span>
-                    <span>-{formatAmount(preview.discountTotal)}</span>
-                  </div>
-                ) : null}
-                <div className="invoice-preview__grand">
-                  <span>{tEnroll("totalDue")}</span>
-                  <span>{formatAmount(preview.total)}</span>
+            <>
+              <InvoiceDetails
+                sections={invoiceSections}
+                totalDue={preview.total}
+                totalLabel={e("totalDue")}
+                currencyLabel="MMK"
+                formatAmount={formatEnrollmentAmount}
+              />
+
+              <Field label={t("dueDate")}>
+                <PdsDatePickerField
+                  type="day"
+                  variant="form"
+                  value={dueDate}
+                  onValueChange={setDueDate}
+                  ariaLabel={t("dueDate")}
+                />
+              </Field>
+
+              <div className="enrollment-ceremony__section">
+                <p className="pds-type-caption-s enrollment-ceremony__section-title">
+                  {t("confirmHelp")}
+                </p>
+                <div className="enrollment-confirm-options">
+                  <EnrollmentConfirmOption
+                    icon="payments"
+                    title={t("confirmPayTitle")}
+                    hint={t("confirmPayHint")}
+                    selected={mode === "pay"}
+                    onSelect={() => setMode("pay")}
+                  />
+                  <EnrollmentConfirmOption
+                    icon="how_to_reg"
+                    title={t("confirmServiceTitle")}
+                    hint={t("confirmServiceHint")}
+                    selected={mode === "confirm"}
+                    onSelect={() => setMode("confirm")}
+                  />
+                  <EnrollmentConfirmOption
+                    icon="save"
+                    title={t("saveDraftTitle")}
+                    hint={t("saveDraftHint")}
+                    selected={mode === "draft"}
+                    onSelect={() => setMode("draft")}
+                  />
                 </div>
               </div>
-              <p className="pds-type-body-s-regular muted">
-                {preview.isRecurring ? t("previewRecurring") : t("previewOneTime")}
-              </p>
-            </div>
+
+              {mode === "pay" ? (
+                <PaymentMethodPicker
+                  value={method}
+                  onChange={(next) => setMethod(next)}
+                  reference={reference}
+                  onReferenceChange={setReference}
+                />
+              ) : null}
+            </>
           ) : null}
-        </>
+        </div>
       )}
     </RecordFormSheet>
   );

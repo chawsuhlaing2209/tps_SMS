@@ -27,6 +27,7 @@ import { RecordList, RecordListItem, RecordListPanel } from "../../../lib/record
 import { getSession } from "../../../lib/session";
 import { TablePanelBody, DataTableSection } from "../../../lib/table-panel";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
+import { formatMMK } from "../../../lib/money";
 import { zodResolver } from "../../../lib/zod-resolver";
 import { navigateWithTrail } from "../../../lib/navigation-trail";
 import { EnrollmentWizard } from "../../enrollments/enrollment-wizard";
@@ -35,6 +36,8 @@ import { PageHeader } from "../../page-header-context";
 import { StudentFamilyPanel } from "../student-family-panel";
 import { StudentRecurrentBillingPanel } from "../student-recurrent-billing-panel";
 import { StudentDocumentsPanel } from "../student-documents-panel";
+import { BillingInvoicePreviewModal } from "../../finance/billing/invoice-preview-modal";
+import { CancelEnrollmentDialog } from "../cancel-enrollment-dialog";
 
 type StudentProfile = {
   id: string;
@@ -83,6 +86,7 @@ type Enrollment = {
   gradeId: string;
   invoiceId: string | null;
   status: string;
+  cancelledAt?: string | null;
   billingSnapshot?: { optionalFeeItemIds?: string[] } | null;
   updatedAt?: string;
 };
@@ -101,6 +105,7 @@ type MembershipRow = {
 type StudentBillingSummary = {
   totalOutstanding: number;
   totalPaid: number;
+  recordable: number;
   invoices: Array<{
     id: string;
     invoiceNumber: string;
@@ -251,6 +256,8 @@ export default function StudentDetailPage({
   const [wizardOpen, setWizardOpen] = useState(false);
   const [resumeDraft, setResumeDraft] = useState<Enrollment | null>(null);
   const [requestDiscountOpen, setRequestDiscountOpen] = useState(false);
+  const [previewInvoiceId, setPreviewInvoiceId] = useState<string | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<{ id: string; invoiceId: string | null } | null>(null);
 
   const update = useApiMutation<
     {
@@ -413,7 +420,10 @@ export default function StudentDetailPage({
       id: "status",
       header: c("status"),
       accessorKey: "status",
-      cell: ({ row }) => (
+      cell: ({ row }) =>
+        row.original.enrollment?.cancelledAt ? (
+          <StatusBadge status="cancelled" label={e("cancelledStatus")} />
+        ) : (
         <StatusBadge
           status={row.original.status}
           label={
@@ -462,14 +472,28 @@ export default function StudentDetailPage({
           );
         }
         if (enrollment?.invoiceId) {
+          const invoiceId = enrollment.invoiceId;
+          const enrollmentId = enrollment.id;
+          const isCancelled = Boolean(enrollment.cancelledAt);
           return (
-            <TrailLink
-              className="pds-type-body-s-regular row-action"
-              href={`/dashboard/finance/invoices/${enrollment.invoiceId}`}
-              from={{ label: data?.fullName ?? t("profileTitle"), href: studentHref }}
-            >
-              {e("viewInvoice")}
-            </TrailLink>
+            <div className="row-action-group">
+              <button
+                type="button"
+                className="pds-type-body-s-regular row-action"
+                onClick={() => setPreviewInvoiceId(invoiceId)}
+              >
+                {e("viewInvoice")}
+              </button>
+              {canViewFinance && !isCancelled ? (
+                <button
+                  type="button"
+                  className="pds-type-body-s-regular row-action row-action--danger"
+                  onClick={() => setCancelTarget({ id: enrollmentId, invoiceId })}
+                >
+                  {e("cancelEnrollment")}
+                </button>
+              ) : null}
+            </div>
           );
         }
         if (row.original.classroomId) {
@@ -681,12 +705,28 @@ export default function StudentDetailPage({
                 {profile.termGpa != null ? profile.termGpa.toFixed(1) : "—"}
               </strong>
             </article>
-            <article className="student-profile-stat">
-              <span className="pds-type-body-s-regular student-profile-stat__label">
-                {t("bestMonthStat")}
-              </span>
-              <strong className="student-profile-stat__value">{t("bestMonthPlaceholder")}</strong>
-            </article>
+            {canViewFinance ? (
+              <article className="student-profile-stat">
+                <span className="pds-type-body-s-regular student-profile-stat__label">
+                  {f("totalOutstanding")}
+                </span>
+                <strong className="student-profile-stat__value student-profile-stat__value--compact">
+                  {billing.data ? formatMMK(billing.data.totalOutstanding) : "—"}
+                </strong>
+                <span className="pds-type-body-m-medium student-profile-stat__sub">
+                  {billing.data
+                    ? t("paidStatSub", { amount: formatMMK(billing.data.totalPaid) })
+                    : f("totalPaid")}
+                </span>
+              </article>
+            ) : (
+              <article className="student-profile-stat">
+                <span className="pds-type-body-s-regular student-profile-stat__label">
+                  {t("bestMonthStat")}
+                </span>
+                <strong className="student-profile-stat__value">{t("bestMonthPlaceholder")}</strong>
+              </article>
+            )}
             <article className="student-profile-stat">
               <span className="pds-type-body-s-regular student-profile-stat__label">
                 {t("guardianStat")}
@@ -832,6 +872,7 @@ export default function StudentDetailPage({
                 <StudentRecurrentBillingPanel
                   studentId={studentId}
                   studentName={data.fullName}
+                  academicYearId={currentYear.data?.id ?? null}
                   data={billing.data}
                   loading={billing.isLoading}
                   error={billing.isError}
@@ -980,6 +1021,32 @@ export default function StudentDetailPage({
               studentId={studentId}
               studentName={student.data?.fullName}
               onRequested={() => void billing.refetch()}
+            />
+          ) : null}
+
+          <BillingInvoicePreviewModal
+            invoiceId={previewInvoiceId}
+            open={Boolean(previewInvoiceId)}
+            onOpenChange={(open) => {
+              if (!open) {
+                setPreviewInvoiceId(null);
+              }
+            }}
+          />
+
+          {cancelTarget ? (
+            <CancelEnrollmentDialog
+              open={Boolean(cancelTarget)}
+              onOpenChange={(open) => {
+                if (!open) setCancelTarget(null);
+              }}
+              enrollmentId={cancelTarget.id}
+              invoiceId={cancelTarget.invoiceId}
+              studentName={data.fullName}
+              onCancelled={() => {
+                refreshEnrollmentData();
+                void billing.refetch();
+              }}
             />
           ) : null}
 
