@@ -19,6 +19,7 @@ import { hasAnyPermission } from "../../../lib/permissions";
 import { getSession } from "../../../lib/session";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
 import { CheckBox } from "../../../../components/pds";
+import { Button } from "../../../../components/ui/button";
 import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
 import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
 import { EmptyState } from "../../../../components/shared/empty-state";
@@ -71,16 +72,18 @@ function billingAmountSuffixKey(billingType: string): "monthly" | "term" | "once
   }
 }
 
+// Category indicator colors drawn from the shared status palette so the dots
+// stay consistent with the rest of finance instead of ad-hoc brand hues.
 function feeTypeColor(feeType: string): string {
   switch (feeType) {
     case "tuition":
-      return "var(--pds-color-azure-60)";
+      return "var(--pds-status-info)";
     case "registration":
-      return "var(--pds-color-red-67)";
+      return "var(--pds-status-error)";
     case "transport":
-      return "var(--pds-color-green-600)";
+      return "var(--pds-status-success)";
     default:
-      return "var(--pds-color-accent-purple)";
+      return "var(--pds-status-warning)";
   }
 }
 
@@ -295,18 +298,20 @@ export default function FeeStructuresPage() {
             <div className={styles.componentsHead}>
               <p className={cn("pds-type-label-s-medium", styles.gradeNavLabel)}>{t("feeComponents")}</p>
               {canManage ? (
-                <button
+                <Button
                   type="button"
-                  className={cn("pds-type-body-s-semibold", styles.componentsAdd)}
+                  size="sm"
+                  buttonType="outlined"
+                  buttonColor="secondary"
                   onClick={() => {
                     form.reset({ name: "", billingType: "annual", required: false });
                     setFormError(null);
                     setAddOpen(true);
                   }}
                 >
-                  <Icon name="add" size={18} />
+                  <Icon name="add" size={16} />
                   {t("addComponent")}
-                </button>
+                </Button>
               ) : null}
             </div>
             {!activeComponents.length ? (
@@ -407,14 +412,16 @@ export default function FeeStructuresPage() {
                           placeholder={t("sameAmountPlaceholder")}
                           suffix={amountSuffix}
                         />
-                        <button
+                        <Button
                           type="button"
-                          className={cn("pds-type-body-s-semibold", styles.componentsAdd)}
+                          size="sm"
+                          buttonType="ghost"
+                          buttonColor="primary"
                           onClick={applyBulkAmount}
                           disabled={!Number(bulkAmount)}
                         >
                           {t("applyToAllGrades")}
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   ) : null}
@@ -424,14 +431,15 @@ export default function FeeStructuresPage() {
                       const d = draft[grade.id] ?? { included: false, amount: "" };
                       return (
                         <div key={grade.id} className={cn(styles.gradeEditorRow, d.included && styles.gradeEditorRowActive)}>
-                          <Toggle
+                          <CheckBox
+                            size="sm"
+                            label={grade.name}
                             checked={d.included}
                             disabled={!canManage}
                             onCheckedChange={(checked) =>
                               setGrade(grade.id, { included: checked, amount: checked && !d.amount ? bulkAmount : d.amount })
                             }
                           />
-                          <span className={cn("pds-type-body-m-bold", styles.gradeEditorName)}>{grade.name}</span>
                           <TextInput
                             type="number"
                             min="0"
@@ -529,8 +537,7 @@ export default function FeeStructuresPage() {
             <TextInput {...form.register("name")} placeholder={t("componentNamePlaceholder")} />
           </InputWrapper>
 
-          <div>
-            <p className={cn("pds-type-label-s-medium")}>{t("billingFrequency")}</p>
+          <InputWrapper label={t("billingFrequency")}>
             <div className={styles.pillRow}>
               {BILLING_TYPES.map((value) => (
                 <button
@@ -543,7 +550,7 @@ export default function FeeStructuresPage() {
                 </button>
               ))}
             </div>
-          </div>
+          </InputWrapper>
 
           <div className={styles.requiredToggle}>
             <div className={styles.requiredToggleCopy}>
