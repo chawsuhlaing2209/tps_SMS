@@ -2,7 +2,9 @@
   display: flex;
   flex-direction: column;
   gap: var(--pds-gap-large);
-}.layout {
+}
+
+.layout {
   background: var(--pds-background-card);
   border: 1px solid var(--pds-border-color-primary);
   border-radius: var(--pds-border-radius-16);
@@ -11,7 +13,9 @@
   grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
   min-width: 0;
   overflow: hidden;
-}.gradeNav {
+}
+
+.gradeNav {
   align-self: stretch;
   background: var(--pds-background-card);
   border: 0;
@@ -22,11 +26,16 @@
   gap: 0;
   min-height: 100%;
   padding: var(--pds-gap-large) 0;
-}.gradeNavLabel {
+}
+
+.gradeNavLabel {
   color: var(--pds-muted);
   margin: 0;
-  padding: 0 var(--pds-gap-large) var(--pds-gap-small);
-}.gradeNavItem {
+  padding: 0;
+  white-space: nowrap;
+}
+
+.gradeNavItem {
   align-items: center;
   background: transparent;
   border: 0;
@@ -41,229 +50,185 @@
   padding: var(--pds-gap-medium) var(--pds-gap-large);
   text-align: left;
   width: 100%;
-}.gradeNavItem:last-child {
+}
+
+.gradeNavItem:last-child {
   border-bottom: 0;
-}.gradeNavItem:hover {
+}
+
+.gradeNavItem:hover {
   background: var(--pds-background-frame);
-}.gradeNavItemActive {
+}
+
+.gradeNavItemActive {
   background: var(--pds-background-frame);
   box-shadow: inset 3px 0 0 var(--pds-compliment-brand);
-}.gradeNavItemActive:hover {
+}
+
+.gradeNavItemActive:hover {
   background: var(--pds-notification-background-success);
-}.gradeNavName {
+}
+
+.gradeNavName {
   display: block;
-}.gradeNavAmount {
+}
+
+.gradeNavAmount {
   color: var(--pds-muted);
   display: block;
   margin-top: 2px;
-}.gradeNavCheck {
+}
+
+.gradeNavCheck {
   color: var(--pds-color-chartreuse-green-700);
   flex-shrink: 0;
-}.main {
+}
+
+.main {
   background: var(--pds-background-card);
   display: flex;
   flex-direction: column;
   gap: var(--pds-gap-large);
   min-width: 0;
   padding: var(--pds-gap-large);
-}.hero {
+}
+
+.hero {
   background: var(--pds-shell);
   border-radius: var(--pds-border-radius-16);
-  color: #fff;
+  color: var(--pds-foreground-contrast-high);
   display: grid;
   gap: var(--pds-padding-large);
   grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
   padding: var(--pds-gap-x-large) var(--pds-padding-large);
-}.heroEyebrow {
+}
+
+.heroEyebrow {
   color: var(--pds-muted-on-dark);
   margin: 0 0 var(--pds-gap-small);
-}.heroTotal {
+}
+
+.heroTotal {
   color: var(--pds-compliment-brand);
   margin: 0;
-}.heroSub {
+}
+
+.heroSub {
   color: var(--pds-muted-on-dark);
   margin: var(--pds-gap-small) 0 0;
-}.heroStats {
+}
+
+.heroStats {
   display: grid;
   gap: var(--pds-gap-medium);
   grid-template-columns: repeat(3, minmax(0, 1fr));
-}.heroStat {
-  background: rgba(255, 255, 255, 0.06);
+}
+
+.heroStat {
+  background: var(--pds-color-neutral-on-shell-white-08);
   border: 1px solid var(--pds-shell-line-soft);
-  border-radius: 14px;
+  border-radius: var(--pds-radius-14);
   padding: var(--pds-gap-medium) var(--pds-gap-medium);
-}.heroStatLabel {
+}
+
+.heroStatLabel {
   color: var(--pds-muted-on-dark);
   display: block;
   margin-bottom: var(--pds-gap-x-small);
-}.heroStatValue {
+}
+
+.heroStatValue {
   display: block;
-}.componentsPanel {
+}
+
+.componentsPanel {
   background: var(--pds-background-card);
   border: 1px solid var(--pds-border-color-primary);
   border-radius: var(--pds-border-radius-16);
   min-width: 0;
   overflow: hidden;
-}.componentsHead {
+}
+
+.componentsHead {
   align-items: center;
   border-bottom: 1px solid var(--pds-border-color-primary);
   display: flex;
-  gap: var(--pds-gap-medium);
+  flex-wrap: wrap;
+  gap: var(--pds-gap-small) var(--pds-gap-medium);
   justify-content: space-between;
   padding: var(--pds-gap-medium) var(--pds-padding-large);
-}.componentsAdd {
+}
+
+.componentsAdd {
   align-items: center;
   background: transparent;
   border: 0;
   color: var(--pds-brand-accent);
   cursor: pointer;
   display: inline-flex;
+  flex-shrink: 0;
   font: inherit;
   gap: var(--pds-gap-x-small);
   padding: 0;
-}.componentsAdd:hover {
+  white-space: nowrap;
+}
+
+.componentsAdd:hover {
   color: var(--pds-brand-dark);
-}.componentsTitle {
+}
+
+.componentsTitle {
   margin: 0;
-}.componentTable {
+}
+
+.componentsBody {
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  overflow-x: auto;
-  width: 100%;
-}.componentTableHead,
-.componentRow {
-  align-items: center;
-  display: grid;
-  gap: var(--pds-gap-medium);
-  grid-template-columns: minmax(0, 1.6fr) minmax(96px, 120px) minmax(140px, 1fr) auto;
-  min-width: min(100%, 560px);
-  width: 100%;
-}.componentTableHead {
-  background: var(--pds-background-frame);
-  border-bottom: 1px solid var(--pds-border-color-primary);
-  color: var(--pds-muted);
-  padding: var(--pds-gap-small) 0;
-}.componentTableHead > :first-child,
-.componentRow > :first-child {
-  padding-left: var(--pds-padding-large);
-}.componentRow > :last-child {
-  padding-right: var(--pds-padding-large);
-}.componentTableAnnualHead {
-  text-align: right;
-}.componentRow {
-  border-bottom: 1px solid var(--pds-border-color-primary);
-  padding: var(--pds-gap-medium) 0;
-}.componentRow:last-child {
-  border-bottom: 0;
-}.componentRowClickable {
-  cursor: pointer;
-  transition: background-color 120ms ease;
-}.componentRowClickable:hover,
-.componentRowClickable:focus-visible {
-  background: var(--pds-notification-background-success-hover);
-  outline: none;
-}.componentName {
-  align-items: center;
-  display: flex;
-  gap: var(--pds-gap-medium);
-  min-width: 0;
-}.componentDot {
+  gap: var(--pds-gap-large);
+  padding: var(--pds-padding-large);
+}
+
+.componentDot {
   border-radius: 50%;
   flex-shrink: 0;
   height: 10px;
   width: 10px;
-}.componentTitleRow {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--pds-gap-x-small);
-  min-width: 0;
-}.componentTitle {
-}.requiredBadge {
-  background: var(--pds-notification-background-success);
-  border-radius: var(--pds-radius-pill);
-  color: var(--pds-brand-dark);
-  padding: 4px 8px;
-}.componentIcon {
-  align-items: center;
-  border-radius: 10px;
-  color: #fff;
-  display: inline-flex;
-  flex-shrink: 0;
-  height: 36px;
-  justify-content: center;
-  width: 36px;
-}.componentMeta {
-  color: var(--pds-muted);
-  display: block;
-}.componentAmount {
-  text-align: right;
-}.shareCell {
-  align-items: center;
-  display: flex;
-  gap: var(--pds-gap-small);
-  min-width: 0;
-}.shareBar {
-  background: var(--pds-background-layout-secondary);
-  border-radius: 999px;
-  flex: 1;
-  height: 8px;
-  min-width: 0;
-  overflow: hidden;
-}.shareFill {
-  border-radius: inherit;
-  height: 100%;
-}.sharePct {
-  color: var(--pds-muted);
-  flex-shrink: 0;
-  text-align: right;
-  width: 36px;
-}.componentActions {
-  display: flex;
-  flex-shrink: 0;
-  gap: var(--pds-gap-x-small);
-}.componentEdit {
-  flex-shrink: 0;
-  min-width: 56px;
-  padding: var(--pds-gap-x-small) var(--pds-gap-medium);
-}.componentDelete {
-  background: transparent;
-  border: none;
-  color: var(--pds-status-error);
-  cursor: pointer;
-  flex-shrink: 0;
-  padding: var(--pds-gap-x-small) var(--pds-gap-medium);
-}.componentDelete:hover {
-  color: var(--pds-brand-dark);
-}.comparisonPanel {
+}
+
+.comparisonPanel {
   background: var(--pds-background-card);
   border: 1px solid var(--pds-border-color-primary);
   border-radius: var(--pds-border-radius-16);
   padding: var(--pds-padding-large);
-}.comparisonTitle {
+}
+
+.comparisonTitle {
   margin: 0 0 var(--pds-gap-large);
-}.comparisonRow {
+}
+
+.comparisonRow {
   align-items: center;
   display: grid;
   gap: var(--pds-gap-medium);
   grid-template-columns: 100px minmax(0, 1fr) 90px;
   padding: var(--pds-gap-small) 0;
-}.comparisonLabel {
-}.comparisonBar {
+}
+
+.comparisonBar {
   background: var(--pds-background-layout-secondary);
-  border-radius: 999px;
+  border-radius: var(--pds-radius-pill);
   height: 10px;
   overflow: hidden;
-}.comparisonFill {
+}
+
+.comparisonFill {
   background: var(--pds-brand-accent);
   border-radius: inherit;
   height: 100%;
-}.comparisonValue {
+}
+
+.comparisonValue {
   text-align: right;
-}.modalSectionLabel {
-  color: var(--pds-muted);
-  margin: 0 0 var(--pds-gap-small);
 }
 
 .formStack {
@@ -272,57 +237,13 @@
   gap: var(--pds-gap-large);
 }
 
-.componentPreview {
-  background: var(--pds-background-layout-secondary);
-  border: 1px solid var(--pds-border-color-primary);
-  border-radius: var(--pds-border-radius-12);
-  display: flex;
-  flex-direction: column;
-  gap: var(--pds-gap-x-small);
-  padding: var(--pds-gap-medium) var(--pds-gap-large);
-}
-
-.componentPreviewName {
-  color: var(--pds-text-primary);
-  margin: 0;
-}
-
-.componentPreviewAmount {
-  color: var(--pds-brand-dark);
-  margin: 0;
-}
-
-.componentPreviewBadge {
-  align-self: flex-start;
-  background: var(--pds-notification-background-success);
-  border-radius: var(--pds-radius-pill);
-  color: var(--pds-brand-dark);
-  margin-top: var(--pds-gap-x-small);
-  padding: 4px 8px;
-}
-
-.gradeSectionHead {
-  align-items: center;
-  display: flex;
-  gap: var(--pds-gap-medium);
-  justify-content: space-between;
-  margin-bottom: var(--pds-gap-small);
-}
-
-.gradeSectionLabel {
-  color: var(--pds-muted);
-  margin: 0;
-}
-
-.gradePillRow {
-  margin-top: 0;
-}
-
 .pillRow {
   display: flex;
   flex-wrap: wrap;
   gap: var(--pds-gap-small);
-}.pill {
+}
+
+.pill {
   background: var(--pds-background-card);
   border: 1px solid var(--pds-border-color-primary);
   border-radius: var(--pds-border-radius-8);
@@ -334,23 +255,7 @@
 .pillActive {
   background: var(--pds-shell);
   border: 1.5px solid var(--pds-shell);
-  color: #fff;
-}
-
-.gradePill {
-  background: var(--pds-background-card);
-  border: 1px solid var(--pds-border-color-primary);
-  border-radius: var(--pds-border-radius-8);
-  color: var(--pds-text-primary);
-  cursor: pointer;
-  display: inline-flex;
-  padding: var(--pds-gap-small) var(--pds-gap-medium);
-}
-
-.gradePillActive {
-  background: var(--pds-shell);
-  border: 1.5px solid var(--pds-shell);
-  color: #fff;
+  color: var(--pds-foreground-contrast-high);
 }
 
 .requiredToggle {
@@ -369,20 +274,6 @@
   min-width: 0;
 }
 
-.requiredToggleHeader {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--pds-gap-x-small);
-}
-
-.requiredToggleBadge {
-  background: var(--pds-notification-background-success);
-  border-radius: var(--pds-radius-pill);
-  color: var(--pds-brand-dark);
-  padding: 4px 8px;
-}
-
 .requiredToggleTitle {
   display: block;
 }
@@ -391,17 +282,67 @@
   color: var(--pds-muted);
   display: block;
   margin-top: 2px;
-}@media (max-width: 960px) {
+}
+
+/* Component-centric grade/amount editor */
+.bulkRow {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pds-gap-medium);
+  justify-content: space-between;
+}
+
+.bulkAmount {
+  align-items: center;
+  display: flex;
+  gap: var(--pds-gap-small);
+}
+
+.gradeEditor {
+  display: grid;
+  gap: var(--pds-gap-small);
+}
+
+.gradeEditorRow {
+  align-items: center;
+  border: 1px solid var(--pds-border-color-primary);
+  border-radius: var(--pds-radius-12);
+  display: grid;
+  gap: var(--pds-gap-medium);
+  grid-template-columns: auto 1fr 220px;
+  padding: var(--pds-gap-medium) var(--pds-padding-large);
+}
+
+.gradeEditorRowActive {
+  background: var(--pds-background-frame);
+}
+
+.gradeEditorName {
+  color: var(--pds-text-primary);
+}
+
+.gradeEditorAmount {
+  width: 100%;
+}
+
+.saveBar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 960px) {
   .layout {
     grid-template-columns: 1fr;
-  }.gradeNav {
+  }
+
+  .gradeNav {
     border-bottom: 1px solid var(--pds-border-color-primary);
     border-right: 0;
     padding-bottom: var(--pds-gap-small);
-  }.hero {
-    grid-template-columns: 1fr;
-  }.componentTableHead,
-  .componentRow {
+  }
+
+  .hero {
     grid-template-columns: 1fr;
   }
 }

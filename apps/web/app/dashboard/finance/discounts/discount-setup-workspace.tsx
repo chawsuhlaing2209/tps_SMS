@@ -412,7 +412,7 @@ export function DiscountSetupModal({ open, onOpenChange, mode, ruleId, onSaved }
                         <span className="pds-type-body-s-regular muted">{t("calcMethodPercentageDesc")}</span>
                       </span>
                       {form.valueType === "percentage" ? (
-                        <CheckBox checked disabled showLabel={false} showDescription={false} />
+                        <Icon name="check_circle" size={20} className="award-basis-card__check" />
                       ) : null}
                     </button>
                     <button
@@ -426,7 +426,7 @@ export function DiscountSetupModal({ open, onOpenChange, mode, ruleId, onSaved }
                         <span className="pds-type-body-s-regular muted">{t("calcMethodFixedDesc")}</span>
                       </span>
                       {form.valueType === "fixed" ? (
-                        <CheckBox checked disabled showLabel={false} showDescription={false} />
+                        <Icon name="check_circle" size={20} className="award-basis-card__check" />
                       ) : null}
                     </button>
                   </div>

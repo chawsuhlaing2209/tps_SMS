@@ -45,7 +45,7 @@ type DraftEnrollment = {
   billingSnapshot?: { optionalFeeItemIds?: string[] } | null;
 };
 
-type WizardValues = { studentId: string; gradeId: string; classroomId: string };
+type WizardValues = { studentId: string; gradeId: string; classroomId?: string };
 
 const STEPS = ["placement", "feeLines", "discounts", "invoicePreview"] as const;
 
@@ -120,7 +120,9 @@ export function EnrollmentWizard({
   const schema = z.object({
     studentId: z.string().uuid(requiredMessage),
     gradeId: z.string().uuid(requiredMessage),
-    classroomId: z.string().uuid(requiredMessage)
+    // Classroom is optional — a student can be enrolled into a grade before a
+    // room has been planned; the room can be assigned later.
+    classroomId: z.string().optional()
   });
 
   const form = useForm<WizardValues>({
@@ -171,7 +173,7 @@ export function EnrollmentWizard({
       studentId: string;
       academicYearId: string;
       gradeId: string;
-      classroomId: string;
+      classroomId?: string;
       optionalFeeItemIds: string[];
       excludedDiscountRuleIds?: string[];
       forcedDiscountRuleIds?: string[];
@@ -213,7 +215,7 @@ export function EnrollmentWizard({
     {
       enrollmentId: string;
       body: {
-        classroomId: string;
+        classroomId?: string;
         gradeId: string;
         academicYearId: string;
         optionalFeeItemIds: string[];
@@ -393,6 +395,11 @@ export function EnrollmentWizard({
   }, [selectedGradeId, scopedClassrooms, form]);
 
   const classroom = scopedClassrooms.find((cl) => cl.id === form.watch("classroomId"));
+  // Grade + academic year drive the fee preview and enrollment; the classroom is
+  // optional. When a room is chosen it is the source of truth; otherwise fall back
+  // to the selected grade and the working academic year.
+  const effectiveAcademicYearId = classroom?.academicYearId ?? academicYears?.[0]?.id ?? "";
+  const effectiveGradeId = classroom?.gradeId ?? selectedGradeId;
 
   const runPreview = async (
     optionalIds: string[],
@@ -404,16 +411,16 @@ export function EnrollmentWizard({
     }
   ) => {
     const values = form.getValues();
-    if (!classroom) {
-      throw new ApiError(t("selectClassroom"), 400);
+    if (!effectiveGradeId || !effectiveAcademicYearId) {
+      throw new ApiError(t("selectGrade"), 400);
     }
     const nextExcluded = options?.excludedDiscountRuleIds ?? excludedDiscountRuleIds;
     const nextForced = options?.forcedDiscountRuleIds ?? forcedDiscountRuleIds;
     const result = await previewMutation.mutateAsync({
       studentId: values.studentId,
-      academicYearId: classroom.academicYearId,
-      gradeId: classroom.gradeId,
-      classroomId: classroom.id,
+      academicYearId: effectiveAcademicYearId,
+      gradeId: effectiveGradeId,
+      classroomId: values.classroomId || undefined,
       optionalFeeItemIds: optionalIds,
       excludedDiscountRuleIds: nextExcluded,
       forcedDiscountRuleIds: nextForced,
@@ -573,27 +580,27 @@ export function EnrollmentWizard({
   };
 
   const ensureDraftId = async () => {
+    const values = form.getValues();
+    if (!effectiveGradeId || !effectiveAcademicYearId) {
+      throw new ApiError(t("selectGrade"), 400);
+    }
     if (draftId) {
-      const values = form.getValues();
-      if (!classroom) throw new ApiError(t("selectClassroom"), 400);
       await updateDraft.mutateAsync({
         enrollmentId: draftId,
         body: {
-          classroomId: values.classroomId,
-          gradeId: classroom.gradeId,
-          academicYearId: classroom.academicYearId,
+          classroomId: values.classroomId || undefined,
+          gradeId: effectiveGradeId,
+          academicYearId: effectiveAcademicYearId,
           optionalFeeItemIds
         }
       });
       return draftId;
     }
-    const values = form.getValues();
-    if (!classroom) throw new ApiError(t("selectClassroom"), 400);
     const row = await saveDraft.mutateAsync({
       studentId: values.studentId,
-      classroomId: values.classroomId,
-      academicYearId: classroom.academicYearId,
-      gradeId: classroom.gradeId,
+      classroomId: values.classroomId || undefined,
+      academicYearId: effectiveAcademicYearId,
+      gradeId: effectiveGradeId,
       optionalFeeItemIds
     });
     setDraftId(row.id);

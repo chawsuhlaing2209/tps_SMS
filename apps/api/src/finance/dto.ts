@@ -69,6 +69,19 @@ export class UpdateEnrollmentFeePlanDto {
   declare gradeIds?: string[]
 }
 
+export class FeeItemGradeAmountDto {
+  @IsUUID() declare gradeId: string
+  @IsNumber() @Type(() => Number) declare amount: number
+}
+
+export class ReconcileFeeItemGradeAmountsDto {
+  @IsUUID() declare academicYearId: string
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => FeeItemGradeAmountDto)
+  declare entries: FeeItemGradeAmountDto[]
+}
+
 export class InvoiceItemDto {
   @IsString() @IsNotEmpty() declare description: string
   @IsNumber() @Type(() => Number) declare unitAmount: number

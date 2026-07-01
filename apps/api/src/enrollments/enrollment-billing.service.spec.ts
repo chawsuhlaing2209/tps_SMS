@@ -156,15 +156,42 @@ describe("EnrollmentBillingService.confirm — tenant isolation & guards", () =>
     expect(audit.recordEvent).not.toHaveBeenCalled();
   });
 
-  it("rejects confirm when the enrollment has no classroom", async () => {
+  it("confirms without a classroom using the enrollment's own grade and year", async () => {
+    // Classroom is optional: confirm must NOT reject a room-less enrollment, and
+    // should preview using the enrollment's own academic year + grade.
     const { db } = makeDb([
-      [{ id: ENROLLMENT_ID, tenantId: TENANT, invoiceId: null, classroomId: null }]
+      [
+        {
+          id: ENROLLMENT_ID,
+          tenantId: TENANT,
+          invoiceId: null,
+          classroomId: null,
+          studentId: "stu-1",
+          academicYearId: "ay-1",
+          gradeId: "g-1",
+          billingSnapshot: null
+        }
+      ]
     ]);
     const service = new EnrollmentBillingService(db, audit);
+    const previewSpy = vi
+      .spyOn(service, "preview")
+      .mockResolvedValue({
+        canConfirm: false,
+        confirmBlockers: ["blocked"],
+        discountApprovalRequired: false,
+        total: 0
+      } as never);
 
+    // Reaches preview (past the old no-classroom guard) and fails only on the
+    // mocked confirm blocker.
     await expect(
       service.confirm(TENANT, ENROLLMENT_ID, ACTOR, {} as never, [])
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).rejects.toThrow("blocked");
+    expect(previewSpy).toHaveBeenCalledWith(
+      TENANT,
+      expect.objectContaining({ academicYearId: "ay-1", gradeId: "g-1", classroomId: undefined })
+    );
   });
 });
 

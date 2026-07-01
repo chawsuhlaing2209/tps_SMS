@@ -1,4 +1,4 @@
-import { IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, IsUUID } from "class-validator";
+import { ArrayNotEmpty, IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, IsUUID } from "class-validator";
 import { Type } from "class-transformer";
 import { paymentMethods } from "@sms/shared";
 
@@ -162,8 +162,10 @@ export class PreviewAddStudentServiceDto {
   @IsUUID()
   declare studentId: string;
 
-  @IsUUID()
-  declare feeItemId: string;
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsUUID(undefined, { each: true })
+  declare feeItemIds: string[];
 
   @IsString()
   declare effectiveFrom: string;
@@ -173,8 +175,10 @@ export class CreateStudentServiceDto {
   @IsUUID()
   declare studentId: string;
 
-  @IsUUID()
-  declare feeItemId: string;
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsUUID(undefined, { each: true })
+  declare feeItemIds: string[];
 
   @IsString()
   declare startDate: string;
@@ -186,4 +190,46 @@ export class CreateStudentServiceDto {
   @IsOptional()
   @IsString()
   declare dueDate?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  declare collectPayment?: boolean;
+
+  @IsOptional()
+  @IsIn([...paymentMethods])
+  declare paymentMethod?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  declare paymentAmount?: number;
+
+  @IsOptional()
+  @IsString()
+  declare paymentReference?: string;
+
+  @IsOptional()
+  @IsString()
+  declare paymentNotes?: string;
+}
+
+export class CancelEnrollmentDto {
+  @IsIn(["full", "partial", "none"])
+  declare refundMode: "full" | "partial" | "none";
+
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  declare refundAmount?: number;
+
+  @IsOptional()
+  @IsIn([...paymentMethods])
+  declare method?: string;
+
+  @IsOptional()
+  @IsString()
+  declare referenceNumber?: string;
+
+  @IsString()
+  declare reason: string;
 }

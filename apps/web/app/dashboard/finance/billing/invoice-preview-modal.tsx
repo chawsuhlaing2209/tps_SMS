@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { hasAnyPermission } from "../../../lib/permissions";
 import { getSession } from "../../../lib/session";
@@ -52,6 +53,7 @@ export function BillingInvoicePreviewModal({
 }) {
   const t = useTranslations("finance.invoiceDocument");
   const c = useTranslations("common");
+  const router = useRouter();
   const canVerifyPayments = hasAnyPermission(getSession()?.permissions, ["finance.manage"]);
 
   const invoice = useApiQuery<InvoiceDetail>(
@@ -106,6 +108,14 @@ export function BillingInvoicePreviewModal({
           onClose={() => onOpenChange(false)}
           onPrint={handlePrint}
           onSend={handleSend}
+          onViewDetails={
+            invoiceId
+              ? () => {
+                  onOpenChange(false);
+                  router.push(`/dashboard/finance/invoices/${invoiceId}`);
+                }
+              : undefined
+          }
           sendPending={send.isPending}
           canVerifyPayments={canVerifyPayments}
         />

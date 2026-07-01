@@ -21,6 +21,7 @@ import {
   PaymentMetricsQueryDto,
   ReceivablesQueryDto,
   RecordPaymentDto,
+  ReconcileFeeItemGradeAmountsDto,
   RefundPaymentDto,
   UpdateEnrollmentFeePlanDto,
   UpdateFeeItemDto,
@@ -62,6 +63,17 @@ export class FinanceController {
     @Headers('x-user-id') actorUserId: string,
   ) {
     return this.financeService.updateFeeItem(tenantId, feeItemId, actorUserId, dto)
+  }
+
+  @Put('fee-items/:feeItemId/grade-amounts')
+  @RequirePermissions('finance.manage')
+  reconcileFeeItemGradeAmounts(
+    @Param('tenantId') tenantId: string,
+    @Param('feeItemId') feeItemId: string,
+    @Body() dto: ReconcileFeeItemGradeAmountsDto,
+    @Headers('x-user-id') actorUserId: string,
+  ) {
+    return this.financeService.reconcileFeeItemGradeAmounts(tenantId, feeItemId, actorUserId, dto)
   }
 
   @Post('fee-items/:feeItemId/archive')
@@ -201,6 +213,25 @@ export class FinanceController {
     @Param('studentId') studentId: string,
   ) {
     return this.financeService.getStudentBillingSummary(tenantId, studentId)
+  }
+
+  @Get('family-groups/:familyGroupId/billing')
+  @RequirePermissions('finance.manage')
+  getFamilyGroupBilling(
+    @Param('tenantId') tenantId: string,
+    @Param('familyGroupId') familyGroupId: string,
+  ) {
+    return this.financeService.getFamilyGroupBilling(tenantId, familyGroupId)
+  }
+
+  @Post('students/:studentId/bill-recurring')
+  @RequirePermissions('finance.manage')
+  billRecurring(
+    @Param('tenantId') tenantId: string,
+    @Param('studentId') studentId: string,
+    @Headers('x-user-id') actorUserId: string,
+  ) {
+    return this.financeService.ensureRecurringInvoice(tenantId, studentId, actorUserId)
   }
 
   @Get('invoices/metrics')

@@ -664,6 +664,9 @@ export const enrollments = pgTable("enrollments", {
   classroomId: uuid("classroom_id").references(() => classrooms.id),
   invoiceId: uuid("invoice_id"),
   confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  cancellationReason: text("cancellation_reason"),
+  refundMode: text("refund_mode"),
   billingSnapshot: jsonb("billing_snapshot").$type<EnrollmentBillingSnapshot>(),
   status: approvalStatusEnum("status").default("draft").notNull()
 });

@@ -112,6 +112,7 @@ export function InvoiceDocumentBody({
   onClose,
   onPrint,
   onSend,
+  onViewDetails,
   sendPending = false,
   canVerifyPayments = false
 }: {
@@ -121,6 +122,8 @@ export function InvoiceDocumentBody({
   onClose?: () => void;
   onPrint?: () => void;
   onSend?: () => void;
+  /** When set (modal preview), shows a "View full details" action that deep-links to the invoice page. */
+  onViewDetails?: () => void;
   sendPending?: boolean;
   canVerifyPayments?: boolean;
 }) {
@@ -130,6 +133,17 @@ export function InvoiceDocumentBody({
 
   const actions = showActions
     ? [
+        ...(onViewDetails
+          ? [
+              {
+                id: "view-details",
+                label: t("viewFullDetails"),
+                icon: "open_in_full",
+                variant: "outline" as const,
+                onClick: onViewDetails,
+              },
+            ]
+          : []),
         {
           id: "print",
           label: t("print"),
@@ -263,10 +277,12 @@ export function mapInvoiceDetailToDocument(
     }>;
   }
 ): InvoiceDocumentData {
+  // Gross verified payments drive the balance: a refund is shown as its own
+  // cash-out line and must NOT re-create a balance / reopen the invoice for
+  // collection (mirrors the backend's gross-based recordable rule).
   const paidToDate = invoice.payments.reduce((sum, payment) => {
-    if (!payment.verifiedAt) return sum;
-    const value = Number(payment.amount);
-    return payment.kind === "refund" ? sum - value : sum + value;
+    if (!payment.verifiedAt || payment.kind === "refund") return sum;
+    return sum + Number(payment.amount);
   }, 0);
 
   const total = Number(invoice.total);

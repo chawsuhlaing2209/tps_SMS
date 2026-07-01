@@ -1,7 +1,5 @@
 "use client";
 
-import { TextInput } from "../../../../components/shared/form-input";
-
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { formatMMK } from "../../../lib/money";
 import { useTranslations } from "next-intl";
@@ -206,7 +204,7 @@ export function RecordPaymentModal({
                 <p className="pay-modal__empty">{t("noOwingStudents")}</p>
               ) : (
                 <div className="pay-modal__body">
-                  <div className="pay-field">
+                  <label className="pay-field">
                     <span className="pay-field__label">{t("selectStudent")}</span>
                     <div className="pay-select">
                       <select
@@ -225,7 +223,7 @@ export function RecordPaymentModal({
                       </select>
                       <Icon name="unfold_more" size={18} className="pay-select__icon" />
                     </div>
-                  </div>
+                  </label>
 
                   <div className="pay-tiles">
                     <div className="pay-tile">
@@ -242,13 +240,9 @@ export function RecordPaymentModal({
                     </div>
                   </div>
 
-                  <div className="pay-field">
-                    <label htmlFor="pay-modal-amount" className="pay-field__label">
-                      {t("amountReceived")}
-                    </label>
-                    <TextInput
-                      unwrapped
-                      id="pay-modal-amount"
+                  <label className="pay-field">
+                    <span className="pay-field__label">{t("amountReceived")}</span>
+                    <input
                       className="pay-amount"
                       type="number"
                       inputMode="numeric"
@@ -257,7 +251,7 @@ export function RecordPaymentModal({
                       value={amount}
                       onChange={(event) => setAmount(event.target.value)}
                     />
-                  </div>
+                  </label>
 
                   <div className="pay-field">
                     <span className="pay-field__label">{t("paymentMethod")}</span>
@@ -279,18 +273,14 @@ export function RecordPaymentModal({
                   </div>
 
                   {needsReference ? (
-                    <div className="pay-field">
-                      <label htmlFor="pay-modal-reference" className="pay-field__label">
-                        {t("receiptReference")}
-                      </label>
-                      <TextInput
-                        unwrapped
-                        id="pay-modal-reference"
+                    <label className="pay-field">
+                      <span className="pay-field__label">{t("receiptReference")}</span>
+                      <input
                         className="pay-input"
                         value={reference}
                         onChange={(event) => setReference(event.target.value)}
                       />
-                    </div>
+                    </label>
                   ) : null}
 
                   <div className="pay-balance-after">

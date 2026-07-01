@@ -445,9 +445,11 @@ async function seedDemoEnrollmentBillingAllGrades(
     }
   };
 
+  // One reusable "Tuition" component with per-grade amounts (grades that share
+  // an amount share a plan via ensurePlanGrade), instead of a component per grade.
+  const tuitionId = await ensureFeeItem("Tuition", "tuition", "one_time");
   for (const [gradeName, gradeId] of gradeIds) {
     const tuitionAmount = DEMO_TUITION_BY_GRADE[gradeName] ?? "500000";
-    const tuitionId = await ensureFeeItem(`${gradeName} Tuition`, "tuition", "one_time");
     await ensurePlanGrade(tuitionId, tuitionAmount, gradeId);
     for (const plan of sharedPlans) {
       await ensurePlanGrade(plan.feeItemId, plan.amount, gradeId);
@@ -757,7 +759,7 @@ async function seedDemoEnrollmentBilling(
     return created!.id;
   };
 
-  const tuitionId = await ensureFeeItem("Grade 1 Tuition", "tuition", "one_time");
+  const tuitionId = await ensureFeeItem("Tuition", "tuition", "one_time");
   const registrationId = await ensureFeeItem("Registration Fee", "registration", "one_time");
   const transportId = await ensureFeeItem("School Transport", "transport", "monthly");
 

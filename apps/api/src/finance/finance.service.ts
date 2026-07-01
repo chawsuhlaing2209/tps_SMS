@@ -16,9 +16,11 @@ import type {
   FinanceOverviewQueryDto,
   MonthlyReportQueryDto, ReceivablesQueryDto, UpdateFeeItemDto,
   UpdateEnrollmentFeePlanDto, InvoiceMetricsQueryDto, PaymentMetricsQueryDto,
+  ReconcileFeeItemGradeAmountsDto,
 } from './dto.js'
 import { InvoicesQueueService } from './invoices-queue.service.js'
 import { RecurringBillingService } from './recurring-billing.service.js'
+import { ensureRecurringInvoiceForStudent } from './recurring-billing.logic.js'
 import { NotificationsService } from '../notifications/notifications.service.js'
 
 @Injectable()
@@ -317,6 +319,130 @@ export class FinanceService {
       this.auditService.createEvent({ tenantId, actorUserId, action: 'enrollment_fee_plan.delete', recordType: 'enrollment_fee_plan', recordId: planId, before: previous })
     )
     return { removed: true }
+  }
+
+  /**
+   * Component-centric save: set the per-grade amounts for one fee component in
+   * one atomic call. Each entry is { gradeId, amount }; grades not listed are
+   * removed. Plans are grouped by amount (one plan per distinct amount spanning
+   * its grades), so "same amount for all grades" stays a single plan.
+   */
+  async reconcileFeeItemGradeAmounts(
+    tenantId: string,
+    feeItemId: string,
+    actorUserId: string,
+    dto: ReconcileFeeItemGradeAmountsDto,
+  ) {
+    const [item] = await this.db
+      .select({ id: feeItems.id })
+      .from(feeItems)
+      .where(and(eq(feeItems.id, feeItemId), eq(feeItems.tenantId, tenantId)))
+    if (!item) throw new NotFoundException('Fee component not found')
+
+    const [year] = await this.db
+      .select({ id: academicYears.id })
+      .from(academicYears)
+      .where(
+        and(
+          eq(academicYears.tenantId, tenantId),
+          eq(academicYears.id, dto.academicYearId),
+          eq(academicYears.status, 'active'),
+        ),
+      )
+    if (!year) {
+      throw new BadRequestException('Fee structures must use the current academic year.')
+    }
+
+    // Validate grades belong to the tenant; dedupe (last entry wins per grade).
+    const amountByGrade = new Map<string, number>()
+    for (const entry of dto.entries) {
+      if (entry.amount <= 0) {
+        throw new BadRequestException('Each applied grade needs an amount greater than zero.')
+      }
+      amountByGrade.set(entry.gradeId, entry.amount)
+    }
+    const gradeIds = [...amountByGrade.keys()]
+    if (gradeIds.length) {
+      const validGrades = await this.db
+        .select({ id: grades.id })
+        .from(grades)
+        .where(and(eq(grades.tenantId, tenantId), inArray(grades.id, gradeIds)))
+      if (validGrades.length !== gradeIds.length) {
+        throw new BadRequestException('One or more grades are invalid.')
+      }
+    }
+
+    // Group grades by amount → one plan per distinct amount.
+    const gradesByAmount = new Map<string, string[]>()
+    for (const [gradeId, amount] of amountByGrade) {
+      const key = String(amount)
+      const list = gradesByAmount.get(key) ?? []
+      list.push(gradeId)
+      gradesByAmount.set(key, list)
+    }
+
+    await this.db.transaction(async (tx) => {
+      // Drop all current plans for this component + year (cascade clears their
+      // grade links), then re-create from the desired amount groups.
+      const existing = await tx
+        .select({ id: enrollmentFeePlans.id })
+        .from(enrollmentFeePlans)
+        .where(
+          and(
+            eq(enrollmentFeePlans.tenantId, tenantId),
+            eq(enrollmentFeePlans.feeItemId, feeItemId),
+            eq(enrollmentFeePlans.academicYearId, dto.academicYearId),
+          ),
+        )
+      if (existing.length) {
+        await tx.delete(enrollmentFeePlans).where(
+          inArray(
+            enrollmentFeePlans.id,
+            existing.map((p) => p.id),
+          ),
+        )
+      }
+
+      for (const [amount, planGradeIds] of gradesByAmount) {
+        const [plan] = await tx
+          .insert(enrollmentFeePlans)
+          .values({
+            tenantId,
+            createdBy: actorUserId,
+            updatedBy: actorUserId,
+            academicYearId: dto.academicYearId,
+            feeItemId,
+            amount,
+          })
+          .returning({ id: enrollmentFeePlans.id })
+        await tx.insert(enrollmentFeePlanGrades).values(
+          planGradeIds.map((gradeId) => ({
+            tenantId,
+            createdBy: actorUserId,
+            updatedBy: actorUserId,
+            planId: plan!.id,
+            gradeId,
+          })),
+        )
+      }
+    })
+
+    await this.auditService.recordEvent(
+      this.auditService.createEvent({
+        tenantId,
+        actorUserId,
+        action: 'enrollment_fee_plan.reconcile',
+        recordType: 'fee_item',
+        recordId: feeItemId,
+        after: {
+          academicYearId: dto.academicYearId,
+          gradeCount: gradeIds.length,
+          planCount: gradesByAmount.size,
+        },
+      }),
+    )
+
+    return { feeItemId, gradeCount: gradeIds.length, planCount: gradesByAmount.size }
   }
 
   private annualizeFeeAmount(amount: string, billingType: string): number {
@@ -1083,6 +1209,40 @@ export class FinanceService {
     }
   }
 
+  /** Resolve the tenant's active academic year id, or null. */
+  private async getActiveAcademicYearId(tenantId: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ id: academicYears.id })
+      .from(academicYears)
+      .where(and(eq(academicYears.tenantId, tenantId), eq(academicYears.status, 'active')))
+      .limit(1)
+    return row?.id ?? null
+  }
+
+  /**
+   * Generate (or return) the current month's recurring invoice for a single
+   * student on demand, so finance staff can collect recurring fees in one step
+   * without first running the monthly batch. Idempotent.
+   */
+  async ensureRecurringInvoice(
+    tenantId: string,
+    studentId: string,
+    actorUserId: string,
+    billingMonth?: string,
+  ) {
+    const academicYearId = await this.getActiveAcademicYearId(tenantId)
+    if (!academicYearId) return { invoiceId: null }
+    const month = billingMonth ?? new Date().toISOString().slice(0, 7)
+    const invoiceId = await ensureRecurringInvoiceForStudent(this.db, {
+      tenantId,
+      studentId,
+      academicYearId,
+      billingMonth: month,
+      actorUserId,
+    })
+    return { invoiceId }
+  }
+
   private async getVerifiedNetPaid(invoiceId: string): Promise<number> {
     const rows = await this.db
       .select({ amount: payments.amount, kind: payments.kind })
@@ -1093,6 +1253,26 @@ export class FinanceService {
       const amount = Number(row.amount)
       return row.kind === 'refund' ? sum - amount : sum + amount
     }, 0)
+  }
+
+  /**
+   * Gross verified payments for an invoice — refunds are NOT subtracted. This is
+   * the basis for how much is still collectable: once an amount has been paid it
+   * stays "paid" for collection purposes even if later refunded, so a refund can
+   * never reopen the balance and let the refunded amount be collected again.
+   * (Use {@link getVerifiedNetPaid} for cash/revenue, which nets out refunds.)
+   */
+  private async getGrossVerifiedPaid(invoiceId: string): Promise<number> {
+    const rows = await this.db
+      .select({ amount: payments.amount })
+      .from(payments)
+      .where(and(
+        eq(payments.invoiceId, invoiceId),
+        eq(payments.kind, 'payment'),
+        isNotNull(payments.verifiedAt),
+      ))
+
+    return rows.reduce((sum, row) => sum + Number(row.amount), 0)
   }
 
   private async getPendingVerificationTotal(invoiceId: string): Promise<number> {
@@ -1148,25 +1328,23 @@ export class FinanceService {
 
     if (['waived', 'cancelled'].includes(invoice.status)) return
 
+    // Status is driven by GROSS payments so a refund never downgrades a paid
+    // invoice back to partial (which would reopen it for collection). Refunds
+    // only affect cash/revenue, surfaced separately as a cash-out line.
+    const gross = await this.getGrossVerifiedPaid(invoiceId)
     const net = await this.getVerifiedNetPaid(invoiceId)
     const total = Number(invoice.total)
 
     let newStatus: 'unpaid' | 'partial' | 'paid' | 'refunded'
-    if (net >= total) {
+    if (gross <= 0) {
+      newStatus = 'unpaid'
+    } else if (net <= 0) {
+      // Everything that was paid has been refunded.
+      newStatus = 'refunded'
+    } else if (gross >= total) {
       newStatus = 'paid'
-    } else if (net > 0) {
-      newStatus = 'partial'
     } else {
-      const [verifiedPayment] = await this.db
-        .select({ id: payments.id })
-        .from(payments)
-        .where(and(
-          eq(payments.invoiceId, invoiceId),
-          eq(payments.kind, 'payment'),
-          isNotNull(payments.verifiedAt),
-        ))
-        .limit(1)
-      newStatus = verifiedPayment ? 'refunded' : 'unpaid'
+      newStatus = 'partial'
     }
 
     await this.db.update(invoices)
@@ -1348,9 +1526,11 @@ export class FinanceService {
     }
 
     const invoiceTotal = Number(invoice.total)
-    const verifiedTotal = await this.getVerifiedNetPaid(invoiceId)
+    // Recordable is based on GROSS payments: a refunded amount has already been
+    // collected once and must not become collectable again.
+    const grossPaid = await this.getGrossVerifiedPaid(invoiceId)
     const pendingVerification = await this.getPendingVerificationTotal(invoiceId)
-    const balanceDue = invoiceTotal - verifiedTotal
+    const balanceDue = invoiceTotal - grossPaid
     const recordable = computeRecordablePaymentBalance(balanceDue, pendingVerification)
 
     if (balanceDue <= 0) {
@@ -1388,8 +1568,8 @@ export class FinanceService {
       this.auditService.createEvent({ tenantId, actorUserId, action: 'payment.record', recordType: 'payment', recordId: payment!.id, after: payment })
     )
 
-    const updatedVerifiedTotal = await this.getVerifiedNetPaid(invoiceId)
-    const remainingBalance = Math.max(0, invoiceTotal - updatedVerifiedTotal)
+    const updatedGrossPaid = await this.getGrossVerifiedPaid(invoiceId)
+    const remainingBalance = Math.max(0, invoiceTotal - updatedGrossPaid)
     const receipt = await this.issueReceiptForPayment(tenantId, actorUserId, payment!.id, {
       studentId: invoice.studentId,
       enrollmentId: invoice.enrollmentId,
@@ -1529,6 +1709,72 @@ export class FinanceService {
 
   // ── Receipts ───────────────────────────────────────────────────────────────
 
+  /**
+   * Balance totals from a student's invoice rows. Shared by the per-student
+   * summary and the family-group billing roll-up so the math stays in one place.
+   * - `totalOutstanding` — verified balance still due (what the family owes).
+   * - `totalPaid` — verified net received.
+   * - `recordable` — how much can be collected now, i.e. outstanding minus
+   *   amounts already covered by payments awaiting verification. The Collect
+   *   action is gated on this so we never double-collect against a pending payment.
+   */
+  private async balanceFromInvoices(
+    rows: Array<{ id: string; total: string; status: string }>,
+  ) {
+    let totalOutstanding = 0
+    let totalPaid = 0
+    let recordable = 0
+    for (const invoice of rows) {
+      // Net cash actually received (gross payments minus refunds) — what the
+      // family has effectively paid, counted even on cancelled/waived invoices.
+      const net = await this.getVerifiedNetPaid(invoice.id)
+      totalPaid += net
+
+      // Cancelled / waived invoices owe nothing and cannot be collected against.
+      if (['cancelled', 'waived'].includes(invoice.status)) continue
+
+      // AR balance & recordable are driven by GROSS payments so a refund never
+      // re-creates debt or reopens the invoice for collection.
+      const gross = await this.getGrossVerifiedPaid(invoice.id)
+      const remaining = Math.max(0, Number(invoice.total) - gross)
+      const pending = await this.getPendingVerificationTotal(invoice.id)
+      totalOutstanding += remaining
+      recordable += computeRecordablePaymentBalance(remaining, pending)
+    }
+    return { totalOutstanding, totalPaid, recordable }
+  }
+
+  /** Per-student outstanding/paid for every member of a family group (household). */
+  async getFamilyGroupBilling(tenantId: string, familyGroupId: string) {
+    const memberRows = await this.db
+      .select({ id: students.id, fullName: students.fullName })
+      .from(students)
+      .where(
+        and(eq(students.tenantId, tenantId), eq(students.familyGroupId, familyGroupId)),
+      )
+      .orderBy(students.fullName)
+
+    const studentsBilling = await Promise.all(
+      memberRows.map(async (member) => {
+        const invoiceRows = await this.db
+          .select({ id: invoices.id, total: invoices.total, status: invoices.status })
+          .from(invoices)
+          .where(and(eq(invoices.tenantId, tenantId), eq(invoices.studentId, member.id)))
+        const { totalOutstanding, totalPaid, recordable } =
+          await this.balanceFromInvoices(invoiceRows)
+        return {
+          studentId: member.id,
+          fullName: member.fullName,
+          totalOutstanding,
+          totalPaid,
+          recordable,
+        }
+      }),
+    )
+
+    return { students: studentsBilling }
+  }
+
   async getStudentBillingSummary(tenantId: string, studentId: string) {
     const [student] = await this.db
       .select({ id: students.id, fullName: students.fullName })
@@ -1554,21 +1800,8 @@ export class FinanceService {
       .where(and(eq(invoices.tenantId, tenantId), eq(invoices.studentId, studentId)))
       .orderBy(sql`${invoices.issueDate} DESC`)
 
-    let totalOutstanding = 0
-    let totalPaid = 0
-
-    for (const invoice of invoiceRows) {
-      if (['paid', 'cancelled', 'waived', 'refunded'].includes(invoice.status)) {
-        if (invoice.status === 'paid') {
-          totalPaid += Number(invoice.total)
-        }
-        continue
-      }
-      const verifiedNet = await this.getVerifiedNetPaid(invoice.id)
-      const remaining = Math.max(0, Number(invoice.total) - verifiedNet)
-      totalOutstanding += remaining
-      totalPaid += verifiedNet
-    }
+    const { totalOutstanding, totalPaid, recordable } =
+      await this.balanceFromInvoices(invoiceRows)
 
     const activeServices = await this.db
       .select({
@@ -1629,6 +1862,7 @@ export class FinanceService {
       studentFullName: student.fullName,
       totalOutstanding,
       totalPaid,
+      recordable,
       invoices: invoiceRows,
       activeServices: activeServicesWithAmounts,
       discounts,
@@ -1791,7 +2025,8 @@ export class FinanceService {
       : []
 
     const invoiceIds = invoiceRows.map((row) => row.id)
-    const paidByInvoice = new Map<string, number>()
+    const paidByInvoice = new Map<string, number>() // net cash (payments − refunds)
+    const grossByInvoice = new Map<string, number>() // gross verified payments (no refund subtraction)
     const pendingByInvoice = new Map<string, number>()
     if (invoiceIds.length) {
       const paymentRows = await this.db
@@ -1813,8 +2048,8 @@ export class FinanceService {
           continue
         }
         if (row.verifiedAt) {
-          const prev = paidByInvoice.get(row.invoiceId) ?? 0
-          paidByInvoice.set(row.invoiceId, prev + amount)
+          paidByInvoice.set(row.invoiceId, (paidByInvoice.get(row.invoiceId) ?? 0) + amount)
+          grossByInvoice.set(row.invoiceId, (grossByInvoice.get(row.invoiceId) ?? 0) + amount)
         } else {
           const prev = pendingByInvoice.get(row.invoiceId) ?? 0
           pendingByInvoice.set(row.invoiceId, prev + amount)
@@ -1867,7 +2102,8 @@ export class FinanceService {
 
       const studentInvoices = invoicesByStudent.get(studentId) ?? []
       let billed = 0
-      let paid = 0
+      let paid = 0 // net cash (for the collected metric)
+      let grossPaid = 0 // gross verified payments (for balance / recordable)
       let pendingVerification = 0
       let hasOverdue = false
       let primaryInvoiceId: string | null = null
@@ -1880,12 +2116,14 @@ export class FinanceService {
       for (const inv of studentInvoices) {
         billed += Number(inv.total)
         const net = paidByInvoice.get(inv.id) ?? 0
+        const gross = grossByInvoice.get(inv.id) ?? 0
         paid += net
+        grossPaid += gross
         pendingVerification += pendingByInvoice.get(inv.id) ?? 0
         latestInvoiceId = inv.id
         latestInvoice = inv
         const open = !this.CLOSED_STATUSES.includes(inv.status)
-        const remaining = Number(inv.total) - net
+        const remaining = Number(inv.total) - gross
         if (open && remaining > 0) {
           if (!primaryInvoiceId) {
             primaryInvoiceId = inv.id
@@ -1906,7 +2144,7 @@ export class FinanceService {
         primaryPaymentPlan = paymentPlanKeyFromInvoiceSource(primary.source)
       }
 
-      const balance = Math.max(0, billed - paid)
+      const balance = Math.max(0, billed - grossPaid)
       const recordableBalance = computeRecordablePaymentBalance(balance, pendingVerification)
       let status: RosterRow['status']
       if (billed > 0 && balance <= 0) status = 'paid'
@@ -2193,6 +2431,17 @@ export class FinanceService {
       academicYearId,
     )
 
+    // One-click recurring collection: make sure the current month's recurring
+    // invoice exists before we look for something to collect against, so finance
+    // staff never have to run the monthly batch first.
+    await ensureRecurringInvoiceForStudent(this.db, {
+      tenantId,
+      studentId: dto.studentId,
+      academicYearId,
+      billingMonth: new Date().toISOString().slice(0, 7),
+      actorUserId,
+    })
+
     const openInvoices = await this.db
       .select({ id: invoices.id, total: invoices.total, status: invoices.status })
       .from(invoices)
@@ -2212,7 +2461,8 @@ export class FinanceService {
     }
 
     if (dto.amount <= 0) throw new BadRequestException('Amount must be greater than zero.')
-    if (dto.method !== 'cash' && !dto.referenceNumber?.trim()) {
+    const isCash = dto.method === 'cash'
+    if (!isCash && !dto.referenceNumber?.trim()) {
       throw new BadRequestException('Transaction ID is required for non-cash payments.')
     }
 
@@ -2221,9 +2471,9 @@ export class FinanceService {
     let totalRecordable = 0
 
     for (const invoice of openInvoices) {
-      const net = await this.getVerifiedNetPaid(invoice.id)
+      const gross = await this.getGrossVerifiedPaid(invoice.id)
       const pendingVerification = await this.getPendingVerificationTotal(invoice.id)
-      const balanceDue = Number(invoice.total) - net
+      const balanceDue = Number(invoice.total) - gross
       const recordable = computeRecordablePaymentBalance(balanceDue, pendingVerification)
       if (recordable > 0) {
         applicableInvoices.push({ id: invoice.id, total: invoice.total, recordable })
@@ -2263,8 +2513,11 @@ export class FinanceService {
           referenceNumber: dto.referenceNumber?.trim() || null,
           notes: dto.notes?.trim() || null,
           paidAt: new Date(),
-          verifiedAt: new Date(),
-          verifiedByUserId: actorUserId,
+          // Non-cash (bank transfer / wallet) payments require verification before
+          // they count as paid — mirror recordPayment() so the rule is consistent
+          // whether collected from the Invoice or the Collection module.
+          verifiedAt: isCash ? new Date() : null,
+          verifiedByUserId: isCash ? actorUserId : null,
         })
         .returning()
 
@@ -2303,9 +2556,9 @@ export class FinanceService {
       )
     let remainingBalance = 0
     for (const invoice of periodInvoices) {
-      const net = await this.getVerifiedNetPaid(invoice.id)
+      const gross = await this.getGrossVerifiedPaid(invoice.id)
       const pendingVerification = await this.getPendingVerificationTotal(invoice.id)
-      remainingBalance += computeRecordablePaymentBalance(Number(invoice.total) - net, pendingVerification)
+      remainingBalance += computeRecordablePaymentBalance(Number(invoice.total) - gross, pendingVerification)
     }
 
     const receipt = await this.issueReceiptForPayment(tenantId, actorUserId, lastPaymentId, {
@@ -2379,9 +2632,15 @@ export class FinanceService {
     return Math.round(((current - previous) / previous) * 1000) / 10
   }
 
+  /**
+   * Net verified cash = verified payments minus verified refunds. Revenue and
+   * cash-flow must use this so a refund reduces (not inflates) reported revenue.
+   */
+  private readonly netVerifiedPaymentExpr = sql<string>`COALESCE(SUM(CASE WHEN ${payments.kind} = 'refund' THEN -${payments.amount}::numeric ELSE ${payments.amount}::numeric END), 0)`
+
   private async sumVerifiedPayments(tenantId: string, start: Date, end: Date) {
     const result = await this.db
-      .select({ total: sum(payments.amount) })
+      .select({ total: this.netVerifiedPaymentExpr })
       .from(payments)
       .where(
         and(
@@ -2644,9 +2903,9 @@ export class FinanceService {
     const startDate = new Date(year, month - 1, 1)
     const endDate = new Date(year, month, 0, 23, 59, 59)
 
-    // Revenue: sum of verified payments in this month
+    // Revenue: net verified cash (payments minus refunds) in this month
     const revenueResult = await this.db
-      .select({ revenue: sum(payments.amount) })
+      .select({ revenue: this.netVerifiedPaymentExpr })
       .from(payments)
       .where(and(
         eq(payments.tenantId, tenantId),
@@ -3103,7 +3362,7 @@ export class FinanceService {
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59)
 
     const revResult = await this.db
-      .select({ revenue: sum(payments.amount) })
+      .select({ revenue: this.netVerifiedPaymentExpr })
       .from(payments)
       .where(and(
         eq(payments.tenantId, tenantId),

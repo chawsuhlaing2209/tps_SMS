@@ -22,8 +22,10 @@ import { StudentCombobox } from "../../../../lib/student-combobox";
 import { TablePanelBody } from "../../../../lib/table-panel";
 import { PdsSelectField } from "../../../../../components/pds";
 import { zodResolver } from "../../../../lib/zod-resolver";
+import { useCurrentAcademicYear } from "../../../../lib/use-current-academic-year";
 import { PageHeader } from "../../../page-header-context";
 import { NavigationBackLink } from "../../../../../components/shared/navigation-back-link";
+import { PeopleBillingPanel, type BillingMember } from "../../people-billing-panel";
 
 type HouseholdTree = {
   id: string;
@@ -55,6 +57,8 @@ export default function HouseholdDetailPage({
   const p = useTranslations("people");
   const permissions = getSession()?.permissions;
   const canManage = hasAnyPermission(permissions, ["student.manage"]);
+  const canCollect = hasAnyPermission(permissions, ["finance.manage"]);
+  const currentYear = useCurrentAcademicYear();
   const [editOpen, setEditOpen] = useState(false);
   const [addStudentOpen, setAddStudentOpen] = useState(false);
   const [addStudentId, setAddStudentId] = useState("");
@@ -63,6 +67,10 @@ export default function HouseholdDetailPage({
 
   const household = useApiQuery<HouseholdTree>(
     (tenant) => `/tenants/${tenant}/family-groups/${familyGroupId}`
+  );
+
+  const billing = useApiQuery<{ students: BillingMember[] }>((tenant) =>
+    canCollect ? `/tenants/${tenant}/finance/family-groups/${familyGroupId}/billing` : null
   );
 
   const guardians = useApiQuery<GuardianOption[]>((tenant) =>
@@ -224,6 +232,20 @@ export default function HouseholdDetailPage({
           <p className="pds-type-body-s-regular muted household-tree-content__hint">{t("siblingHint")}</p>
         </div>
       </TablePanelBody>
+
+      {canCollect ? (
+        <PeopleBillingPanel
+          title={t("householdBalanceTitle")}
+          members={billing.data?.students ?? []}
+          academicYearId={currentYear.data?.id ?? null}
+          loading={billing.isLoading}
+          error={billing.isError}
+          canCollect={canCollect}
+          fromLabel={data.name}
+          fromHref={`/dashboard/people/households/${familyGroupId}`}
+          onRefresh={() => void billing.refetch()}
+        />
+      ) : null}
 
       {formError && !editOpen && !addStudentOpen && !removeStudent ? (
         <p className="pds-type-body-m-medium error-text" role="alert">
