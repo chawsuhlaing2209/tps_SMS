@@ -47,7 +47,7 @@ export function ConfirmDialog({
           <ModalCloseButton />
         </ModalHeader>
         <ModalBody>
-          <ModalDescription>{description}</ModalDescription>
+          <ModalDescription className="pds-type-body-m-medium">{description}</ModalDescription>
         </ModalBody>
         <ModalFooter>
           <ModalFooterStart />
