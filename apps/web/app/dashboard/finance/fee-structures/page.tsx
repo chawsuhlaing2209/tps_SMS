@@ -197,13 +197,16 @@ export default function FeeStructuresPage() {
     });
   };
 
-  // Copy one grade's amount to every grade (contextual "apply to all").
+  // Copy one grade's amount to the other SELECTED grades only — never auto-include
+  // grades the user left unchecked.
   const applyAmountToAll = (amount: string) => {
     if (!Number(amount)) return;
     setDraft((prev) => {
       const next: GradeDraft = { ...prev };
       for (const grade of activeGrades) {
-        next[grade.id] = { included: true, amount };
+        if (prev[grade.id]?.included) {
+          next[grade.id] = { included: true, amount };
+        }
       }
       return next;
     });
@@ -424,9 +427,12 @@ export default function FeeStructuresPage() {
                         const changed = Number(d.amount) !== Number(originalAmount);
                         const showApplyAll =
                           canManage && lastEditedGrade === grade.id && Number(d.amount) > 0 && changed;
+                        // Checked when every *selected* grade already shares this amount.
+                        const includedGrades = activeGrades.filter((g) => draft[g.id]?.included);
                         const allShareAmount =
                           Number(d.amount) > 0 &&
-                          activeGrades.every((g) => draft[g.id]?.included && Number(draft[g.id]?.amount) === Number(d.amount));
+                          includedGrades.length > 0 &&
+                          includedGrades.every((g) => Number(draft[g.id]?.amount) === Number(d.amount));
                         return (
                           <div key={grade.id} className={cn(styles.gradeEditorRow, d.included && styles.gradeEditorRowActive)}>
                             <div className={styles.gradeEditorMain}>
