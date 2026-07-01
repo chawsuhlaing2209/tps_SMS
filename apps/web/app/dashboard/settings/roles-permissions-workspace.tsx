@@ -5,6 +5,7 @@ import {
   categoryBadgeColor,
   permissionCategories,
   roleDisplayFor,
+  roles as builtInRoleKeys,
   tenantPermissionCatalog,
   tenantStaffRoleKeys,
   type PermissionCategory
@@ -16,6 +17,7 @@ import { z } from "zod";
 import { Toggle } from "../../../components/shared/toggle";
 import { EmptyState } from "../../../components/shared/empty-state";
 import { ConfirmDialog } from "../../../components/shared/confirm-dialog";
+import { RowMoreActionsMenu } from "../../../components/shared/row-more-actions";
 import { ApiError, useApiMutation, useApiQuery } from "../../lib/api";
 import { Field } from "../../lib/form";
 import { Icon } from "../../lib/material-icon";
@@ -76,6 +78,9 @@ export function RolesPermissionsWorkspace() {
   const [formError, setFormError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [disableConfirmOpen, setDisableConfirmOpen] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
 
@@ -120,7 +125,7 @@ export function RolesPermissionsWorkspace() {
   }, [selectedRole?.id, selectedRole?.permissions, selectedRole?.status]);
 
   const updateRole = useApiMutation<
-    { permissions?: string[]; status?: "active" | "inactive" },
+    { name?: string; permissions?: string[]; status?: "active" | "inactive" },
     RoleRow
   >(
     (body, tenant) => ({
@@ -131,6 +136,20 @@ export function RolesPermissionsWorkspace() {
       invalidatePaths: (_b, tenant) => [`/tenants/${tenant}/identity/roles`]
     }
   );
+
+  const deleteRole = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({
+      path: `/tenants/${tenant}/identity/roles/${id}`,
+      init: { method: "DELETE" }
+    }),
+    { showErrorToast: false, invalidatePaths: (_b, tenant) => [`/tenants/${tenant}/identity/roles`] }
+  );
+
+  // Built-in (seeded) roles can't be renamed away from their key or deleted.
+  const isBuiltInRole = selectedRole
+    ? (builtInRoleKeys as readonly string[]).includes(selectedRole.key)
+    : false;
+  const canDeleteRole = Boolean(selectedRole) && !isBuiltInRole && (selectedRole?.userCount ?? 0) === 0;
 
   const createRole = useApiMutation<{ name: string }, RoleRow>(
     (body, tenant) => ({
@@ -226,6 +245,18 @@ export function RolesPermissionsWorkspace() {
     resolver: zodResolver(createSchema),
     defaultValues: { name: "" }
   });
+
+  const renameForm = useForm<{ name: string }>({
+    resolver: zodResolver(createSchema),
+    defaultValues: { name: "" }
+  });
+
+  const openRename = () => {
+    if (!selectedRole) return;
+    renameForm.reset({ name: localizedRoleLabel(roleDisplayFor(selectedRole.key, selectedRole.name), tNames, selectedRole.name) });
+    setFormError(null);
+    setRenameOpen(true);
+  };
 
   if (!canManage) {
     return <EmptyState icon="lock" title={t("noAccess")} />;
@@ -353,6 +384,28 @@ export function RolesPermissionsWorkspace() {
                     <span className="pds-type-body-s-semibold roles-detail-head__badge">
                       {t("userCount", { count: selectedRole.userCount })}
                     </span>
+                    <RowMoreActionsMenu
+                      ariaLabel={c("moreActions")}
+                      items={[
+                        {
+                          id: "rename",
+                          label: t("renameRole"),
+                          icon: "edit",
+                          onSelect: openRename
+                        },
+                        {
+                          id: "delete",
+                          label: t("deleteRole"),
+                          icon: "delete",
+                          destructive: true,
+                          disabled: !canDeleteRole,
+                          onSelect: () => {
+                            setDeleteError(null);
+                            setDeleteOpen(true);
+                          }
+                        }
+                      ]}
+                    />
                   </div>
                 </div>
 
@@ -459,6 +512,72 @@ export function RolesPermissionsWorkspace() {
           <FormInput {...createForm.register("name")} placeholder={t("roleNamePlaceholder")} />
         </Field>
       </RecordFormSheet>
+
+      <RecordFormSheet
+        open={renameOpen}
+        onOpenChange={(open) => {
+          if (!open) renameForm.reset();
+          setRenameOpen(open);
+        }}
+        title={t("renameRole")}
+        onSubmit={renameForm.handleSubmit(async (values) => {
+          setFormError(null);
+          try {
+            await updateRole.mutateAsync({ name: values.name.trim() });
+            setRenameOpen(false);
+            void roles.refetch();
+          } catch (error) {
+            setFormError(error instanceof ApiError ? error.message : c("somethingWrong"));
+          }
+        })}
+        footer={
+          <>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setRenameOpen(false)}>
+              {c("cancel")}
+            </button>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={updateRole.isPending}>
+              {updateRole.isPending ? c("loading") : c("save")}
+            </button>
+          </>
+        }
+      >
+        <Field label={t("roleName")} error={renameForm.formState.errors.name?.message}>
+          <FormInput {...renameForm.register("name")} placeholder={t("roleNamePlaceholder")} />
+        </Field>
+      </RecordFormSheet>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={(open) => {
+          if (!open) setDeleteError(null);
+          setDeleteOpen(open);
+        }}
+        title={t("deleteRole")}
+        description={
+          deleteError ??
+          (selectedRole
+            ? t("deleteRoleConfirm", {
+                name: localizedRoleLabel(roleDisplayFor(selectedRole.key, selectedRole.name), tNames, selectedRole.name)
+              })
+            : "")
+        }
+        confirmLabel={t("deleteRole")}
+        cancelLabel={c("cancel")}
+        destructive
+        loading={deleteRole.isPending}
+        onConfirm={async () => {
+          if (!selectedRole) return;
+          setDeleteError(null);
+          try {
+            await deleteRole.mutateAsync({ id: selectedRole.id });
+            setDeleteOpen(false);
+            setSelectedRoleId(null);
+            void roles.refetch();
+          } catch (error) {
+            setDeleteError(error instanceof ApiError ? error.message : c("somethingWrong"));
+          }
+        }}
+      />
 
       <ConfirmDialog
         open={disableConfirmOpen}

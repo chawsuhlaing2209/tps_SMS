@@ -10,7 +10,7 @@
   border-radius: var(--pds-border-radius-16);
   display: grid;
   gap: 0;
-  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
   min-width: 0;
   overflow: hidden;
 }
@@ -29,7 +29,7 @@
 }
 
 .gradeNavLabel {
-  color: var(--pds-muted);
+  color: var(--pds-text-primary);
   margin: 0;
   padding: 0;
   white-space: nowrap;
@@ -245,20 +245,20 @@
   gap: var(--pds-gap-small);
 }
 
-.gradeEditorGroup {
-  display: flex;
-  flex-direction: column;
-  gap: var(--pds-gap-x-small);
-}
-
 .gradeEditorRow {
-  align-items: center;
   border: 1px solid var(--pds-border-color-primary);
   border-radius: var(--pds-radius-12);
+  display: flex;
+  flex-direction: column;
+  gap: var(--pds-gap-small);
+  padding: var(--pds-gap-medium) var(--pds-padding-large);
+}
+
+.gradeEditorMain {
+  align-items: center;
   display: grid;
   gap: var(--pds-gap-medium);
   grid-template-columns: minmax(0, 1fr) minmax(0, 220px);
-  padding: var(--pds-gap-medium) var(--pds-padding-large);
 }
 
 .gradeEditorRowActive {
@@ -269,9 +269,10 @@
   width: 100%;
 }
 
-/* Contextual "apply to all" that appears under the row just edited. */
+/* Contextual "apply to all" — appears inside the row just edited. */
 .applyAllRow {
-  padding: 0 var(--pds-padding-large);
+  border-top: 1px solid var(--pds-border-color-soft);
+  padding-top: var(--pds-gap-small);
 }
 
 @media (max-width: 960px) {

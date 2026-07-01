@@ -94,6 +94,7 @@ export default function FeeStructuresPage() {
 
   const [selectedFeeItemId, setSelectedFeeItemId] = useState<string | null>(null);
   const [draft, setDraft] = useState<GradeDraft>({});
+  const [originalDraft, setOriginalDraft] = useState<GradeDraft>({});
   const [addOpen, setAddOpen] = useState(false);
   const [renaming, setRenaming] = useState<FeeItem | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -150,6 +151,7 @@ export default function FeeStructuresPage() {
       }
     }
     setDraft(next);
+    setOriginalDraft(next);
     setLastEditedGrade(null);
   }, [selectedFeeItemId, yearPlans, activeGrades]);
 
@@ -291,12 +293,12 @@ export default function FeeStructuresPage() {
         <div className={styles.layout}>
           <aside className={styles.gradeNav}>
             <div className={styles.componentsHead}>
-              <p className={cn("pds-type-label-s-medium", styles.gradeNavLabel)}>{t("feeComponents")}</p>
+              <p className={cn("pds-type-title-xxs-extrabold", styles.gradeNavLabel)}>{t("feeComponents")}</p>
               {canManage ? (
                 <Button
                   type="button"
                   size="sm"
-                  buttonType="outlined"
+                  buttonType="ghost"
                   buttonColor="secondary"
                   onClick={() => {
                     form.reset({ name: "", billingType: "annual", required: false });
@@ -331,7 +333,7 @@ export default function FeeStructuresPage() {
                         {t(`billingTypes.${item.billingType}`)} · {t("appliesToGrades", { count: totals?.grades ?? 0 })}
                       </span>
                     </span>
-                    {active ? <Icon name="check_circle" size={18} className={styles.gradeNavCheck} /> : null}
+                    {active ? <Icon name="chevron_right" size={18} className={styles.gradeNavCheck} /> : null}
                   </button>
                 );
               })
@@ -418,13 +420,16 @@ export default function FeeStructuresPage() {
                     <div className={styles.gradeEditor}>
                       {activeGrades.map((grade) => {
                         const d = draft[grade.id] ?? { included: false, amount: "" };
-                        const showApplyAll = canManage && lastEditedGrade === grade.id && Number(d.amount) > 0;
+                        const originalAmount = originalDraft[grade.id]?.amount ?? "";
+                        const changed = Number(d.amount) !== Number(originalAmount);
+                        const showApplyAll =
+                          canManage && lastEditedGrade === grade.id && Number(d.amount) > 0 && changed;
                         const allShareAmount =
                           Number(d.amount) > 0 &&
-                          activeGrades.every((g) => draft[g.id]?.included && draft[g.id]?.amount === d.amount);
+                          activeGrades.every((g) => draft[g.id]?.included && Number(draft[g.id]?.amount) === Number(d.amount));
                         return (
-                          <div key={grade.id} className={styles.gradeEditorGroup}>
-                            <div className={cn(styles.gradeEditorRow, d.included && styles.gradeEditorRowActive)}>
+                          <div key={grade.id} className={cn(styles.gradeEditorRow, d.included && styles.gradeEditorRowActive)}>
+                            <div className={styles.gradeEditorMain}>
                               <CheckBox
                                 size="sm"
                                 label={grade.name}
