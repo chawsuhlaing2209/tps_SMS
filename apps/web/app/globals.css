@@ -1668,7 +1668,29 @@ h3,
 .padauk-table tbody tr.table-row--clickable:focus-visible {
   background: var(--pds-notification-background-success-hover);
   outline: none;
-}.padauk-table code {
+}
+/* Row actions are pinned to the far right and stay visible while the table
+   scrolls horizontally (applies to every DataTable). */
+.padauk-table th.col-actions,
+.padauk-table td.col-actions {
+  position: sticky;
+  right: 0;
+  box-shadow: -10px 0 10px -10px rgb(15 23 20 / 18%);
+  text-align: right;
+}
+.padauk-table td.col-actions {
+  background: var(--pds-background-card);
+  z-index: 1;
+}
+.padauk-table th.col-actions {
+  background: var(--pds-background-layout-primary);
+  z-index: 2;
+}
+.padauk-table tbody tr:hover td.col-actions,
+.padauk-table tbody tr.table-row--clickable:focus-visible td.col-actions {
+  background: var(--pds-notification-background-success-hover);
+}
+.padauk-table code {
   background: var(--pds-background-layout-secondary);
   border-radius: var(--pds-gap-x-small);
   padding: var(--pds-gap-xx-small) var(--pds-gap-x-small);
