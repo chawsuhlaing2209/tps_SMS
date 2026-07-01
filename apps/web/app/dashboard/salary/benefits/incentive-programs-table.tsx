@@ -45,7 +45,7 @@ export function IncentiveProgramsTable({ programs, onEdit }: Props) {
 
   return (
     <div className="padauk-table-wrap incentive-programs-table-wrap">
-      <table className="pds-type-body-m-medium padauk-table incentive-programs-table">
+      <table className="pds-type-body-m-medium padauk-table padauk-table--pinned-end incentive-programs-table">
         <thead>
           <tr>
             <th className="pds-type-caption-s incentive-programs-table__col-program">

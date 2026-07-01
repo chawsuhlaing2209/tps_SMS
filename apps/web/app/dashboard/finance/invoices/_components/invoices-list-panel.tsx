@@ -321,7 +321,7 @@ export function InvoicesListPanel() {
         emptyMessage={t("empty")}
       >
         <div className="padauk-table-wrap">
-          <table className="pds-type-body-m-medium padauk-table">
+          <table className="pds-type-body-m-medium padauk-table padauk-table--pinned-end">
             <thead>
               <tr>
                 <th className="pds-type-caption-s">{t("invoice")}</th>

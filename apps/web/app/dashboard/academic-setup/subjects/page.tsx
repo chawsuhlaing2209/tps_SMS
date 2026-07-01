@@ -269,7 +269,7 @@ export default function SubjectsPage() {
           archiveVisibility === "archived" ? t("archivedSubjectsEmpty") : undefined
         }
       >
-        <table className="pds-type-body-m-medium padauk-table setup-subjects-table">
+        <table className="pds-type-body-m-medium padauk-table padauk-table--pinned-end setup-subjects-table">
           <thead>
             <tr>
               <th scope="col" className="pds-type-caption-s">{setup("subjectNameColumn")}</th>
