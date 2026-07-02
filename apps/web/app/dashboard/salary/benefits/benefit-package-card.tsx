@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { formatMMK } from "../../../lib/money";
 import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
 import { Icon } from "../../../lib/material-icon";
+import { isPadaukRowInteractiveTarget } from "../../../lib/table-row-interaction";
 import { cn } from "../../../../lib/utils";
 import { benefitIconTone } from "./benefit-icon-themes";
 import type { BenefitPackageRecord } from "./benefit-package-form-sheet";
@@ -31,7 +32,7 @@ export function BenefitPackageCard({ pkg, onEdit, onArchive, onRestore, onDelete
       className="benefit-package-card"
       tabIndex={0}
       onClick={(event) => {
-        if ((event.target as HTMLElement).closest("[data-row-stop]")) return;
+        if (isPadaukRowInteractiveTarget(event.target)) return;
         onEdit(pkg);
       }}
       onKeyDown={(event) => {
