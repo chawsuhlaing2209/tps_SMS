@@ -5791,7 +5791,7 @@ button.btn-hero-outline:hover {
 }
 
 .dash-content > .dash-content-body {
-  max-width: 1320;
+  max-width: var(--pds-width-1180);
 }@media (max-width: var(--pds-breakpoint-md)) {
   .dash-page-chrome__inner,
   .pds-top-nav-bar__inner {

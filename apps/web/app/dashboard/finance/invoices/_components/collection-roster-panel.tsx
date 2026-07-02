@@ -396,7 +396,6 @@ export function CollectionRosterPanel() {
                       <DirectoryMemberCell
                         name={row.studentFullName}
                         subtitle={row.admissionNumber}
-                        colorKey={row.studentId}
                       />
                     </td>
                     <td>{gradeRoom || "—"}</td>
