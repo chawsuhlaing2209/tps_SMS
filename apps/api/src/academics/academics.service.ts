@@ -169,6 +169,41 @@ export class AcademicsService {
       createdBy: actorUserId,
       updatedBy: actorUserId
     });
+
+    // A grade chief must be able to teach that grade. Auto-grant grade
+    // eligibility so the assignment is reflected on the teacher profile and the
+    // "chief ⟹ eligible" invariant holds. (Additive only — never revokes here.)
+    await this.grantGradeEligibility(tenantId, staffId, gradeId, actorUserId);
+  }
+
+  /** Ensure the teacher's profile lists this grade as eligible (idempotent). */
+  private async grantGradeEligibility(
+    tenantId: string,
+    staffId: string,
+    gradeId: string,
+    actorUserId?: string
+  ) {
+    const [row] = await this.db
+      .select({ profile: staff.teacherProfile })
+      .from(staff)
+      .where(and(eq(staff.tenantId, tenantId), eq(staff.id, staffId)))
+      .limit(1);
+    if (!row) {
+      return;
+    }
+    const profile = row.profile ?? {};
+    const current = profile.eligibleGradeIds ?? [];
+    if (current.includes(gradeId)) {
+      return;
+    }
+    await this.db
+      .update(staff)
+      .set({
+        teacherProfile: { ...profile, eligibleGradeIds: [...current, gradeId] },
+        updatedBy: actorUserId,
+        updatedAt: new Date()
+      })
+      .where(and(eq(staff.tenantId, tenantId), eq(staff.id, staffId)));
   }
 
   private async syncSubjectGrades(
