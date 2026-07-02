@@ -366,7 +366,6 @@ export function InvoicesListPanel() {
                       <DirectoryMemberCell
                         name={row.studentFullName ?? "—"}
                         subtitle={gradeRoom || "—"}
-                        colorKey={row.studentId}
                       />
                     </td>
                     <td className="padauk-table__num">{fullNumber(Number(row.total))}</td>

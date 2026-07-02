@@ -420,7 +420,6 @@ export default function PaymentsPage() {
                       <DirectoryMemberCell
                         name={row.studentFullName ?? "—"}
                         subtitle={gradeRoom || "—"}
-                        colorKey={row.invoiceId}
                       />
                     </td>
                     <td>

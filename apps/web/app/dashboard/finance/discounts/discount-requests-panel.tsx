@@ -187,7 +187,6 @@ export function DiscountRequestsPanel() {
                             {t("viewStudent")}
                           </TrailLink>
                         }
-                        colorKey={row.studentId}
                       />
                     </td>
                     <td>{row.ruleName}</td>
