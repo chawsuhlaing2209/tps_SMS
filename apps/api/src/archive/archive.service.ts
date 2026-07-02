@@ -1,7 +1,8 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { DB, type Database } from "../db/db.module.js";
-import { feeItems, grades, sections, staff, students, subjects } from "../db/schema.js";
+import { feeItems, grades, sections, staff, students, subjects, tenantSettings } from "../db/schema.js";
+import { purgeArchivedForTenant } from "./purge-archived-runner.js";
 
 /** One archived record, normalized across modules for the recycle bin. */
 export type RecycleBinItem = {
@@ -115,5 +116,15 @@ export class ArchiveService {
     items.sort((a, b) => (b.archivedAt ?? "").localeCompare(a.archivedAt ?? ""));
 
     return { items };
+  }
+
+  /** Run the retention auto-purge for one tenant now (manual trigger). */
+  async purgeNow(tenantId: string) {
+    const [settings] = await this.db
+      .select({ days: tenantSettings.archiveRetentionDays })
+      .from(tenantSettings)
+      .where(eq(tenantSettings.tenantId, tenantId));
+    const days = settings?.days ?? 0;
+    return purgeArchivedForTenant(this.db, tenantId, days);
   }
 }

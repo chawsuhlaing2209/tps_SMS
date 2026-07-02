@@ -173,6 +173,9 @@ export const tenantSettings = pgTable(
     branding: jsonb("branding").$type<Record<string, unknown>>().default({}).notNull(),
     receiptPrefix: text("receipt_prefix").default("RCPT").notNull(),
     invoicePrefix: text("invoice_prefix").default("INV").notNull(),
+    // Archive retention: auto-purge archived records older than N days.
+    // NULL or 0 disables auto-purge (records stay archived until manually deleted).
+    archiveRetentionDays: integer("archive_retention_days"),
     ...actorFields,
     ...timestamps
   },

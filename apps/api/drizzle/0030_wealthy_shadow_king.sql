@@ -1,0 +1,1 @@
+ALTER TABLE "tenant_settings" ADD COLUMN "archive_retention_days" integer;

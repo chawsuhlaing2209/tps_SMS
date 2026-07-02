@@ -64,7 +64,7 @@ Permanent delete and even archive must respect relationships:
 
 ## 3. Phased build plan
 
-**Progress:** Phase 0 ✅ · Phase 1 (students) ✅ · Phase 2 (academics) ✅ · Phase 3a (teachers/staff) ✅ · Phase 3b (finance/payroll/salary/enrollments) ✅ · Phase 4 pending.
+**Progress:** Phase 0 ✅ · Phase 1 (students) ✅ · Phase 2 (academics) ✅ · Phase 3a (teachers/staff) ✅ · Phase 3b (finance/payroll/salary/enrollments) ✅ · Phase 4 (bulk / recycle bin / retention) ✅. **All phases complete.**
 
 **Phase 0 — Foundation (shared primitives)** ✅
 - Add `archivedAt`/`archivedBy` columns where missing (migration).
@@ -85,8 +85,10 @@ Permanent delete and even archive must respect relationships:
 - **3b Finance / Salary / Payroll / Enrollments ✅** — archive-only per the split-model decision. Standardized `reactivate → restore` (deprecated aliases kept) for finance fee-items, salary components, payroll pay-components. Reviewed the existing hard-delete routes: all are already appropriately guarded and do **not** hard-delete financial/academic history — `deleteEnrollment` is draft-only (blocks if invoiced/confirmed), `removeStudentService` is a soft-end (`effectiveTo`), `deletePayComponent`/`deleteFeeItem` are two-step (archived-first) + assignment-guarded. No deletes added or removed; invoices/payments/payroll records remain non-deletable, using void/cancel/refund states.
   - Follow-up ✅ — the `discounts` module `reactivate` route was also renamed to `restore` (deprecated alias kept), completing the system-wide verb standardization.
 
-**Phase 4 — Polish**
-- Bulk archive/restore, an optional tenant-wide "Recycle bin" / archived dashboard, optional retention/auto-purge policy.
+**Phase 4 — Polish** ✅
+- **Bulk archive/restore ✅** — opt-in row selection on the shared DataTable + a bulk action bar; bulk-archive/bulk-restore endpoints for students & staff (idempotent, capped at 200).
+- **Global recycle bin ✅** — `archive` module aggregates archived records across modules; `/dashboard/archive` page with per-row restore + guarded permanent-delete; admin sidebar entry.
+- **Retention / auto-purge ✅** — `tenant_settings.archiveRetentionDays` (null/0 = off); a shared purge runner deletes archived students/staff older than the window, skipping any with financial/academic dependents and writing an "auto-purge" audit tombstone; manual `POST archive/purge` trigger + a daily BullMQ repeatable job (03:00) on a new `maintenance` queue.
 
 ---
 
