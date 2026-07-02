@@ -16,9 +16,11 @@ type Props = {
   pkg: BenefitPackageRecord;
   onEdit: (pkg: BenefitPackageRecord) => void;
   onArchive?: (pkg: BenefitPackageRecord) => void;
+  onRestore?: (pkg: BenefitPackageRecord) => void;
+  onDelete?: (pkg: BenefitPackageRecord) => void;
 };
 
-export function BenefitPackageCard({ pkg, onEdit, onArchive }: Props) {
+export function BenefitPackageCard({ pkg, onEdit, onArchive, onRestore, onDelete }: Props) {
   const t = useTranslations("salary");
   const c = useTranslations("common");
   const tone = benefitIconTone(pkg.icon);
@@ -70,6 +72,27 @@ export function BenefitPackageCard({ pkg, onEdit, onArchive }: Props) {
                       icon: "archive",
                       destructive: true,
                       onSelect: () => onArchive(pkg)
+                    }
+                  ]
+                : []),
+              ...(!isActive && onRestore
+                ? [
+                    {
+                      id: "restore",
+                      label: c("restore"),
+                      icon: "restore",
+                      onSelect: () => onRestore(pkg)
+                    }
+                  ]
+                : []),
+              ...(!isActive && onDelete
+                ? [
+                    {
+                      id: "delete",
+                      label: c("deletePermanently"),
+                      icon: "delete_forever",
+                      destructive: true,
+                      onSelect: () => onDelete(pkg)
                     }
                   ]
                 : [])

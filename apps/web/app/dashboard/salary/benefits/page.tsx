@@ -1,6 +1,7 @@
 "use client";
 
 import { IconTagControl } from "../../../../components/pds/composites/icon-tag";
+import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
 import { formatMMK } from "../../../lib/money";
 import { StatCard, StatGrid } from "../../../../components/shared/stat-card";
 import { useTranslations } from "next-intl";
@@ -63,6 +64,8 @@ export default function SalaryBenefitsPage() {
   const [incentiveFormOpen, setIncentiveFormOpen] = useState(false);
   const [incentiveFormMode, setIncentiveFormMode] = useState<"create" | "edit">("create");
   const [editingIncentive, setEditingIncentive] = useState<IncentiveProgramRecord | null>(null);
+  const [deletingPackage, setDeletingPackage] = useState<BenefitPackageRecord | null>(null);
+  const [deletingIncentive, setDeletingIncentive] = useState<IncentiveProgramRecord | null>(null);
 
   const packages = useApiQuery<BenefitPackageRecord[]>(
     canManage ? PACKAGES_PATH : () => null
@@ -114,6 +117,22 @@ export default function SalaryBenefitsPage() {
     { invalidatePaths: (_b, tenant) => [PACKAGES_PATH(tenant)] }
   );
 
+  const restorePackage = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({
+      path: `${PACKAGES_PATH(tenant)}/${id}/restore`,
+      init: { method: "POST" }
+    }),
+    { invalidatePaths: (_b, tenant) => [PACKAGES_PATH(tenant)] }
+  );
+
+  const deletePackage = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({
+      path: `${PACKAGES_PATH(tenant)}/${id}`,
+      init: { method: "DELETE" }
+    }),
+    { invalidatePaths: (_b, tenant) => [PACKAGES_PATH(tenant)] }
+  );
+
   const createIncentive = useApiMutation<Record<string, unknown>>(
     (body, tenant) => ({
       path: INCENTIVES_PATH(tenant),
@@ -126,6 +145,30 @@ export default function SalaryBenefitsPage() {
     ({ id, ...body }, tenant) => ({
       path: `${INCENTIVES_PATH(tenant)}/${id}`,
       init: { method: "PATCH", body: JSON.stringify(body) }
+    }),
+    { invalidatePaths: (_b, tenant) => [INCENTIVES_PATH(tenant)] }
+  );
+
+  const archiveIncentive = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({
+      path: `${INCENTIVES_PATH(tenant)}/${id}/archive`,
+      init: { method: "POST" }
+    }),
+    { invalidatePaths: (_b, tenant) => [INCENTIVES_PATH(tenant)] }
+  );
+
+  const restoreIncentive = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({
+      path: `${INCENTIVES_PATH(tenant)}/${id}/restore`,
+      init: { method: "POST" }
+    }),
+    { invalidatePaths: (_b, tenant) => [INCENTIVES_PATH(tenant)] }
+  );
+
+  const deleteIncentive = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({
+      path: `${INCENTIVES_PATH(tenant)}/${id}`,
+      init: { method: "DELETE" }
     }),
     { invalidatePaths: (_b, tenant) => [INCENTIVES_PATH(tenant)] }
   );
@@ -237,6 +280,12 @@ export default function SalaryBenefitsPage() {
                   void packages.refetch();
                 })
               }
+              onRestore={(record) =>
+                void restorePackage.mutateAsync({ id: record.id }).then(() => {
+                  void packages.refetch();
+                })
+              }
+              onDelete={(record) => setDeletingPackage(record)}
             />
           ))}
         </div>
@@ -259,6 +308,17 @@ export default function SalaryBenefitsPage() {
                 <IncentiveProgramsTable
                   programs={incentives.data ?? []}
                   onEdit={(program) => openIncentiveForm("edit", program)}
+                  onArchive={(program) =>
+                    void archiveIncentive.mutateAsync({ id: program.id }).then(() => {
+                      void incentives.refetch();
+                    })
+                  }
+                  onRestore={(program) =>
+                    void restoreIncentive.mutateAsync({ id: program.id }).then(() => {
+                      void incentives.refetch();
+                    })
+                  }
+                  onDelete={(program) => setDeletingIncentive(program)}
                 />
               </TablePanelBody>
             </section>
@@ -297,6 +357,44 @@ export default function SalaryBenefitsPage() {
             await createIncentive.mutateAsync(payload);
           }
           setIncentiveFormOpen(false);
+          void incentives.refetch();
+        }}
+      />
+
+      <ConfirmDialog
+        open={deletingPackage !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeletingPackage(null);
+        }}
+        title={t("deletePackageTitle")}
+        description={t("deletePackageHelp", { name: deletingPackage?.name ?? "" })}
+        confirmLabel={c("deletePermanently")}
+        cancelLabel={c("cancel")}
+        destructive
+        loading={deletePackage.isPending}
+        onConfirm={async () => {
+          if (!deletingPackage) return;
+          await deletePackage.mutateAsync({ id: deletingPackage.id });
+          setDeletingPackage(null);
+          void packages.refetch();
+        }}
+      />
+
+      <ConfirmDialog
+        open={deletingIncentive !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeletingIncentive(null);
+        }}
+        title={t("deleteIncentiveTitle")}
+        description={t("deleteIncentiveHelp", { name: deletingIncentive?.name ?? "" })}
+        confirmLabel={c("deletePermanently")}
+        cancelLabel={c("cancel")}
+        destructive
+        loading={deleteIncentive.isPending}
+        onConfirm={async () => {
+          if (!deletingIncentive) return;
+          await deleteIncentive.mutateAsync({ id: deletingIncentive.id });
+          setDeletingIncentive(null);
           void incentives.refetch();
         }}
       />

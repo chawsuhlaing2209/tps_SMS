@@ -1805,7 +1805,11 @@
       "aya_pay": "AYA Pay",
       "cb_pay": "CB Pay",
       "other": "Other"
-    }
+    },
+    "deletePackageTitle": "Delete benefit package permanently?",
+    "deletePackageHelp": "This permanently removes “{name}” and cannot be undone. Packages with staff enrolments cannot be deleted — keep them archived instead.",
+    "deleteIncentiveTitle": "Delete incentive program permanently?",
+    "deleteIncentiveHelp": "This permanently removes “{name}” and cannot be undone. Programs with eligible staff cannot be deleted — keep them archived instead."
   },
   "settings": {
     "description": "School configuration, access control, and role permissions.",
