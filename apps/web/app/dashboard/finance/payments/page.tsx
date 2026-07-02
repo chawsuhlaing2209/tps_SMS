@@ -2,10 +2,11 @@
 import { FormInput, TextAreaInput } from "../../../../components/shared/form-input";
 
 import { useTranslations } from "next-intl";
-import { TrailLink } from "../../../../components/shared/trail-link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useApiMutation, useLiveApiQuery } from "../../../lib/api";
+import { appendNavigationTrail } from "../../../lib/navigation-trail";
 import { formatMMK } from "../../../lib/money";
 import { useDashPageTitleActionsTarget } from "../../dashboard-page-title";
 import { fetchAllPaginated } from "../../../lib/export-csv";
@@ -21,6 +22,7 @@ import { FinanceTableShell } from "../finance-table-shell";
 import { formatBillingMonth, formatCreatedAt } from "../format-finance";
 import { PdsSearchBar, PdsSearchFiltersRow, SegmentedControl } from "../../../../components/pds";
 import { ExportCsvButton } from "../../../../components/shared/export-csv-button";
+import { RowMoreActionsMenu, type RowMoreActionItem } from "../../../../components/shared/row-more-actions";
 
 type PaymentRow = {
   id: string;
@@ -168,6 +170,7 @@ export default function PaymentsPage() {
   const tPay = useTranslations("enrollments");
   const nav = useTranslations("nav");
   const c = useTranslations("common");
+  const router = useRouter();
 
   const currentYear = useCurrentAcademicYear();
   const academicYearId = currentYear.data?.id ?? "";
@@ -435,39 +438,48 @@ export default function PaymentsPage() {
                       </div>
                     </td>
                     <td className="padauk-table__actions">
-                      <div className="table-row-actions">
-                        {!row.verifiedAt ? (
-                          <button
-                            type="button"
-                            className="pds-type-body-s-semibold table-row-action table-row-action--primary"
-                            disabled={verify.isPending}
-                            onClick={() => openVerify(row)}
-                          >
-                            {tFinance("verifyPaymentNow")}
-                          </button>
-                        ) : null}
-                        {row.kind === "payment" &&
-                        row.verifiedAt &&
-                        (row.refundableAmount ?? 0) > 0 ? (
-                          <button
-                            type="button"
-                            className="pds-type-body-s-semibold table-row-action"
-                            onClick={() => openRefund(row)}
-                          >
-                            {tFinance("refundPayment")}
-                          </button>
-                        ) : null}
-                        {row.invoiceId ? (
-                          <TrailLink
-                            href={`/dashboard/finance/invoices/${row.invoiceId}`}
-                            className="pds-type-body-s-semibold table-row-action"
-                            from={{ label: t("title"), href: "/dashboard/finance/payments" }}
-                          >
-                            <Icon name="visibility" size={16} />
-                            {t("viewInvoice")}
-                          </TrailLink>
-                        ) : null}
-                      </div>
+                      {(() => {
+                        const items: RowMoreActionItem[] = [];
+                        if (!row.verifiedAt) {
+                          items.push({
+                            id: "verify",
+                            label: tFinance("verifyPaymentNow"),
+                            icon: "verified",
+                            disabled: verify.isPending,
+                            onSelect: () => openVerify(row)
+                          });
+                        }
+                        if (
+                          row.kind === "payment" &&
+                          row.verifiedAt &&
+                          (row.refundableAmount ?? 0) > 0
+                        ) {
+                          items.push({
+                            id: "refund",
+                            label: tFinance("refundPayment"),
+                            icon: "undo",
+                            onSelect: () => openRefund(row)
+                          });
+                        }
+                        if (row.invoiceId) {
+                          items.push({
+                            id: "invoice",
+                            label: t("viewInvoice"),
+                            icon: "visibility",
+                            onSelect: () => {
+                              appendNavigationTrail({
+                                label: t("title"),
+                                href: "/dashboard/finance/payments"
+                              });
+                              router.push(`/dashboard/finance/invoices/${row.invoiceId}`);
+                            }
+                          });
+                        }
+                        if (!items.length) {
+                          return <span className="muted">—</span>;
+                        }
+                        return <RowMoreActionsMenu ariaLabel={c("moreActions")} items={items} />;
+                      })()}
                     </td>
                   </tr>
                 );

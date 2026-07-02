@@ -7775,6 +7775,7 @@ button.btn-hero-outline:hover {
 .fees-page {
   display: grid;
   gap: var(--pds-gap-large);
+  min-width: 0;
 }.fees-view-toggle {
   border-bottom: 1px solid var(--pds-border-color-primary);
   display: flex;
