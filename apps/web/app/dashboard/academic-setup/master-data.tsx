@@ -61,7 +61,7 @@ export function useMasterDataResource<T extends StatusRecord = StatusRecord>(res
 
   const reactivate = useApiMutation<{ id: string }>(
     ({ id }, tenantId) => ({
-      path: `${path(tenantId)}/${id}/reactivate`,
+      path: `${path(tenantId)}/${id}/restore`,
       init: { method: "POST" }
     }),
     { invalidatePaths: (_body, tenantId) => [path(tenantId)] }

@@ -64,19 +64,21 @@ Permanent delete and even archive must respect relationships:
 
 ## 3. Phased build plan
 
-**Phase 0 — Foundation (shared primitives)**
+**Progress:** Phase 0 ✅ · Phase 1 (students) ✅ · Phase 2 (academics) ✅ · Phase 3–4 pending.
+
+**Phase 0 — Foundation (shared primitives)** ✅
 - Add `archivedAt`/`archivedBy` columns where missing (migration).
 - Create a shared backend helper/mixin for archive/restore/permanent-delete + the `view` query contract.
 - Build the reusable web `ArchivedFilter` + actions (generalize `MasterDataPanel`).
 - Define the audit + tombstone convention.
 - Add i18n keys (restore, deletePermanently, archived-view labels) to both locales.
 
-**Phase 1 — Students** (highest-visibility gap; user explicitly hit it)
+**Phase 1 — Students** ✅ (highest-visibility gap; user explicitly hit it)
 - Add archived list/filter, `restore`, and guarded `permanent-delete` to students.
 - Dependency guard: block delete when the student has invoices/payments/enrollment history (recommend archive-only for students with financial history).
 
-**Phase 2 — Academics parity cleanup**
-- Rename `reactivate → restore` (alias old route), add permanent-delete with dependency guards (block grade delete if sections/students exist).
+**Phase 2 — Academics parity cleanup** ✅
+- Renamed `reactivate → restore` for grades/sections/subjects/academic-years (legacy `reactivate` routes kept as deprecated aliases), added guarded permanent-delete for grades/sections/subjects (two-step: archive first; block-on-dependents + FK-violation fallback). Academic years remain lifecycle-only (no hard delete).
 
 **Phase 3 — Finance, Salary, Payroll, Teachers, Enrollments**
 - Apply the shared contract. Decide per-entity whether permanent-delete is allowed or archive-only (retention). Likely archive-only for invoices/payments/payroll/report-cards.

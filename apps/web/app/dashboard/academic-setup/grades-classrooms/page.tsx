@@ -118,6 +118,7 @@ export default function GradesClassroomsPage() {
   const [gradeFormMode, setGradeFormMode] = useState<GradeFormMode | null>(null);
   const [roomFormMode, setRoomFormMode] = useState<RoomFormMode | null>(null);
   const [deletingGrade, setDeletingGrade] = useState<GradeOverview | null>(null);
+  const [permanentDeleteGrade, setPermanentDeleteGrade] = useState<GradeOverview | null>(null);
   const [deletingRoom, setDeletingRoom] = useState<ClassroomOverview | null>(null);
   const [archiveVisibility, setArchiveVisibility] = useState<ArchiveVisibility>("active");
 
@@ -262,10 +263,21 @@ export default function GradesClassroomsPage() {
     }
   );
 
-  const reactivateGrade = useApiMutation<{ id: string }>(
+  const restoreGrade = useApiMutation<{ id: string }>(
     ({ id }, tenant) => ({
-      path: `${GRADES_PATH(tenant)}/${id}/reactivate`,
+      path: `${GRADES_PATH(tenant)}/${id}/restore`,
       init: { method: "POST" }
+    }),
+    {
+      invalidatePaths: (_b, tenant) =>
+        contextYearId ? invalidatePaths(tenant, contextYearId) : [GRADES_PATH(tenant)]
+    }
+  );
+
+  const deleteGrade = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({
+      path: `${GRADES_PATH(tenant)}/${id}`,
+      init: { method: "DELETE" }
     }),
     {
       invalidatePaths: (_b, tenant) =>
@@ -499,13 +511,20 @@ export default function GradesClassroomsPage() {
                       selectedGradeArchived
                         ? [
                             {
-                              id: "reactivate",
-                              label: c("reactivate"),
+                              id: "restore",
+                              label: c("restore"),
                               icon: "unarchive",
                               onSelect: async () => {
-                                await reactivateGrade.mutateAsync({ id: selectedGrade.id });
+                                await restoreGrade.mutateAsync({ id: selectedGrade.id });
                                 toastSuccess(t("gradeReactivated"));
                               }
+                            },
+                            {
+                              id: "deleteForever",
+                              label: c("deletePermanently"),
+                              icon: "delete_forever",
+                              destructive: true,
+                              onSelect: () => setPermanentDeleteGrade(selectedGrade)
                             }
                           ]
                         : [
@@ -861,6 +880,27 @@ export default function GradesClassroomsPage() {
           await archiveGrade.mutateAsync({ id: deletingGrade.id });
           setDeletingGrade(null);
           if (selectedGradeId === deletingGrade.id) {
+            setSelectedGradeId(null);
+          }
+        }}
+      />
+
+      <ConfirmDialog
+        open={permanentDeleteGrade !== null}
+        onOpenChange={(open) => {
+          if (!open) setPermanentDeleteGrade(null);
+        }}
+        title={t("deleteGradeTitle")}
+        description={t("deleteGradeHelp", { name: permanentDeleteGrade?.name ?? "" })}
+        confirmLabel={c("deletePermanently")}
+        destructive
+        loading={deleteGrade.isPending}
+        onConfirm={async () => {
+          if (!permanentDeleteGrade) return;
+          await deleteGrade.mutateAsync({ id: permanentDeleteGrade.id });
+          const removedId = permanentDeleteGrade.id;
+          setPermanentDeleteGrade(null);
+          if (selectedGradeId === removedId) {
             setSelectedGradeId(null);
           }
         }}
