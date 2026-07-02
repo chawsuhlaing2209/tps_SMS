@@ -46,8 +46,6 @@ function formatMoney(value: number): string {
   return formatMMK(value);
 }
 
-const DEFAULT_CURRENCY = "MMK";
-
 function serviceIcon(name: string) {
   const lower = name.toLowerCase();
   if (lower.includes("transport") || lower.includes("bus")) {
@@ -162,13 +160,11 @@ export function StudentRecurrentBillingPanel({
             layout
             label={f("totalOutstanding")}
             value={formatMoney(data.totalOutstanding)}
-            hint={DEFAULT_CURRENCY}
           />
           <StatCard
             dark
             label={f("totalPaid")}
             value={formatMoney(data.totalPaid)}
-            hint={DEFAULT_CURRENCY}
           />
         </StatGrid>
 
@@ -215,9 +211,6 @@ export function StudentRecurrentBillingPanel({
                 <div className="student-recurrent-billing__invoice-amount">
                   <span className="pds-type-title-xxs-extrabold student-recurrent-billing__invoice-amount-value">
                     {formatMoney(Number(invoice.total))}
-                  </span>
-                  <span className="pds-type-body-s-regular student-recurrent-billing__invoice-amount-currency">
-                    {DEFAULT_CURRENCY}
                   </span>
                 </div>
                 <div className="student-recurrent-billing__invoice-actions">
