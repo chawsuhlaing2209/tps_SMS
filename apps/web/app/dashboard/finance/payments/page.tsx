@@ -537,7 +537,7 @@ export default function PaymentsPage() {
             <div className="verify-summary__row">
               <dt className="pds-type-body-s-regular muted">{tFinance("paidAt")}</dt>
               <dd className="pds-type-body-m-medium">
-                {verifyTarget.paidAt ? new Date(verifyTarget.paidAt).toLocaleString() : "—"}
+                {formatCreatedAt(verifyTarget.paidAt)}
               </dd>
             </div>
           </dl>

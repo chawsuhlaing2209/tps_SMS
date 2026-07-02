@@ -2825,7 +2825,7 @@
     "badgeFixed": "ပုံသေ",
     "valueTiered": "အဆင့်လိုက်",
     "valuePercent": "{percent}% လျှော့",
-    "valueFixed": "{amount} MMK",
+    "valueFixed": "{amount}",
     "scopeLine": "{fees} ကိစ္စရပ် · {grades}",
     "specificGrades": "အတန်း {count}",
     "scopeBadgeFees": "{count} fee components",

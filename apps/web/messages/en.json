@@ -2826,7 +2826,7 @@
     "badgeFixed": "Fixed",
     "valueTiered": "Tiered",
     "valuePercent": "{percent}% off",
-    "valueFixed": "{amount} MMK",
+    "valueFixed": "{amount}",
     "scopeLine": "{fees} components · {grades}",
     "specificGrades": "{count} grades",
     "scopeBadgeFees": "{count} fee components",

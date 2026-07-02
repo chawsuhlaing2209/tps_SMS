@@ -73,7 +73,7 @@ function ruleValueLabel(rule: DiscountRuleRecord, t: (key: string, values?: Reco
     return t("valueTiered");
   }
   if (rule.valueType === "fixed") {
-    return t("valueFixed", { amount: Number(rule.value).toLocaleString() });
+    return t("valueFixed", { amount: formatMMK(Number(rule.value)) });
   }
   return t("valuePercent", { percent: Math.round(Number(rule.value)) });
 }

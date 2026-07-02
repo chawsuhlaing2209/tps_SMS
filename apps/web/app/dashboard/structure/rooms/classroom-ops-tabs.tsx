@@ -21,6 +21,7 @@ import { RecordFormSheet } from "../../../lib/record-sheet";
 import { TablePanelBody } from "../../../lib/table-panel";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
 import { WorkspaceLoading } from "../../../lib/workspace-loading";
+import { formatCreatedAt } from "../../finance/format-finance";
 
 const EnrollmentWizard = dynamic(
   () => import("../../enrollments/enrollment-wizard").then((module) => module.EnrollmentWizard),
@@ -232,7 +233,7 @@ export function ClassroomOpsTabs({
       id: "submitted",
       header: t("submitted"),
       accessorFn: (row) =>
-        row.submittedAt ? new Date(row.submittedAt).toLocaleString() : t("notSubmitted")
+        row.submittedAt ? formatCreatedAt(row.submittedAt) : t("notSubmitted")
     },
     {
       id: "actions",
@@ -620,7 +621,7 @@ function ClassroomOpsExportPortal({
             date: session.sessionDate,
             subject: subjectName(session.subjectId),
             submitted: session.submittedAt
-              ? new Date(session.submittedAt).toLocaleString()
+              ? formatCreatedAt(session.submittedAt)
               : t("notSubmitted")
           }))
         };

@@ -9,6 +9,7 @@ import { Icon } from "../../lib/material-icon";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { StatusBadge } from "../../../components/shared/badge";
 import { formatReceiptAmount } from "./receipt-document";
+import { formatCreatedAt } from "./format-finance";
 
 export type InvoicePaymentRow = {
   id: string;
@@ -28,11 +29,6 @@ const METHOD_ICONS: Record<string, string> = {
   bank_transfer: "account_balance",
   cash: "payments"
 };
-
-function formatDateTime(value: string | null) {
-  if (!value) return "—";
-  return new Date(value).toLocaleString();
-}
 
 export function InvoiceVerifyPayments({
   invoiceId,
@@ -95,7 +91,7 @@ export function InvoiceVerifyPayments({
                 <StatusBadge status="pending" label={t("pendingVerification")} />
               </div>
               <p className="pds-type-body-s-regular muted invoice-doc__verify-meta">
-                {t("paidAt")}: {formatDateTime(payment.paidAt)}
+                {t("paidAt")}: {formatCreatedAt(payment.paidAt)}
                 {payment.referenceNumber ? (
                   <>
                     {" "}
@@ -178,7 +174,7 @@ export function InvoiceVerifyPayments({
               </div>
               <div className="verify-summary__row">
                 <dt className="pds-type-body-s-regular muted">{t("paidAt")}</dt>
-                <dd className="pds-type-body-m-medium">{formatDateTime(target.paidAt)}</dd>
+                <dd className="pds-type-body-m-medium">{formatCreatedAt(target.paidAt)}</dd>
               </div>
             </dl>
           ) : null}
