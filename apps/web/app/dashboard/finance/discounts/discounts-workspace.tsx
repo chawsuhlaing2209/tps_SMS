@@ -163,7 +163,7 @@ export function DiscountsWorkspace() {
 
   const activateRule = useApiMutation<{ id: string }>(
     ({ id }, tenant) => ({
-      path: `${RULES_PATH(tenant)}/${id}/reactivate`,
+      path: `${RULES_PATH(tenant)}/${id}/restore`,
       init: { method: "POST" }
     }),
     { invalidatePaths: (_b, tenant) => [RULES_PATH(tenant), METRICS_PATH(tenant, academicYearId)] }

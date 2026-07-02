@@ -281,7 +281,7 @@ export class DiscountsService {
     return enrichRule(rule!);
   }
 
-  async reactivateDiscountRule(tenantId: string, ruleId: string, actorUserId: string) {
+  async restoreDiscountRule(tenantId: string, ruleId: string, actorUserId: string) {
     const previous = await this.getDiscountRuleOrThrow(tenantId, ruleId);
 
     const [rule] = await this.db
@@ -293,7 +293,7 @@ export class DiscountsService {
     await this.auditService.recordEvent({
       tenantId,
       actorUserId,
-      action: "discount_rule.reactivate",
+      action: "discount_rule.restore",
       recordType: "DiscountRule",
       recordId: ruleId,
       before: { status: previous.status },
@@ -301,6 +301,11 @@ export class DiscountsService {
     });
 
     return enrichRule(rule!);
+  }
+
+  /** @deprecated Use {@link restoreDiscountRule}. Kept for the legacy /reactivate route. */
+  async reactivateDiscountRule(tenantId: string, ruleId: string, actorUserId: string) {
+    return this.restoreDiscountRule(tenantId, ruleId, actorUserId);
   }
 
   listStudentDiscounts(tenantId: string, query: ListStudentDiscountsQueryDto) {

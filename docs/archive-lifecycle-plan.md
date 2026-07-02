@@ -83,7 +83,7 @@ Permanent delete and even archive must respect relationships:
 **Phase 3 — Finance, Salary, Payroll, Teachers, Enrollments**
 - **3a Teachers/staff ✅** — full lifecycle (archivedAt orthogonal to employment status; archive/restore/guarded permanent-delete; Active|Archived|All directory filter; archived badge). Delete blocks on teaching/timetable/salary/payroll, cascades owned compensation config, FK-violation fallback.
 - **3b Finance / Salary / Payroll / Enrollments ✅** — archive-only per the split-model decision. Standardized `reactivate → restore` (deprecated aliases kept) for finance fee-items, salary components, payroll pay-components. Reviewed the existing hard-delete routes: all are already appropriately guarded and do **not** hard-delete financial/academic history — `deleteEnrollment` is draft-only (blocks if invoiced/confirmed), `removeStudentService` is a soft-end (`effectiveTo`), `deletePayComponent`/`deleteFeeItem` are two-step (archived-first) + assignment-guarded. No deletes added or removed; invoices/payments/payroll records remain non-deletable, using void/cancel/refund states.
-  - Note: the `discounts` module also has a `reactivate` route (out of the finance/salary/payroll scope) — a candidate for the same rename in a follow-up.
+  - Follow-up ✅ — the `discounts` module `reactivate` route was also renamed to `restore` (deprecated alias kept), completing the system-wide verb standardization.
 
 **Phase 4 — Polish**
 - Bulk archive/restore, an optional tenant-wide "Recycle bin" / archived dashboard, optional retention/auto-purge policy.

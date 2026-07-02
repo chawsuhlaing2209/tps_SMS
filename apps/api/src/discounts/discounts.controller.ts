@@ -62,6 +62,17 @@ export class DiscountsController {
     return this.discountsService.archiveDiscountRule(tenantId, ruleId, actorUserId);
   }
 
+  @Post("rules/:ruleId/restore")
+  @RequirePermissions("discount.approve")
+  restoreDiscountRule(
+    @Param("tenantId") tenantId: string,
+    @Param("ruleId") ruleId: string,
+    @Headers("x-user-id") actorUserId: string
+  ) {
+    return this.discountsService.restoreDiscountRule(tenantId, ruleId, actorUserId);
+  }
+
+  /** @deprecated Use POST rules/:ruleId/restore. */
   @Post("rules/:ruleId/reactivate")
   @RequirePermissions("discount.approve")
   reactivateDiscountRule(
@@ -69,7 +80,7 @@ export class DiscountsController {
     @Param("ruleId") ruleId: string,
     @Headers("x-user-id") actorUserId: string
   ) {
-    return this.discountsService.reactivateDiscountRule(tenantId, ruleId, actorUserId);
+    return this.discountsService.restoreDiscountRule(tenantId, ruleId, actorUserId);
   }
 
   @Get("student-discounts")
