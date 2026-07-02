@@ -16,6 +16,7 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import { RequireAnyPermissions, RequirePermissions } from "../identity/permissions.decorator.js";
 import { PermissionsGuard } from "../identity/permissions.guard.js";
 import {
+  BulkIdsDto,
   CreateGuardianDto,
   CreateStudentDto,
   CreateStudentFamilyGroupDto,
@@ -255,6 +256,26 @@ export class StudentsController {
     @Headers("x-user-id") actorUserId?: string
   ) {
     return this.studentsService.withdraw(tenantId, studentId, actorUserId, dto);
+  }
+
+  @Post("bulk-archive")
+  @RequirePermissions("student.manage")
+  bulkArchive(
+    @Param("tenantId") tenantId: string,
+    @Body() dto: BulkIdsDto,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.studentsService.bulkArchive(tenantId, dto.ids, actorUserId);
+  }
+
+  @Post("bulk-restore")
+  @RequirePermissions("student.manage")
+  bulkRestore(
+    @Param("tenantId") tenantId: string,
+    @Body() dto: BulkIdsDto,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.studentsService.bulkRestore(tenantId, dto.ids, actorUserId);
   }
 
   @Post(":studentId/archive")

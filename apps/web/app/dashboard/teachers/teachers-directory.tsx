@@ -8,7 +8,9 @@ import { PdsSearchBar, PdsSearchFiltersRow, PdsSelectField } from "../../../comp
 import { StatusBadge } from "../../../components/shared/badge";
 import { Chip, ChipGroup } from "../../../components/shared/chip";
 import { ExportCsvButton } from "../../../components/shared/export-csv-button";
-import { useApiQuery } from "../../lib/api";
+import { useApiMutation, useApiQuery } from "../../lib/api";
+import { BulkArchiveBar, buildRowSelection, useRowSelection } from "../../lib/bulk-selection";
+import { toastSuccess } from "../../lib/toast";
 import { useDashPageTitleActionsTarget } from "../dashboard-page-title";
 import { fetchAllPaginated } from "../../lib/export-csv";
 import { DataTable, DirectoryMemberCell } from "../../lib/data-table";
@@ -105,6 +107,34 @@ export function TeachersDirectory() {
   );
 
   const teachers = useApiQuery<StaffOverviewPage>(canView ? queryPath : () => null);
+  const selection = useRowSelection();
+  const STAFF_PATH = (tenant: string) => `/tenants/${tenant}/hr/staff`;
+
+  const bulkArchive = useApiMutation<{ ids: string[] }, { archived: number }>(
+    (body, tenant) => ({
+      path: `${STAFF_PATH(tenant)}/bulk-archive`,
+      init: { method: "POST", body: JSON.stringify(body) }
+    })
+  );
+  const bulkRestore = useApiMutation<{ ids: string[] }, { restored: number }>(
+    (body, tenant) => ({
+      path: `${STAFF_PATH(tenant)}/bulk-restore`,
+      init: { method: "POST", body: JSON.stringify(body) }
+    })
+  );
+
+  async function runBulkArchive() {
+    const res = await bulkArchive.mutateAsync({ ids: [...selection.selected] });
+    toastSuccess(c("bulkArchived", { count: res.archived }));
+    selection.clear();
+    void teachers.refetch();
+  }
+  async function runBulkRestore() {
+    const res = await bulkRestore.mutateAsync({ ids: [...selection.selected] });
+    toastSuccess(c("bulkRestored", { count: res.restored }));
+    selection.clear();
+    void teachers.refetch();
+  }
   const grades = useApiQuery<GradeOption[]>((tenant) =>
     canView ? `/tenants/${tenant}/academics/grades` : null
   );
@@ -239,6 +269,16 @@ export function TeachersDirectory() {
           }
         />
 
+        {canManageHr ? (
+          <BulkArchiveBar
+            count={selection.selected.size}
+            onArchive={viewFilter === "archived" ? undefined : () => void runBulkArchive()}
+            onRestore={viewFilter === "active" ? undefined : () => void runBulkRestore()}
+            onClear={selection.clear}
+            busy={bulkArchive.isPending || bulkRestore.isPending}
+          />
+        ) : null}
+
         <TablePanelBody
           loading={teachers.isLoading}
           error={teachers.isError ? c("somethingWrong") : null}
@@ -249,6 +289,11 @@ export function TeachersDirectory() {
             data={teachers.data?.data ?? []}
             getRowHref={(teacher) => `/dashboard/teachers/${teacher.id}`}
             navigationFrom={{ label: nav("teachers"), href: "/dashboard/teachers" }}
+            rowSelection={
+              canManageHr
+                ? buildRowSelection(teachers.data?.data ?? [], (row) => row.id, selection)
+                : undefined
+            }
           />
         </TablePanelBody>
       </DataTableSection>

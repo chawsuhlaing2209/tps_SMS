@@ -21,7 +21,7 @@
     "cancel": "မလုပ်တော့ပါ",
     "close": "ပိတ်မည်",
     "clear": "ရှင်းမည်",
-    "selectAll": "အားလုံး ရွေးမည်",
+    "selectAll": "အားလုံးရွေးရန်",
     "deselectAll": "အားလုံး မရွေးတော့",
     "checkboxListSelectedCount": "{total} ခုအနက် {selected} ခု ရွေးထားသည်",
     "checkboxListSelectedTotal": "ရွေးထားသော စုစုပေါင်း",
@@ -58,7 +58,12 @@
     "deletePermanently": "အပြီးဖျက်မည်",
     "viewActive": "အသုံးပြုဆဲ",
     "viewArchived": "ဖျောက်ထားပြီး",
-    "viewAll": "အားလုံး"
+    "viewAll": "အားလုံး",
+    "selectRow": "အတန်းရွေးရန်",
+    "selectedCount": "{count} ခု ရွေးထားသည်",
+    "clearSelection": "ရှင်းလင်းရန်",
+    "bulkArchived": "{count} ခု ဖျောက်ပြီး",
+    "bulkRestored": "{count} ခု ပြန်ယူပြီး"
   },
   "language": {
     "label": "ဘာသာစကား",

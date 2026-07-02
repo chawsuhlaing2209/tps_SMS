@@ -345,6 +345,32 @@ export class HrService {
     return updated!;
   }
 
+  /** Archive many staff at once. Returns how many were newly archived. */
+  async bulkArchiveStaff(tenantId: string, ids: string[], actorUserId?: string) {
+    let archived = 0;
+    for (const id of ids) {
+      const before = await this.getStaffOrThrow(tenantId, id);
+      if (!before.archivedAt) {
+        await this.archiveStaff(tenantId, id, actorUserId);
+        archived += 1;
+      }
+    }
+    return { archived };
+  }
+
+  /** Restore many staff at once. Returns how many were newly restored. */
+  async bulkRestoreStaff(tenantId: string, ids: string[], actorUserId?: string) {
+    let restored = 0;
+    for (const id of ids) {
+      const before = await this.getStaffOrThrow(tenantId, id);
+      if (before.archivedAt) {
+        await this.restoreStaff(tenantId, id, actorUserId);
+        restored += 1;
+      }
+    }
+    return { restored };
+  }
+
   /** Counts of teaching/operational/payroll records that block permanent deletion. */
   private async getStaffBlockingDependencies(tenantId: string, staffId: string) {
     const n = sql<number>`count(*)::int`;

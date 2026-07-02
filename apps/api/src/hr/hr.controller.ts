@@ -17,6 +17,7 @@ import {
 } from "../identity/permissions.decorator.js";
 import { PermissionsGuard } from "../identity/permissions.guard.js";
 import {
+  BulkIdsDto,
   CreateStaffDto,
   LinkStaffUserDto,
   ListStaffQueryDto,
@@ -105,6 +106,26 @@ export class HrController {
     @Headers("x-user-id") actorUserId?: string
   ) {
     return this.hrService.updateStaff(tenantId, staffId, actorUserId, dto);
+  }
+
+  @Post("staff/bulk-archive")
+  @RequirePermissions("hr.manage")
+  bulkArchiveStaff(
+    @Param("tenantId") tenantId: string,
+    @Body() dto: BulkIdsDto,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.hrService.bulkArchiveStaff(tenantId, dto.ids, actorUserId);
+  }
+
+  @Post("staff/bulk-restore")
+  @RequirePermissions("hr.manage")
+  bulkRestoreStaff(
+    @Param("tenantId") tenantId: string,
+    @Body() dto: BulkIdsDto,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.hrService.bulkRestoreStaff(tenantId, dto.ids, actorUserId);
   }
 
   @Post("staff/:staffId/archive")

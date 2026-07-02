@@ -8,7 +8,9 @@ import { type ColumnDef } from "@tanstack/react-table";
 import { PdsSearchBar, PdsSearchFiltersRow, PdsSelectField } from "../../../components/pds";
 import { StatusBadge } from "../../../components/shared/badge";
 import { ExportCsvButton } from "../../../components/shared/export-csv-button";
-import { useApiQuery } from "../../lib/api";
+import { useApiMutation, useApiQuery } from "../../lib/api";
+import { BulkArchiveBar, buildRowSelection, useRowSelection } from "../../lib/bulk-selection";
+import { toastSuccess } from "../../lib/toast";
 import { useDashPageTitleActionsTarget } from "../dashboard-page-title";
 import { fetchAllPaginated } from "../../lib/export-csv";
 import { DataTable, DirectoryMemberCell } from "../../lib/data-table";
@@ -78,6 +80,35 @@ export function StudentsDirectory() {
   };
 
   const students = useApiQuery<StudentList>(queryPath);
+  const selection = useRowSelection();
+
+  const bulkArchive = useApiMutation<{ ids: string[] }, { archived: number }>(
+    (body, tenant) => ({
+      path: `${STUDENTS_PATH(tenant)}/bulk-archive`,
+      init: { method: "POST", body: JSON.stringify(body) }
+    }),
+    { invalidatePaths: (_b, tenant) => [STUDENTS_PATH(tenant)] }
+  );
+  const bulkRestore = useApiMutation<{ ids: string[] }, { restored: number }>(
+    (body, tenant) => ({
+      path: `${STUDENTS_PATH(tenant)}/bulk-restore`,
+      init: { method: "POST", body: JSON.stringify(body) }
+    }),
+    { invalidatePaths: (_b, tenant) => [STUDENTS_PATH(tenant)] }
+  );
+
+  async function runBulkArchive() {
+    const res = await bulkArchive.mutateAsync({ ids: [...selection.selected] });
+    toastSuccess(c("bulkArchived", { count: res.archived }));
+    selection.clear();
+    void students.refetch();
+  }
+  async function runBulkRestore() {
+    const res = await bulkRestore.mutateAsync({ ids: [...selection.selected] });
+    toastSuccess(c("bulkRestored", { count: res.restored }));
+    selection.clear();
+    void students.refetch();
+  }
 
   const columns: ColumnDef<Student, unknown>[] = [
     {
@@ -189,6 +220,16 @@ export function StudentsDirectory() {
         }
       />
 
+      {canManage ? (
+        <BulkArchiveBar
+          count={selection.selected.size}
+          onArchive={viewFilter === "archived" ? undefined : () => void runBulkArchive()}
+          onRestore={viewFilter === "active" ? undefined : () => void runBulkRestore()}
+          onClear={selection.clear}
+          busy={bulkArchive.isPending || bulkRestore.isPending}
+        />
+      ) : null}
+
       <TablePanelBody
         variant="card-plain"
         loading={students.isLoading}
@@ -200,6 +241,11 @@ export function StudentsDirectory() {
           data={students.data?.data ?? []}
           getRowHref={(student) => `/dashboard/students/${student.id}`}
           navigationFrom={{ label: nav("students"), href: "/dashboard/people?tab=students" }}
+          rowSelection={
+            canManage
+              ? buildRowSelection(students.data?.data ?? [], (s) => s.id, selection)
+              : undefined
+          }
         />
       </TablePanelBody>
 

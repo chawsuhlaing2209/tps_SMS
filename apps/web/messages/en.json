@@ -58,7 +58,12 @@
     "deletePermanently": "Delete permanently",
     "viewActive": "Active",
     "viewArchived": "Archived",
-    "viewAll": "All"
+    "viewAll": "All",
+    "selectRow": "Select row",
+    "selectedCount": "{count} selected",
+    "clearSelection": "Clear",
+    "bulkArchived": "{count} archived",
+    "bulkRestored": "{count} restored"
   },
   "language": {
     "label": "Language",

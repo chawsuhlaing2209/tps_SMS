@@ -1,4 +1,7 @@
 import {
+  ArrayMaxSize,
+  ArrayNotEmpty,
+  IsArray,
   IsBoolean,
   IsDateString,
   IsEnum,
@@ -12,6 +15,15 @@ import {
   ValidateNested
 } from "class-validator";
 import { Type } from "class-transformer";
+
+/** Batch of record ids for bulk archive/restore actions. */
+export class BulkIdsDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(200)
+  @IsUUID("4", { each: true })
+  ids!: string[];
+}
 
 export class RegisterStudentGuardianDto {
   @IsOptional()
