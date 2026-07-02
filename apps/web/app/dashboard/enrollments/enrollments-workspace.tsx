@@ -18,6 +18,7 @@ import { WorkspaceLoading } from "../../lib/workspace-loading";
 import { PdsDatePickerField, PdsSearchFiltersRow, PdsSelectField } from "../../../components/pds";
 import { parseDayRangeValue, toDayValue } from "../../../components/pds/date-picker-utils";
 import { StatusBadge } from "../../../components/shared/badge";
+import { StatCard, StatGrid } from "../../../components/shared/stat-card";
 import { RowMoreActionsMenu } from "../../../components/shared/row-more-actions";
 import { ExportCsvButton } from "../../../components/shared/export-csv-button";
 import { CancelEnrollmentDialog } from "../students/cancel-enrollment-dialog";
@@ -113,6 +114,18 @@ export function EnrollmentsWorkspace({
     (tn) => `${ENROLLMENTS_PATH(tn)}${enrollmentsQuery}`
   );
 
+  type EnrollmentStats = {
+    total: number;
+    byStatus: Array<{ status: string; count: number }>;
+    byGrade: Array<{ gradeId: string; count: number }>;
+    byMonth: Array<{ month: string; count: number }>;
+  };
+  const stats = useApiQuery<EnrollmentStats>((tn) =>
+    workingYearId
+      ? `${ENROLLMENTS_PATH(tn)}/stats?academicYearId=${workingYearId}`
+      : `${ENROLLMENTS_PATH(tn)}/stats`
+  );
+
   // Grade + date-range filters are applied client-side over the fetched rows.
   const filteredEnrollments = useMemo(() => {
     let rows = enrollments.data ?? [];
@@ -143,6 +156,13 @@ export function EnrollmentsWorkspace({
   const yearName = (id: string) =>
     id === workingYearId ? (currentYear.data?.name ?? id) : id;
   const gradeName = (id: string) => grades.data?.find((g) => g.id === id)?.name ?? id;
+
+  const statusCount = (status: string) =>
+    stats.data?.byStatus.find((row) => row.status === status)?.count ?? 0;
+  const gradeBreakdown = (stats.data?.byGrade ?? [])
+    .map((row) => ({ ...row, name: gradeName(row.gradeId) }))
+    .sort((a, b) => b.count - a.count);
+  const maxGradeCount = Math.max(1, ...gradeBreakdown.map((row) => row.count));
 
   const openWizard = (draft: EnrollmentRow | null = null) => {
     setResumeDraft(draft);
@@ -199,6 +219,62 @@ export function EnrollmentsWorkspace({
         yearName={yearName}
         loading={enrollments.isLoading}
       />
+      {showStatusFilter ? (
+        <StatGrid className="enrollments-stat-grid">
+          <StatCard
+            accent
+            icon={<Icon name="school" size={18} />}
+            label={t("statTotal")}
+            value={stats.data?.total ?? 0}
+            hint={t("statTotalHint")}
+          />
+          <StatCard
+            icon={<Icon name="task_alt" size={18} />}
+            label={t("status_approved")}
+            value={statusCount("approved") + statusCount("published")}
+            hint={t("statConfirmedHint")}
+          />
+          <StatCard
+            icon={<Icon name="edit_note" size={18} />}
+            label={t("status_draft")}
+            value={statusCount("draft")}
+            hint={t("statDraftHint")}
+          />
+          <StatCard
+            icon={<Icon name="cancel" size={18} />}
+            label={t("status_cancelled")}
+            value={statusCount("cancelled") + statusCount("rejected")}
+            hint={t("statCancelledHint")}
+          />
+        </StatGrid>
+      ) : null}
+
+      {showStatusFilter && gradeBreakdown.length ? (
+        <section className="panel enrollments-breakdown-panel">
+          <p className="pds-type-title-xxs-extrabold enrollments-breakdown-panel__title">
+            {t("breakdownByGrade")}
+          </p>
+          <div className="enrollments-breakdown">
+            {gradeBreakdown.map((row) => (
+              <div key={row.gradeId} className="enrollments-breakdown__row">
+                <span className="pds-type-body-s-medium enrollments-breakdown__label">
+                  {row.name}
+                </span>
+                <span className="enrollments-breakdown__track" aria-hidden>
+                  <span
+                    className="enrollments-breakdown__bar"
+                    style={{ width: `${Math.round((row.count / maxGradeCount) * 100)}%` }}
+                  />
+                </span>
+                <span className="pds-type-body-s-semibold enrollments-breakdown__count">
+                  {row.count}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       {showStatusFilter ? (
         <PdsSearchFiltersRow
           filters={

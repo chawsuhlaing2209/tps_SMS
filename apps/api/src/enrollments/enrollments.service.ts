@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import type { EnrollmentConfirmInput } from "@sms/shared";
-import { and, eq, inArray, isNull, ne } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
 import {
@@ -117,6 +117,39 @@ export class EnrollmentsService {
     }
 
     return row;
+  }
+
+  /** Counts by status, grade, and month for the enrollments dashboard. */
+  async getEnrollmentStats(tenantId: string, academicYearId?: string) {
+    const filters = [eq(enrollments.tenantId, tenantId)];
+    if (academicYearId) {
+      filters.push(eq(enrollments.academicYearId, academicYearId));
+    }
+
+    const [byStatus, byGrade, byMonth] = await Promise.all([
+      this.db
+        .select({ status: enrollments.status, count: sql<number>`count(*)::int` })
+        .from(enrollments)
+        .where(and(...filters))
+        .groupBy(enrollments.status),
+      this.db
+        .select({ gradeId: enrollments.gradeId, count: sql<number>`count(*)::int` })
+        .from(enrollments)
+        .where(and(...filters))
+        .groupBy(enrollments.gradeId),
+      this.db
+        .select({
+          month: sql<string>`to_char(${enrollments.createdAt}, 'YYYY-MM')`,
+          count: sql<number>`count(*)::int`
+        })
+        .from(enrollments)
+        .where(and(...filters))
+        .groupBy(sql`to_char(${enrollments.createdAt}, 'YYYY-MM')`)
+        .orderBy(sql`to_char(${enrollments.createdAt}, 'YYYY-MM')`)
+    ]);
+
+    const total = byStatus.reduce((sum, row) => sum + row.count, 0);
+    return { total, byStatus, byGrade, byMonth };
   }
 
   listEnrollments(tenantId: string, query: ListEnrollmentsQueryDto) {

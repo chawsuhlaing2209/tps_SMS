@@ -10434,3 +10434,54 @@ button.btn-hero-outline:hover {
   align-items: center;
   gap: 6px;
 }
+
+/* Enrollments breakdown dashboard */
+.enrollments-stat-grid {
+  margin-bottom: 12px;
+}
+
+.enrollments-breakdown-panel {
+  margin-bottom: 12px;
+}
+
+.enrollments-breakdown-panel__title {
+  margin-bottom: 10px;
+}
+
+.enrollments-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.enrollments-breakdown__row {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 110px 1fr 32px;
+}
+
+.enrollments-breakdown__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.enrollments-breakdown__track {
+  background: var(--pds-background-layout-secondary);
+  border-radius: 999px;
+  display: block;
+  height: 8px;
+  overflow: hidden;
+}
+
+.enrollments-breakdown__bar {
+  background: var(--pds-brand-dark);
+  border-radius: 999px;
+  display: block;
+  height: 100%;
+}
+
+.enrollments-breakdown__count {
+  text-align: right;
+}

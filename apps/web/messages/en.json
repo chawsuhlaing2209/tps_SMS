@@ -2496,7 +2496,13 @@
     "legacyBillingNote": "This enrollment was approved before unified billing. Continue the ceremony to generate the invoice.",
     "noMandatoryFees": "No enrollment fee plans are configured for this classroom's academic year and grade. Add plans under Finance → Enrollment fee plans.",
     "previewRequired": "Fee preview is not available. Go back, choose a classroom with fee plans configured, and try again.",
-    "enrolledBetween": "Enrolled between"
+    "enrolledBetween": "Enrolled between",
+    "statTotal": "Total enrollments",
+    "statTotalHint": "This academic year",
+    "statConfirmedHint": "Approved & published",
+    "statDraftHint": "In progress",
+    "statCancelledHint": "Cancelled & rejected",
+    "breakdownByGrade": "Enrollments by grade"
   },
   "exams": {
     "title": "Exams & Grading",
