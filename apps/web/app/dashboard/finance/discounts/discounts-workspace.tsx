@@ -20,6 +20,7 @@ import { StatCard, StatGrid } from "../../../../components/shared/stat-card";
 import { ArchiveVisibilityFilter } from "../../../../components/shared/archive-visibility-filter";
 import { type ArchiveVisibility } from "../../../lib/archive-filter";
 import { PadaukTableWrap } from "../../../lib/padauk-table-wrap";
+import { TablePanelBody } from "../../../lib/table-panel";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { isPadaukRowInteractiveTarget } from "../../../lib/table-row-interaction";
 import { Icon } from "../../../lib/material-icon";
@@ -439,9 +440,9 @@ export function DiscountsWorkspace() {
       ) : null}
 
       {canView && visibleRules.length ? (
-        <section className="panel discount-table-panel">
-          <PadaukTableWrap className="discount-table-wrap">
-            <table className="padauk-table padauk-table--pinned-end discount-table">
+        <TablePanelBody>
+          <PadaukTableWrap>
+            <table className="pds-type-body-m-medium padauk-table padauk-table--pinned-end discount-table">
               <thead>
                 <tr>
                   <th className="pds-type-caption-s">{t("colDiscount")}</th>
@@ -455,7 +456,7 @@ export function DiscountsWorkspace() {
               <tbody>{visibleRules.map(renderRuleRow)}</tbody>
             </table>
           </PadaukTableWrap>
-        </section>
+        </TablePanelBody>
       ) : null}
 
       <DiscountSetupModal

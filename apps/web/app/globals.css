@@ -7072,11 +7072,6 @@ button.btn-hero-outline:hover {
   text-decoration: none;
 }.discount-list-card__configure:hover {
   color: var(--pds-brand-dark);
-}.discount-table-wrap {
-  background: var(--pds-background-card);
-  border: 1px solid var(--pds-border-color-primary);
-  border-radius: var(--pds-border-radius-16);
-  overflow: hidden;
 }.discount-table thead th {
   background: var(--pds-background-layout-secondary);
   border-bottom: 1px solid var(--pds-border-color-primary);
@@ -7471,11 +7466,6 @@ button.btn-hero-outline:hover {
 
 .discount-stat-grid {
   margin-bottom: var(--pds-gap-large);
-}
-
-.discount-table-panel {
-  overflow: hidden;
-  padding: 0;
 }
 
 @media (max-width: 960px) {
