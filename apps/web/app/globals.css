@@ -4818,7 +4818,7 @@ button.btn-hero-outline:hover {
 }.student-profile-avatar {
   align-items: center;
   background: var(--pds-color-blue-700);
-  border-radius: var(--pds-radius-pill);
+  border-radius: var(--pds-radius-base);
   color: var(--pds-background-card);
   display: inline-flex;
   flex-shrink: 0;

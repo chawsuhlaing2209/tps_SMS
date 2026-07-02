@@ -34,6 +34,7 @@ import {
   type TeachingSetupOptions
 } from "../teacher-teaching-setup";
 import styles from "../teacher-profile.module.css";
+import { subjectColor } from "../../structure/subject-colors";
 import "../teacher-teaching-setup-modal.css";
 import { StaffCompensationSection } from "../../salary/staff-compensation-section";
 
@@ -539,7 +540,7 @@ export default function TeacherProfilePage({
 
       <DetailCard
         className={styles.teacherProfileDetailCard}
-        avatar={{ initials: initials(teacher.fullName), tone: "teacher" }}
+        avatar={{ initials: initials(teacher.fullName), tone: "custom", background: subjectColor(teacher.fullName).bg }}
         title={teacher.fullName}
         status={
           <StatusPill tone={isTeacherActive ? "active" : "inactive"}>

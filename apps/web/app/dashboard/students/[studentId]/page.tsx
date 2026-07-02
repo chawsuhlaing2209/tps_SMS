@@ -18,6 +18,7 @@ import { StatusPill } from "../../../../components/pds/subcomponents/status-pill
 import { StatusBadge } from "../../../../components/shared/badge";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { DataTable } from "../../../lib/data-table";
+import { subjectColor } from "../../structure/subject-colors";
 import { Field } from "../../../lib/form";
 import { HeroMoreActionsMenu, HeroPrimaryAction } from "../../../lib/hero-more-actions";
 import { Icon } from "../../../lib/material-icon";
@@ -622,7 +623,12 @@ export default function StudentDetailPage({
 
           <section className="structure-room-banner student-profile-banner">
             <div className="structure-room-banner__main student-profile-banner__main">
-              <span className="student-profile-avatar">{studentInitials(data.fullName)}</span>
+              <span
+                className="student-profile-avatar"
+                style={{ background: subjectColor(data.fullName).bg, color: subjectColor(data.fullName).text }}
+              >
+                {studentInitials(data.fullName)}
+              </span>
               <div>
                 <div className="student-profile-banner__title-row">
                   <h2 className="structure-room-banner__title">{data.fullName}</h2>
