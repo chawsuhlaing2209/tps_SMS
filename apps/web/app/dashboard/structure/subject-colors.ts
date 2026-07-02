@@ -55,9 +55,12 @@ export function subjectColor(name: string, colorKey?: string | null) {
   if (colorKey) {
     return subjectColorByKey(colorKey);
   }
+  // Normalize so trivial formatting differences (case, trailing/collapsed
+  // whitespace) can't split one entity's color across modules.
+  const key = name.trim().replace(/\s+/g, " ").toLowerCase();
   let hash = 0;
-  for (let i = 0; i < name.length; i += 1) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < key.length; i += 1) {
+    hash = key.charCodeAt(i) + ((hash << 5) - hash);
   }
   return SUBJECT_COLOR_OPTIONS[Math.abs(hash) % SUBJECT_COLOR_OPTIONS.length]!;
 }
