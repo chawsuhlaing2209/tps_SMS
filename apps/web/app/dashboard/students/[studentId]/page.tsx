@@ -682,9 +682,9 @@ export default function StudentDetailPage({
                       onSelect: () => void handleStatusToggle(!isActive)
                     },
                     {
-                      id: "delete",
-                      label: c("delete"),
-                      icon: "delete",
+                      id: "archive",
+                      label: c("archive"),
+                      icon: "archive",
                       destructive: true,
                       onSelect: () => setDeleteOpen(true)
                     }
@@ -992,7 +992,7 @@ export default function StudentDetailPage({
                 onOpenChange={setDeleteOpen}
                 title={t("deleteStudentTitle")}
                 description={t("deleteStudentHelp")}
-                confirmLabel={c("delete")}
+                confirmLabel={c("archive")}
                 cancelLabel={c("cancel")}
                 destructive
                 loading={update.isPending}
