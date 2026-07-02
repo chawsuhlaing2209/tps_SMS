@@ -2876,6 +2876,10 @@
       "reviewed": "Reviewed",
       "approved": "Approved",
       "rejected": "Rejected"
-    }
+    },
+    "earlyBirdCutoffDate": "Early bird cutoff date",
+    "earlyBirdCutoffDateHelp": "Only enrollments confirmed on or before this date qualify. Leave empty for no date limit.",
+    "earlyBirdMaxRecipients": "Early bird limit",
+    "earlyBirdMaxRecipientsHelp": "Only the first N enrollments receive the discount. Leave empty for no limit."
   }
 }

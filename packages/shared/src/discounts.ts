@@ -80,6 +80,13 @@ export const earlyPaymentRuleCriteriaSchema = z.object({
   appliesTo: discountAppliesToSchema,
   requiresPaymentAtEnrollment: z.boolean().default(true),
   paymentMethods: z.array(z.string()).optional(),
+  /** Early-bird: only enrollments confirmed on/before this date qualify (yyyy-mm-dd). */
+  cutoffDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  /** Early-bird: only the first N granted recipients qualify. */
+  maxRecipients: z.number().int().min(1).optional(),
   notes: z.string().optional()
 });
 
@@ -183,6 +190,10 @@ export type DiscountEvaluationContext = {
   /** Student rank in grade by GPA (1 = top). */
   gradeRank?: number;
   isNewEnrollmentThisYear?: boolean;
+  /** Date the eligibility is evaluated for (yyyy-mm-dd); defaults to today. */
+  evaluationDate?: string;
+  /** Grants already recorded per rule id — enforces early-bird maxRecipients. */
+  grantedCountByRuleId?: Record<string, number>;
 };
 
 export type DiscountCandidate = {
@@ -268,6 +279,14 @@ export function parseDiscountCriteria(
       appliesTo,
       requiresPaymentAtEnrollment: raw?.requiresPaymentAtEnrollment !== false,
       paymentMethods: Array.isArray(raw?.paymentMethods) ? raw.paymentMethods : undefined,
+      cutoffDate:
+        typeof raw?.cutoffDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw.cutoffDate)
+          ? raw.cutoffDate
+          : undefined,
+      maxRecipients:
+        typeof raw?.maxRecipients === "number" && raw.maxRecipients >= 1
+          ? Math.floor(raw.maxRecipients)
+          : undefined,
       notes: typeof raw?.notes === "string" ? raw.notes : typeof raw?.description === "string" ? raw.description : undefined
     });
   }
@@ -388,7 +407,8 @@ export function siblingRuleMatches(
 
 export function earlyPaymentRuleMatches(
   criteria: z.infer<typeof earlyPaymentRuleCriteriaSchema>,
-  context: DiscountEvaluationContext
+  context: DiscountEvaluationContext,
+  options?: { grantedCount?: number }
 ): boolean {
   if (criteria.requiresPaymentAtEnrollment && !context.collectPayment) {
     return false;
@@ -398,6 +418,16 @@ export function earlyPaymentRuleMatches(
     context.paymentMethod &&
     !criteria.paymentMethods.includes(context.paymentMethod)
   ) {
+    return false;
+  }
+  if (criteria.cutoffDate) {
+    // yyyy-mm-dd strings compare correctly lexicographically.
+    const evaluated = context.evaluationDate ?? new Date().toISOString().slice(0, 10);
+    if (evaluated > criteria.cutoffDate) {
+      return false;
+    }
+  }
+  if (criteria.maxRecipients != null && (options?.grantedCount ?? 0) >= criteria.maxRecipients) {
     return false;
   }
   return true;

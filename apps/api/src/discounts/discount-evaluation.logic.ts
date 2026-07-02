@@ -14,7 +14,7 @@ import {
   type DiscountRuleCriteria
 } from "@sms/shared";
 import type { EnrollmentPreviewDiscountOption } from "@sms/shared";
-import { and, eq, gte, isNull, lte, or } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { Database } from "../db/db.module.js";
 import { discountRules, invoiceDiscountLines, studentDiscounts } from "../db/schema.js";
 
@@ -30,13 +30,19 @@ type EvaluateInput = {
 function autoRuleTypeMatches(
   normalizedType: string,
   criteria: DiscountRuleCriteria,
-  context: DiscountEvaluationContext
+  context: DiscountEvaluationContext,
+  ruleId?: string
 ): boolean {
   if (normalizedType === "sibling") {
     return criteria.type === "sibling" && siblingRuleMatches(criteria, context.siblingSummary);
   }
   if (normalizedType === "early_payment") {
-    return criteria.type === "early_payment" && earlyPaymentRuleMatches(criteria, context);
+    return (
+      criteria.type === "early_payment" &&
+      earlyPaymentRuleMatches(criteria, context, {
+        grantedCount: ruleId ? context.grantedCountByRuleId?.[ruleId] : undefined
+      })
+    );
   }
   if (normalizedType === "custom") {
     return criteria.type === "custom" && customRuleMatches(criteria, context);
@@ -177,6 +183,47 @@ export async function evaluateDiscountsFromDb(
       )
     );
 
+  // Early-bird recipient limits: count invoices already granted per limited
+  // rule so maxRecipients can be enforced. Callers may pre-populate
+  // grantedCountByRuleId (e.g. inside a confirm transaction) to narrow races.
+  if (!input.context.grantedCountByRuleId) {
+    const limitedRuleIds = autoRules
+      .filter((rule) => {
+        const criteria = parseDiscountCriteria(
+          rule.discountType,
+          rule.criteria as Record<string, unknown>
+        );
+        return criteria.type === "early_payment" && criteria.maxRecipients != null;
+      })
+      .map((rule) => rule.id);
+
+    if (limitedRuleIds.length) {
+      const rows = await db
+        .select({
+          ruleId: invoiceDiscountLines.discountRuleId,
+          n: sql<number>`count(distinct ${invoiceDiscountLines.invoiceId})::int`
+        })
+        .from(invoiceDiscountLines)
+        .where(
+          and(
+            eq(invoiceDiscountLines.tenantId, input.tenantId),
+            inArray(invoiceDiscountLines.discountRuleId, limitedRuleIds)
+          )
+        )
+        .groupBy(invoiceDiscountLines.discountRuleId);
+
+      input = {
+        ...input,
+        context: {
+          ...input.context,
+          grantedCountByRuleId: Object.fromEntries(
+            rows.filter((row) => row.ruleId).map((row) => [row.ruleId as string, row.n])
+          )
+        }
+      };
+    }
+  }
+
   for (const rule of autoRules) {
     if (excluded.has(rule.id)) continue;
 
@@ -192,7 +239,12 @@ export async function evaluateDiscountsFromDb(
           continue;
         }
       } else if (normalizedType === "early_payment") {
-        if (criteria.type !== "early_payment" || !earlyPaymentRuleMatches(criteria, input.context)) {
+        if (
+          criteria.type !== "early_payment" ||
+          !earlyPaymentRuleMatches(criteria, input.context, {
+            grantedCount: input.context.grantedCountByRuleId?.[rule.id]
+          })
+        ) {
           continue;
         }
       } else if (normalizedType === "custom") {
@@ -295,7 +347,7 @@ export async function evaluateDiscountsFromDb(
     const normalizedType = normalizeDiscountType(rule.discountType);
     const criteria = parseDiscountCriteria(rule.discountType, rule.criteria as Record<string, unknown>);
     const contextMatches = ruleMatchesContext(criteria, input.context);
-    const typeMatches = autoRuleTypeMatches(normalizedType, criteria, input.context);
+    const typeMatches = autoRuleTypeMatches(normalizedType, criteria, input.context, rule.id);
     const amount = computeDiscountAmount(
       input.context.feeLines,
       criteria.appliesTo,

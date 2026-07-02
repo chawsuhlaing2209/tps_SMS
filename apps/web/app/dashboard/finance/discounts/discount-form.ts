@@ -43,6 +43,8 @@ export type DiscountRuleFormValues = {
   topRankInGrade: string;
   requireNewEnrollmentThisYear: boolean;
   requiresPaymentAtEnrollment: boolean;
+  earlyBirdCutoffDate: string;
+  earlyBirdMaxRecipients: string;
   requiresDocumentation: boolean;
   prorateAcrossInstallments: boolean;
   priorityOrder: string;
@@ -76,6 +78,8 @@ export function emptyDiscountForm(): DiscountRuleFormValues {
     topRankInGrade: "3",
     requireNewEnrollmentThisYear: false,
     requiresPaymentAtEnrollment: false,
+    earlyBirdCutoffDate: "",
+    earlyBirdMaxRecipients: "",
     requiresDocumentation: false,
     prorateAcrossInstallments: false,
     priorityOrder: "1",
@@ -197,6 +201,12 @@ export function ruleToForm(rule: DiscountRuleRecord): DiscountRuleFormValues {
         : criteria.type === "custom"
           ? criteria.requiresPaymentAtEnrollment === true
           : false,
+    earlyBirdCutoffDate:
+      criteria.type === "early_payment" && criteria.cutoffDate ? criteria.cutoffDate : "",
+    earlyBirdMaxRecipients:
+      criteria.type === "early_payment" && criteria.maxRecipients != null
+        ? String(criteria.maxRecipients)
+        : "",
     requiresDocumentation:
       criteria.type === "scholarship" ||
       criteria.type === "staff_child" ||
@@ -304,6 +314,10 @@ export function formToPayload(
         type: "early_payment" as const,
         appliesTo,
         requiresPaymentAtEnrollment: form.requiresPaymentAtEnrollment,
+        cutoffDate: form.earlyBirdCutoffDate.trim() || undefined,
+        maxRecipients: form.earlyBirdMaxRecipients.trim()
+          ? Number(form.earlyBirdMaxRecipients.trim())
+          : undefined,
         notes: form.notes.trim() || undefined
       }
     };

@@ -720,6 +720,28 @@ export function DiscountSetupModal({ open, onOpenChange, mode, ruleId, onSaved }
                     checked={form.requiresPaymentAtEnrollment}
                     onCheckedChange={(checked) => setField("requiresPaymentAtEnrollment", checked)}
                   />
+                  {form.recordDiscountType === "early_payment" ? (
+                    <div className="pds-toggle-list__expandable-fields">
+                      <InputWrapper label={t("earlyBirdCutoffDate")} hint={t("earlyBirdCutoffDateHelp")}>
+                        <TextInput
+                          type="date"
+                          value={form.earlyBirdCutoffDate}
+                          onChange={(event) => setField("earlyBirdCutoffDate", event.target.value)}
+                        />
+                      </InputWrapper>
+                      <InputWrapper
+                        label={t("earlyBirdMaxRecipients")}
+                        hint={t("earlyBirdMaxRecipientsHelp")}
+                      >
+                        <TextInput
+                          inputMode="numeric"
+                          value={form.earlyBirdMaxRecipients}
+                          onChange={(event) => setField("earlyBirdMaxRecipients", event.target.value)}
+                          placeholder="10"
+                        />
+                      </InputWrapper>
+                    </div>
+                  ) : null}
                   <ToggleListItem
                     variant="expandable"
                     icon="layers"

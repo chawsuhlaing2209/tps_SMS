@@ -3,6 +3,7 @@ import {
   applyDiscountStacking,
   computeDiscountAmount,
   defaultAppliesTo,
+  earlyPaymentRuleMatches,
   siblingRuleMatches,
   type DiscountCandidate,
   type DiscountFeeLine
@@ -133,5 +134,73 @@ describe("applyDiscountStacking", () => {
       { maxCombinedPercent: 60, ordinalMethod: "birth_date_then_id" }
     );
     expect(result.discountTotal).toBe(60_000);
+  });
+});
+
+describe("earlyPaymentRuleMatches (early bird)", () => {
+  const baseCriteria = {
+    type: "early_payment" as const,
+    appliesTo: defaultAppliesTo("early_payment"),
+    requiresPaymentAtEnrollment: true
+  };
+  const baseContext = {
+    billingContext: "enrollment" as const,
+    academicYearId: "year-1",
+    gradeId: "grade-1",
+    feeLines: [tuitionLine],
+    siblingSummary: { eligible: false, enrolledSiblingCount: 0, studentPosition: 1 },
+    collectPayment: true
+  };
+
+  it("qualifies on/before the cutoff date and fails after it", () => {
+    const criteria = { ...baseCriteria, cutoffDate: "2026-05-01" };
+    expect(
+      earlyPaymentRuleMatches(criteria, { ...baseContext, evaluationDate: "2026-05-01" })
+    ).toBe(true);
+    expect(
+      earlyPaymentRuleMatches(criteria, { ...baseContext, evaluationDate: "2026-04-15" })
+    ).toBe(true);
+    expect(
+      earlyPaymentRuleMatches(criteria, { ...baseContext, evaluationDate: "2026-05-02" })
+    ).toBe(false);
+  });
+
+  it("enforces the recipient limit", () => {
+    const criteria = { ...baseCriteria, maxRecipients: 10 };
+    expect(earlyPaymentRuleMatches(criteria, baseContext, { grantedCount: 9 })).toBe(true);
+    expect(earlyPaymentRuleMatches(criteria, baseContext, { grantedCount: 10 })).toBe(false);
+    expect(earlyPaymentRuleMatches(criteria, baseContext)).toBe(true);
+  });
+
+  it("applies both cutoff and limit together", () => {
+    const criteria = { ...baseCriteria, cutoffDate: "2026-05-01", maxRecipients: 2 };
+    expect(
+      earlyPaymentRuleMatches(
+        criteria,
+        { ...baseContext, evaluationDate: "2026-04-01" },
+        { grantedCount: 1 }
+      )
+    ).toBe(true);
+    expect(
+      earlyPaymentRuleMatches(
+        criteria,
+        { ...baseContext, evaluationDate: "2026-04-01" },
+        { grantedCount: 2 }
+      )
+    ).toBe(false);
+    expect(
+      earlyPaymentRuleMatches(
+        criteria,
+        { ...baseContext, evaluationDate: "2026-06-01" },
+        { grantedCount: 0 }
+      )
+    ).toBe(false);
+  });
+
+  it("still requires payment at enrollment", () => {
+    const criteria = { ...baseCriteria, cutoffDate: "2099-01-01" };
+    expect(
+      earlyPaymentRuleMatches(criteria, { ...baseContext, collectPayment: false })
+    ).toBe(false);
   });
 });
