@@ -146,6 +146,22 @@ h3,
   padding: var(--pds-size-x-large);
   width: 100%;
   max-width: min(100%, 30rem);
+}.auth-card__top {
+  align-items: center;
+  display: flex;
+  gap: var(--pds-gap-medium);
+  justify-content: space-between;
+  margin-bottom: var(--pds-gap-x-small);
+}.auth-password-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--pds-muted);
+  cursor: pointer;
+  display: inline-flex;
+  padding: 0;
+}.auth-password-toggle:hover {
+  color: var(--pds-text-primary);
 }.auth-title {
   margin: var(--pds-gap-x-small) 0 var(--pds-gap-x-small);
 }.auth-subtitle {
