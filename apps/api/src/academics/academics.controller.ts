@@ -134,6 +134,15 @@ export class AcademicsController {
     return this.academicsService.restoreAcademicYear(tenantId, academicYearId, actorUserId);
   }
 
+  @Delete("academic-years/:academicYearId")
+  deleteAcademicYear(
+    @Param("tenantId") tenantId: string,
+    @Param("academicYearId") academicYearId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.academicsService.deleteAcademicYear(tenantId, academicYearId, actorUserId);
+  }
+
   @Get("terms")
   listTerms(@Param("tenantId") tenantId: string) {
     return this.academicsService.listTerms(tenantId);

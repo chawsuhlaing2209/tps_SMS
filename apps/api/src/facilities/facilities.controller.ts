@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Headers, Param, Patch, Post, UseGuards } from "@nestjs/common";
 import { RequireAnyPermissions, RequirePermissions } from "../identity/permissions.decorator.js";
 import { PermissionsGuard } from "../identity/permissions.guard.js";
 import { CreateFacilityRoomDto, UpdateFacilityRoomDto } from "./dto.js";
@@ -40,5 +40,35 @@ export class FacilitiesController {
     @Headers("x-user-id") actorUserId?: string
   ) {
     return this.facilitiesService.updateFacilityRoom(tenantId, roomId, actorUserId, dto);
+  }
+
+  @Post(":roomId/archive")
+  @RequirePermissions("facility.manage")
+  archiveFacilityRoom(
+    @Param("tenantId") tenantId: string,
+    @Param("roomId") roomId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.facilitiesService.archiveFacilityRoom(tenantId, roomId, actorUserId);
+  }
+
+  @Post(":roomId/restore")
+  @RequirePermissions("facility.manage")
+  restoreFacilityRoom(
+    @Param("tenantId") tenantId: string,
+    @Param("roomId") roomId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.facilitiesService.restoreFacilityRoom(tenantId, roomId, actorUserId);
+  }
+
+  @Delete(":roomId")
+  @RequirePermissions("facility.manage")
+  deleteFacilityRoom(
+    @Param("tenantId") tenantId: string,
+    @Param("roomId") roomId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.facilitiesService.deleteFacilityRoom(tenantId, roomId, actorUserId);
   }
 }

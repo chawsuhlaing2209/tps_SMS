@@ -499,7 +499,7 @@ export const departments = pgTable(
     ...tenantFields,
     name: text("name").notNull(),
     description: text("description"),
-    status: text("status").$type<"active" | "inactive">().default("active").notNull()
+    status: text("status").$type<"active" | "inactive" | "archived">().default("active").notNull()
   },
   (table) => ({
     tenantNameUnique: uniqueIndex("departments_tenant_name_unique").on(table.tenantId, table.name)
@@ -515,7 +515,7 @@ export const facilityRooms = pgTable(
     name: text("name").notNull(),
     capacity: integer("capacity"),
     note: text("note"),
-    status: text("status").$type<"active" | "inactive">().default("active").notNull()
+    status: text("status").$type<"active" | "inactive" | "archived">().default("active").notNull()
   },
   (table) => ({
     tenantNameUnique: uniqueIndex("facility_rooms_tenant_name_unique").on(table.tenantId, table.name)

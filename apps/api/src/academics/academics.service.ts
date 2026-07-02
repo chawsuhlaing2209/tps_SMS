@@ -409,6 +409,60 @@ export class AcademicsService {
     return this.restoreAcademicYear(tenantId, academicYearId, actorUserId);
   }
 
+  async deleteAcademicYear(tenantId: string, academicYearId: string, actorUserId?: string) {
+    const year = await this.getAcademicYearOrThrow(tenantId, academicYearId);
+
+    // Two-step safety: only an archived (closed) year can be permanently deleted.
+    if (year.status !== "archived") {
+      throw new BadRequestException("Close the academic year before deleting it.");
+    }
+
+    const n = sql<number>`count(*)::int`;
+    const [termsN, classroomsN, enrollmentsN] = await Promise.all([
+      this.db.select({ n }).from(terms).where(and(eq(terms.tenantId, tenantId), eq(terms.academicYearId, academicYearId))),
+      this.db.select({ n }).from(classrooms).where(and(eq(classrooms.tenantId, tenantId), eq(classrooms.academicYearId, academicYearId))),
+      this.db.select({ n }).from(enrollments).where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.academicYearId, academicYearId)))
+    ]);
+    const dependencies = {
+      terms: termsN[0]?.n ?? 0,
+      classrooms: classroomsN[0]?.n ?? 0,
+      enrollments: enrollmentsN[0]?.n ?? 0
+    };
+    if (Object.values(dependencies).some((c) => c > 0)) {
+      throw new ConflictException({
+        message:
+          "This academic year has terms, classrooms, or enrolments and cannot be deleted. Keep it closed instead.",
+        dependencies
+      });
+    }
+
+    try {
+      await this.db
+        .delete(academicYears)
+        .where(and(eq(academicYears.tenantId, tenantId), eq(academicYears.id, academicYearId)));
+    } catch (err) {
+      if (isForeignKeyViolation(err)) {
+        throw new ConflictException({
+          message:
+            "This academic year is still referenced by other records and cannot be deleted. Keep it closed instead."
+        });
+      }
+      throw err;
+    }
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "academic_year.delete",
+      recordType: "AcademicYear",
+      recordId: academicYearId,
+      before: { name: year.name, status: year.status },
+      after: { deleted: true }
+    });
+
+    return { id: academicYearId, deleted: true };
+  }
+
   listTerms(tenantId: string) {
     return this.db.select().from(terms).where(eq(terms.tenantId, tenantId));
   }
