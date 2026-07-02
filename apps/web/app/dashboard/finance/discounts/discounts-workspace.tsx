@@ -17,7 +17,8 @@ import { Button } from "../../../../components/ui/button";
 import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
 import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
 import { StatCard, StatGrid } from "../../../../components/shared/stat-card";
-import { PdsSelectField } from "../../../../components/pds";
+import { ArchiveVisibilityFilter } from "../../../../components/shared/archive-visibility-filter";
+import { type ArchiveVisibility } from "../../../lib/archive-filter";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { isPadaukRowInteractiveTarget } from "../../../lib/table-row-interaction";
 import { Icon } from "../../../lib/material-icon";
@@ -117,7 +118,7 @@ export function DiscountsWorkspace() {
   const canView = hasAnyPermission(permissions, ["discount.request", "discount.approve"]);
   const canManage = hasAnyPermission(permissions, ["discount.approve"]);
   const [deletingRule, setDeletingRule] = useState<DiscountRuleRecord | null>(null);
-  const [viewFilter, setViewFilter] = useState<"active" | "archived" | "all">("active");
+  const [viewFilter, setViewFilter] = useState<ArchiveVisibility>("active");
   const [setupOpen, setSetupOpen] = useState(false);
   const [setupMode, setSetupMode] = useState<"create" | "edit">("create");
   const [editingRuleId, setEditingRuleId] = useState<string | undefined>();
@@ -404,19 +405,8 @@ export function DiscountsWorkspace() {
       ) : null}
 
       {canView ? (
-        <div className="discount-view-filter" style={{ maxWidth: 200 }}>
-          <PdsSelectField
-            variant="filter"
-            value={viewFilter}
-            onValueChange={(value) =>
-              setViewFilter(value === "archived" || value === "all" ? value : "active")
-            }
-            options={[
-              { value: "active", label: c("viewActive") },
-              { value: "archived", label: c("viewArchived") },
-              { value: "all", label: c("viewAll") }
-            ]}
-          />
+        <div className="discount-view-filter" style={{ display: "flex", justifyContent: "flex-end" }}>
+          <ArchiveVisibilityFilter value={viewFilter} onChange={setViewFilter} />
         </div>
       ) : null}
 

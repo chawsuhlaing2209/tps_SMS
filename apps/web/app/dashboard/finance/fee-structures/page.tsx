@@ -11,7 +11,8 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ApiError, useApiMutation, useApiQuery } from "../../../lib/api";
 import { Icon } from "../../../lib/material-icon";
-import { PdsSelectField } from "../../../../components/pds";
+import { ArchiveVisibilityFilter } from "../../../../components/shared/archive-visibility-filter";
+import { filterByArchiveVisibility, type ArchiveVisibility } from "../../../lib/archive-filter";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { toastSuccess } from "../../../lib/toast";
 import { zodResolver } from "../../../lib/zod-resolver";
@@ -103,7 +104,7 @@ export default function FeeStructuresPage() {
   const [restoring, setRestoring] = useState<FeeItem | null>(null);
   const [permanentDeleting, setPermanentDeleting] = useState<FeeItem | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [componentView, setComponentView] = useState<"active" | "archived" | "all">("active");
+  const [componentView, setComponentView] = useState<ArchiveVisibility>("active");
   const [lastEditedGrade, setLastEditedGrade] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -130,12 +131,10 @@ export default function FeeStructuresPage() {
     [feeItems.data]
   );
 
-  const displayedComponents = useMemo(() => {
-    const all = feeItems.data ?? [];
-    if (componentView === "archived") return all.filter((item) => item.status === "archived");
-    if (componentView === "all") return all;
-    return all.filter((item) => item.status === "active");
-  }, [feeItems.data, componentView]);
+  const displayedComponents = useMemo(
+    () => filterByArchiveVisibility(feeItems.data ?? [], componentView),
+    [feeItems.data, componentView]
+  );
 
   const yearPlans = useMemo(
     () => plans.data?.filter((plan) => plan.academicYearId === workingYearId) ?? [],
@@ -309,6 +308,9 @@ export default function FeeStructuresPage() {
           { label: nav("finance"), href: "/dashboard/finance/invoices" },
           { label: t("feeStructuresTitle") }
         ]}
+        actions={
+          <ArchiveVisibilityFilter value={componentView} onChange={setComponentView} />
+        }
       />
 
       {!workingYearId ? (
@@ -338,20 +340,6 @@ export default function FeeStructuresPage() {
                   {t("addComponent")}
                 </Button>
               ) : null}
-            </div>
-            <div style={{ padding: "0 4px 10px" }}>
-              <PdsSelectField
-                variant="filter"
-                value={componentView}
-                onValueChange={(value) =>
-                  setComponentView(value === "archived" || value === "all" ? value : "active")
-                }
-                options={[
-                  { value: "active", label: c("viewActive") },
-                  { value: "archived", label: c("viewArchived") },
-                  { value: "all", label: c("viewAll") }
-                ]}
-              />
             </div>
             {!displayedComponents.length ? (
               <p className="pds-type-body-s-regular muted">{t("noComponentsYet")}</p>
