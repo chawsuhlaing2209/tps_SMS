@@ -165,7 +165,7 @@ export default function FacilitiesPage() {
         emptyDescription={t("emptyDescription")}
       >
         <div className="padauk-table-wrap">
-          <table className="pds-type-body-m-medium padauk-table facility-rooms-table">
+          <table className="pds-type-body-m-medium padauk-table padauk-table--pinned-end facility-rooms-table">
             <thead>
               <tr>
                 <th className="pds-type-caption-s">{t("name")}</th>

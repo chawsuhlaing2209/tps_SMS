@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, type MouseEvent } from "react";
+import { type MouseEvent } from "react";
 import { Icon } from "../../../app/lib/material-icon";
 import {
   findScrollContainer,
@@ -34,8 +34,6 @@ export function SegmentedControl({
   className,
   preserveScroll = true,
 }: SegmentedControlProps) {
-  const scrollPositionsRef = useRef<Map<string, number>>(new Map());
-
   function handleSelect(optionId: string, event: MouseEvent<HTMLButtonElement>) {
     if (optionId === value) {
       return;
@@ -44,11 +42,13 @@ export function SegmentedControl({
     const button = event.currentTarget;
 
     if (preserveScroll) {
+      // Keep the viewport where it is across the content swap so the tab bar
+      // stays in view — don't jump to the top (or a per-tab remembered spot).
       const container = findScrollContainer(button);
-      scrollPositionsRef.current.set(value, getScrollTop(container));
+      const current = getScrollTop(container);
       onChange(optionId);
       button.focus({ preventScroll: true });
-      restoreScrollAfterPaint(container, scrollPositionsRef.current.get(optionId) ?? 0);
+      restoreScrollAfterPaint(container, current);
       return;
     }
 

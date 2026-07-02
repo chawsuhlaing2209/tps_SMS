@@ -136,6 +136,22 @@ export function EnrollmentWizard({
     (tenant) => (open && watchedStudentId ? `/tenants/${tenant}/students/${watchedStudentId}` : null)
   );
 
+  // Surface the duplicate-enrollment rule at Placement (step 0) rather than only
+  // at confirm: check whether the picked student already has an active enrollment
+  // for this academic year.
+  const placementYearId = academicYears?.[0]?.id ?? "";
+  const studentEnrollments = useApiQuery<Array<{ id: string; status: string }>>((tenant) =>
+    open && step === 0 && watchedStudentId && placementYearId
+      ? `/tenants/${tenant}/enrollments?studentId=${watchedStudentId}&academicYearId=${placementYearId}`
+      : null
+  );
+  const duplicateEnrollment = useMemo(() => {
+    const activeStatuses = new Set(["draft", "submitted", "reviewed", "approved", "published"]);
+    return (studentEnrollments.data ?? []).some(
+      (row) => row.id !== initialDraft?.id && activeStatuses.has(row.status)
+    );
+  }, [studentEnrollments.data, initialDraft?.id]);
+
   type StudentDiscountRow = {
     id: string;
     discountRuleId: string;
@@ -613,6 +629,10 @@ export function EnrollmentWizard({
     if (!valid) return;
 
     if (step === 0) {
+      if (duplicateEnrollment) {
+        setFormError(t("alreadyActiveEnrollment"));
+        return;
+      }
       try {
         await runPreview(optionalFeeItemIds);
         setStep(1);
@@ -808,6 +828,12 @@ export function EnrollmentWizard({
           )}
           {bannerStudentName && !lockStudent ? (
             <EnrollmentStudentBanner name={bannerStudentName} meta={bannerStudentMeta} />
+          ) : null}
+
+          {duplicateEnrollment ? (
+            <p className="pds-type-body-s-regular error-text" role="alert">
+              {t("alreadyActiveEnrollment")}
+            </p>
           ) : null}
 
           <div className="enrollment-ceremony__section">

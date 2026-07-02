@@ -9,7 +9,9 @@ export type PrintDocumentOptions = {
 };
 
 const DEFAULT_REMOVE_SELECTORS = [
-  "button",
+  // Strip interactive controls, but keep buttons that carry printable content
+  // (e.g. timetable slot cards) via `data-print-keep`.
+  "button:not([data-print-keep])",
   "[data-print-exclude]",
   ".sr-only"
 ];

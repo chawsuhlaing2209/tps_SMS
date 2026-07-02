@@ -9,6 +9,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { setSession } from "./lib/session";
 import { loginHttpError, resolveLoginError } from "./lib/login-error";
+import { LanguageSwitcher } from "./lib/language-switcher";
 import { zodResolver } from "./lib/zod-resolver";
 
 const API_BASE_URL = "/api";
@@ -29,6 +30,7 @@ export default function LoginPage() {
   const router = useRouter();
   const t = useTranslations("auth");
   const [serverError, setServerError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const schema = z.object({
     tenant: z.string().trim().min(1, t("tenantRequired")),
@@ -89,7 +91,10 @@ export default function LoginPage() {
   return (
     <main className="auth">
       <div className="auth-card">
-        <span className="pds-type-caption-m eyebrow">{t("platform")}</span>
+        <div className="auth-card__top">
+          <span className="pds-type-caption-m eyebrow">{t("platform")}</span>
+          <LanguageSwitcher variant="segmented" />
+        </div>
         <h1 className="pds-type-display-m auth-title">{t("signIn")}</h1>
         <p className="auth-subtitle">{t("subtitle")}</p>
 
@@ -119,9 +124,19 @@ export default function LoginPage() {
           <label className="pds-type-body-m-medium auth-field">
             <span>{t("password")}</span>
             <FormInput
-              type="password"
+              type={showPassword ? "text" : "password"}
               placeholder={t("passwordPlaceholder")}
               autoComplete="current-password"
+              suffix={
+                <button
+                  type="button"
+                  className="pds-type-body-s-semibold auth-password-toggle"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-pressed={showPassword}
+                >
+                  {showPassword ? t("hidePassword") : t("showPassword")}
+                </button>
+              }
               {...register("password")}
             />
             {errors.password ? (

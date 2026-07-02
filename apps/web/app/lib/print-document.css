@@ -44,4 +44,31 @@
   .print-document-root--wide {
     max-width: none;
   }
+
+  /* Force background/subject colors to print (the pills/slot cards). */
+  .print-document-page,
+  .print-document-page * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Timetable board: unclip the scroll wrapper and fit the landscape page so the
+     weekly grid prints exactly like the on-screen design. */
+  .print-document-page .timetable-grid-wrap,
+  .print-document-page .padauk-table-wrap {
+    overflow: visible !important;
+  }
+  .print-document-page .timetable-board {
+    width: 100% !important;
+    min-width: 0 !important;
+    table-layout: fixed;
+  }
+  .print-document-page .timetable-slot-card {
+    width: 100%;
+    break-inside: avoid;
+  }
+  .print-document-page tr,
+  .print-document-page .timetable-board__break-row {
+    break-inside: avoid;
+  }
 }

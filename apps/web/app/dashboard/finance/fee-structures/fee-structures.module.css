@@ -10,7 +10,7 @@
   border-radius: var(--pds-border-radius-16);
   display: grid;
   gap: 0;
-  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
   min-width: 0;
   overflow: hidden;
 }
@@ -29,7 +29,7 @@
 }
 
 .gradeNavLabel {
-  color: var(--pds-muted);
+  color: var(--pds-text-primary);
   margin: 0;
   padding: 0;
   white-space: nowrap;
@@ -119,15 +119,18 @@
 }
 
 .heroStats {
-  display: grid;
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--pds-gap-medium);
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  justify-content: flex-end;
 }
 
 .heroStat {
   background: var(--pds-color-neutral-on-shell-white-08);
   border: 1px solid var(--pds-shell-line-soft);
   border-radius: var(--pds-radius-14);
+  min-width: 120px;
   padding: var(--pds-gap-medium) var(--pds-gap-medium);
 }
 
@@ -153,28 +156,16 @@
   align-items: center;
   border-bottom: 1px solid var(--pds-border-color-primary);
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--pds-gap-small) var(--pds-gap-medium);
+  gap: var(--pds-gap-medium);
   justify-content: space-between;
   padding: var(--pds-gap-medium) var(--pds-padding-large);
 }
 
-.componentsAdd {
+.headActions {
   align-items: center;
-  background: transparent;
-  border: 0;
-  color: var(--pds-brand-accent);
-  cursor: pointer;
-  display: inline-flex;
+  display: flex;
   flex-shrink: 0;
-  font: inherit;
-  gap: var(--pds-gap-x-small);
-  padding: 0;
-  white-space: nowrap;
-}
-
-.componentsAdd:hover {
-  color: var(--pds-brand-dark);
+  gap: var(--pds-gap-small);
 }
 
 .componentsTitle {
@@ -193,42 +184,6 @@
   flex-shrink: 0;
   height: 10px;
   width: 10px;
-}
-
-.comparisonPanel {
-  background: var(--pds-background-card);
-  border: 1px solid var(--pds-border-color-primary);
-  border-radius: var(--pds-border-radius-16);
-  padding: var(--pds-padding-large);
-}
-
-.comparisonTitle {
-  margin: 0 0 var(--pds-gap-large);
-}
-
-.comparisonRow {
-  align-items: center;
-  display: grid;
-  gap: var(--pds-gap-medium);
-  grid-template-columns: 100px minmax(0, 1fr) 90px;
-  padding: var(--pds-gap-small) 0;
-}
-
-.comparisonBar {
-  background: var(--pds-background-layout-secondary);
-  border-radius: var(--pds-radius-pill);
-  height: 10px;
-  overflow: hidden;
-}
-
-.comparisonFill {
-  background: var(--pds-brand-accent);
-  border-radius: inherit;
-  height: 100%;
-}
-
-.comparisonValue {
-  text-align: right;
 }
 
 .formStack {
@@ -255,7 +210,7 @@
 .pillActive {
   background: var(--pds-shell);
   border: 1.5px solid var(--pds-shell);
-  color: var(--pds-foreground-contrast-high);
+  color: var(--pds-text-invert-primary);
 }
 
 .requiredToggle {
@@ -285,50 +240,39 @@
 }
 
 /* Component-centric grade/amount editor */
-.bulkRow {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--pds-gap-medium);
-  justify-content: space-between;
-}
-
-.bulkAmount {
-  align-items: center;
-  display: flex;
-  gap: var(--pds-gap-small);
-}
-
 .gradeEditor {
   display: grid;
   gap: var(--pds-gap-small);
 }
 
 .gradeEditorRow {
-  align-items: center;
   border: 1px solid var(--pds-border-color-primary);
   border-radius: var(--pds-radius-12);
+  display: flex;
+  flex-direction: column;
+  gap: var(--pds-gap-small);
+  padding: var(--pds-gap-medium) var(--pds-padding-large);
+}
+
+.gradeEditorMain {
+  align-items: center;
   display: grid;
   gap: var(--pds-gap-medium);
-  grid-template-columns: auto 1fr 220px;
-  padding: var(--pds-gap-medium) var(--pds-padding-large);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 220px);
 }
 
 .gradeEditorRowActive {
   background: var(--pds-background-frame);
 }
 
-.gradeEditorName {
-  color: var(--pds-text-primary);
-}
-
 .gradeEditorAmount {
   width: 100%;
 }
 
-.saveBar {
-  display: flex;
-  justify-content: flex-end;
+/* Contextual "apply to all" — appears inside the row just edited. */
+.applyAllRow {
+  border-top: 1px solid var(--pds-border-color-soft);
+  padding-top: var(--pds-gap-small);
 }
 
 @media (max-width: 960px) {

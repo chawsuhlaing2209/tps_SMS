@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useApiQuery } from "../../../../lib/api";
 import { EmptyState } from "../../../../../components/shared/empty-state";
+import { formatCreatedAt } from "../../format-finance";
 
 type InvoiceActivityEvent = {
   id: string;
@@ -14,11 +15,6 @@ type InvoiceActivityEvent = {
   reason: string | null;
   createdAt: string;
 };
-
-function formatDateTime(value: string | null) {
-  if (!value) return "—";
-  return new Date(value).toLocaleString();
-}
 
 export function InvoiceActivityPanel({ invoiceId }: { invoiceId: string }) {
   const t = useTranslations("finance");
@@ -52,7 +48,7 @@ export function InvoiceActivityPanel({ invoiceId }: { invoiceId: string }) {
                 ) : null}
               </div>
               <p className="pds-type-body-s-regular muted payment-row__meta">
-                {formatDateTime(event.createdAt)}
+                {formatCreatedAt(event.createdAt)}
                 {event.reason ? (
                   <>
                     {" "}

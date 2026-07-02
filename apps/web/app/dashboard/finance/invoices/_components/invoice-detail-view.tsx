@@ -22,6 +22,7 @@ import {
   printInvoiceDocument
 } from "../../invoice-document";
 import { formatReceiptAmount } from "../../receipt-document";
+import { formatCreatedAt } from "../../format-finance";
 import {
   RecordPaymentModal,
   type InvoicePaymentContext
@@ -71,11 +72,6 @@ type InvoiceDetail = {
 };
 
 const CLOSED_STATUSES = new Set(["paid", "cancelled", "waived", "refunded"]);
-
-function formatDateTime(value: string | null) {
-  if (!value) return "—";
-  return new Date(value).toLocaleString();
-}
 
 /**
  * Full invoice detail (document + payments + record payment + activity log).
@@ -255,7 +251,7 @@ export function InvoiceDetailView({
                   )}
                 </div>
                 <p className="pds-type-body-s-regular muted payment-row__meta">
-                  {t("paidAt")}: {formatDateTime(payment.paidAt)}
+                  {t("paidAt")}: {formatCreatedAt(payment.paidAt)}
                   {payment.referenceNumber ? (
                     <>
                       {" "}

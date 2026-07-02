@@ -12,6 +12,7 @@ import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
 import { cn } from "../../../../lib/utils";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { Icon } from "../../../lib/material-icon";
+import { formatMMK } from "../../../lib/money";
 import { RecordFormModal } from "../../../lib/record-modal";
 import {
   emptyDiscountForm,
@@ -795,7 +796,7 @@ export function DiscountSetupModal({ open, onOpenChange, mode, ruleId, onSaved }
                     <dd>
                       {form.valueType === "percentage"
                         ? `${form.value}%`
-                        : `${Number(form.value || 0).toLocaleString()} MMK`}
+                        : formatMMK(Number(form.value || 0))}
                     </dd>
                   </div>
                   <div>

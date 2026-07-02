@@ -141,20 +141,27 @@ function prepareColumns<TData>(
     return next;
   });
 
-  if (!showUpdatedAt || enhanced.some((column) => column.id === "updatedAt")) {
-    return enhanced;
-  }
+  const withUpdatedAt =
+    !showUpdatedAt || enhanced.some((column) => column.id === "updatedAt")
+      ? enhanced
+      : [
+          ...enhanced,
+          {
+            id: "updatedAt",
+            header: updatedAtLabel,
+            accessorFn: (row) => getRowTimestamp(row),
+            cell: ({ row }) => formatRowTimestamp(row.original),
+            enableSorting: true
+          } as ColumnDef<TData, unknown>
+        ];
 
-  return [
-    ...enhanced,
-    {
-      id: "updatedAt",
-      header: updatedAtLabel,
-      accessorFn: (row) => getRowTimestamp(row),
-      cell: ({ row }) => formatRowTimestamp(row.original),
-      enableSorting: true
-    }
-  ];
+  // The actions column is always pinned to the far right (after "Last updated"),
+  // so every table exposes row actions in a consistent, sticky-right slot.
+  const actionsColumns = withUpdatedAt.filter((column) => column.id === "actions");
+  if (!actionsColumns.length) {
+    return withUpdatedAt;
+  }
+  return [...withUpdatedAt.filter((column) => column.id !== "actions"), ...actionsColumns];
 }
 
 function sortIndicator(isSorted: false | "asc" | "desc"): string {
@@ -322,7 +329,7 @@ export function DataTable<TData>({
             {headerGroup.headers.map((header) => {
               const canSort = header.column.getCanSort();
               return (
-                <TableHead key={header.id}>
+                <TableHead key={header.id} className={header.column.id === "actions" ? "col-actions" : undefined}>
                   {header.isPlaceholder ? null : canSort ? (
                     <button
                       type="button"
@@ -360,7 +367,7 @@ export function DataTable<TData>({
                 }
               >
                 {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id}>
+                  <TableCell key={cell.id} className={cell.column.id === "actions" ? "col-actions" : undefined}>
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </TableCell>
                 ))}

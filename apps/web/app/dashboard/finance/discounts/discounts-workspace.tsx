@@ -73,7 +73,7 @@ function ruleValueLabel(rule: DiscountRuleRecord, t: (key: string, values?: Reco
     return t("valueTiered");
   }
   if (rule.valueType === "fixed") {
-    return t("valueFixed", { amount: Number(rule.value).toLocaleString() });
+    return t("valueFixed", { amount: formatMMK(Number(rule.value)) });
   }
   return t("valuePercent", { percent: Math.round(Number(rule.value)) });
 }
@@ -378,7 +378,7 @@ export function DiscountsWorkspace() {
       {canView && visibleRules.length ? (
         <section className="panel discount-table-panel">
           <div className="discount-table-wrap">
-            <table className="padauk-table discount-table">
+            <table className="padauk-table padauk-table--pinned-end discount-table">
               <thead>
                 <tr>
                   <th className="pds-type-caption-s">{t("colDiscount")}</th>

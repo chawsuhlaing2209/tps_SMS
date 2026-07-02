@@ -146,6 +146,22 @@ h3,
   padding: var(--pds-size-x-large);
   width: 100%;
   max-width: min(100%, 30rem);
+}.auth-card__top {
+  align-items: center;
+  display: flex;
+  gap: var(--pds-gap-medium);
+  justify-content: space-between;
+  margin-bottom: var(--pds-gap-x-small);
+}.auth-password-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--pds-muted);
+  cursor: pointer;
+  display: inline-flex;
+  padding: 0;
+}.auth-password-toggle:hover {
+  color: var(--pds-text-primary);
 }.auth-title {
   margin: var(--pds-gap-x-small) 0 var(--pds-gap-x-small);
 }.auth-subtitle {
@@ -1668,7 +1684,40 @@ h3,
 .padauk-table tbody tr.table-row--clickable:focus-visible {
   background: var(--pds-notification-background-success-hover);
   outline: none;
-}.padauk-table code {
+}
+/* Pinned right-most column (row actions or a trailing toggle) stays visible
+   while the table scrolls horizontally. Two ways to opt in:
+     • DataTable marks its actions column with `.col-actions` (auto).
+     • Any hand-rolled `.padauk-table` adds `.padauk-table--pinned-end`, which
+       pins that table's last column. */
+.padauk-table th.col-actions,
+.padauk-table td.col-actions,
+.padauk-table--pinned-end > thead th:last-child,
+.padauk-table--pinned-end > tbody td:last-child {
+  position: sticky;
+  right: 0;
+  box-shadow: -10px 0 10px -10px rgb(15 23 20 / 18%);
+}
+.padauk-table th.col-actions {
+  text-align: right;
+}
+.padauk-table td.col-actions,
+.padauk-table--pinned-end > tbody td:last-child {
+  background: var(--pds-background-card);
+  z-index: 1;
+}
+.padauk-table th.col-actions,
+.padauk-table--pinned-end > thead th:last-child {
+  background: var(--pds-background-layout-primary);
+  z-index: 2;
+}
+.padauk-table tbody tr:hover td.col-actions,
+.padauk-table tbody tr.table-row--clickable:focus-visible td.col-actions,
+.padauk-table--pinned-end > tbody tr:hover td:last-child,
+.padauk-table--pinned-end > tbody tr.table-row--clickable:focus-visible td:last-child {
+  background: var(--pds-notification-background-success-hover);
+}
+.padauk-table code {
   background: var(--pds-background-layout-secondary);
   border-radius: var(--pds-gap-x-small);
   padding: var(--pds-gap-xx-small) var(--pds-gap-x-small);
@@ -5742,7 +5791,7 @@ button.btn-hero-outline:hover {
 }
 
 .dash-content > .dash-content-body {
-  max-width: 1320;
+  max-width: var(--pds-width-1180);
 }@media (max-width: var(--pds-breakpoint-md)) {
   .dash-page-chrome__inner,
   .pds-top-nav-bar__inner {
@@ -6678,7 +6727,9 @@ button.btn-hero-outline:hover {
   transition: background-color 0.15s ease;
   width: 44px;
 }.form-toggle[data-state="checked"] {
-  background: var(--pds-compliment-brand);
+  background: var(--pds-brand-accent);
+}.form-toggle--secondary[data-state="checked"] {
+  background: var(--pds-brand-dark);
 }.form-toggle[data-state="checked"] .form-toggle__thumb {
   background: var(--pds-text-invert-primary);
 }.form-toggle:focus-visible {
@@ -7724,6 +7775,7 @@ button.btn-hero-outline:hover {
 .fees-page {
   display: grid;
   gap: var(--pds-gap-large);
+  min-width: 0;
 }.fees-view-toggle {
   border-bottom: 1px solid var(--pds-border-color-primary);
   display: flex;

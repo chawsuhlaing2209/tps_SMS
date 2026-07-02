@@ -76,6 +76,16 @@ export class FinanceController {
     return this.financeService.reconcileFeeItemGradeAmounts(tenantId, feeItemId, actorUserId, dto)
   }
 
+  @Delete('fee-items/:feeItemId')
+  @RequirePermissions('finance.manage')
+  deleteFeeItem(
+    @Param('tenantId') tenantId: string,
+    @Param('feeItemId') feeItemId: string,
+    @Headers('x-user-id') actorUserId: string,
+  ) {
+    return this.financeService.deleteFeeItem(tenantId, feeItemId, actorUserId)
+  }
+
   @Post('fee-items/:feeItemId/archive')
   @RequirePermissions('finance.manage')
   archiveFeeItem(

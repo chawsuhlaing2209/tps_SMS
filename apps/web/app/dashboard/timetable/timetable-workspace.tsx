@@ -822,6 +822,7 @@ export function TimetableWorkspace() {
                                 <td key={`${day}-${period.id}`}>
                                   <button
                                     type="button"
+                                    data-print-keep
                                     className={`timetable-slot-card timetable-slot-card--${colorKey}`}
                                     onClick={() => setSelectedSlot(slot)}
                                   >

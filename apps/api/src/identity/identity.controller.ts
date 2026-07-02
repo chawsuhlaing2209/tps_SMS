@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Headers, Param, Patch, Post, UseGuards } from "@nestjs/common";
 import { AssignRoleDto, CreateSessionDto, CreateTenantRoleDto, InviteUserDto, UpdateTenantRoleDto } from "./dto.js";
 import { IdentityManageGuard } from "./identity-manage.guard.js";
 import { IdentityService } from "./identity.service.js";
@@ -40,6 +40,15 @@ export class IdentityController {
     @Headers("x-user-id") actorUserId?: string
   ) {
     return this.identityService.updateTenantRole(tenantId, roleId, dto, actorUserId);
+  }
+
+  @Delete("roles/:roleId")
+  deleteRole(
+    @Param("tenantId") tenantId: string,
+    @Param("roleId") roleId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.identityService.deleteTenantRole(tenantId, roleId, actorUserId);
   }
 
   @Get("users")

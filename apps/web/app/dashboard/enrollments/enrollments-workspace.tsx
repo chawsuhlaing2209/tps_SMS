@@ -15,10 +15,12 @@ import { Icon } from "../../lib/material-icon";
 import { TablePanelBody } from "../../lib/table-panel";
 import { useDashPageTitleActionsTarget } from "../dashboard-page-title";
 import { WorkspaceLoading } from "../../lib/workspace-loading";
-import { PdsSearchFiltersRow, PdsSelectField } from "../../../components/pds";
+import { PdsDatePickerField, PdsSearchFiltersRow, PdsSelectField } from "../../../components/pds";
 import { StatusBadge } from "../../../components/shared/badge";
+import { RowMoreActionsMenu } from "../../../components/shared/row-more-actions";
 import { ExportCsvButton } from "../../../components/shared/export-csv-button";
 import { TrailLink } from "../../../components/shared/trail-link";
+import { CancelEnrollmentDialog } from "../students/cancel-enrollment-dialog";
 
 const EnrollmentWizard = dynamic(
   () => import("./enrollment-wizard").then((module) => module.EnrollmentWizard),
@@ -38,6 +40,8 @@ export type EnrollmentRow = {
   invoiceId: string | null;
   status: string;
   billingSnapshot?: { optionalFeeItemIds?: string[] } | null;
+  cancelledAt?: string | null;
+  createdAt?: string;
   updatedAt?: string;
 };
 
@@ -60,6 +64,9 @@ export function EnrollmentsWorkspace({
   const [prefillStudentId, setPrefillStudentId] = useState<string | null>(null);
   const [prefillClassroomId, setPrefillClassroomId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("");
+  const [gradeFilter, setGradeFilter] = useState("");
+  const [dateFilter, setDateFilter] = useState("");
+  const [cancelTarget, setCancelTarget] = useState<EnrollmentRow | null>(null);
 
   const currentYear = useCurrentAcademicYear();
   const workingYearId = currentYear.data?.id ?? "";
@@ -105,6 +112,20 @@ export function EnrollmentsWorkspace({
   const enrollments = useApiQuery<EnrollmentRow[]>(
     (tn) => `${ENROLLMENTS_PATH(tn)}${enrollmentsQuery}`
   );
+
+  // Grade + date filters are applied client-side over the fetched rows.
+  const filteredEnrollments = useMemo(() => {
+    let rows = enrollments.data ?? [];
+    if (gradeFilter) rows = rows.filter((row) => row.gradeId === gradeFilter);
+    if (dateFilter) {
+      const from = new Date(dateFilter).getTime();
+      rows = rows.filter((row) => {
+        const when = row.createdAt ?? row.updatedAt;
+        return when ? new Date(when).getTime() >= from : false;
+      });
+    }
+    return rows;
+  }, [enrollments.data, gradeFilter, dateFilter]);
 
   const studentName = (row: { studentId: string; studentFullName?: string | null }) =>
     row.studentFullName ?? row.studentId;
@@ -153,21 +174,23 @@ export function EnrollmentsWorkspace({
       header: t("actions"),
       enableSorting: false,
       cell: ({ row }) => {
-        if (row.original.status === "draft" && !row.original.invoiceId) {
-          return (
-            <button type="button" className="pds-type-body-s-regular row-action" onClick={() => openWizard(row.original)}>
-              {t("continueEnrollment")}
-            </button>
-          );
-        }
-        if (row.original.status === "approved" && !row.original.invoiceId) {
-          return (
-            <button type="button" className="pds-type-body-s-regular row-action" onClick={() => openWizard(row.original)}>
-              {t("continueEnrollment")}
-            </button>
-          );
-        }
-        return null;
+        const enrollment = row.original;
+        const canContinue = !enrollment.invoiceId && (enrollment.status === "draft" || enrollment.status === "approved");
+        const canCancel =
+          !enrollment.cancelledAt && enrollment.status !== "cancelled" && enrollment.status !== "draft";
+        const items = [
+          ...(canContinue
+            ? [{ id: "continue", label: t("continueEnrollment"), icon: "edit", onSelect: () => openWizard(enrollment) }]
+            : []),
+          ...(enrollment.invoiceId
+            ? [{ id: "invoice", label: t("viewInvoice"), icon: "receipt_long", onSelect: () => { window.location.href = `/dashboard/finance/invoices/${enrollment.invoiceId}`; } }]
+            : []),
+          ...(canCancel
+            ? [{ id: "cancel", label: t("cancelEnrollment"), icon: "cancel", destructive: true, onSelect: () => setCancelTarget(enrollment) }]
+            : [])
+        ];
+        if (!items.length) return <span className="muted">—</span>;
+        return <RowMoreActionsMenu ariaLabel={c("moreActions")} items={items} />;
       }
     }
   ];
@@ -186,28 +209,50 @@ export function EnrollmentsWorkspace({
       {showStatusFilter ? (
         <PdsSearchFiltersRow
           filters={
-            <div className="pds-search-filters-row__filter--160">
-              <PdsSelectField
-                variant="filter"
-                value={statusFilter}
-                onValueChange={(value) => setStatusFilter(typeof value === "string" ? value : "")}
-                placeholder={t("allStatuses")}
-                options={[
-                  { value: "draft", label: t("status_draft") },
-                  { value: "approved", label: t("status_approved") },
-                  { value: "archived", label: t("status_archived") }
-                ]}
-              />
-            </div>
+            <>
+              <div className="pds-search-filters-row__filter--160">
+                <PdsSelectField
+                  variant="filter"
+                  value={statusFilter}
+                  onValueChange={(value) => setStatusFilter(typeof value === "string" ? value : "")}
+                  placeholder={t("allStatuses")}
+                  options={[
+                    { value: "draft", label: t("status_draft") },
+                    { value: "approved", label: t("status_approved") },
+                    { value: "cancelled", label: t("status_cancelled") },
+                    { value: "archived", label: t("status_archived") }
+                  ]}
+                />
+              </div>
+              <div className="pds-search-filters-row__filter--160">
+                <PdsSelectField
+                  variant="filter"
+                  value={gradeFilter}
+                  onValueChange={(value) => setGradeFilter(typeof value === "string" ? value : "")}
+                  placeholder={t("allGrades")}
+                  options={(grades.data ?? []).map((g) => ({ value: g.id, label: g.name }))}
+                />
+              </div>
+              <div className="pds-search-filters-row__filter--160">
+                <PdsDatePickerField
+                  type="day"
+                  variant="filter"
+                  value={dateFilter}
+                  onValueChange={setDateFilter}
+                  ariaLabel={t("enrolledFrom")}
+                  placeholder={t("enrolledFrom")}
+                />
+              </div>
+            </>
           }
         />
       ) : null}
       <TablePanelBody
           loading={enrollments.isLoading}
           error={enrollments.isError ? c("somethingWrong") : null}
-          empty={!enrollments.data?.length}
+          empty={!filteredEnrollments.length}
         >
-          <DataTable columns={enrollmentColumns} data={enrollments.data ?? []} />
+          <DataTable columns={enrollmentColumns} data={filteredEnrollments} />
         </TablePanelBody>
 
       <EnrollmentWizard
@@ -229,6 +274,22 @@ export function EnrollmentsWorkspace({
         initialClassroomId={prefillClassroomId}
         onSaved={() => void enrollments.refetch()}
       />
+
+      {cancelTarget ? (
+        <CancelEnrollmentDialog
+          open={cancelTarget !== null}
+          onOpenChange={(open) => {
+            if (!open) setCancelTarget(null);
+          }}
+          enrollmentId={cancelTarget.id}
+          invoiceId={cancelTarget.invoiceId}
+          studentName={studentName(cancelTarget)}
+          onCancelled={() => {
+            setCancelTarget(null);
+            void enrollments.refetch();
+          }}
+        />
+      ) : null}
     </>
   );
 }

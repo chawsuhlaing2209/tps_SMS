@@ -267,6 +267,47 @@ export class IdentityService {
     return this.getTenantRole(tenantId, roleId);
   }
 
+  /**
+   * Delete a custom tenant role. Built-in roles (seeded defaults) and roles that
+   * still have users assigned cannot be deleted — the caller must reassign first.
+   */
+  async deleteTenantRole(tenantId: string, roleId: string, actorUserId?: string) {
+    const [existing] = await this.db
+      .select()
+      .from(roles)
+      .where(and(eq(roles.tenantId, tenantId), eq(roles.id, roleId)));
+
+    if (!existing) {
+      throw new NotFoundException("Tenant role not found.");
+    }
+
+    if ((defaultRoles as readonly string[]).includes(existing.key)) {
+      throw new BadRequestException("Built-in roles can't be deleted.");
+    }
+
+    const withUsers = await this.getTenantRole(tenantId, roleId);
+    if (withUsers.userCount > 0) {
+      throw new BadRequestException(
+        `Cannot delete a role assigned to ${withUsers.userCount} user(s). Reassign them first.`
+      );
+    }
+
+    await this.db.delete(roles).where(and(eq(roles.tenantId, tenantId), eq(roles.id, roleId)));
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "role.delete",
+      recordType: "Role",
+      recordId: roleId,
+      before: { name: existing.name, key: existing.key, status: existing.status },
+      after: { deleted: true }
+    });
+
+    this.tenantContextCache.invalidateTenant(tenantId);
+    return { deleted: true, roleId };
+  }
+
   async findUserByContact(
     tenantId: string,
     contact: { email?: string; phone?: string }
