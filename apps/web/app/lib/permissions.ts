@@ -18,12 +18,9 @@ export type DashboardNavKey =
   | "academicSetup"
   | "admissions"
   | "enrollments"
-  | "calendar"
   | "timetable"
-  | "exams"
   | "finance"
   | "salary"
-  | "communication"
   | "audit"
   | "settings"
   | "team"
@@ -61,27 +58,12 @@ export const DASHBOARD_NAV: DashboardNavItem[] = [
   { href: "/dashboard/admissions", key: "admissions", anyOf: ["admissions.manage"] },
   { href: "/dashboard/enrollments", key: "enrollments", anyOf: ["student.manage"] },
   {
-    href: "/dashboard/calendar",
-    key: "calendar",
-    anyOf: ["calendar.manage", "student.view"]
-  },
-  {
     href: "/dashboard/timetable",
     key: "timetable",
     anyOf: ["timetable.manage", "student.view"]
   },
-  {
-    href: "/dashboard/exams",
-    key: "exams",
-    anyOf: ["exam.manage", "grade.approve", "report_card.generate"]
-  },
   { href: "/dashboard/finance", key: "finance", anyOf: ["finance.manage"] },
   { href: "/dashboard/salary", key: "salary", anyOf: ["salary.manage"] },
-  {
-    href: "/dashboard/communication",
-    key: "communication",
-    anyOf: ["communication.manage"]
-  },
   { href: "/dashboard/audit", key: "audit", anyOf: ["audit.view"] },
   { href: "/dashboard/settings/user-roles", key: "settings", anyOf: ["identity.manage"] },
   {
@@ -100,7 +82,7 @@ export const DASHBOARD_NAV_GROUPS: DashboardNavGroup[] = [
   {
     key: "academics",
     items: DASHBOARD_NAV.filter((item) =>
-      ["structure", "academicSetup", "facilities", "calendar", "timetable", "exams"].includes(item.key)
+      ["structure", "academicSetup", "facilities", "timetable"].includes(item.key)
     )
   },
   {
@@ -112,7 +94,7 @@ export const DASHBOARD_NAV_GROUPS: DashboardNavGroup[] = [
   {
     key: "admin",
     items: DASHBOARD_NAV.filter((item) =>
-      ["communication", "audit", "settings", "team", "departments"].includes(item.key)
+      ["audit", "settings", "team", "departments"].includes(item.key)
     )
   }
 ];

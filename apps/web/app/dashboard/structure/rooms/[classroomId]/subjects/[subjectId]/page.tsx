@@ -1,11 +1,9 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import Link from "next/link";
 import { useMemo, use } from "react";
 import { useApiQuery } from "../../../../../../lib/api";
 import { RecordList, RecordListItem, RecordListPanel } from "../../../../../../lib/record-list";
-import { PanelHead } from "../../../../../../lib/panel";
 import { useCurrentAcademicYear } from "../../../../../../lib/use-current-academic-year";
 import { PageHeader } from "../../../../../page-header-context";
 import { EmptyState } from "../../../../../../../components/shared/empty-state";
@@ -167,15 +165,6 @@ export default function StructureSubjectClassroomPage({
             <p className="pds-type-caption-s structure-stat-card__label">{t("assignmentsTitle")}</p>
             <strong className="pds-type-title-l-extrabold structure-stat-card__value">{subjectAssignments.length}</strong>
             <span className="pds-type-body-s-regular muted">{t("assignmentsHelp")}</span>
-          </section>
-          <section className="panel">
-            <PanelHead title={t("examsTitle")} />
-            <div className="panel-body">
-              <p className="pds-type-body-s-regular muted">{t("examsHelp")}</p>
-              <Link href="/dashboard/exams" className="pds-type-body-s-regular structure-room-card__link">
-                {t("openExams")}
-              </Link>
-            </div>
           </section>
         </aside>
       </div>

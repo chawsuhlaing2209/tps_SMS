@@ -109,16 +109,8 @@ export function prefetchPathsForDashboardRoute(
     paths.push(`${base}/enrollments?academicYearId=${yearId}`);
   }
 
-  if (pathname.startsWith("/dashboard/calendar") && yearId) {
-    paths.push(`${base}/calendar?academicYearId=${yearId}`);
-  }
-
   if (pathname.startsWith("/dashboard/timetable") && yearId) {
     paths.push(`${base}/timetable?academicYearId=${yearId}`);
-  }
-
-  if (pathname.startsWith("/dashboard/exams")) {
-    paths.push(`${base}/exam-cycles`);
   }
 
   if (pathname.startsWith("/dashboard/finance/overview") && yearId) {
@@ -137,10 +129,6 @@ export function prefetchPathsForDashboardRoute(
     paths.push(`${base}/finance/fee-structures?academicYearId=${yearId}`);
   }
 
-  if (pathname.startsWith("/dashboard/finance/payment-plans")) {
-    paths.push(`${base}/finance/payment-plans`);
-  }
-
   if (pathname.startsWith("/dashboard/finance/discounts")) {
     paths.push(`${base}/finance/discounts/rules`);
   }
@@ -151,10 +139,6 @@ export function prefetchPathsForDashboardRoute(
       `${base}/salary/components`,
       `${base}/salary/records?limit=50&offset=0`
     );
-  }
-
-  if (pathname.startsWith("/dashboard/communication")) {
-    paths.push(`${base}/email-templates`);
   }
 
   if (pathname.startsWith("/dashboard/team")) {

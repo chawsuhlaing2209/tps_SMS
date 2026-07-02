@@ -67,12 +67,6 @@ export const DASHBOARD_NAV_SUBMODULES: Partial<
           labelKey: "feeStructures"
         },
         {
-          href: "/dashboard/finance/payment-plans",
-          icon: "payments",
-          labelNs: "finance",
-          labelKey: "paymentPlans"
-        },
-        {
           href: "/dashboard/finance/discounts",
           icon: "percent",
           labelNs: "finance",
@@ -145,36 +139,6 @@ export const DASHBOARD_NAV_SUBMODULES: Partial<
       ]
     }
   ],
-  exams: [
-    {
-      labelNs: "exams",
-      labelKey: "navExams",
-      items: [
-        {
-          href: "/dashboard/exams",
-          icon: "grading",
-          labelNs: "exams",
-          labelKey: "cycles",
-          exact: true,
-          anyOf: ["exam.manage"]
-        },
-        {
-          href: "/dashboard/exams/report-cards",
-          icon: "description",
-          labelNs: "exams",
-          labelKey: "reportCards",
-          anyOf: ["report_card.generate", "report_card.approve"]
-        },
-        {
-          href: "/dashboard/exams/grade-rules",
-          icon: "rule",
-          labelNs: "exams",
-          labelKey: "gradeRules",
-          anyOf: ["grade.approve"]
-        }
-      ]
-    }
-  ],
   salary: [
     {
       labelNs: "salary",
@@ -209,7 +173,6 @@ export const MODULE_PATH_PREFIX: Partial<Record<DashboardNavKey, string>> = {
   finance: "/dashboard/finance",
   academicSetup: "/dashboard/academic-setup",
   settings: "/dashboard/settings",
-  exams: "/dashboard/exams",
   salary: "/dashboard/salary"
 };
 

@@ -219,12 +219,7 @@ export default function GuardianDetailPage({
               <Icon name="call" />
               {t("messageGuardian")}
             </HeroPrimaryAction>
-          ) : (
-            <HeroPrimaryAction href="/dashboard/communication">
-              <Icon name="send" />
-              {t("messageGuardian")}
-            </HeroPrimaryAction>
-          )}
+          ) : null}
           {data.household ? (
             <HeroOutlineAction href={`/dashboard/people/households/${data.household.id}`}>
               <Icon name="family_restroom" />

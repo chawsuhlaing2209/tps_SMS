@@ -691,41 +691,29 @@ export default function StudentDetailPage({
               </div>
             </div>
             <div className="structure-room-banner__actions student-profile-banner__actions">
-              <HeroPrimaryAction
-                onClick={() =>
-                  navigateWithTrail(
-                    router,
-                    `/dashboard/exams/report-cards?studentId=${studentId}`,
-                    { label: data.fullName, href: studentHref }
-                  )
-                }
-              >
-                <Icon name="grading" />
-                {t("reportCard")}
-              </HeroPrimaryAction>
+              {canManage ? (
+                <HeroPrimaryAction onClick={() => setEditOpen(true)}>
+                  <Icon name="edit" />
+                  {t("editProfile")}
+                </HeroPrimaryAction>
+              ) : null}
               {canManage ? (
                 <HeroMoreActionsMenu
                   label={t("moreActions")}
                   items={[
-                    {
-                      id: "message",
-                      label: t("messageGuardian"),
-                      icon: "send",
-                      onSelect: () => {
-                        const phone = profile.primaryGuardian?.phone?.replace(/\s+/g, "");
-                        if (phone) {
-                          window.location.href = `tel:${phone}`;
-                        } else {
-                          router.push("/dashboard/communication");
-                        }
-                      }
-                    },
-                    {
-                      id: "edit",
-                      label: t("editProfile"),
-                      icon: "edit",
-                      onSelect: () => setEditOpen(true)
-                    },
+                    ...(profile.primaryGuardian?.phone
+                      ? [
+                          {
+                            id: "message",
+                            label: t("messageGuardian"),
+                            icon: "send",
+                            onSelect: () => {
+                              const phone = profile.primaryGuardian!.phone!.replace(/\s+/g, "");
+                              window.location.href = `tel:${phone}`;
+                            }
+                          }
+                        ]
+                      : []),
                     {
                       id: "active",
                       label: isActive ? t("setAsInactive") : t("markActive"),
