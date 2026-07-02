@@ -105,8 +105,7 @@
     "language": "Language",
     "brandTagline": "School OS",
     "collapseSidebar": "Collapse sidebar",
-    "expandSidebar": "Expand sidebar",
-    "archive": "Recycle Bin"
+    "expandSidebar": "Expand sidebar"
   },
   "auth": {
     "platform": "Myanmar SaaS School Platform",
@@ -2690,7 +2689,7 @@
     "newDiscount": "New discount",
     "configure": "Configure",
     "deleteDiscountTitle": "Delete discount rule permanently?",
-    "deleteDiscountHelp": "This permanently removes “{name}” and cannot be undone. Rules already applied to students or invoices cannot be deleted — keep them disabled instead.",
+    "deleteDiscountHelp": "This permanently removes “{name}” and cannot be undone. Rules already applied to students or invoices cannot be deleted — keep them archived instead.",
     "backToDiscounts": "Back to discounts",
     "ruleNotFound": "Discount rule not found.",
     "livePreview": "Live preview",
@@ -2871,24 +2870,5 @@
       "approved": "Approved",
       "rejected": "Rejected"
     }
-  },
-  "archive": {
-    "title": "Recycle Bin",
-    "description": "Archived records across the system. Restore them or delete permanently.",
-    "typeColumn": "Type",
-    "archivedAtColumn": "Archived",
-    "type_student": "Student",
-    "type_staff": "Staff",
-    "type_grade": "Grade",
-    "type_section": "Section",
-    "type_subject": "Subject",
-    "type_feeItem": "Fee item",
-    "restored": "Restored",
-    "deleteTitle": "Delete permanently?",
-    "deleteHelp": "This permanently removes “{name}” and cannot be undone. Records with dependencies cannot be deleted — keep them archived instead.",
-    "emptyTitle": "Recycle bin is empty",
-    "emptyDescription": "Archived records will appear here for review, restore, or permanent deletion.",
-    "type_benefitPackage": "Benefit package",
-    "type_incentiveProgram": "Incentive program"
   }
 }

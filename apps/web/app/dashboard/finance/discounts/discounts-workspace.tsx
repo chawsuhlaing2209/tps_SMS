@@ -17,6 +17,7 @@ import { Button } from "../../../../components/ui/button";
 import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
 import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
 import { StatCard, StatGrid } from "../../../../components/shared/stat-card";
+import { PdsSelectField } from "../../../../components/pds";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { isPadaukRowInteractiveTarget } from "../../../lib/table-row-interaction";
 import { Icon } from "../../../lib/material-icon";
@@ -116,6 +117,7 @@ export function DiscountsWorkspace() {
   const canView = hasAnyPermission(permissions, ["discount.request", "discount.approve"]);
   const canManage = hasAnyPermission(permissions, ["discount.approve"]);
   const [deletingRule, setDeletingRule] = useState<DiscountRuleRecord | null>(null);
+  const [viewFilter, setViewFilter] = useState<"active" | "archived" | "all">("active");
   const [setupOpen, setSetupOpen] = useState(false);
   const [setupMode, setSetupMode] = useState<"create" | "edit">("create");
   const [editingRuleId, setEditingRuleId] = useState<string | undefined>();
@@ -153,40 +155,64 @@ export function DiscountsWorkspace() {
     canView && academicYearId ? METRICS_PATH(tenant, academicYearId) : null
   );
 
-  const deactivateRule = useApiMutation<{ id: string }>(
-    ({ id }, tenant) => ({
-      path: `${RULES_PATH(tenant)}/${id}/archive`,
-      init: { method: "POST" }
-    }),
-    { invalidatePaths: (_b, tenant) => [RULES_PATH(tenant), METRICS_PATH(tenant, academicYearId)] }
-  );
+  const mutationInvalidate = {
+    invalidatePaths: (_b: unknown, tenant: string) => [
+      RULES_PATH(tenant),
+      METRICS_PATH(tenant, academicYearId)
+    ]
+  };
 
-  const activateRule = useApiMutation<{ id: string }>(
-    ({ id }, tenant) => ({
-      path: `${RULES_PATH(tenant)}/${id}/restore`,
-      init: { method: "POST" }
-    }),
-    { invalidatePaths: (_b, tenant) => [RULES_PATH(tenant), METRICS_PATH(tenant, academicYearId)] }
+  // Enable/disable = the Active toggle (stays in the active view).
+  const enableRule = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({ path: `${RULES_PATH(tenant)}/${id}/enable`, init: { method: "POST" } }),
+    mutationInvalidate
   );
-
+  const disableRule = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({ path: `${RULES_PATH(tenant)}/${id}/disable`, init: { method: "POST" } }),
+    mutationInvalidate
+  );
+  // Archive/restore = the lifecycle (moves in/out of the archived view).
+  const archiveRule = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({ path: `${RULES_PATH(tenant)}/${id}/archive`, init: { method: "POST" } }),
+    mutationInvalidate
+  );
+  const restoreRule = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({ path: `${RULES_PATH(tenant)}/${id}/restore`, init: { method: "POST" } }),
+    mutationInvalidate
+  );
   const deleteRule = useApiMutation<{ id: string }>(
-    ({ id }, tenant) => ({
-      path: `${RULES_PATH(tenant)}/${id}`,
-      init: { method: "DELETE" }
-    }),
-    { invalidatePaths: (_b, tenant) => [RULES_PATH(tenant), METRICS_PATH(tenant, academicYearId)] }
+    ({ id }, tenant) => ({ path: `${RULES_PATH(tenant)}/${id}`, init: { method: "DELETE" } }),
+    mutationInvalidate
   );
 
-  const visibleRules = (rules.data ?? []).filter((rule) => rule.status !== "archived");
-  const enabledRules = visibleRules.filter((rule) => rule.status === "active");
+  const allRules = rules.data ?? [];
+  const visibleRules =
+    viewFilter === "archived"
+      ? allRules.filter((rule) => rule.status === "archived")
+      : viewFilter === "all"
+        ? allRules
+        : allRules.filter((rule) => rule.status !== "archived");
+  const enabledRules = allRules.filter((rule) => rule.status === "active");
   const metricData = metrics.data;
 
   async function toggleRule(rule: DiscountRuleRecord, active: boolean) {
     if (active) {
-      await activateRule.mutateAsync({ id: rule.id });
+      await enableRule.mutateAsync({ id: rule.id });
     } else {
-      await deactivateRule.mutateAsync({ id: rule.id });
+      await disableRule.mutateAsync({ id: rule.id });
     }
+    void rules.refetch();
+    void metrics.refetch();
+  }
+
+  async function handleArchive(rule: DiscountRuleRecord) {
+    await archiveRule.mutateAsync({ id: rule.id });
+    void rules.refetch();
+    void metrics.refetch();
+  }
+
+  async function handleRestore(rule: DiscountRuleRecord) {
+    await restoreRule.mutateAsync({ id: rule.id });
     void rules.refetch();
     void metrics.refetch();
   }
@@ -201,6 +227,7 @@ export function DiscountsWorkspace() {
     const triggerMode = rule.triggerMode ?? defaultTriggerMode(rule.discountType);
     const application = applicationLabel(triggerMode, t);
     const isEnabled = rule.status === "active";
+    const isArchived = rule.status === "archived";
     const isSibling = normalizedType === "sibling";
 
     return (
@@ -242,10 +269,12 @@ export function DiscountsWorkspace() {
           <Badge tone={application.tone}>{application.label}</Badge>
         </td>
         <td>
-          {canManage ? (
+          {isArchived ? (
+            <Badge tone="neutral">{c("viewArchived")}</Badge>
+          ) : canManage ? (
             <Toggle
               checked={isEnabled}
-              disabled={deactivateRule.isPending || activateRule.isPending}
+              disabled={disableRule.isPending || enableRule.isPending}
               aria-label={t("toggleRule", { name: rule.name })}
               onCheckedChange={(checked) => void toggleRule(rule, checked)}
             />
@@ -283,15 +312,29 @@ export function DiscountsWorkspace() {
                   icon: "edit",
                   onSelect: () => openEdit(rule.id)
                 },
-                ...(rule.status === "active"
-                  ? []
-                  : [
+                ...(isArchived
+                  ? [
+                      {
+                        id: "restore",
+                        label: c("restore"),
+                        icon: "restore",
+                        onSelect: () => void handleRestore(rule)
+                      },
                       {
                         id: "delete",
                         label: c("deletePermanently"),
                         icon: "delete_forever",
                         destructive: true,
                         onSelect: () => setDeletingRule(rule)
+                      }
+                    ]
+                  : [
+                      {
+                        id: "archive",
+                        label: c("archive"),
+                        icon: "archive",
+                        destructive: true,
+                        onSelect: () => void handleArchive(rule)
                       }
                     ])
               ]}
@@ -358,6 +401,23 @@ export function DiscountsWorkspace() {
             hint={t("statAvgHelp")}
           />
         </StatGrid>
+      ) : null}
+
+      {canView ? (
+        <div className="discount-view-filter" style={{ maxWidth: 200 }}>
+          <PdsSelectField
+            variant="filter"
+            value={viewFilter}
+            onValueChange={(value) =>
+              setViewFilter(value === "archived" || value === "all" ? value : "active")
+            }
+            options={[
+              { value: "active", label: c("viewActive") },
+              { value: "archived", label: c("viewArchived") },
+              { value: "all", label: c("viewAll") }
+            ]}
+          />
+        </div>
       ) : null}
 
       {canView && rules.isLoading ? (

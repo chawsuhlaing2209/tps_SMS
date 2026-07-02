@@ -18,6 +18,5 @@ export const NAV_ICONS: Record<DashboardNavKey, string> = {
   settings: "settings",
   team: "groups",
   departments: "corporate_fare",
-  facilities: "meeting_room",
-  archive: "delete"
+  facilities: "meeting_room"
 };

@@ -52,6 +52,26 @@ export class DiscountsController {
     return this.discountsService.updateDiscountRule(tenantId, ruleId, actorUserId, dto);
   }
 
+  @Post("rules/:ruleId/enable")
+  @RequirePermissions("discount.approve")
+  enableDiscountRule(
+    @Param("tenantId") tenantId: string,
+    @Param("ruleId") ruleId: string,
+    @Headers("x-user-id") actorUserId: string
+  ) {
+    return this.discountsService.enableDiscountRule(tenantId, ruleId, actorUserId);
+  }
+
+  @Post("rules/:ruleId/disable")
+  @RequirePermissions("discount.approve")
+  disableDiscountRule(
+    @Param("tenantId") tenantId: string,
+    @Param("ruleId") ruleId: string,
+    @Headers("x-user-id") actorUserId: string
+  ) {
+    return this.discountsService.disableDiscountRule(tenantId, ruleId, actorUserId);
+  }
+
   @Post("rules/:ruleId/archive")
   @RequirePermissions("discount.approve")
   archiveDiscountRule(

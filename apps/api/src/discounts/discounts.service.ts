@@ -266,48 +266,50 @@ export class DiscountsService {
     return enrichRule(rule!);
   }
 
-  async archiveDiscountRule(tenantId: string, ruleId: string, actorUserId: string) {
+  /** Set a rule's status (enable/disable toggle uses active/inactive). */
+  private async setDiscountRuleStatus(
+    tenantId: string,
+    ruleId: string,
+    status: "active" | "inactive" | "archived",
+    action: string,
+    actorUserId: string
+  ) {
     const previous = await this.getDiscountRuleOrThrow(tenantId, ruleId);
-
     const [rule] = await this.db
       .update(discountRules)
-      .set({ status: "inactive", updatedBy: actorUserId, updatedAt: new Date() })
+      .set({ status, updatedBy: actorUserId, updatedAt: new Date() })
       .where(and(eq(discountRules.id, ruleId), eq(discountRules.tenantId, tenantId)))
       .returning();
 
     await this.auditService.recordEvent({
       tenantId,
       actorUserId,
-      action: "discount_rule.deactivate",
+      action,
       recordType: "DiscountRule",
       recordId: ruleId,
       before: { status: previous.status },
-      after: { status: "inactive" }
+      after: { status }
     });
 
     return enrichRule(rule!);
   }
 
+  /** Enable a rule (toggle on). */
+  enableDiscountRule(tenantId: string, ruleId: string, actorUserId: string) {
+    return this.setDiscountRuleStatus(tenantId, ruleId, "active", "discount_rule.enable", actorUserId);
+  }
+
+  /** Disable a rule (toggle off) — stays visible in the active view. */
+  disableDiscountRule(tenantId: string, ruleId: string, actorUserId: string) {
+    return this.setDiscountRuleStatus(tenantId, ruleId, "inactive", "discount_rule.disable", actorUserId);
+  }
+
+  archiveDiscountRule(tenantId: string, ruleId: string, actorUserId: string) {
+    return this.setDiscountRuleStatus(tenantId, ruleId, "archived", "discount_rule.archive", actorUserId);
+  }
+
   async restoreDiscountRule(tenantId: string, ruleId: string, actorUserId: string) {
-    const previous = await this.getDiscountRuleOrThrow(tenantId, ruleId);
-
-    const [rule] = await this.db
-      .update(discountRules)
-      .set({ status: "active", updatedBy: actorUserId, updatedAt: new Date() })
-      .where(and(eq(discountRules.id, ruleId), eq(discountRules.tenantId, tenantId)))
-      .returning();
-
-    await this.auditService.recordEvent({
-      tenantId,
-      actorUserId,
-      action: "discount_rule.restore",
-      recordType: "DiscountRule",
-      recordId: ruleId,
-      before: { status: previous.status },
-      after: { status: "active" }
-    });
-
-    return enrichRule(rule!);
+    return this.setDiscountRuleStatus(tenantId, ruleId, "active", "discount_rule.restore", actorUserId);
   }
 
   /** @deprecated Use {@link restoreDiscountRule}. Kept for the legacy /reactivate route. */
@@ -318,9 +320,9 @@ export class DiscountsService {
   async deleteDiscountRule(tenantId: string, ruleId: string, actorUserId: string) {
     const rule = await this.getDiscountRuleOrThrow(tenantId, ruleId);
 
-    // Two-step safety: disable (archive) the rule before deleting it permanently.
-    if (rule.status === "active") {
-      throw new BadRequestException("Disable the discount rule before deleting it.");
+    // Two-step safety: archive the rule before deleting it permanently.
+    if (rule.status !== "archived") {
+      throw new BadRequestException("Archive the discount rule before deleting it.");
     }
 
     const n = sql<number>`count(*)::int`;
@@ -335,7 +337,7 @@ export class DiscountsService {
     if (Object.values(dependencies).some((c) => c > 0)) {
       throw new ConflictException({
         message:
-          "This discount rule has been applied to students or invoices and cannot be deleted. Keep it disabled instead.",
+          "This discount rule has been applied to students or invoices and cannot be deleted. Keep it archived instead.",
         dependencies
       });
     }
