@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
@@ -417,6 +418,55 @@ export class PayrollService {
     return pkg;
   }
 
+  async restoreBenefitPackage(tenantId: string, id: string, actorUserId: string | undefined) {
+    const [pkg] = await this.db
+      .update(benefitPackages)
+      .set({ status: "active", updatedBy: actorUserId, updatedAt: new Date() })
+      .where(and(eq(benefitPackages.id, id), eq(benefitPackages.tenantId, tenantId)))
+      .returning();
+    if (!pkg) throw new NotFoundException("Benefit package not found.");
+    return pkg;
+  }
+
+  async deleteBenefitPackage(tenantId: string, id: string, actorUserId: string | undefined) {
+    const [pkg] = await this.db
+      .select()
+      .from(benefitPackages)
+      .where(and(eq(benefitPackages.id, id), eq(benefitPackages.tenantId, tenantId)));
+    if (!pkg) throw new NotFoundException("Benefit package not found.");
+
+    // Two-step safety: archive before permanent deletion.
+    if (pkg.status !== "archived") {
+      throw new BadRequestException("Archive the benefit package before deleting it.");
+    }
+
+    const [enrolled] = await this.db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(staffBenefitEnrollments)
+      .where(and(eq(staffBenefitEnrollments.tenantId, tenantId), eq(staffBenefitEnrollments.packageId, id)));
+    if ((enrolled?.n ?? 0) > 0) {
+      throw new ConflictException({
+        message:
+          "This benefit package has staff enrolments and cannot be deleted. Keep it archived instead.",
+        dependencies: { enrollments: enrolled?.n ?? 0 }
+      });
+    }
+
+    await this.db.delete(benefitPackages).where(and(eq(benefitPackages.tenantId, tenantId), eq(benefitPackages.id, id)));
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "benefit_package.delete",
+      recordType: "BenefitPackage",
+      recordId: id,
+      before: { name: pkg.name, status: pkg.status },
+      after: { deleted: true }
+    });
+
+    return { id, deleted: true };
+  }
+
   async enrollStaffBenefit(
     tenantId: string,
     packageId: string,
@@ -580,6 +630,51 @@ export class PayrollService {
       .returning();
     if (!program) throw new NotFoundException("Incentive program not found.");
     return program;
+  }
+
+  async restoreIncentiveProgram(tenantId: string, id: string, actorUserId: string | undefined) {
+    const [program] = await this.db
+      .update(incentivePrograms)
+      .set({ status: "active", updatedBy: actorUserId, updatedAt: new Date() })
+      .where(and(eq(incentivePrograms.id, id), eq(incentivePrograms.tenantId, tenantId)))
+      .returning();
+    if (!program) throw new NotFoundException("Incentive program not found.");
+    return program;
+  }
+
+  async deleteIncentiveProgram(tenantId: string, id: string, actorUserId: string | undefined) {
+    const program = await this.getIncentiveProgramOrThrow(tenantId, id);
+
+    // Two-step safety: archive before permanent deletion.
+    if (program.status !== "archived") {
+      throw new BadRequestException("Archive the incentive program before deleting it.");
+    }
+
+    const [eligible] = await this.db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(staffIncentiveEligibility)
+      .where(and(eq(staffIncentiveEligibility.tenantId, tenantId), eq(staffIncentiveEligibility.programId, id)));
+    if ((eligible?.n ?? 0) > 0) {
+      throw new ConflictException({
+        message:
+          "This incentive program has eligible staff and cannot be deleted. Keep it archived instead.",
+        dependencies: { eligibility: eligible?.n ?? 0 }
+      });
+    }
+
+    await this.db.delete(incentivePrograms).where(and(eq(incentivePrograms.tenantId, tenantId), eq(incentivePrograms.id, id)));
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "incentive_program.delete",
+      recordType: "IncentiveProgram",
+      recordId: id,
+      before: { name: program.name, status: program.status },
+      after: { deleted: true }
+    });
+
+    return { id, deleted: true };
   }
 
   async setIncentiveEligibility(

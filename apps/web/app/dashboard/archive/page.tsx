@@ -15,7 +15,15 @@ import { DataTableSection, TablePanelBody } from "../../lib/table-panel";
 import { toastSuccess } from "../../lib/toast";
 import { ModulePageHeader } from "../module-page-header";
 
-type RecycleType = "student" | "staff" | "grade" | "section" | "subject" | "feeItem";
+type RecycleType =
+  | "student"
+  | "staff"
+  | "grade"
+  | "section"
+  | "subject"
+  | "feeItem"
+  | "benefitPackage"
+  | "incentiveProgram";
 
 type RecycleItem = {
   type: RecycleType;
@@ -34,7 +42,9 @@ const BASE_PATH: Record<RecycleType, (tenant: string, id: string) => string> = {
   grade: (t, id) => `/tenants/${t}/academics/grades/${id}`,
   section: (t, id) => `/tenants/${t}/academics/sections/${id}`,
   subject: (t, id) => `/tenants/${t}/academics/subjects/${id}`,
-  feeItem: (t, id) => `/tenants/${t}/finance/fee-items/${id}`
+  feeItem: (t, id) => `/tenants/${t}/finance/fee-items/${id}`,
+  benefitPackage: (t, id) => `/tenants/${t}/benefit-packages/${id}`,
+  incentiveProgram: (t, id) => `/tenants/${t}/incentive-programs/${id}`
 };
 
 function formatDate(value: string | null) {

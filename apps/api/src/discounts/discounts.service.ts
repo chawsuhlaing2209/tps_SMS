@@ -1,4 +1,10 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException
+} from "@nestjs/common";
 import {
   createDiscountRuleSchema,
   defaultStackable,
@@ -8,13 +14,14 @@ import {
   parseDiscountCriteria,
   updateDiscountRuleSchema
 } from "@sms/shared";
-import { and, eq, gt, sum } from "drizzle-orm";
+import { and, eq, gt, sql, sum } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
 import {
   academicYears,
   discountRules,
   enrollments,
+  invoiceDiscountLines,
   invoices,
   studentDiscounts,
   students
@@ -306,6 +313,48 @@ export class DiscountsService {
   /** @deprecated Use {@link restoreDiscountRule}. Kept for the legacy /reactivate route. */
   async reactivateDiscountRule(tenantId: string, ruleId: string, actorUserId: string) {
     return this.restoreDiscountRule(tenantId, ruleId, actorUserId);
+  }
+
+  async deleteDiscountRule(tenantId: string, ruleId: string, actorUserId: string) {
+    const rule = await this.getDiscountRuleOrThrow(tenantId, ruleId);
+
+    // Two-step safety: disable (archive) the rule before deleting it permanently.
+    if (rule.status === "active") {
+      throw new BadRequestException("Disable the discount rule before deleting it.");
+    }
+
+    const n = sql<number>`count(*)::int`;
+    const [applied, invoiced] = await Promise.all([
+      this.db.select({ n }).from(studentDiscounts).where(and(eq(studentDiscounts.tenantId, tenantId), eq(studentDiscounts.discountRuleId, ruleId))),
+      this.db.select({ n }).from(invoiceDiscountLines).where(and(eq(invoiceDiscountLines.tenantId, tenantId), eq(invoiceDiscountLines.discountRuleId, ruleId)))
+    ]);
+    const dependencies = {
+      studentDiscounts: applied[0]?.n ?? 0,
+      invoiceLines: invoiced[0]?.n ?? 0
+    };
+    if (Object.values(dependencies).some((c) => c > 0)) {
+      throw new ConflictException({
+        message:
+          "This discount rule has been applied to students or invoices and cannot be deleted. Keep it disabled instead.",
+        dependencies
+      });
+    }
+
+    await this.db
+      .delete(discountRules)
+      .where(and(eq(discountRules.tenantId, tenantId), eq(discountRules.id, ruleId)));
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId,
+      action: "discount_rule.delete",
+      recordType: "DiscountRule",
+      recordId: ruleId,
+      before: { name: rule.name, status: rule.status },
+      after: { deleted: true }
+    });
+
+    return { id: ruleId, deleted: true };
   }
 
   listStudentDiscounts(tenantId: string, query: ListStudentDiscountsQueryDto) {

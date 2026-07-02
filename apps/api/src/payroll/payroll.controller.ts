@@ -139,6 +139,24 @@ export class PayrollController {
     return this.payrollService.archiveBenefitPackage(tenantId, packageId, actorUserId);
   }
 
+  @Post("benefit-packages/:packageId/restore")
+  restoreBenefitPackage(
+    @Param("tenantId") tenantId: string,
+    @Param("packageId") packageId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.payrollService.restoreBenefitPackage(tenantId, packageId, actorUserId);
+  }
+
+  @Delete("benefit-packages/:packageId")
+  deleteBenefitPackage(
+    @Param("tenantId") tenantId: string,
+    @Param("packageId") packageId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.payrollService.deleteBenefitPackage(tenantId, packageId, actorUserId);
+  }
+
   @Post("benefit-packages/:packageId/enrollments")
   enrollStaffBenefit(
     @Param("tenantId") tenantId: string,
@@ -189,6 +207,24 @@ export class PayrollController {
     @Headers("x-user-id") actorUserId?: string
   ) {
     return this.payrollService.archiveIncentiveProgram(tenantId, programId, actorUserId);
+  }
+
+  @Post("incentive-programs/:programId/restore")
+  restoreIncentiveProgram(
+    @Param("tenantId") tenantId: string,
+    @Param("programId") programId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.payrollService.restoreIncentiveProgram(tenantId, programId, actorUserId);
+  }
+
+  @Delete("incentive-programs/:programId")
+  deleteIncentiveProgram(
+    @Param("tenantId") tenantId: string,
+    @Param("programId") programId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.payrollService.deleteIncentiveProgram(tenantId, programId, actorUserId);
   }
 
   @Post("incentive-programs/:programId/eligibility")

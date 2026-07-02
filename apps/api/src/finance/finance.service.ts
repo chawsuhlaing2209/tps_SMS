@@ -112,6 +112,11 @@ export class FinanceService {
   async deleteFeeItem(tenantId: string, feeItemId: string, actorUserId: string) {
     const previous = await this.getFeeItemOrThrow(tenantId, feeItemId)
 
+    // Two-step safety: archive the fee item before deleting it permanently.
+    if (previous.status !== 'archived') {
+      throw new BadRequestException('Archive the fee item before deleting it.')
+    }
+
     const today = new Date().toISOString().slice(0, 10)
     const [activeRow] = await this.db
       .select({ value: count() })

@@ -222,8 +222,8 @@ export default function FeeStructuresPage() {
     { invalidatePaths: (_b, tenant) => [FEE_ITEMS_PATH(tenant)] }
   );
 
-  const deleteFeeItem = useApiMutation<{ id: string }>(
-    ({ id }, tenant) => ({ path: `${FEE_ITEMS_PATH(tenant)}/${id}`, init: { method: "DELETE" } }),
+  const archiveFeeItem = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({ path: `${FEE_ITEMS_PATH(tenant)}/${id}/archive`, init: { method: "POST" } }),
     { showErrorToast: false, invalidatePaths: (_b, tenant) => [FEE_ITEMS_PATH(tenant), PLANS_PATH(tenant)] }
   );
 
@@ -393,9 +393,9 @@ export default function FeeStructuresPage() {
                               }
                             },
                             {
-                              id: "delete",
-                              label: t("deleteComponent"),
-                              icon: "delete",
+                              id: "archive",
+                              label: c("archive"),
+                              icon: "archive",
                               destructive: true,
                               onSelect: () => {
                                 setDeleteError(null);
@@ -586,17 +586,17 @@ export default function FeeStructuresPage() {
             setDeleteError(null);
           }
         }}
-        title={t("deleteComponent")}
-        description={deleteError ?? (deleting ? t("deleteComponentHelp", { name: deleting.name }) : "")}
-        confirmLabel={t("deleteComponent")}
+        title={t("archiveComponent")}
+        description={deleteError ?? (deleting ? t("archiveComponentHelp", { name: deleting.name }) : "")}
+        confirmLabel={c("archive")}
         cancelLabel={c("cancel")}
         destructive
-        loading={deleteFeeItem.isPending}
+        loading={archiveFeeItem.isPending}
         onConfirm={async () => {
           if (!deleting) return;
           setDeleteError(null);
           try {
-            await deleteFeeItem.mutateAsync({ id: deleting.id });
+            await archiveFeeItem.mutateAsync({ id: deleting.id });
             if (selectedFeeItemId === deleting.id) setSelectedFeeItemId(null);
             setDeleting(null);
           } catch (error) {

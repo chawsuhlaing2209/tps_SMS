@@ -169,6 +169,14 @@ export function DiscountsWorkspace() {
     { invalidatePaths: (_b, tenant) => [RULES_PATH(tenant), METRICS_PATH(tenant, academicYearId)] }
   );
 
+  const deleteRule = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({
+      path: `${RULES_PATH(tenant)}/${id}`,
+      init: { method: "DELETE" }
+    }),
+    { invalidatePaths: (_b, tenant) => [RULES_PATH(tenant), METRICS_PATH(tenant, academicYearId)] }
+  );
+
   const visibleRules = (rules.data ?? []).filter((rule) => rule.status !== "archived");
   const enabledRules = visibleRules.filter((rule) => rule.status === "active");
   const metricData = metrics.data;
@@ -275,13 +283,17 @@ export function DiscountsWorkspace() {
                   icon: "edit",
                   onSelect: () => openEdit(rule.id)
                 },
-                {
-                  id: "delete",
-                  label: c("delete"),
-                  icon: "delete",
-                  destructive: true,
-                  onSelect: () => setDeletingRule(rule)
-                }
+                ...(rule.status === "active"
+                  ? []
+                  : [
+                      {
+                        id: "delete",
+                        label: c("deletePermanently"),
+                        icon: "delete_forever",
+                        destructive: true,
+                        onSelect: () => setDeletingRule(rule)
+                      }
+                    ])
               ]}
             />
           ) : null}
@@ -413,13 +425,14 @@ export function DiscountsWorkspace() {
         }}
         title={t("deleteDiscountTitle")}
         description={t("deleteDiscountHelp", { name: deletingRule?.name ?? "" })}
-        confirmLabel={c("delete")}
+        confirmLabel={c("deletePermanently")}
         destructive
-        loading={deactivateRule.isPending}
+        loading={deleteRule.isPending}
         onConfirm={async () => {
           if (!deletingRule) return;
-          await deactivateRule.mutateAsync({ id: deletingRule.id });
+          await deleteRule.mutateAsync({ id: deletingRule.id });
           setDeletingRule(null);
+          void rules.refetch();
         }}
       />
     </div>

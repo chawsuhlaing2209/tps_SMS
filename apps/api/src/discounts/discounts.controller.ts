@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Headers, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { RequireAnyPermissions, RequirePermissions } from "../identity/permissions.decorator.js";
 import { PermissionsGuard } from "../identity/permissions.guard.js";
 import { DiscountsService } from "./discounts.service.js";
@@ -81,6 +81,16 @@ export class DiscountsController {
     @Headers("x-user-id") actorUserId: string
   ) {
     return this.discountsService.restoreDiscountRule(tenantId, ruleId, actorUserId);
+  }
+
+  @Delete("rules/:ruleId")
+  @RequirePermissions("discount.approve")
+  deleteDiscountRule(
+    @Param("tenantId") tenantId: string,
+    @Param("ruleId") ruleId: string,
+    @Headers("x-user-id") actorUserId: string
+  ) {
+    return this.discountsService.deleteDiscountRule(tenantId, ruleId, actorUserId);
   }
 
   @Get("student-discounts")

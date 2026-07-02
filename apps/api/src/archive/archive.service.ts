@@ -1,12 +1,30 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { DB, type Database } from "../db/db.module.js";
-import { feeItems, grades, sections, staff, students, subjects, tenantSettings } from "../db/schema.js";
+import {
+  benefitPackages,
+  feeItems,
+  grades,
+  incentivePrograms,
+  sections,
+  staff,
+  students,
+  subjects,
+  tenantSettings
+} from "../db/schema.js";
 import { purgeArchivedForTenant } from "./purge-archived-runner.js";
 
 /** One archived record, normalized across modules for the recycle bin. */
 export type RecycleBinItem = {
-  type: "student" | "staff" | "grade" | "section" | "subject" | "feeItem";
+  type:
+    | "student"
+    | "staff"
+    | "grade"
+    | "section"
+    | "subject"
+    | "feeItem"
+    | "benefitPackage"
+    | "incentiveProgram";
   id: string;
   label: string;
   sublabel: string | null;
@@ -19,8 +37,16 @@ export class ArchiveService {
 
   /** Aggregate archived records across the deletable structural modules. */
   async getRecycleBin(tenantId: string): Promise<{ items: RecycleBinItem[] }> {
-    const [studentRows, staffRows, gradeRows, sectionRows, subjectRows, feeItemRows] =
-      await Promise.all([
+    const [
+      studentRows,
+      staffRows,
+      gradeRows,
+      sectionRows,
+      subjectRows,
+      feeItemRows,
+      benefitRows,
+      incentiveRows
+    ] = await Promise.all([
         this.db
           .select({
             id: students.id,
@@ -61,7 +87,15 @@ export class ArchiveService {
         this.db
           .select({ id: feeItems.id, label: feeItems.name, updatedAt: feeItems.updatedAt })
           .from(feeItems)
-          .where(and(eq(feeItems.tenantId, tenantId), eq(feeItems.status, "archived")))
+          .where(and(eq(feeItems.tenantId, tenantId), eq(feeItems.status, "archived"))),
+        this.db
+          .select({ id: benefitPackages.id, label: benefitPackages.name, updatedAt: benefitPackages.updatedAt })
+          .from(benefitPackages)
+          .where(and(eq(benefitPackages.tenantId, tenantId), eq(benefitPackages.status, "archived"))),
+        this.db
+          .select({ id: incentivePrograms.id, label: incentivePrograms.name, updatedAt: incentivePrograms.updatedAt })
+          .from(incentivePrograms)
+          .where(and(eq(incentivePrograms.tenantId, tenantId), eq(incentivePrograms.status, "archived")))
       ]);
 
     const toIso = (value: Date | string | null | undefined) =>
@@ -105,6 +139,20 @@ export class ArchiveService {
       })),
       ...feeItemRows.map((r) => ({
         type: "feeItem" as const,
+        id: r.id,
+        label: r.label,
+        sublabel: null,
+        archivedAt: toIso(r.updatedAt)
+      })),
+      ...benefitRows.map((r) => ({
+        type: "benefitPackage" as const,
+        id: r.id,
+        label: r.label,
+        sublabel: null,
+        archivedAt: toIso(r.updatedAt)
+      })),
+      ...incentiveRows.map((r) => ({
+        type: "incentiveProgram" as const,
         id: r.id,
         label: r.label,
         sublabel: null,
