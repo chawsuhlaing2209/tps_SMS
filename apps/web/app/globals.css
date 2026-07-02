@@ -1696,6 +1696,14 @@ h3,
 .padauk-table--pinned-end > tbody td:last-child {
   position: sticky;
   right: 0;
+}
+/* The floating shadow only renders while more columns remain to the right
+   (data-pin-overlay is managed by PadaukTableWrap). At scroll-end — or when
+   the table fits — the pinned column sits flush like a normal column. */
+[data-pin-overlay="true"] .padauk-table th.col-actions,
+[data-pin-overlay="true"] .padauk-table td.col-actions,
+[data-pin-overlay="true"] .padauk-table--pinned-end > thead th:last-child,
+[data-pin-overlay="true"] .padauk-table--pinned-end > tbody td:last-child {
   box-shadow: -10px 0 10px -10px rgb(15 23 20 / 18%);
 }
 .padauk-table th.col-actions {

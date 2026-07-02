@@ -14,6 +14,7 @@ import { getSession } from "../../../lib/session";
 import { DirectoryMemberCell } from "../../../lib/data-table";
 import { Field } from "../../../lib/form";
 import { Icon } from "../../../lib/material-icon";
+import { PadaukTableWrap } from "../../../lib/padauk-table-wrap";
 import { PaginationControls } from "../../../lib/pagination-controls";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
@@ -389,7 +390,7 @@ export default function PaymentsPage() {
         empty={!rows.length}
         emptyMessage={t("empty")}
       >
-        <div className="padauk-table-wrap">
+        <PadaukTableWrap>
           <table className="pds-type-body-m-medium padauk-table padauk-table--pinned-end">
             <thead>
               <tr>
@@ -485,7 +486,7 @@ export default function PaymentsPage() {
               })}
             </tbody>
           </table>
-        </div>
+        </PadaukTableWrap>
       </FinanceTableShell>
 
       <PaginationControls

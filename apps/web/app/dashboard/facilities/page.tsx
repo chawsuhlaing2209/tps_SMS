@@ -12,6 +12,7 @@ import { hasAnyPermission } from "../../lib/permissions";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { getSession } from "../../lib/session";
 import { Icon } from "../../lib/material-icon";
+import { PadaukTableWrap } from "../../lib/padauk-table-wrap";
 import { TablePanelBody } from "../../lib/table-panel";
 import { zodResolver } from "../../lib/zod-resolver";
 import { PageHeader } from "../page-header-context";
@@ -164,7 +165,7 @@ export default function FacilitiesPage() {
         emptyTitle={t("emptyTitle")}
         emptyDescription={t("emptyDescription")}
       >
-        <div className="padauk-table-wrap">
+        <PadaukTableWrap>
           <table className="pds-type-body-m-medium padauk-table padauk-table--pinned-end facility-rooms-table">
             <thead>
               <tr>
@@ -197,7 +198,7 @@ export default function FacilitiesPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </PadaukTableWrap>
       </TablePanelBody>
 
       <RecordFormSheet

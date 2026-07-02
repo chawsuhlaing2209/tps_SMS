@@ -19,6 +19,7 @@ import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actio
 import { StatCard, StatGrid } from "../../../../components/shared/stat-card";
 import { ArchiveVisibilityFilter } from "../../../../components/shared/archive-visibility-filter";
 import { type ArchiveVisibility } from "../../../lib/archive-filter";
+import { PadaukTableWrap } from "../../../lib/padauk-table-wrap";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { isPadaukRowInteractiveTarget } from "../../../lib/table-row-interaction";
 import { Icon } from "../../../lib/material-icon";
@@ -439,7 +440,7 @@ export function DiscountsWorkspace() {
 
       {canView && visibleRules.length ? (
         <section className="panel discount-table-panel">
-          <div className="discount-table-wrap">
+          <PadaukTableWrap className="discount-table-wrap">
             <table className="padauk-table padauk-table--pinned-end discount-table">
               <thead>
                 <tr>
@@ -453,7 +454,7 @@ export function DiscountsWorkspace() {
               </thead>
               <tbody>{visibleRules.map(renderRuleRow)}</tbody>
             </table>
-          </div>
+          </PadaukTableWrap>
         </section>
       ) : null}
 

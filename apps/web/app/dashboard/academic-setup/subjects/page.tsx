@@ -23,6 +23,7 @@ import {
 } from "../../../lib/archive-filter";
 import { hasAnyPermission } from "../../../lib/permissions";
 import { getSession } from "../../../lib/session";
+import { PadaukTableWrap } from "../../../lib/padauk-table-wrap";
 import { toastSuccess } from "../../../lib/toast";
 import { useAcademicYearContext } from "../use-academic-year-context";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
@@ -281,6 +282,7 @@ export default function SubjectsPage() {
           archiveVisibility === "archived" ? t("archivedSubjectsEmpty") : undefined
         }
       >
+        <PadaukTableWrap>
         <table className="pds-type-body-m-medium padauk-table padauk-table--pinned-end setup-subjects-table">
           <thead>
             <tr>
@@ -397,6 +399,7 @@ export default function SubjectsPage() {
             })}
           </tbody>
         </table>
+        </PadaukTableWrap>
       </TablePanelBody>
 
       <RecordFormSheet

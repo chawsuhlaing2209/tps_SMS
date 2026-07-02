@@ -11,6 +11,7 @@ import { fetchAllPaginated } from "../../../../lib/export-csv";
 import { getSession } from "../../../../lib/session";
 import { DirectoryMemberCell } from "../../../../lib/data-table";
 import { Icon } from "../../../../lib/material-icon";
+import { PadaukTableWrap } from "../../../../lib/padauk-table-wrap";
 import { PaginationControls } from "../../../../lib/pagination-controls";
 import { useCurrentAcademicYear } from "../../../../lib/use-current-academic-year";
 import { Badge, type BadgeTone } from "../../../../../components/shared/badge";
@@ -320,7 +321,7 @@ export function InvoicesListPanel() {
         empty={!rows.length}
         emptyMessage={t("empty")}
       >
-        <div className="padauk-table-wrap">
+        <PadaukTableWrap>
           <table className="pds-type-body-m-medium padauk-table padauk-table--pinned-end">
             <thead>
               <tr>
@@ -394,7 +395,7 @@ export function InvoicesListPanel() {
               })}
             </tbody>
           </table>
-        </div>
+        </PadaukTableWrap>
       </FinanceTableShell>
 
       <PaginationControls

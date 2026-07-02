@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { Icon } from "../../../lib/material-icon";
+import { PadaukTableWrap } from "../../../lib/padauk-table-wrap";
 import { cn } from "../../../../lib/utils";
 import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
 import { StatusBadge } from "../../../../components/shared/badge";
@@ -55,7 +56,7 @@ export function IncentiveProgramsTable({
   const c = useTranslations("common");
 
   return (
-    <div className="padauk-table-wrap incentive-programs-table-wrap">
+    <PadaukTableWrap className="incentive-programs-table-wrap">
       <table className="pds-type-body-m-medium padauk-table padauk-table--pinned-end incentive-programs-table">
         <thead>
           <tr>
@@ -179,6 +180,6 @@ export function IncentiveProgramsTable({
           })}
         </tbody>
       </table>
-    </div>
+    </PadaukTableWrap>
   );
 }
