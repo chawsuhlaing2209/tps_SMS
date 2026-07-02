@@ -105,7 +105,8 @@
     "language": "Language",
     "brandTagline": "School OS",
     "collapseSidebar": "Collapse sidebar",
-    "expandSidebar": "Expand sidebar"
+    "expandSidebar": "Expand sidebar",
+    "archive": "Recycle Bin"
   },
   "auth": {
     "platform": "Myanmar SaaS School Platform",
@@ -2866,5 +2867,22 @@
       "approved": "Approved",
       "rejected": "Rejected"
     }
+  },
+  "archive": {
+    "title": "Recycle Bin",
+    "description": "Archived records across the system. Restore them or delete permanently.",
+    "typeColumn": "Type",
+    "archivedAtColumn": "Archived",
+    "type_student": "Student",
+    "type_staff": "Staff",
+    "type_grade": "Grade",
+    "type_section": "Section",
+    "type_subject": "Subject",
+    "type_feeItem": "Fee item",
+    "restored": "Restored",
+    "deleteTitle": "Delete permanently?",
+    "deleteHelp": "This permanently removes “{name}” and cannot be undone. Records with dependencies cannot be deleted — keep them archived instead.",
+    "emptyTitle": "Recycle bin is empty",
+    "emptyDescription": "Archived records will appear here for review, restore, or permanent deletion."
   }
 }

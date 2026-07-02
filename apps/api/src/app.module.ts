@@ -3,6 +3,7 @@ import { ConfigModule } from "@nestjs/config";
 import { AcademicsModule } from "./academics/academics.module.js";
 import { AdmissionsModule } from "./admissions/admissions.module.js";
 import { AppController } from "./app.controller.js";
+import { ArchiveModule } from "./archive/archive.module.js";
 import { AttendanceModule } from "./attendance/attendance.module.js";
 import { AuditModule } from "./audit/audit.module.js";
 import { CalendarModule } from "./calendar/calendar.module.js";
@@ -46,6 +47,7 @@ import { StorageModule } from "./storage/storage.module.js";
     ClassroomsModule,
     AttendanceModule,
     AuditModule,
+    ArchiveModule,
     StudentsModule,
     FinanceModule,
     HrModule,

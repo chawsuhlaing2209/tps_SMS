@@ -28,7 +28,8 @@ export type DashboardNavKey =
   | "settings"
   | "team"
   | "departments"
-  | "facilities";
+  | "facilities"
+  | "archive";
 
 export type DashboardNavGroupKey = "school" | "academics" | "business" | "admin";
 
@@ -89,7 +90,12 @@ export const DASHBOARD_NAV: DashboardNavItem[] = [
     key: "team",
     anyOf: ["hr.manage", "identity.manage"]
   },
-  { href: "/dashboard/departments", key: "departments", anyOf: ["hr.manage"] }
+  { href: "/dashboard/departments", key: "departments", anyOf: ["hr.manage"] },
+  {
+    href: "/dashboard/archive",
+    key: "archive",
+    anyOf: ["student.manage", "hr.manage", "academic_setup.manage", "finance.manage"]
+  }
 ];
 
 export const DASHBOARD_NAV_GROUPS: DashboardNavGroup[] = [
@@ -112,7 +118,7 @@ export const DASHBOARD_NAV_GROUPS: DashboardNavGroup[] = [
   {
     key: "admin",
     items: DASHBOARD_NAV.filter((item) =>
-      ["communication", "audit", "settings", "team", "departments"].includes(item.key)
+      ["communication", "audit", "settings", "team", "departments", "archive"].includes(item.key)
     )
   }
 ];
