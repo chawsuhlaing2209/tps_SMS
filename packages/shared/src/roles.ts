@@ -23,6 +23,7 @@ export const permissions = [
   "student.manage",
   "student.view",
   "hr.manage",
+  "leave.manage",
   "salary.manage",
   "classroom.manage",
   "facility.manage",
@@ -62,6 +63,7 @@ export const rolePermissions: Record<Role, Permission[]> = {
     "student.manage",
     "student.view",
     "hr.manage",
+    "leave.manage",
     "salary.manage",
     "classroom.manage",
     "facility.manage",
@@ -84,6 +86,7 @@ export const rolePermissions: Record<Role, Permission[]> = {
     "academic_setup.manage",
     "student.view",
     "hr.manage",
+    "leave.manage",
     "classroom.manage",
     "facility.manage",
     "calendar.manage",
@@ -140,7 +143,7 @@ export const rolePermissions: Record<Role, Permission[]> = {
     "communication.manage",
     "report.view"
   ],
-  hr_staff: ["hr.manage", "salary.manage", "report.view"],
+  hr_staff: ["hr.manage", "leave.manage", "salary.manage", "report.view"],
   parent_guardian: ["student.view"],
   student: ["student.view"]
 };

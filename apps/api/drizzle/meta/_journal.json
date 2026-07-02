@@ -225,6 +225,20 @@
       "when": 1783900000005,
       "tag": "0031_archive_earning_pay_components",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1783900000006,
+      "tag": "0032_icy_ironclad",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1783900000007,
+      "tag": "0033_backfill_leave_manage_permission",
+      "breakpoints": true
     }
   ]
 }

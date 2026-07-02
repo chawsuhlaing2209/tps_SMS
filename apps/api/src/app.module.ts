@@ -18,6 +18,7 @@ import { ExamsModule } from "./exams/exams.module.js";
 import { FinanceModule } from "./finance/finance.module.js";
 import { GradingModule } from "./grading/grading.module.js";
 import { HrModule } from "./hr/hr.module.js";
+import { LeavesModule } from "./leaves/leaves.module.js";
 import { IdentityModule } from "./identity/identity.module.js";
 import { LmsModule } from "./lms/lms.module.js";
 import { PayrollModule } from "./payroll/payroll.module.js";
@@ -51,6 +52,7 @@ import { StorageModule } from "./storage/storage.module.js";
     StudentsModule,
     FinanceModule,
     HrModule,
+    LeavesModule,
     DepartmentsModule,
     FacilitiesModule,
     SalaryModule,

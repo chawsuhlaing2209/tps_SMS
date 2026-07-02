@@ -1319,3 +1319,52 @@ export const studentDocuments = pgTable("student_documents", {
   verifiedByUserId: uuid("verified_by_user_id").references(() => users.id),
   verifiedAt: timestamp("verified_at", { withTimezone: true })
 });
+
+/** Leave management: admin-defined leave types with yearly quotas. */
+export const leaveTypes = pgTable(
+  "leave_types",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...tenantFields,
+    name: text("name").notNull(),
+    /** Default allowance in days per calendar year. */
+    yearlyQuota: numeric("yearly_quota").notNull(),
+    status: text("status").$type<"active" | "archived">().default("active").notNull()
+  },
+  (table) => ({
+    tenantNameUnique: uniqueIndex("leave_types_tenant_name_unique").on(table.tenantId, table.name)
+  })
+);
+
+/** Per-staff allocation override for a leave type in a calendar year. */
+export const staffLeaveBalances = pgTable(
+  "staff_leave_balances",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...tenantFields,
+    staffId: uuid("staff_id").references(() => staff.id).notNull(),
+    leaveTypeId: uuid("leave_type_id").references(() => leaveTypes.id).notNull(),
+    calendarYear: integer("calendar_year").notNull(),
+    allocatedDays: numeric("allocated_days").notNull()
+  },
+  (table) => ({
+    tenantStaffTypeYearUnique: uniqueIndex("staff_leave_balances_unique").on(
+      table.tenantId,
+      table.staffId,
+      table.leaveTypeId,
+      table.calendarYear
+    )
+  })
+);
+
+/** A recorded leave for a staff member. Used days = sum of records per year. */
+export const leaveRecords = pgTable("leave_records", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  staffId: uuid("staff_id").references(() => staff.id).notNull(),
+  leaveTypeId: uuid("leave_type_id").references(() => leaveTypes.id).notNull(),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date").notNull(),
+  days: numeric("days").notNull(),
+  note: text("note")
+});

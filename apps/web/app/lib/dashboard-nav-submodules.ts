@@ -162,6 +162,13 @@ export const DASHBOARD_NAV_SUBMODULES: Partial<
           icon: "card_giftcard",
           labelNs: "salary",
           labelKey: "bonusesBenefits"
+        },
+        {
+          href: "/dashboard/salary/leaves",
+          icon: "event_busy",
+          labelNs: "leaves",
+          labelKey: "nav",
+          anyOf: ["leave.manage"]
         }
       ]
     }
