@@ -204,6 +204,13 @@
       "when": 1783900000002,
       "tag": "0028_hesitant_mojo",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1783900000003,
+      "tag": "0029_sharp_maverick",
+      "breakpoints": true
     }
   ]
 }

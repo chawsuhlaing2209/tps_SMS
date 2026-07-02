@@ -2103,7 +2103,13 @@
     "homeroomConflictWarning": "{classroom} already has a homeroom teacher. Saving will reassign it.",
     "homeroomConflictConfirm": "These classrooms already have a homeroom teacher and will be reassigned: {items}.",
     "roleConflictTitle": "Reassign existing roles?",
-    "roleConflictOverride": "Reassign and save"
+    "roleConflictOverride": "Reassign and save",
+    "archiveTeacherTitle": "Archive teacher?",
+    "archiveTeacherHelp": "This archives the teacher record. History is kept, but they will no longer appear in active lists.",
+    "restoreTeacherTitle": "Restore teacher?",
+    "restoreTeacherHelp": "This returns the teacher to active lists with their previous employment status.",
+    "deleteTeacherTitle": "Delete teacher permanently?",
+    "deleteTeacherHelp": "This permanently removes the teacher and their profile and cannot be undone. Teachers with teaching, timetable, or payroll records cannot be deleted — keep them archived instead."
   },
   "departments": {
     "title": "Departments",

@@ -64,7 +64,7 @@ Permanent delete and even archive must respect relationships:
 
 ## 3. Phased build plan
 
-**Progress:** Phase 0 ✅ · Phase 1 (students) ✅ · Phase 2 (academics) ✅ · Phase 3–4 pending.
+**Progress:** Phase 0 ✅ · Phase 1 (students) ✅ · Phase 2 (academics) ✅ · Phase 3a (teachers/staff) ✅ · Phase 3b (finance/payroll/salary/enrollments) + Phase 4 pending.
 
 **Phase 0 — Foundation (shared primitives)** ✅
 - Add `archivedAt`/`archivedBy` columns where missing (migration).
@@ -81,7 +81,8 @@ Permanent delete and even archive must respect relationships:
 - Renamed `reactivate → restore` for grades/sections/subjects/academic-years (legacy `reactivate` routes kept as deprecated aliases), added guarded permanent-delete for grades/sections/subjects (two-step: archive first; block-on-dependents + FK-violation fallback). Academic years remain lifecycle-only (no hard delete).
 
 **Phase 3 — Finance, Salary, Payroll, Teachers, Enrollments**
-- Apply the shared contract. Decide per-entity whether permanent-delete is allowed or archive-only (retention). Likely archive-only for invoices/payments/payroll/report-cards.
+- **3a Teachers/staff ✅** — full lifecycle (archivedAt orthogonal to employment status; archive/restore/guarded permanent-delete; Active|Archived|All directory filter; archived badge). Delete blocks on teaching/timetable/salary/payroll, cascades owned compensation config, FK-violation fallback.
+- **3b (pending)** — Finance, Salary, Payroll, Enrollments. Per the split-model decision these are **archive-only** (no tenant hard-delete): ensure archive + restore + archived review where missing, and use void/cancel/refund states rather than deletion.
 
 **Phase 4 — Polish**
 - Bulk archive/restore, an optional tenant-wide "Recycle bin" / archived dashboard, optional retention/auto-purge policy.

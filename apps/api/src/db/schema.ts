@@ -561,7 +561,11 @@ export const staff = pgTable("staff", {
     .$type<TeacherProfileCapability>()
     .default({})
     .notNull(),
-  status: staffStatusEnum("status").default("active").notNull()
+  status: staffStatusEnum("status").default("active").notNull(),
+  // Archive lifecycle: orthogonal to `status` so employment state
+  // (active/probation/resigned/…) is preserved and restore returns to it.
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
+  archivedBy: uuid("archived_by")
 });
 
 export const classrooms = pgTable("classrooms", {

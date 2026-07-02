@@ -102,6 +102,11 @@ export class ListStaffQueryDto {
   @IsOptional()
   status?: string;
 
+  /** Archive lifecycle filter. Defaults to "active" (non-archived) when omitted. */
+  @IsIn(["active", "archived", "all"])
+  @IsOptional()
+  view?: "active" | "archived" | "all";
+
   @IsString()
   @IsOptional()
   department?: string;

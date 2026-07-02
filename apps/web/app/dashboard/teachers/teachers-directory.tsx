@@ -30,6 +30,7 @@ type TeacherOverview = {
   phone: string | null;
   department: string | null;
   status: string;
+  archivedAt?: string | null;
   homeroomCount: number;
   classroomCount: number;
   subjectCount: number;
@@ -54,12 +55,14 @@ const teachersPath = (
   page: number,
   search: string,
   status: string,
-  gradeId: string
+  gradeId: string,
+  view: "active" | "archived" | "all"
 ) => {
   const params = new URLSearchParams({
     employmentRole: "teacher",
     limit: String(PAGE_SIZE),
-    offset: String(page * PAGE_SIZE)
+    offset: String(page * PAGE_SIZE),
+    view
   });
   if (search.trim()) params.set("search", search.trim());
   if (status) params.set("status", status);
@@ -88,15 +91,17 @@ export function TeachersDirectory() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [gradeFilter, setGradeFilter] = useState("");
+  const [viewFilter, setViewFilter] = useState<"active" | "archived" | "all">("active");
   const [page, setPage] = useState(0);
 
   useEffect(() => {
     setPage(0);
-  }, [search, statusFilter, gradeFilter]);
+  }, [search, statusFilter, gradeFilter, viewFilter]);
 
   const queryPath = useMemo(
-    () => (tenant: string) => teachersPath(tenant, page, search, statusFilter, gradeFilter),
-    [page, search, statusFilter, gradeFilter]
+    () => (tenant: string) =>
+      teachersPath(tenant, page, search, statusFilter, gradeFilter, viewFilter),
+    [page, search, statusFilter, gradeFilter, viewFilter]
   );
 
   const teachers = useApiQuery<StaffOverviewPage>(canView ? queryPath : () => null);
@@ -157,7 +162,12 @@ export function TeachersDirectory() {
       id: "status",
       header: c("status"),
       accessorKey: "status",
-      cell: ({ row }) => <StatusBadge status={row.original.status} />
+      cell: ({ row }) =>
+        row.original.archivedAt ? (
+          <StatusBadge status="archived" label={t("statusArchived")} />
+        ) : (
+          <StatusBadge status={row.original.status} />
+        )
     }
   ];
 
@@ -207,8 +217,21 @@ export function TeachersDirectory() {
                     { value: "active", label: t("statusActive") },
                     { value: "probation", label: t("statusProbation") },
                     { value: "resigned", label: t("statusResigned") },
-                    { value: "terminated", label: t("statusTerminated") },
-                    { value: "archived", label: t("statusArchived") }
+                    { value: "terminated", label: t("statusTerminated") }
+                  ]}
+                />
+              </div>
+              <div className="pds-search-filters-row__filter--160">
+                <PdsSelectField
+                  variant="filter"
+                  value={viewFilter}
+                  onValueChange={(value) =>
+                    setViewFilter(value === "archived" || value === "all" ? value : "active")
+                  }
+                  options={[
+                    { value: "active", label: c("viewActive") },
+                    { value: "archived", label: c("viewArchived") },
+                    { value: "all", label: c("viewAll") }
                   ]}
                 />
               </div>

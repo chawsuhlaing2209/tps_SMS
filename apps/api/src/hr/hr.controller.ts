@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   Param,
@@ -104,6 +105,36 @@ export class HrController {
     @Headers("x-user-id") actorUserId?: string
   ) {
     return this.hrService.updateStaff(tenantId, staffId, actorUserId, dto);
+  }
+
+  @Post("staff/:staffId/archive")
+  @RequirePermissions("hr.manage")
+  archiveStaff(
+    @Param("tenantId") tenantId: string,
+    @Param("staffId") staffId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.hrService.archiveStaff(tenantId, staffId, actorUserId);
+  }
+
+  @Post("staff/:staffId/restore")
+  @RequirePermissions("hr.manage")
+  restoreStaff(
+    @Param("tenantId") tenantId: string,
+    @Param("staffId") staffId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.hrService.restoreStaff(tenantId, staffId, actorUserId);
+  }
+
+  @Delete("staff/:staffId")
+  @RequirePermissions("hr.manage")
+  deleteStaff(
+    @Param("tenantId") tenantId: string,
+    @Param("staffId") staffId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.hrService.permanentlyDeleteStaff(tenantId, staffId, actorUserId);
   }
 
   @Patch("staff/:staffId/provision")
