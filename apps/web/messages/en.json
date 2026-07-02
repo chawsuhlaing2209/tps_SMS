@@ -573,7 +573,9 @@
     "importButton": "Import",
     "importHelp": "Paste a master-data JSON document to bulk-create grades and subjects.",
     "importSummary": "Imported {grades} grades and {subjects} subjects.",
-    "invalidJson": "That is not valid JSON."
+    "invalidJson": "That is not valid JSON.",
+    "deleteYearTitle": "Delete academic year permanently?",
+    "deleteYearHelp": "This permanently removes “{name}” and cannot be undone. Years with terms, classrooms, or enrolments cannot be deleted — keep them closed instead."
   },
   "people": {
     "title": "People",
@@ -2133,7 +2135,9 @@
     "active": "Active",
     "staffCount": "{count, plural, one {# staff member} other {# staff members}}",
     "cannotDisableWithStaff": "This department has {count} assigned staff and cannot be disabled.",
-    "noAccess": "You need hr.manage permission to manage departments."
+    "noAccess": "You need hr.manage permission to manage departments.",
+    "deleteDepartmentTitle": "Delete department permanently?",
+    "deleteDepartmentHelp": "This permanently removes “{name}” and cannot be undone. Departments with staff assigned cannot be deleted — keep them archived instead."
   },
   "facilities": {
     "title": "Facilities",
@@ -2153,7 +2157,9 @@
     "active": "Active",
     "emptyTitle": "No rooms yet",
     "emptyDescription": "Add your classrooms, labs, halls, and other spaces so teams can reference them.",
-    "noAccess": "You need facility.manage permission to manage rooms."
+    "noAccess": "You need facility.manage permission to manage rooms.",
+    "deleteRoomTitle": "Delete room permanently?",
+    "deleteRoomHelp": "This permanently removes “{name}” and cannot be undone. Rooms assigned to classrooms cannot be deleted — keep them archived instead."
   },
   "audit": {
     "title": "Audit Log",
@@ -2489,7 +2495,8 @@
     "allYears": "All years",
     "legacyBillingNote": "This enrollment was approved before unified billing. Continue the ceremony to generate the invoice.",
     "noMandatoryFees": "No enrollment fee plans are configured for this classroom's academic year and grade. Add plans under Finance → Enrollment fee plans.",
-    "previewRequired": "Fee preview is not available. Go back, choose a classroom with fee plans configured, and try again."
+    "previewRequired": "Fee preview is not available. Go back, choose a classroom with fee plans configured, and try again.",
+    "enrolledBetween": "Enrolled between"
   },
   "exams": {
     "title": "Exams & Grading",

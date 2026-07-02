@@ -7,7 +7,9 @@ import { createPortal } from "react-dom";
 import { type ColumnDef } from "@tanstack/react-table";
 import { PdsSearchBar, PdsSearchFiltersRow, PdsSelectField } from "../../../components/pds";
 import { StatusBadge } from "../../../components/shared/badge";
+import { ConfirmDialog } from "../../../components/shared/confirm-dialog";
 import { ExportCsvButton } from "../../../components/shared/export-csv-button";
+import { RowMoreActionsMenu } from "../../../components/shared/row-more-actions";
 import { useApiMutation, useApiQuery } from "../../lib/api";
 import { BulkArchiveBar, buildRowSelection, useRowSelection } from "../../lib/bulk-selection";
 import { toastSuccess } from "../../lib/toast";
@@ -110,6 +112,21 @@ export function StudentsDirectory() {
     void students.refetch();
   }
 
+  const [deletingStudent, setDeletingStudent] = useState<Student | null>(null);
+
+  const archiveOne = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({ path: `${STUDENTS_PATH(tenant)}/${id}/archive`, init: { method: "POST" } }),
+    { invalidatePaths: (_b, tenant) => [STUDENTS_PATH(tenant)] }
+  );
+  const restoreOne = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({ path: `${STUDENTS_PATH(tenant)}/${id}/restore`, init: { method: "POST" } }),
+    { invalidatePaths: (_b, tenant) => [STUDENTS_PATH(tenant)] }
+  );
+  const deleteOne = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({ path: `${STUDENTS_PATH(tenant)}/${id}`, init: { method: "DELETE" } }),
+    { invalidatePaths: (_b, tenant) => [STUDENTS_PATH(tenant)] }
+  );
+
   const columns: ColumnDef<Student, unknown>[] = [
     {
       id: "name",
@@ -159,7 +176,64 @@ export function StudentsDirectory() {
       header: t("dateOfBirth"),
       accessorFn: (row) => row.dateOfBirth ?? "",
       cell: ({ row }) => formatDateOfBirth(row.original.dateOfBirth)
-    }
+    },
+    ...(canManage
+      ? ([
+          {
+            id: "actions",
+            header: "",
+            enableSorting: false,
+            cell: ({ row }) => (
+              <RowMoreActionsMenu
+                ariaLabel={c("moreActions")}
+                items={[
+                  {
+                    id: "view",
+                    label: c("view"),
+                    icon: "visibility",
+                    onSelect: () => {
+                      window.location.href = `/dashboard/students/${row.original.id}`;
+                    }
+                  },
+                  ...(row.original.archivedAt
+                    ? [
+                        {
+                          id: "restore",
+                          label: c("restore"),
+                          icon: "restore",
+                          onSelect: () =>
+                            void restoreOne.mutateAsync({ id: row.original.id }).then(() => {
+                              toastSuccess(c("restore"));
+                              void students.refetch();
+                            })
+                        },
+                        {
+                          id: "delete",
+                          label: c("deletePermanently"),
+                          icon: "delete_forever",
+                          destructive: true,
+                          onSelect: () => setDeletingStudent(row.original)
+                        }
+                      ]
+                    : [
+                        {
+                          id: "archive",
+                          label: c("archive"),
+                          icon: "archive",
+                          destructive: true,
+                          onSelect: () =>
+                            void archiveOne.mutateAsync({ id: row.original.id }).then(() => {
+                              toastSuccess(c("archive"));
+                              void students.refetch();
+                            })
+                        }
+                      ])
+                ]}
+              />
+            )
+          }
+        ] satisfies ColumnDef<Student, unknown>[])
+      : [])
   ];
 
   return (
@@ -263,6 +337,25 @@ export function StudentsDirectory() {
           onSaved={() => void students.refetch()}
         />
       ) : null}
+
+      <ConfirmDialog
+        open={deletingStudent !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeletingStudent(null);
+        }}
+        title={t("deleteStudentTitle")}
+        description={t("deleteStudentHelp")}
+        confirmLabel={c("deletePermanently")}
+        cancelLabel={c("cancel")}
+        destructive
+        loading={deleteOne.isPending}
+        onConfirm={async () => {
+          if (!deletingStudent) return;
+          await deleteOne.mutateAsync({ id: deletingStudent.id });
+          setDeletingStudent(null);
+          void students.refetch();
+        }}
+      />
     </DataTableSection>
   );
 }

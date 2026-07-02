@@ -16,10 +16,10 @@ import { TablePanelBody } from "../../lib/table-panel";
 import { useDashPageTitleActionsTarget } from "../dashboard-page-title";
 import { WorkspaceLoading } from "../../lib/workspace-loading";
 import { PdsDatePickerField, PdsSearchFiltersRow, PdsSelectField } from "../../../components/pds";
+import { parseDayRangeValue, toDayValue } from "../../../components/pds/date-picker-utils";
 import { StatusBadge } from "../../../components/shared/badge";
 import { RowMoreActionsMenu } from "../../../components/shared/row-more-actions";
 import { ExportCsvButton } from "../../../components/shared/export-csv-button";
-import { TrailLink } from "../../../components/shared/trail-link";
 import { CancelEnrollmentDialog } from "../students/cancel-enrollment-dialog";
 
 const EnrollmentWizard = dynamic(
@@ -113,15 +113,24 @@ export function EnrollmentsWorkspace({
     (tn) => `${ENROLLMENTS_PATH(tn)}${enrollmentsQuery}`
   );
 
-  // Grade + date filters are applied client-side over the fetched rows.
+  // Grade + date-range filters are applied client-side over the fetched rows.
   const filteredEnrollments = useMemo(() => {
     let rows = enrollments.data ?? [];
     if (gradeFilter) rows = rows.filter((row) => row.gradeId === gradeFilter);
-    if (dateFilter) {
-      const from = new Date(dateFilter).getTime();
+    const range = parseDayRangeValue(dateFilter);
+    if (range) {
+      const from = new Date(
+        toDayValue(range.start.year, range.start.month, range.start.day)
+      ).getTime();
+      // Include the whole end day.
+      const to =
+        new Date(toDayValue(range.end.year, range.end.month, range.end.day)).getTime() +
+        24 * 60 * 60 * 1000;
       rows = rows.filter((row) => {
         const when = row.createdAt ?? row.updatedAt;
-        return when ? new Date(when).getTime() >= from : false;
+        if (!when) return false;
+        const ts = new Date(when).getTime();
+        return ts >= from && ts < to;
       });
     }
     return rows;
@@ -152,22 +161,6 @@ export function EnrollmentsWorkspace({
       cell: ({ row }) => (
         <StatusBadge status={row.original.status} />
       )
-    },
-    {
-      id: "invoice",
-      header: t("invoice"),
-      cell: ({ row }) =>
-        row.original.invoiceId ? (
-          <TrailLink
-            className="pds-type-body-s-regular row-action"
-            href={`/dashboard/finance/invoices/${row.original.invoiceId}`}
-            from={{ label: t("title"), href: "/dashboard/enrollments" }}
-          >
-            {t("viewInvoice")}
-          </TrailLink>
-        ) : (
-          "—"
-        )
     },
     {
       id: "actions",
@@ -237,10 +230,11 @@ export function EnrollmentsWorkspace({
                 <PdsDatePickerField
                   type="day"
                   variant="filter"
+                  selectionMode="range"
                   value={dateFilter}
                   onValueChange={setDateFilter}
-                  ariaLabel={t("enrolledFrom")}
-                  placeholder={t("enrolledFrom")}
+                  ariaLabel={t("enrolledBetween")}
+                  placeholder={t("enrolledBetween")}
                 />
               </div>
             </>
@@ -252,7 +246,22 @@ export function EnrollmentsWorkspace({
           error={enrollments.isError ? c("somethingWrong") : null}
           empty={!filteredEnrollments.length}
         >
-          <DataTable columns={enrollmentColumns} data={filteredEnrollments} />
+          <DataTable
+            columns={enrollmentColumns}
+            data={filteredEnrollments}
+            onRowClick={(enrollment) => {
+              // Smart row click: drafts resume the wizard; confirmed rows open
+              // the student's profile.
+              const canContinue =
+                !enrollment.invoiceId &&
+                (enrollment.status === "draft" || enrollment.status === "approved");
+              if (canContinue) {
+                openWizard(enrollment);
+              } else {
+                window.location.href = `/dashboard/students/${enrollment.studentId}`;
+              }
+            }}
+          />
         </TablePanelBody>
 
       <EnrollmentWizard

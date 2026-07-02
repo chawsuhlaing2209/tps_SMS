@@ -19,6 +19,8 @@ import { hasAnyPermission } from "../../lib/permissions";
 import { getSession } from "../../lib/session";
 import { TablePanelBody, DataTableSection } from "../../lib/table-panel";
 import { TeacherCreateSheet } from "./teacher-create-sheet";
+import { ConfirmDialog } from "../../../components/shared/confirm-dialog";
+import { RowMoreActionsMenu } from "../../../components/shared/row-more-actions";
 import { useTeachersActions } from "./teachers-actions-provider";
 
 type TeacherProfile = {
@@ -135,6 +137,18 @@ export function TeachersDirectory() {
     selection.clear();
     void teachers.refetch();
   }
+
+  const [deletingTeacher, setDeletingTeacher] = useState<TeacherOverview | null>(null);
+
+  const archiveOne = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({ path: `${STAFF_PATH(tenant)}/${id}/archive`, init: { method: "POST" } })
+  );
+  const restoreOne = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({ path: `${STAFF_PATH(tenant)}/${id}/restore`, init: { method: "POST" } })
+  );
+  const deleteOne = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({ path: `${STAFF_PATH(tenant)}/${id}`, init: { method: "DELETE" } })
+  );
   const grades = useApiQuery<GradeOption[]>((tenant) =>
     canView ? `/tenants/${tenant}/academics/grades` : null
   );
@@ -198,7 +212,64 @@ export function TeachersDirectory() {
         ) : (
           <StatusBadge status={row.original.status} />
         )
-    }
+    },
+    ...(canManageHr
+      ? ([
+          {
+            id: "actions",
+            header: "",
+            enableSorting: false,
+            cell: ({ row }) => (
+              <RowMoreActionsMenu
+                ariaLabel={c("moreActions")}
+                items={[
+                  {
+                    id: "view",
+                    label: c("view"),
+                    icon: "visibility",
+                    onSelect: () => {
+                      window.location.href = `/dashboard/teachers/${row.original.id}`;
+                    }
+                  },
+                  ...(row.original.archivedAt
+                    ? [
+                        {
+                          id: "restore",
+                          label: c("restore"),
+                          icon: "restore",
+                          onSelect: () =>
+                            void restoreOne.mutateAsync({ id: row.original.id }).then(() => {
+                              toastSuccess(c("restore"));
+                              void teachers.refetch();
+                            })
+                        },
+                        {
+                          id: "delete",
+                          label: c("deletePermanently"),
+                          icon: "delete_forever",
+                          destructive: true,
+                          onSelect: () => setDeletingTeacher(row.original)
+                        }
+                      ]
+                    : [
+                        {
+                          id: "archive",
+                          label: c("archive"),
+                          icon: "archive",
+                          destructive: true,
+                          onSelect: () =>
+                            void archiveOne.mutateAsync({ id: row.original.id }).then(() => {
+                              toastSuccess(c("archive"));
+                              void teachers.refetch();
+                            })
+                        }
+                      ])
+                ]}
+              />
+            )
+          }
+        ] satisfies ColumnDef<TeacherOverview, unknown>[])
+      : [])
   ];
 
   if (!canView) {
@@ -309,6 +380,25 @@ export function TeachersDirectory() {
         open={createOpen}
         onOpenChange={setCreateOpen}
         onCreated={() => void teachers.refetch()}
+      />
+
+      <ConfirmDialog
+        open={deletingTeacher !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeletingTeacher(null);
+        }}
+        title={t("deleteTeacherTitle")}
+        description={t("deleteTeacherHelp")}
+        confirmLabel={c("deletePermanently")}
+        cancelLabel={c("cancel")}
+        destructive
+        loading={deleteOne.isPending}
+        onConfirm={async () => {
+          if (!deletingTeacher) return;
+          await deleteOne.mutateAsync({ id: deletingTeacher.id });
+          setDeletingTeacher(null);
+          void teachers.refetch();
+        }}
       />
     </>
   );

@@ -3,6 +3,7 @@ import { FormInput } from "../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
+import { RowMoreActionsMenu } from "../../../components/shared/row-more-actions";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -97,7 +98,27 @@ export function HouseholdsDirectory() {
       id: "members",
       header: t("memberCount"),
       accessorFn: (row) => row.memberCount
-    }
+    },
+    {
+      id: "actions",
+      header: "",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <RowMoreActionsMenu
+          ariaLabel={c("moreActions")}
+          items={[
+            {
+              id: "view",
+              label: c("view"),
+              icon: "visibility",
+              onSelect: () => {
+                window.location.href = `/dashboard/people/households/${row.original.id}`;
+              }
+            }
+          ]}
+        />
+      )
+    } satisfies ColumnDef<HouseholdRow, unknown>
   ];
 
   return (

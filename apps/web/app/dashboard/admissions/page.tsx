@@ -3,6 +3,7 @@ import { FormInput, TextAreaInput } from "../../../components/shared/form-input"
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
+import { RowMoreActionsMenu } from "../../../components/shared/row-more-actions";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -105,7 +106,27 @@ export default function AdmissionsPage() {
       cell: ({ row }) => (
         <StatusBadge status={row.original.status} />
       )
-    }
+    },
+    {
+      id: "actions",
+      header: "",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <RowMoreActionsMenu
+          ariaLabel={c("moreActions")}
+          items={[
+            {
+              id: "view",
+              label: c("view"),
+              icon: "visibility",
+              onSelect: () => {
+                window.location.href = `/dashboard/admissions/${row.original.id}`;
+              }
+            }
+          ]}
+        />
+      )
+    } satisfies ColumnDef<Enquiry, unknown>
   ];
 
   return (

@@ -5,9 +5,14 @@ import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Toggle } from "../../../components/shared/toggle";
+import { ArchiveVisibilityFilter } from "../../../components/shared/archive-visibility-filter";
+import { ConfirmDialog } from "../../../components/shared/confirm-dialog";
 import { EmptyState } from "../../../components/shared/empty-state";
 import { FormField, FormInput, FormTextarea } from "../../../components/shared/form-input";
+import { RowMoreActionsMenu } from "../../../components/shared/row-more-actions";
+import { StatusBadge } from "../../../components/shared/badge";
 import { ApiError, useApiMutation, useApiQuery } from "../../lib/api";
+import { filterByArchiveVisibility, type ArchiveVisibility } from "../../lib/archive-filter";
 import { hasAnyPermission } from "../../lib/permissions";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { getSession } from "../../lib/session";
@@ -22,7 +27,7 @@ type FacilityRoomRow = {
   name: string;
   capacity: number | null;
   note: string | null;
-  status: "active" | "inactive";
+  status: "active" | "inactive" | "archived";
 };
 
 const FACILITY_ROOMS_PATH = (tenant: string) => `/tenants/${tenant}/facility-rooms`;
@@ -37,9 +42,16 @@ export default function FacilitiesPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [visibility, setVisibility] = useState<ArchiveVisibility>("active");
+  const [deletingRoom, setDeletingRoom] = useState<FacilityRoomRow | null>(null);
 
   const rooms = useApiQuery<FacilityRoomRow[]>((tenant) =>
     canManage ? FACILITY_ROOMS_PATH(tenant) : null
+  );
+
+  const visibleRooms = useMemo(
+    () => filterByArchiveVisibility(rooms.data ?? [], visibility),
+    [rooms.data, visibility]
   );
 
   const schema = useMemo(
@@ -73,6 +85,19 @@ export default function FacilitiesPage() {
       path: `${FACILITY_ROOMS_PATH(tenant)}/${roomId}`,
       init: { method: "PATCH", body: JSON.stringify(body) }
     }),
+    { invalidatePaths: (_b, tenant) => [FACILITY_ROOMS_PATH(tenant)] }
+  );
+
+  const archiveRoom = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({ path: `${FACILITY_ROOMS_PATH(tenant)}/${id}/archive`, init: { method: "POST" } }),
+    { invalidatePaths: (_b, tenant) => [FACILITY_ROOMS_PATH(tenant)] }
+  );
+  const restoreRoom = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({ path: `${FACILITY_ROOMS_PATH(tenant)}/${id}/restore`, init: { method: "POST" } }),
+    { invalidatePaths: (_b, tenant) => [FACILITY_ROOMS_PATH(tenant)] }
+  );
+  const deleteRoom = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({ path: `${FACILITY_ROOMS_PATH(tenant)}/${id}`, init: { method: "DELETE" } }),
     { invalidatePaths: (_b, tenant) => [FACILITY_ROOMS_PATH(tenant)] }
   );
 
@@ -149,6 +174,7 @@ export default function FacilitiesPage() {
         breadcrumbs={[{ label: nav("group_academics") }, { label: nav("facilities") }]}
         actions={
           <>
+            <ArchiveVisibilityFilter value={visibility} onChange={setVisibility} />
             <button type="button" className="pds-type-body-m-bold btn-primary" onClick={openCreate}>
               <Icon name="add" />
               {t("addRoom")}
@@ -161,7 +187,7 @@ export default function FacilitiesPage() {
         variant="plain"
         loading={rooms.isLoading}
         error={rooms.isError ? c("somethingWrong") : null}
-        empty={!rooms.data?.length}
+        empty={!visibleRooms.length}
         emptyTitle={t("emptyTitle")}
         emptyDescription={t("emptyDescription")}
       >
@@ -173,25 +199,90 @@ export default function FacilitiesPage() {
                 <th className="pds-type-caption-s padauk-table__num">{t("capacity")}</th>
                 <th className="pds-type-caption-s">{t("note")}</th>
                 <th className="pds-type-caption-s">{t("active")}</th>
+                <th className="pds-type-caption-s" aria-hidden />
               </tr>
             </thead>
             <tbody>
-              {rooms.data?.map((row) => (
-                <tr key={row.id} className={row.status === "inactive" ? "facility-rooms-table__row--inactive" : undefined}>
+              {visibleRooms.map((row) => (
+                <tr
+                  key={row.id}
+                  className={[
+                    row.status !== "active" ? "facility-rooms-table__row--inactive" : undefined,
+                    "table-row--clickable"
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  tabIndex={0}
+                  onClick={(event) => {
+                    if ((event.target as HTMLElement).closest("button, [data-row-stop], [role='menuitem']")) return;
+                    openEdit(row);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
+                    openEdit(row);
+                  }}
+                >
                   <td>
-                    <button type="button" className="facility-rooms-table__name" onClick={() => openEdit(row)}>
-                      {row.name}
-                    </button>
+                    <span className="facility-rooms-table__name">{row.name}</span>
                   </td>
                   <td className="padauk-table__num">{row.capacity ?? "—"}</td>
                   <td className="padauk-table__muted facility-rooms-table__note">
                     {row.note ? row.note : "—"}
                   </td>
                   <td>
-                    <Toggle
-                      checked={row.status === "active"}
-                      onCheckedChange={(checked: boolean) => void toggleStatus(row, checked)}
-                      aria-label={t("active")}
+                    {row.status === "archived" ? (
+                      <StatusBadge status="archived" label={c("viewArchived")} />
+                    ) : (
+                      <Toggle
+                        checked={row.status === "active"}
+                        onCheckedChange={(checked: boolean) => void toggleStatus(row, checked)}
+                        aria-label={t("active")}
+                      />
+                    )}
+                  </td>
+                  <td className="padauk-table__actions">
+                    <RowMoreActionsMenu
+                      ariaLabel={c("moreActions")}
+                      items={[
+                        {
+                          id: "edit",
+                          label: c("edit"),
+                          icon: "edit",
+                          onSelect: () => openEdit(row)
+                        },
+                        ...(row.status === "archived"
+                          ? [
+                              {
+                                id: "restore",
+                                label: c("restore"),
+                                icon: "restore",
+                                onSelect: () =>
+                                  void restoreRoom.mutateAsync({ id: row.id }).then(() => {
+                                    void rooms.refetch();
+                                  })
+                              },
+                              {
+                                id: "delete",
+                                label: c("deletePermanently"),
+                                icon: "delete_forever",
+                                destructive: true,
+                                onSelect: () => setDeletingRoom(row)
+                              }
+                            ]
+                          : [
+                              {
+                                id: "archive",
+                                label: c("archive"),
+                                icon: "archive",
+                                destructive: true,
+                                onSelect: () =>
+                                  void archiveRoom.mutateAsync({ id: row.id }).then(() => {
+                                    void rooms.refetch();
+                                  })
+                              }
+                            ])
+                      ]}
                     />
                   </td>
                 </tr>
@@ -240,6 +331,25 @@ export default function FacilitiesPage() {
         </FormField>
         {formError ? <p className="pds-type-body-m-medium error-text">{formError}</p> : null}
       </RecordFormSheet>
+
+      <ConfirmDialog
+        open={deletingRoom !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeletingRoom(null);
+        }}
+        title={t("deleteRoomTitle")}
+        description={t("deleteRoomHelp", { name: deletingRoom?.name ?? "" })}
+        confirmLabel={c("deletePermanently")}
+        cancelLabel={c("cancel")}
+        destructive
+        loading={deleteRoom.isPending}
+        onConfirm={async () => {
+          if (!deletingRoom) return;
+          await deleteRoom.mutateAsync({ id: deletingRoom.id });
+          setDeletingRoom(null);
+          void rooms.refetch();
+        }}
+      />
     </div>
   );
 }
