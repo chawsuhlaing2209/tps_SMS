@@ -357,6 +357,8 @@
     "backToRoom": "Back to classroom",
     "roomHeroSubtitle": "Homeroom · {homeroom} · {students} students · {room}",
     "homeroomTeacherLabel": "Homeroom Teacher",
+    "editHomeroom": "Edit homeroom teacher",
+    "assignHomeroom": "Assign homeroom teacher",
     "homeroomCardMeta": "{department} · Staff ID {staffId}",
     "staffDepartmentFallback": "General",
     "homeroomUnassigned": "No homeroom teacher assigned",

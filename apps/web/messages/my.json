@@ -357,6 +357,8 @@
     "backToRoom": "အတန်းခန်းသို့ ပြန်သွားမည်",
     "roomHeroSubtitle": "Homeroom · {homeroom} · student {students} ဦး · {room}",
     "homeroomTeacherLabel": "အတန်းပိုင်ဆရာ/ဆရာမ",
+    "editHomeroom": "အတန်းပိုင်ဆရာ/ဆရာမ ပြင်ဆင်မည်",
+    "assignHomeroom": "အတန်းပိုင်ဆရာ/ဆရာမ သတ်မှတ်မည်",
     "homeroomCardMeta": "{department} · ဝန်ထမ်း ID {staffId}",
     "staffDepartmentFallback": "အထွေထွေ",
     "homeroomUnassigned": "Homeroom teacher မသတ်မှတ်ရသေးပါ",

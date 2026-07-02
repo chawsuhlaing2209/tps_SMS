@@ -19,6 +19,7 @@ import {
   type ArchiveVisibility
 } from "../../lib/archive-filter";
 import { cn } from "../../../lib/utils";
+import { isPadaukRowInteractiveTarget } from "../../lib/table-row-interaction";
 import { useDashPageTitleActionsTarget } from "../dashboard-page-title";
 import { hasAnyPermission } from "../../lib/permissions";
 import { getSession } from "../../lib/session";
@@ -443,7 +444,19 @@ export default function SchoolStructurePage() {
                       return (
                         <article
                           key={room.id}
-                          className={cn("structure-room-card", roomArchived && "structure-room-card--archived")}
+                          className={cn("structure-room-card", "structure-room-card--clickable", roomArchived && "structure-room-card--archived")}
+                          role="link"
+                          tabIndex={0}
+                          aria-label={room.name}
+                          onClick={(event) => {
+                            if (isPadaukRowInteractiveTarget(event.target)) return;
+                            router.push(`/dashboard/structure/rooms/${room.id}`);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key !== "Enter" && event.key !== " ") return;
+                            event.preventDefault();
+                            router.push(`/dashboard/structure/rooms/${room.id}`);
+                          }}
                         >
                           <div className="structure-room-card__head">
                             <span className="pds-type-title-s-extrabold structure-room-card__mark" style={{ background: accent }}>

@@ -336,6 +336,18 @@ export default function StructureRoomPage({
             title={t("homeroomTeacherLabel")}
             titlePlacement="inside-eyebrow"
             empty={!homeroom ? t("homeroomUnassigned") : undefined}
+            emptyAction={
+              !homeroom && canEdit ? (
+                <button
+                  type="button"
+                  className="pds-type-body-s-semibold btn-ghost"
+                  onClick={() => setEditOpen(true)}
+                >
+                  <Icon name="edit" size={16} />
+                  {t("assignHomeroom")}
+                </button>
+              ) : undefined
+            }
           >
             {homeroom ? (
               <EntityList>
@@ -347,6 +359,19 @@ export default function StructureRoomPage({
                     department: homeroom.department ?? t("staffDepartmentFallback"),
                     staffId: homeroom.employeeNumber ?? homeroom.id.slice(0, 8)
                   })}
+                  trailing={
+                    canEdit ? (
+                      <button
+                        type="button"
+                        className="pds-entity-list-item__icon-btn"
+                        aria-label={t("editHomeroom")}
+                        title={t("editHomeroom")}
+                        onClick={() => setEditOpen(true)}
+                      >
+                        <Icon name="edit" size={18} />
+                      </button>
+                    ) : undefined
+                  }
                 />
               </EntityList>
             ) : null}
