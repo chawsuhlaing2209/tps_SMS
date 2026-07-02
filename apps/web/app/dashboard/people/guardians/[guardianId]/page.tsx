@@ -201,23 +201,29 @@ export default function GuardianDetailPage({
           </div>
         </div>
         <div className="structure-room-banner__actions student-profile-banner__actions">
-          {canManage ? (
+          {canManage || data.phone ? (
             <HeroMoreActionsMenu
-              label={t("editGuardian")}
+              label={c("moreActions")}
               items={[
-                {
-                  id: "edit",
-                  label: t("editGuardian"),
-                  icon: "edit",
-                  onSelect: () => setEditOpen(true)
-                }
+                ...(data.phone
+                  ? [
+                      {
+                        id: "call",
+                        label: t("messageGuardian"),
+                        icon: "call",
+                        onSelect: () => {
+                          window.location.href = `tel:${data.phone!.replace(/\s+/g, "")}`;
+                        }
+                      }
+                    ]
+                  : [])
               ]}
             />
           ) : null}
-          {data.phone ? (
-            <HeroPrimaryAction href={`tel:${data.phone.replace(/\s+/g, "")}`}>
-              <Icon name="call" />
-              {t("messageGuardian")}
+          {canManage ? (
+            <HeroPrimaryAction onClick={() => setEditOpen(true)}>
+              <Icon name="edit" />
+              {t("editGuardian")}
             </HeroPrimaryAction>
           ) : null}
           {data.household ? (
