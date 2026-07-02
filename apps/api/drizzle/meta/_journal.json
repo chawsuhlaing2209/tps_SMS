@@ -218,6 +218,13 @@
       "when": 1783900000004,
       "tag": "0030_wealthy_shadow_king",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1783900000005,
+      "tag": "0031_archive_earning_pay_components",
+      "breakpoints": true
     }
   ]
 }

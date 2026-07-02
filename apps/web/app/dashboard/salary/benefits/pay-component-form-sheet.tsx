@@ -31,7 +31,6 @@ type FormValues = {
   defaultAmount: string;
 };
 
-const KIND_OPTIONS = ["earning", "deduction"] as const;
 const CALCULATION_OPTIONS = ["fixed", "percent_of_basic"] as const;
 
 type Props = {
@@ -85,7 +84,7 @@ export function PayComponentFormSheet({
     defaultValues: {
       code: "",
       name: "",
-      kind: "earning",
+      kind: "deduction",
       calculation: "fixed",
       defaultAmount: "0"
     }
@@ -96,7 +95,7 @@ export function PayComponentFormSheet({
     form.reset({
       code: record?.code ?? "",
       name: record?.name ?? "",
-      kind: record?.kind ?? "earning",
+      kind: record?.kind ?? "deduction",
       calculation: record?.calculation ?? "fixed",
       defaultAmount: record ? String(record.defaultAmount) : "0"
     });
@@ -122,7 +121,7 @@ export function PayComponentFormSheet({
           await onSubmit({
             ...payload,
             code: values.code.trim().toLowerCase(),
-            kind: values.kind as "earning" | "deduction"
+            kind: "deduction"
           });
         } else {
           await onSubmit(payload);
@@ -191,19 +190,7 @@ export function PayComponentFormSheet({
           <Field label={t("codeLabel")} error={form.formState.errors.code?.message}>
             <FormInput placeholder={t("codePlaceholder")} {...form.register("code")} />
           </Field>
-          <Field label={t("kindLabel")} error={form.formState.errors.kind?.message}>
-            <PdsSelectField
-              variant="form"
-              value={form.watch("kind")}
-              onValueChange={(value) => {
-                if (typeof value === "string") form.setValue("kind", value);
-              }}
-              options={KIND_OPTIONS.map((option) => ({
-                value: option,
-                label: t(`kind.${option}`)
-              }))}
-            />
-          </Field>
+
         </>
       )}
       <Field label={c("name")} error={form.formState.errors.name?.message}>
