@@ -73,13 +73,23 @@ export class PayrollController {
     return this.payrollService.archivePayComponent(tenantId, componentId, actorUserId);
   }
 
+  @Post("pay-components/:componentId/restore")
+  restorePayComponent(
+    @Param("tenantId") tenantId: string,
+    @Param("componentId") componentId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.payrollService.restorePayComponent(tenantId, componentId, actorUserId);
+  }
+
+  /** @deprecated Use POST pay-components/:componentId/restore. */
   @Post("pay-components/:componentId/reactivate")
   reactivatePayComponent(
     @Param("tenantId") tenantId: string,
     @Param("componentId") componentId: string,
     @Headers("x-user-id") actorUserId?: string
   ) {
-    return this.payrollService.reactivatePayComponent(tenantId, componentId, actorUserId);
+    return this.payrollService.restorePayComponent(tenantId, componentId, actorUserId);
   }
 
   @Delete("pay-components/:componentId")

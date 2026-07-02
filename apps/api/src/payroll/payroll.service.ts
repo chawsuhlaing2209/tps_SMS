@@ -221,7 +221,7 @@ export class PayrollService {
     return component;
   }
 
-  async reactivatePayComponent(tenantId: string, id: string, actorUserId: string | undefined) {
+  async restorePayComponent(tenantId: string, id: string, actorUserId: string | undefined) {
     const [component] = await this.db
       .update(payComponents)
       .set({ status: "active", updatedBy: actorUserId, updatedAt: new Date() })
@@ -229,6 +229,11 @@ export class PayrollService {
       .returning();
     if (!component) throw new NotFoundException("Pay component not found.");
     return component;
+  }
+
+  /** @deprecated Use {@link restorePayComponent}. Kept for the legacy /reactivate route. */
+  async reactivatePayComponent(tenantId: string, id: string, actorUserId: string | undefined) {
+    return this.restorePayComponent(tenantId, id, actorUserId);
   }
 
   async deletePayComponent(tenantId: string, id: string, actorUserId: string | undefined) {

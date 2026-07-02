@@ -87,7 +87,7 @@ export default function PayComponentsPage() {
 
   const reactivatePayComponent = useApiMutation<{ id: string }>(
     ({ id }, tenant) => ({
-      path: `${PAY_COMPONENTS_PATH(tenant)}/${id}/reactivate`,
+      path: `${PAY_COMPONENTS_PATH(tenant)}/${id}/restore`,
       init: { method: "POST" }
     }),
     { invalidatePaths: (_b, tenant) => [PAY_COMPONENTS_PATH(tenant)] }
