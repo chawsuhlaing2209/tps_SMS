@@ -45,6 +45,7 @@ type StudentProfile = {
   fullName: string;
   admissionNumber: string;
   status: string;
+  archivedAt: string | null;
   familyGroupId: string | null;
   dateOfBirth: string | null;
   gender: string | null;
@@ -253,6 +254,8 @@ export default function StudentDetailPage({
 
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [deleteForeverOpen, setDeleteForeverOpen] = useState(false);
   const [statusConfirm, setStatusConfirm] = useState<"deactivate" | "activate" | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [resumeDraft, setResumeDraft] = useState<Enrollment | null>(null);
@@ -279,6 +282,42 @@ export default function StudentDetailPage({
         `/tenants/${tenant}/students/${studentId}/profile`,
         `/tenants/${tenant}/students`
       ]
+    }
+  );
+
+  const archiveStudent = useApiMutation<Record<string, never>, StudentProfile>(
+    (_body, tenant) => ({
+      path: `/tenants/${tenant}/students/${studentId}/archive`,
+      init: { method: "POST" }
+    }),
+    {
+      invalidatePaths: (_b, tenant) => [
+        `/tenants/${tenant}/students/${studentId}/profile`,
+        `/tenants/${tenant}/students`
+      ]
+    }
+  );
+
+  const restoreStudent = useApiMutation<Record<string, never>, StudentProfile>(
+    (_body, tenant) => ({
+      path: `/tenants/${tenant}/students/${studentId}/restore`,
+      init: { method: "POST" }
+    }),
+    {
+      invalidatePaths: (_b, tenant) => [
+        `/tenants/${tenant}/students/${studentId}/profile`,
+        `/tenants/${tenant}/students`
+      ]
+    }
+  );
+
+  const deleteStudent = useApiMutation<Record<string, never>, { id: string; deleted: boolean }>(
+    (_body, tenant) => ({
+      path: `/tenants/${tenant}/students/${studentId}`,
+      init: { method: "DELETE" }
+    }),
+    {
+      invalidatePaths: (_b, tenant) => [`/tenants/${tenant}/students`]
     }
   );
 
@@ -590,9 +629,21 @@ export default function StudentDetailPage({
     setStatusConfirm(null);
   }
 
-  async function handleDelete() {
-    await update.mutateAsync({ status: "archived" });
+  async function handleArchive() {
+    await archiveStudent.mutateAsync({});
     setDeleteOpen(false);
+    router.push("/dashboard/people?tab=students");
+  }
+
+  async function handleRestore() {
+    await restoreStudent.mutateAsync({});
+    setRestoreOpen(false);
+  }
+
+  async function handlePermanentDelete() {
+    // A blocking-dependency 409 surfaces its message via the shared error toast.
+    await deleteStudent.mutateAsync({});
+    setDeleteForeverOpen(false);
     router.push("/dashboard/people?tab=students");
   }
 
@@ -681,13 +732,31 @@ export default function StudentDetailPage({
                       icon: isActive ? "pause_circle" : "check_circle",
                       onSelect: () => void handleStatusToggle(!isActive)
                     },
-                    {
-                      id: "archive",
-                      label: c("archive"),
-                      icon: "archive",
-                      destructive: true,
-                      onSelect: () => setDeleteOpen(true)
-                    }
+                    ...(data?.archivedAt
+                      ? [
+                          {
+                            id: "restore",
+                            label: c("restore"),
+                            icon: "restore",
+                            onSelect: () => setRestoreOpen(true)
+                          },
+                          {
+                            id: "deleteForever",
+                            label: c("deletePermanently"),
+                            icon: "delete_forever",
+                            destructive: true,
+                            onSelect: () => setDeleteForeverOpen(true)
+                          }
+                        ]
+                      : [
+                          {
+                            id: "archive",
+                            label: c("archive"),
+                            icon: "archive",
+                            destructive: true,
+                            onSelect: () => setDeleteOpen(true)
+                          }
+                        ])
                   ]}
                 />
               ) : null}
@@ -990,13 +1059,36 @@ export default function StudentDetailPage({
               <ConfirmDialog
                 open={deleteOpen}
                 onOpenChange={setDeleteOpen}
-                title={t("deleteStudentTitle")}
-                description={t("deleteStudentHelp")}
+                title={t("archiveStudentTitle")}
+                description={t("archiveStudentHelp")}
                 confirmLabel={c("archive")}
                 cancelLabel={c("cancel")}
                 destructive
-                loading={update.isPending}
-                onConfirm={() => void handleDelete()}
+                loading={archiveStudent.isPending}
+                onConfirm={() => void handleArchive()}
+              />
+
+              <ConfirmDialog
+                open={restoreOpen}
+                onOpenChange={setRestoreOpen}
+                title={t("restoreStudentTitle")}
+                description={t("restoreStudentHelp")}
+                confirmLabel={c("restore")}
+                cancelLabel={c("cancel")}
+                loading={restoreStudent.isPending}
+                onConfirm={() => void handleRestore()}
+              />
+
+              <ConfirmDialog
+                open={deleteForeverOpen}
+                onOpenChange={setDeleteForeverOpen}
+                title={t("deleteStudentTitle")}
+                description={t("deleteStudentHelp")}
+                confirmLabel={c("deletePermanently")}
+                cancelLabel={c("cancel")}
+                destructive
+                loading={deleteStudent.isPending}
+                onConfirm={() => void handlePermanentDelete()}
               />
 
               <ConfirmDialog

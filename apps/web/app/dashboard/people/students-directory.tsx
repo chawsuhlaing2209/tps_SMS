@@ -28,6 +28,7 @@ type Student = {
   gender: string | null;
   familyGroupId: string | null;
   householdName: string | null;
+  archivedAt?: string | null;
   updatedAt?: string;
 };
 
@@ -57,13 +58,15 @@ export function StudentsDirectory() {
   const canManage = hasAnyPermission(permissions, ["student.manage"]);
   const { studentsRegisterOpen, setStudentsRegisterOpen } = usePeopleDirectoryActions();
   const [statusFilter, setStatusFilter] = useState("");
+  const [viewFilter, setViewFilter] = useState<"active" | "archived" | "all">("active");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
 
   const queryPath = (tenant: string) => {
     const params = new URLSearchParams({
       limit: String(PAGE_SIZE),
-      offset: String(page * PAGE_SIZE)
+      offset: String(page * PAGE_SIZE),
+      view: viewFilter
     });
     if (statusFilter) {
       params.set("status", statusFilter);
@@ -110,12 +113,15 @@ export function StudentsDirectory() {
       id: "status",
       header: c("status"),
       accessorKey: "status",
-      cell: ({ row }) => (
-        <StatusBadge
-          status={row.original.status}
-          label={t(`status_${row.original.status}` as "status_draft")}
-        />
-      )
+      cell: ({ row }) =>
+        row.original.archivedAt ? (
+          <StatusBadge status="archived" label={t("status_archived")} />
+        ) : (
+          <StatusBadge
+            status={row.original.status}
+            label={t(`status_${row.original.status}` as "status_draft")}
+          />
+        )
     },
     {
       id: "dateOfBirth",
@@ -159,6 +165,23 @@ export function StudentsDirectory() {
                   { value: "enrolled", label: t("status_enrolled") },
                   { value: "transferred", label: t("status_transferred") },
                   { value: "withdrawn", label: t("status_withdrawn") }
+                ]}
+              />
+            </div>
+            <div className="pds-search-filters-row__filter--160">
+              <PdsSelectField
+                variant="filter"
+                value={viewFilter}
+                onValueChange={(value) => {
+                  setViewFilter(
+                    value === "archived" || value === "all" ? value : "active"
+                  );
+                  setPage(0);
+                }}
+                options={[
+                  { value: "active", label: c("viewActive") },
+                  { value: "archived", label: c("viewArchived") },
+                  { value: "all", label: c("viewAll") }
                 ]}
               />
             </div>

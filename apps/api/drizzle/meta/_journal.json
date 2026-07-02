@@ -197,6 +197,13 @@
       "when": 1783900000001,
       "tag": "0027_slim_rafael_vega",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1783900000002,
+      "tag": "0028_hesitant_mojo",
+      "breakpoints": true
     }
   ]
 }

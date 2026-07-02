@@ -233,6 +233,11 @@ export class ListStudentsQueryDto {
   @IsEnum(["draft", "enrolled", "transferred", "withdrawn", "graduated", "archived"])
   status?: "draft" | "enrolled" | "transferred" | "withdrawn" | "graduated" | "archived";
 
+  /** Archive lifecycle filter. Defaults to "active" (non-archived) when omitted. */
+  @IsOptional()
+  @IsIn(["active", "archived", "all"])
+  view?: "active" | "archived" | "all";
+
   @IsOptional()
   @IsUUID()
   gradeId?: string;

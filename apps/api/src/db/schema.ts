@@ -472,7 +472,11 @@ export const students = pgTable("students", {
   township: text("township"),
   identityNumber: text("identity_number"),
   medicalNotes: text("medical_notes"),
-  status: studentStatusEnum("status").default("draft").notNull()
+  status: studentStatusEnum("status").default("draft").notNull(),
+  // Archive lifecycle: orthogonal to `status` so the lifecycle state
+  // (enrolled/graduated/…) is preserved and restore returns to it.
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
+  archivedBy: uuid("archived_by")
 });
 
 export const studentGuardians = pgTable("student_guardians", {

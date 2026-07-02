@@ -1,12 +1,15 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { and, desc, eq, ilike, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
 import {
+  assessmentResults,
+  assignmentSubmissions,
   attendanceRecords,
   auditLogs,
   classroomStudents,
   classrooms,
+  enrollments,
   familyGroups,
   gradeSubjects,
   grades,
@@ -14,7 +17,10 @@ import {
   invoices,
   reportCards,
   sections,
+  studentDiscounts,
+  studentDocuments,
   studentGuardians,
+  studentServices,
   students,
   subjects
 } from "../db/schema.js";
@@ -46,6 +52,14 @@ export class StudentsService {
   async list(tenantId: string, query: ListStudentsQueryDto) {
     const filters: ReturnType<typeof eq>[] = [eq(students.tenantId, tenantId)];
 
+    // Archive lifecycle: default view hides archived students; "archived" shows
+    // only them; "all" shows both.
+    if (query.view === "archived") {
+      filters.push(isNotNull(students.archivedAt));
+    } else if (query.view !== "all") {
+      filters.push(isNull(students.archivedAt));
+    }
+
     if (query.status) {
       filters.push(eq(students.status, query.status));
     }
@@ -68,6 +82,7 @@ export class StudentsService {
         gender: students.gender,
         familyGroupId: students.familyGroupId,
         householdName: familyGroups.name,
+        archivedAt: students.archivedAt,
         updatedAt: students.updatedAt
       })
       .from(students)
@@ -707,6 +722,143 @@ export class StudentsService {
     });
 
     return updated!;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Archive lifecycle: Active → Archived (reviewable) → Restore | Permanent delete.
+  // `archivedAt` is orthogonal to `status`, so the lifecycle state
+  // (enrolled/graduated/…) is preserved and restore returns to it.
+  // ---------------------------------------------------------------------------
+
+  async archive(tenantId: string, studentId: string, actorUserId?: string) {
+    const before = await this.getStudentOrThrow(tenantId, studentId);
+    if (before.archivedAt) {
+      return before;
+    }
+
+    const [updated] = await this.db
+      .update(students)
+      .set({
+        archivedAt: new Date(),
+        archivedBy: actorUserId,
+        updatedBy: actorUserId,
+        updatedAt: new Date()
+      })
+      .where(and(eq(students.tenantId, tenantId), eq(students.id, studentId)))
+      .returning();
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "student.archive",
+      recordType: "student",
+      recordId: studentId,
+      before: { archivedAt: null },
+      after: { archivedAt: updated!.archivedAt }
+    });
+
+    return updated!;
+  }
+
+  async restore(tenantId: string, studentId: string, actorUserId?: string) {
+    const before = await this.getStudentOrThrow(tenantId, studentId);
+    if (!before.archivedAt) {
+      return before;
+    }
+
+    const [updated] = await this.db
+      .update(students)
+      .set({
+        archivedAt: null,
+        archivedBy: null,
+        updatedBy: actorUserId,
+        updatedAt: new Date()
+      })
+      .where(and(eq(students.tenantId, tenantId), eq(students.id, studentId)))
+      .returning();
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "student.restore",
+      recordType: "student",
+      recordId: studentId,
+      before: { archivedAt: before.archivedAt },
+      after: { archivedAt: null }
+    });
+
+    return updated!;
+  }
+
+  /** Counts of financial/academic records that block permanent deletion. */
+  private async getBlockingDependencies(tenantId: string, studentId: string) {
+    const n = sql<number>`count(*)::int`;
+    const [invoicesN, reportCardsN, enrollmentsN, classroomsN, attendanceN, assessmentsN] =
+      await Promise.all([
+        this.db.select({ n }).from(invoices).where(and(eq(invoices.tenantId, tenantId), eq(invoices.studentId, studentId))),
+        this.db.select({ n }).from(reportCards).where(and(eq(reportCards.tenantId, tenantId), eq(reportCards.studentId, studentId))),
+        this.db.select({ n }).from(enrollments).where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.studentId, studentId))),
+        this.db.select({ n }).from(classroomStudents).where(and(eq(classroomStudents.tenantId, tenantId), eq(classroomStudents.studentId, studentId))),
+        this.db.select({ n }).from(attendanceRecords).where(and(eq(attendanceRecords.tenantId, tenantId), eq(attendanceRecords.studentId, studentId))),
+        this.db.select({ n }).from(assessmentResults).where(and(eq(assessmentResults.tenantId, tenantId), eq(assessmentResults.studentId, studentId)))
+      ]);
+
+    return {
+      invoices: invoicesN[0]?.n ?? 0,
+      reportCards: reportCardsN[0]?.n ?? 0,
+      enrollments: enrollmentsN[0]?.n ?? 0,
+      classrooms: classroomsN[0]?.n ?? 0,
+      attendance: attendanceN[0]?.n ?? 0,
+      assessments: assessmentsN[0]?.n ?? 0
+    };
+  }
+
+  async permanentlyDelete(tenantId: string, studentId: string, actorUserId?: string) {
+    const student = await this.getStudentOrThrow(tenantId, studentId);
+
+    // Two-step safety: only an already-archived student can be permanently deleted.
+    if (!student.archivedAt) {
+      throw new BadRequestException("Archive the student before deleting permanently.");
+    }
+
+    const dependencies = await this.getBlockingDependencies(tenantId, studentId);
+    const blocking = Object.entries(dependencies).filter(([, n]) => n > 0);
+    if (blocking.length > 0) {
+      throw new ConflictException({
+        message:
+          "This student has financial or academic records and cannot be permanently deleted. Keep it archived instead.",
+        dependencies
+      });
+    }
+
+    await this.db.transaction(async (tx) => {
+      // Cascade the trivial owned rows (links, uploads, ad-hoc services/discounts,
+      // draft submissions) — none are financial/academic history.
+      await tx.delete(studentGuardians).where(and(eq(studentGuardians.tenantId, tenantId), eq(studentGuardians.studentId, studentId)));
+      await tx.delete(studentDocuments).where(and(eq(studentDocuments.tenantId, tenantId), eq(studentDocuments.studentId, studentId)));
+      await tx.delete(studentServices).where(and(eq(studentServices.tenantId, tenantId), eq(studentServices.studentId, studentId)));
+      await tx.delete(studentDiscounts).where(and(eq(studentDiscounts.tenantId, tenantId), eq(studentDiscounts.studentId, studentId)));
+      await tx.delete(assignmentSubmissions).where(and(eq(assignmentSubmissions.tenantId, tenantId), eq(assignmentSubmissions.studentId, studentId)));
+
+      await tx.delete(students).where(and(eq(students.tenantId, tenantId), eq(students.id, studentId)));
+    });
+
+    // Tombstone: the row is gone, so record enough to trace the deletion.
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "student.delete",
+      recordType: "student",
+      recordId: studentId,
+      before: {
+        fullName: student.fullName,
+        admissionNumber: student.admissionNumber,
+        status: student.status
+      },
+      after: { deleted: true }
+    });
+
+    return { id: studentId, deleted: true };
   }
 
   listGuardians(tenantId: string, query: ListGuardiansQueryDto = {}) {
