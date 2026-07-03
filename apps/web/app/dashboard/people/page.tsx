@@ -55,14 +55,24 @@ export default function PeoplePage() {
 
   const tabCounts = counts.data;
 
+  // Trail segment must reflect the active tab so detail pages' back links
+  // return to the tab the user actually came from.
+  const tabLabel =
+    tab === "guardians"
+      ? t("guardiansTab")
+      : tab === "households"
+        ? t("householdsTab")
+        : nav("students");
+  const tabSegment = { label: tabLabel, href: `/dashboard/people?tab=${tab}` };
+
   return (
     <PeopleDirectoryActionsProvider activeTab={tab}>
       <div className="directory-page">
         <PageHeader
           title={t("studentsDirectoryTitle")}
           actionsPortal
-          resetTrail={[{ label: nav("students"), href: "/dashboard/people?tab=students" }]}
-          segment={{ label: nav("students"), href: "/dashboard/people?tab=students" }}
+          resetTrail={[tabSegment]}
+          segment={tabSegment}
         />
 
         <PeopleDirectoryHeaderActionsPortal />
