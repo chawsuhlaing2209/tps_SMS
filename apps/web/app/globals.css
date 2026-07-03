@@ -879,7 +879,8 @@ h3,
   gap: var(--pds-gap-small);
   min-width: var(--pds-width-240);
   padding: var(--pds-gap-medium);
-  z-index: 100;
+  /* Above the mobile nav drawer (--pds-z-modal: 101) so sign-out stays reachable. */
+  z-index: var(--pds-z-popover, 1000);
 }.dash-user-menu__section {
   display: grid;
   gap: var(--pds-gap-x-small);
@@ -4595,6 +4596,31 @@ button.btn-hero-outline:hover {
 
 .student-recurrent-billing__invoice-view:hover {
   background: var(--pds-background-layout-secondary);
+}
+
+@media (max-width: 640px) { /* = --pds-breakpoint-sm */
+  /* Three columns collide at phone widths — number+source and the view button
+     share the top row; the amount gets its own full-width line below. */
+  .student-recurrent-billing__invoice-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: var(--pds-gap-x-small);
+  }
+
+  .student-recurrent-billing__invoice-main {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .student-recurrent-billing__invoice-actions {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .student-recurrent-billing__invoice-amount {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: flex-start;
+  }
 }
 
 .student-recurrent-billing__service-card {
