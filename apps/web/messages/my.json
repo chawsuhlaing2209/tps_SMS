@@ -1131,7 +1131,7 @@
       "collectionViewHelp": "Row တစ်ခုစီတွင် ကျောင်းသား တစ်ဦး၏ နှစ်စဉ် ကြေး စုစုပေါင်းဖြစ်သည်။ Cashier desk တွင် ငွေပေးချေမှု အမြန် ကောက်ခံရန် သုံးပါ။",
       "collect": "ကောက်ခံ",
       "settled": "ပြီးစီး",
-      "pendingVerification": "Verification စောင့်ဆိုင်းနေသည်",
+      "pendingVerification": "စိစစ်နေသည်",
       "empty": "ဤစစ်ထုတ်မှုများနှင့် ကိုက်ညီသော ကျောင်းသားမရှိပါ။",
       "statusFilters": {
         "all": "အခြေအနေ အားလုံး",
@@ -1480,7 +1480,7 @@
     "recordPayment": "ငွေပေးချေမှု မှတ်မည်",
     "method": "နည်းလမ်း",
     "verified": "အတည်ပြုပြီး",
-    "pendingVerification": "Verification စောင့်ဆိုင်းနေသည်",
+    "pendingVerification": "စိစစ်နေသည်",
     "verifyPaymentNow": "ငွေပေးချေမှု အတည်ပြုမည်",
     "verifyReason": "Verify လုပ်ရခြင်း အကြောင်းရင်း",
     "verifyReasonPlaceholder": "ဥပမာ - 15 Jun ဘဏ်လွှဲ ref 12345 နှင့် တိုက်ဆိုင်သည်",

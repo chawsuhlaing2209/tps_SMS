@@ -1875,7 +1875,7 @@ h3,
   }
 
   .table-row-actions {
-    align-items: flex-start;
+    align-items: flex-end;
     flex-direction: column;
   }
 }
