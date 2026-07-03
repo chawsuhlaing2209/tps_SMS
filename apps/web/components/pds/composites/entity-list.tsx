@@ -78,7 +78,16 @@ export function EntityListItem(props: EntityListItemProps) {
       <Link
         href={href}
         className={itemClass}
-        onClick={() => {
+        onClick={(event) => {
+          // Clicks on trailing controls (e.g. a row "…" menu, marked with
+          // data-row-stop) must not follow the row link.
+          if (
+            event.target instanceof Element &&
+            event.target.closest("[data-row-stop]")
+          ) {
+            event.preventDefault();
+            return;
+          }
           if (navigationFrom) {
             appendNavigationTrail(navigationFrom);
           }

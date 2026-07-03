@@ -45,7 +45,12 @@ export function RowMoreActionsMenu({
             type="button"
             className="row-more-actions__trigger"
             aria-label={ariaLabel}
-            onClick={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              // Inside a linked row the anchor's default navigation must not
+              // fire; stopPropagation alone doesn't cancel it.
+              event.preventDefault();
+              event.stopPropagation();
+            }}
           >
             <Icon name="more_vert" size={20} />
           </button>
