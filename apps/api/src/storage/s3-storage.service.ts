@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
+  CreateBucketCommand,
   GetObjectCommand,
   PutObjectCommand,
   S3Client
@@ -26,14 +27,35 @@ export class S3StorageService {
   }
 
   async putObject(key: string, body: Buffer, contentType: string): Promise<void> {
-    await this.client.send(
-      new PutObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-        Body: body,
-        ContentType: contentType
-      })
-    );
+    try {
+      await this.client.send(
+        new PutObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+          Body: body,
+          ContentType: contentType
+        })
+      );
+    } catch (error) {
+      // Fresh dev/self-hosted environments start without the bucket — create
+      // it once and retry rather than failing every upload with a 500.
+      if (!isNoSuchBucket(error)) {
+        throw error;
+      }
+      await this.client.send(new CreateBucketCommand({ Bucket: this.bucket })).catch((createError) => {
+        if (!isBucketAlreadyOwned(createError)) {
+          throw createError;
+        }
+      });
+      await this.client.send(
+        new PutObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+          Body: body,
+          ContentType: contentType
+        })
+      );
+    }
   }
 
   async getObject(key: string): Promise<Buffer> {
@@ -57,4 +79,14 @@ export class S3StorageService {
       return null;
     }
   }
+}
+
+function isNoSuchBucket(error: unknown): boolean {
+  return (error as { name?: string; Code?: string })?.name === "NoSuchBucket" ||
+    (error as { Code?: string })?.Code === "NoSuchBucket";
+}
+
+function isBucketAlreadyOwned(error: unknown): boolean {
+  const name = (error as { name?: string })?.name;
+  return name === "BucketAlreadyOwnedByYou" || name === "BucketAlreadyExists";
 }
