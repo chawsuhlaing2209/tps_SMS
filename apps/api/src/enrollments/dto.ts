@@ -80,6 +80,11 @@ export class CreateEnrollmentDto {
   optionalFeeItemIds?: string[];
 }
 
+export class AssignClassroomDto {
+  @IsUUID()
+  declare classroomId: string;
+}
+
 export class UpdateEnrollmentDto {
   @IsOptional()
   @IsString()

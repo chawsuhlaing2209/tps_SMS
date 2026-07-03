@@ -6,7 +6,8 @@ import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { useApiMutation, useApiQuery, useLiveApiQuery, useReferenceApiQuery, apiFetch } from "../../../lib/api";
+import { ApiError, useApiMutation, useApiQuery, useLiveApiQuery, useReferenceApiQuery, apiFetch } from "../../../lib/api";
+import { RecordFormModal } from "../../../lib/record-modal";
 import { useDashPageTitleActionsTarget } from "../../dashboard-page-title";
 import { getSession } from "../../../lib/session";
 import { DataTable } from "../../../lib/data-table";
@@ -122,6 +123,9 @@ export function ClassroomOpsTabs({
   const [activeTab, setActiveTab] = useState<"roster" | "attendance" | "lms">(initialTab);
   const [takeOpen, setTakeOpen] = useState(false);
   const [enrollOpen, setEnrollOpen] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignEnrollmentId, setAssignEnrollmentId] = useState("");
+  const [assignError, setAssignError] = useState<string | null>(null);
   const [sessionDate, setSessionDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [markSubjectId, setMarkSubjectId] = useState("");
   const [markingSession, setMarkingSession] = useState<AttendanceSession | null>(null);
@@ -141,7 +145,30 @@ export function ClassroomOpsTabs({
     enrollOpen ? `/tenants/${tenant}/academics/grades` : null
   );
   const classrooms = useReferenceApiQuery<Classroom[]>((tenant) =>
-    enrollOpen ? `/tenants/${tenant}/classrooms` : null
+    enrollOpen || assignOpen ? `/tenants/${tenant}/classrooms` : null
+  );
+  const thisClassroom = classrooms.data?.find((room) => room.id === classroomId);
+  const unassignedEnrollments = useApiQuery<
+    Array<{
+      id: string;
+      studentFullName: string | null;
+      studentId: string;
+      gradeId: string;
+      classroomId: string | null;
+      status: string;
+      cancelledAt: string | null;
+    }>
+  >((tenant) =>
+    assignOpen && thisClassroom
+      ? `/tenants/${tenant}/enrollments?academicYearId=${thisClassroom.academicYearId}`
+      : null
+  );
+  const assignCandidates = (unassignedEnrollments.data ?? []).filter(
+    (row) =>
+      row.gradeId === thisClassroom?.gradeId &&
+      !row.classroomId &&
+      !row.cancelledAt &&
+      row.status !== "cancelled"
   );
   const sessions = useLiveApiQuery<AttendanceSession[]>((tenant) =>
     activeTab === "attendance" || takeOpen
@@ -168,6 +195,19 @@ export function ClassroomOpsTabs({
 
   const sessionsPath = (tenant: string) =>
     `/tenants/${tenant}/classrooms/${classroomId}/attendance-sessions`;
+
+  const assignStudent = useApiMutation<{ enrollmentId: string }, unknown>(
+    (body, tenant) => ({
+      path: `/tenants/${tenant}/enrollments/${body.enrollmentId}/assign-classroom`,
+      init: { method: "POST", body: JSON.stringify({ classroomId }) }
+    }),
+    {
+      invalidatePaths: (_b, tenant) => [
+        `/tenants/${tenant}/classrooms/${classroomId}/students`,
+        `/tenants/${tenant}/classrooms/${classroomId}/room-detail`
+      ]
+    }
+  );
 
   const enrollmentInvalidatePaths = useMemo(
     () => (tenant: string) => [
@@ -303,9 +343,23 @@ export function ClassroomOpsTabs({
               <p className="pds-type-body-s-regular classroom-ops-panel__help">{t("rosterHelp")}</p>
             </div>
             {canEnroll ? (
-              <Button buttonType="filled" buttonColor="primary" prefixIcon="add" onClick={() => setEnrollOpen(true)}>
-                {t("enrollStudent")}
-              </Button>
+              <div className="classroom-ops-panel__head-actions">
+                <Button
+                  buttonType="ghost"
+                  buttonColor="primary"
+                  prefixIcon="door_open"
+                  onClick={() => {
+                    setAssignEnrollmentId("");
+                    setAssignError(null);
+                    setAssignOpen(true);
+                  }}
+                >
+                  {t("assignStudent")}
+                </Button>
+                <Button buttonType="filled" buttonColor="primary" prefixIcon="add" onClick={() => setEnrollOpen(true)}>
+                  {t("enrollStudent")}
+                </Button>
+              </div>
             ) : null}
           </div>
           <TablePanelBody
@@ -551,6 +605,78 @@ export function ClassroomOpsTabs({
           onSaved={() => void roster.refetch()}
         />
       ) : null}
+
+      <RecordFormModal
+        open={assignOpen}
+        onOpenChange={(open) => {
+          setAssignOpen(open);
+          if (!open) {
+            setAssignError(null);
+          }
+        }}
+        title={t("assignStudentTitle")}
+        help={t("assignStudentHelp")}
+        headerIcon="door_open"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (!assignEnrollmentId) {
+            setAssignError(c("required"));
+            return;
+          }
+          setAssignError(null);
+          try {
+            await assignStudent.mutateAsync({ enrollmentId: assignEnrollmentId });
+            setAssignOpen(false);
+            void roster.refetch();
+          } catch (error) {
+            setAssignError(error instanceof ApiError ? error.message : c("somethingWrong"));
+          }
+        }}
+        footer={
+          <>
+            <button
+              type="button"
+              className="pds-type-body-m-bold btn-ghost"
+              onClick={() => setAssignOpen(false)}
+            >
+              {c("cancel")}
+            </button>
+            <button
+              type="submit"
+              className="pds-type-body-m-bold btn-primary"
+              disabled={assignStudent.isPending || !assignEnrollmentId}
+            >
+              <Icon name="door_open" />
+              {assignStudent.isPending ? c("loading") : t("assignStudentConfirm")}
+            </button>
+          </>
+        }
+      >
+        {unassignedEnrollments.isLoading ? (
+          <p className="pds-type-body-s-regular muted">{c("loading")}</p>
+        ) : assignCandidates.length ? (
+          <Field label={t("studentsTab")}>
+            <PdsSelectField
+              value={assignEnrollmentId}
+              onValueChange={(value) =>
+                setAssignEnrollmentId(typeof value === "string" ? value : "")
+              }
+              placeholder={t("assignStudentPlaceholder")}
+              options={assignCandidates.map((row) => ({
+                value: row.id,
+                label: row.studentFullName ?? row.studentId
+              }))}
+            />
+          </Field>
+        ) : (
+          <p className="pds-type-body-s-regular muted">{t("assignStudentEmpty")}</p>
+        )}
+        {assignError ? (
+          <p className="pds-type-body-m-medium error-text" role="alert">
+            {assignError}
+          </p>
+        ) : null}
+      </RecordFormModal>
     </>
   );
 }

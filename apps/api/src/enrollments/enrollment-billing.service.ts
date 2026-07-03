@@ -759,12 +759,77 @@ export class EnrollmentBillingService {
     return Boolean(row);
   }
 
+  /**
+   * Assigns (or moves) an enrollment to a classroom after the fact — the
+   * ceremony allows enrolling without picking a room, and confirmed
+   * enrollments are otherwise immutable. Validates the classroom matches the
+   * enrollment's year and grade; approved enrollments get their classroom
+   * placement synced immediately.
+   */
+  async assignClassroom(
+    tenantId: string,
+    enrollmentId: string,
+    classroomId: string,
+    actorUserId: string
+  ) {
+    const [enrollment] = await this.db
+      .select()
+      .from(enrollments)
+      .where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.id, enrollmentId)));
+
+    if (!enrollment) {
+      throw new NotFoundException("Enrollment not found.");
+    }
+    if (enrollment.cancelledAt) {
+      throw new BadRequestException("Cancelled enrollments cannot be assigned to a classroom.");
+    }
+    if (enrollment.classroomId === classroomId) {
+      return enrollment;
+    }
+
+    await this.assertClassroomPlacement(
+      tenantId,
+      classroomId,
+      enrollment.academicYearId,
+      enrollment.gradeId
+    );
+
+    const today = new Date().toISOString().slice(0, 10);
+
+    const updated = await this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(enrollments)
+        .set({ classroomId, updatedBy: actorUserId, updatedAt: new Date() })
+        .where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.id, enrollmentId)))
+        .returning();
+
+      if (row!.status === "approved") {
+        await this.syncClassroomPlacementTx(tx, tenantId, row!, actorUserId, today, "classroom_assigned");
+      }
+
+      return row!;
+    });
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId,
+      action: "enrollment.assign_classroom",
+      recordType: "enrollment",
+      recordId: enrollmentId,
+      before: { classroomId: enrollment.classroomId },
+      after: { classroomId }
+    });
+
+    return updated;
+  }
+
   private async syncClassroomPlacementTx(
     tx: Pick<Database, "select" | "insert" | "update">,
     tenantId: string,
     enrollment: typeof enrollments.$inferSelect,
     actorUserId: string,
-    today: string
+    today: string,
+    movementReason = "enrollment_confirmed"
   ) {
     if (!enrollment.classroomId) return;
 
@@ -797,7 +862,7 @@ export class EnrollmentBillingService {
         classroomId: enrollment.classroomId,
         studentId: enrollment.studentId,
         effectiveFrom: today,
-        movementReason: "enrollment_confirmed",
+        movementReason,
         createdBy: actorUserId,
         updatedBy: actorUserId
       });

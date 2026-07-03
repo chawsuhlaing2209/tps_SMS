@@ -16,7 +16,9 @@ import { NavigationBackLink } from "../../../../components/shared/navigation-bac
 import { Button } from "../../../../components/ui/button";
 import { StatusPill } from "../../../../components/pds/subcomponents/status-pill";
 import { StatusBadge } from "../../../../components/shared/badge";
-import { useApiMutation, useApiQuery } from "../../../lib/api";
+import { ApiError, useApiMutation, useApiQuery } from "../../../lib/api";
+import { PdsSelectField } from "../../../../components/pds";
+import { RecordFormModal } from "../../../lib/record-modal";
 import { DataTable } from "../../../lib/data-table";
 import { subjectColor } from "../../structure/subject-colors";
 import { Field } from "../../../lib/form";
@@ -262,6 +264,9 @@ export default function StudentDetailPage({
   const [requestDiscountOpen, setRequestDiscountOpen] = useState(false);
   const [previewInvoiceId, setPreviewInvoiceId] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<{ id: string; invoiceId: string | null } | null>(null);
+  const [assignTarget, setAssignTarget] = useState<Enrollment | null>(null);
+  const [assignClassroomId, setAssignClassroomId] = useState("");
+  const [assignError, setAssignError] = useState<string | null>(null);
 
   const update = useApiMutation<
     {
@@ -318,6 +323,19 @@ export default function StudentDetailPage({
     }),
     {
       invalidatePaths: (_b, tenant) => [`/tenants/${tenant}/students`]
+    }
+  );
+
+  const assignClassroom = useApiMutation<{ enrollmentId: string; classroomId: string }, unknown>(
+    (body, tenant) => ({
+      path: `/tenants/${tenant}/enrollments/${body.enrollmentId}/assign-classroom`,
+      init: { method: "POST", body: JSON.stringify({ classroomId: body.classroomId }) }
+    }),
+    {
+      invalidatePaths: (_b, tenant) => [
+        `/tenants/${tenant}/students/${studentId}/profile`,
+        `/tenants/${tenant}/enrollments?studentId=${studentId}`
+      ]
     }
   );
 
@@ -520,6 +538,18 @@ export default function StudentDetailPage({
               onSelect: () => setCancelTarget({ id: enrollment.id, invoiceId })
             });
           }
+        }
+        if (canManage && enrollment && !enrollment.cancelledAt && !row.original.classroomId) {
+          items.push({
+            id: "assign-classroom",
+            label: t("assignClassroom"),
+            icon: "door_open",
+            onSelect: () => {
+              setAssignClassroomId("");
+              setAssignError(null);
+              setAssignTarget(enrollment);
+            }
+          });
         }
         if (row.original.classroomId) {
           const classroomId = row.original.classroomId;
@@ -1130,6 +1160,80 @@ export default function StudentDetailPage({
               }}
             />
           ) : null}
+
+          <RecordFormModal
+            open={assignTarget !== null}
+            onOpenChange={(open) => {
+              if (!open) {
+                setAssignTarget(null);
+                setAssignError(null);
+              }
+            }}
+            title={t("assignClassroom")}
+            help={t("assignClassroomHelp")}
+            headerIcon="door_open"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              if (!assignTarget) return;
+              if (!assignClassroomId) {
+                setAssignError(c("required"));
+                return;
+              }
+              setAssignError(null);
+              try {
+                await assignClassroom.mutateAsync({
+                  enrollmentId: assignTarget.id,
+                  classroomId: assignClassroomId
+                });
+                setAssignTarget(null);
+                refreshEnrollmentData();
+              } catch (error) {
+                setAssignError(error instanceof ApiError ? error.message : c("somethingWrong"));
+              }
+            }}
+            footer={
+              <>
+                <button
+                  type="button"
+                  className="pds-type-body-m-bold btn-ghost"
+                  onClick={() => setAssignTarget(null)}
+                >
+                  {c("cancel")}
+                </button>
+                <button
+                  type="submit"
+                  className="pds-type-body-m-bold btn-primary"
+                  disabled={assignClassroom.isPending || !assignClassroomId}
+                >
+                  <Icon name="door_open" />
+                  {assignClassroom.isPending ? c("loading") : t("assignClassroomConfirm")}
+                </button>
+              </>
+            }
+          >
+            <Field label={t("membershipClass")}>
+              <PdsSelectField
+                value={assignClassroomId}
+                onValueChange={(value) =>
+                  setAssignClassroomId(typeof value === "string" ? value : "")
+                }
+                placeholder={t("assignClassroomPlaceholder")}
+                options={(classrooms.data ?? [])
+                  .filter(
+                    (room) =>
+                      !assignTarget ||
+                      (room.gradeId === assignTarget.gradeId &&
+                        room.academicYearId === assignTarget.academicYearId)
+                  )
+                  .map((room) => ({ value: room.id, label: room.name }))}
+              />
+            </Field>
+            {assignError ? (
+              <p className="pds-type-body-m-medium error-text" role="alert">
+                {assignError}
+              </p>
+            ) : null}
+          </RecordFormModal>
 
           {canManage ? (
             <EnrollmentWizard

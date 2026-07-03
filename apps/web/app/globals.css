@@ -3213,6 +3213,11 @@ button.btn-hero-outline:hover {
   display: flex;
   gap: var(--pds-gap-medium);
   justify-content: space-between;
+}.classroom-ops-panel__head-actions {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--pds-gap-small);
 }.classroom-ops-panel__head-main {
   display: grid;
   flex: 1;

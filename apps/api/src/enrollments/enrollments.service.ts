@@ -251,6 +251,20 @@ export class EnrollmentsService {
     );
   }
 
+  assignClassroom(
+    tenantId: string,
+    enrollmentId: string,
+    classroomId: string,
+    actorUserId: string
+  ) {
+    return this.enrollmentBillingService.assignClassroom(
+      tenantId,
+      enrollmentId,
+      classroomId,
+      actorUserId
+    );
+  }
+
   async updateEnrollment(
     tenantId: string,
     enrollmentId: string,
