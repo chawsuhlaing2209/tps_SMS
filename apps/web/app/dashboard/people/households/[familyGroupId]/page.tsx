@@ -1,14 +1,18 @@
 "use client";
 import { FormInput } from "../../../../../components/shared/form-input";
 
-import type { FamilyTreeGuardian, FamilyTreeStudent } from "../../family-tree";
-import { FamilyTree } from "../../family-tree";
 import { useTranslations } from "next-intl";
 import { useState, use } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { Chip } from "../../../../../components/shared/chip";
 import { ConfirmDialog } from "../../../../../components/shared/confirm-dialog";
+import { EmptyState } from "../../../../../components/shared/empty-state";
+import { RowMoreActionsMenu } from "../../../../../components/shared/row-more-actions";
+import { StatusBadge } from "../../../../../components/shared/badge";
+import { TrailLink } from "../../../../../components/shared/trail-link";
 import { ApiError, useApiMutation, useApiQuery } from "../../../../lib/api";
+import { DirectoryMemberCell } from "../../../../lib/data-table";
 import { Field } from "../../../../lib/form";
 import {
   HeroMoreActionsMenu,
@@ -19,7 +23,6 @@ import { hasAnyPermission } from "../../../../lib/permissions";
 import { RecordFormSheet } from "../../../../lib/record-sheet";
 import { getSession } from "../../../../lib/session";
 import { StudentCombobox } from "../../../../lib/student-combobox";
-import { TablePanelBody } from "../../../../lib/table-panel";
 import { PdsSelectField } from "../../../../../components/pds";
 import { zodResolver } from "../../../../lib/zod-resolver";
 import { useCurrentAcademicYear } from "../../../../lib/use-current-academic-year";
@@ -27,12 +30,29 @@ import { PageHeader } from "../../../page-header-context";
 import { NavigationBackLink } from "../../../../../components/shared/navigation-back-link";
 import { PeopleBillingPanel, type BillingMember } from "../../people-billing-panel";
 
+type HouseholdGuardian = {
+  id: string;
+  fullName: string;
+  phone: string | null;
+  isPrimary: boolean;
+  studentLinks: Array<{ studentId: string; relationship: string }>;
+};
+
+type HouseholdStudent = {
+  id: string;
+  fullName: string;
+  admissionNumber: string;
+  status: string;
+  dateOfBirth: string | null;
+  guardians: Array<{ guardianId: string; relationship: string }>;
+};
+
 type HouseholdTree = {
   id: string;
   name: string;
   primaryGuardian: { id: string; fullName: string; phone: string | null } | null;
-  guardians: FamilyTreeGuardian[];
-  students: FamilyTreeStudent[];
+  guardians: HouseholdGuardian[];
+  students: HouseholdStudent[];
 };
 
 type GuardianOption = { id: string; fullName: string };
@@ -55,6 +75,7 @@ export default function HouseholdDetailPage({
   const c = useTranslations("common");
   const nav = useTranslations("nav");
   const p = useTranslations("people");
+  const s = useTranslations("students");
   const permissions = getSession()?.permissions;
   const canManage = hasAnyPermission(permissions, ["student.manage"]);
   const canCollect = hasAnyPermission(permissions, ["finance.manage"]);
@@ -62,7 +83,7 @@ export default function HouseholdDetailPage({
   const [editOpen, setEditOpen] = useState(false);
   const [addStudentOpen, setAddStudentOpen] = useState(false);
   const [addStudentId, setAddStudentId] = useState("");
-  const [removeStudent, setRemoveStudent] = useState<FamilyTreeStudent | null>(null);
+  const [removeStudent, setRemoveStudent] = useState<HouseholdStudent | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
   const household = useApiQuery<HouseholdTree>(
@@ -149,6 +170,14 @@ export default function HouseholdDetailPage({
 
   const data = household.data;
   const memberIds = data.students.map((student) => student.id);
+  const relationshipLabel = (relationship: string) => {
+    const key = `relationship_${relationship}` as
+      | "relationship_father"
+      | "relationship_mother"
+      | "relationship_guardian"
+      | "relationship_other";
+    return t(key);
+  };
   const heroMeta = [
     data.primaryGuardian
       ? t("primaryGuardianLine", { name: data.primaryGuardian.fullName })
@@ -221,17 +250,89 @@ export default function HouseholdDetailPage({
         </div>
       </section>
 
-      <TablePanelBody variant="card-plain" loading={false} error={null}>
-        <div className="household-tree-content">
-          <FamilyTree
-            guardians={data.guardians}
-            students={data.students}
-            canManage={canManage}
-            onRemoveStudent={(student) => setRemoveStudent(student)}
-          />
-          <p className="pds-type-body-s-regular muted household-tree-content__hint">{t("siblingHint")}</p>
+      <section className="panel household-members-panel">
+        <div className="dash-page-title">
+          <h2 className="pds-type-title-s-extrabold dash-page-title__heading">
+            {t("treeGuardians")}
+          </h2>
         </div>
-      </TablePanelBody>
+        {data.guardians.length ? (
+          <ul className="household-member-list">
+            {data.guardians.map((guardian) => (
+              <li key={guardian.id} className="household-member-row">
+                <TrailLink
+                  href={`/dashboard/people/guardians/${guardian.id}`}
+                  className="household-member-row__link"
+                  from={{ label: data.name, href: `/dashboard/people/households/${familyGroupId}` }}
+                >
+                  <DirectoryMemberCell
+                    name={guardian.fullName}
+                    subtitle={guardian.phone ?? undefined}
+                  />
+                </TrailLink>
+                {guardian.isPrimary ? <Chip>{t("primaryGuardian")}</Chip> : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <EmptyState compact embedded icon="supervisor_account" title={t("treeEmpty")} />
+        )}
+      </section>
+
+      <section className="panel household-members-panel">
+        <div className="dash-page-title">
+          <h2 className="pds-type-title-s-extrabold dash-page-title__heading">
+            {t("treeStudents")}
+          </h2>
+        </div>
+        {data.students.length ? (
+          <ul className="household-member-list">
+            {data.students.map((student) => (
+              <li key={student.id} className="household-member-row">
+                <TrailLink
+                  href={`/dashboard/students/${student.id}`}
+                  className="household-member-row__link"
+                  from={{ label: data.name, href: `/dashboard/people/households/${familyGroupId}` }}
+                >
+                  <DirectoryMemberCell
+                    name={student.fullName}
+                    subtitle={student.admissionNumber}
+                  />
+                </TrailLink>
+                <div className="household-member-row__trailing">
+                  {student.guardians.length ? (
+                    <span className="pds-type-body-s-regular muted">
+                      {student.guardians
+                        .map((link) => relationshipLabel(link.relationship))
+                        .join(", ")}
+                    </span>
+                  ) : null}
+                  <StatusBadge
+                    status={student.status}
+                    label={s(`status_${student.status}` as "status_draft")}
+                  />
+                  {canManage ? (
+                    <RowMoreActionsMenu
+                      ariaLabel={t("removeStudentAria", { name: student.fullName })}
+                      items={[
+                        {
+                          id: "remove",
+                          label: t("removeStudentConfirm"),
+                          icon: "person_remove",
+                          destructive: true,
+                          onSelect: () => setRemoveStudent(student)
+                        }
+                      ]}
+                    />
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <EmptyState compact embedded icon="school" title={t("treeEmpty")} />
+        )}
+      </section>
 
       {canCollect ? (
         <PeopleBillingPanel
