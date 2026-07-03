@@ -12,6 +12,9 @@ import {
   academicYears,
   classroomStudents,
   classrooms,
+  discountRules,
+  enrollmentFeePlanGrades,
+  enrollmentFeePlans,
   enrollments,
   gradeChiefAssignments,
   gradeSubjects,
@@ -336,13 +339,14 @@ export class AcademicsService {
   }
 
   /**
-   * Clones the year-scoped structure — active classrooms (name, section,
-   * capacity, room, homeroom teacher) and grade↔subject assignments — from a
-   * source year into a freshly created one. Enrollments, placements, and
-   * financial data are never copied.
+   * Clones the year-scoped setup from a source year into a freshly created
+   * one: active classrooms (name, section, capacity, room, homeroom teacher),
+   * grade↔subject assignments, enrollment fee plans with their amounts and
+   * grade scoping, and extends year-scoped discount rules to cover the new
+   * year. Enrollments, placements, invoices, and payments are never copied.
    */
   private async importStructureIntoYearTx(
-    tx: Pick<Database, "select" | "insert">,
+    tx: Pick<Database, "select" | "insert" | "update">,
     tenantId: string,
     sourceYearId: string,
     targetYearId: string,
@@ -401,6 +405,80 @@ export class AcademicsService {
           updatedBy: actorUserId
         }))
       );
+    }
+
+    // Fee structure: clone the source year's enrollment fee plans (amounts)
+    // and each plan's grade scoping.
+    const sourcePlans = await tx
+      .select()
+      .from(enrollmentFeePlans)
+      .where(
+        and(
+          eq(enrollmentFeePlans.tenantId, tenantId),
+          eq(enrollmentFeePlans.academicYearId, sourceYearId)
+        )
+      );
+
+    for (const plan of sourcePlans) {
+      const [newPlan] = await tx
+        .insert(enrollmentFeePlans)
+        .values({
+          tenantId,
+          academicYearId: targetYearId,
+          feeItemId: plan.feeItemId,
+          amount: plan.amount,
+          createdBy: actorUserId,
+          updatedBy: actorUserId
+        })
+        .returning();
+
+      const planGrades = await tx
+        .select()
+        .from(enrollmentFeePlanGrades)
+        .where(
+          and(
+            eq(enrollmentFeePlanGrades.tenantId, tenantId),
+            eq(enrollmentFeePlanGrades.planId, plan.id)
+          )
+        );
+
+      if (planGrades.length) {
+        await tx.insert(enrollmentFeePlanGrades).values(
+          planGrades.map((row) => ({
+            tenantId,
+            planId: newPlan!.id,
+            gradeId: row.gradeId,
+            createdBy: actorUserId,
+            updatedBy: actorUserId
+          }))
+        );
+      }
+    }
+
+    // Discounts: rules without year scoping already apply to every year.
+    // Rules explicitly scoped to the source year get the new year appended
+    // so the same setup keeps working.
+    const rules = await tx
+      .select()
+      .from(discountRules)
+      .where(and(eq(discountRules.tenantId, tenantId), eq(discountRules.status, "active")));
+
+    for (const rule of rules) {
+      const criteria = rule.criteria as Record<string, unknown>;
+      const appliesTo = criteria.appliesTo as Record<string, unknown> | undefined;
+      const container = appliesTo ?? criteria;
+      const yearIds = container.academicYearIds;
+      if (!Array.isArray(yearIds) || !yearIds.includes(sourceYearId) || yearIds.includes(targetYearId)) {
+        continue;
+      }
+      const nextCriteria = appliesTo
+        ? { ...criteria, appliesTo: { ...appliesTo, academicYearIds: [...yearIds, targetYearId] } }
+        : { ...criteria, academicYearIds: [...yearIds, targetYearId] };
+
+      await tx
+        .update(discountRules)
+        .set({ criteria: nextCriteria, updatedBy: actorUserId, updatedAt: new Date() })
+        .where(and(eq(discountRules.tenantId, tenantId), eq(discountRules.id, rule.id)));
     }
   }
 
