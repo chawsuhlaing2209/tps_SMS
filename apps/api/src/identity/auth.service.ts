@@ -116,8 +116,11 @@ export class AuthService {
 
   /**
    * Accepts either a tenant UUID or a tenant slug (e.g. "demo-alpha") and
-   * returns the canonical tenant UUID. Uses the generic credentials error to
-   * avoid leaking which tenants exist.
+   * returns the canonical tenant UUID.
+   *
+   * Login failures carry a machine-readable `code` so the web login form can
+   * point at the exact field. Product decision: field-specific errors
+   * (tenant/identifier/password) are worth the account-enumeration tradeoff.
    */
   private async resolveTenantId(tenantIdOrSlug: string): Promise<string> {
     const [tenant] = await this.db
@@ -130,7 +133,10 @@ export class AuthService {
       );
 
     if (!tenant) {
-      throw new UnauthorizedException("Invalid credentials.");
+      throw new UnauthorizedException({
+        code: "auth.unknownTenant",
+        message: "No school found with that name."
+      });
     }
 
     return tenant.id;
@@ -149,13 +155,26 @@ export class AuthService {
         )
       );
 
-    if (!user || !user.passwordHash || user.status !== "active") {
-      throw new UnauthorizedException("Invalid credentials.");
+    if (!user) {
+      throw new UnauthorizedException({
+        code: "auth.unknownIdentifier",
+        message: "No account with that email or phone in this school."
+      });
+    }
+
+    if (!user.passwordHash || user.status !== "active") {
+      throw new UnauthorizedException({
+        code: "auth.accountInactive",
+        message: "This account is not active yet."
+      });
     }
 
     const valid = await this.passwordService.verify(user.passwordHash, dto.password);
     if (!valid) {
-      throw new UnauthorizedException("Invalid credentials.");
+      throw new UnauthorizedException({
+        code: "auth.wrongPassword",
+        message: "Incorrect password."
+      });
     }
 
     const token = this.passwordService.generateToken();
@@ -239,13 +258,26 @@ export class AuthService {
         )
       );
 
-    if (!user || !user.passwordHash || user.status !== "active") {
-      throw new UnauthorizedException("Invalid credentials.");
+    if (!user) {
+      throw new UnauthorizedException({
+        code: "auth.unknownIdentifier",
+        message: "No platform account with that email or phone."
+      });
+    }
+
+    if (!user.passwordHash || user.status !== "active") {
+      throw new UnauthorizedException({
+        code: "auth.accountInactive",
+        message: "This account is not active yet."
+      });
     }
 
     const valid = await this.passwordService.verify(user.passwordHash, dto.password);
     if (!valid) {
-      throw new UnauthorizedException("Invalid credentials.");
+      throw new UnauthorizedException({
+        code: "auth.wrongPassword",
+        message: "Incorrect password."
+      });
     }
 
     const token = this.passwordService.generateToken();

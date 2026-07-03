@@ -110,6 +110,13 @@
   .pds-detail-card {
     align-items: stretch;
     flex-direction: column;
+    padding: var(--pds-padding-large);
+  }
+
+  /* In column direction the desktop 18rem flex-basis would become a forced
+     288px height — size to content instead. */
+  .pds-detail-card__main {
+    flex: 0 1 auto;
   }
 
   .pds-detail-card__actions {

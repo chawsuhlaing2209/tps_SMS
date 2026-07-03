@@ -144,7 +144,11 @@
     "passwordMismatch": "စကားဝှက် မတူညီပါ။",
     "resetPasswordButton": "စကားဝှက် ပြင်မည်",
     "resettingPassword": "ပြင်နေသည်…",
-    "resetFailed": "စကားဝှက် ပြင်၍ မရပါ။ Token မမှန်ပါ သို့မဟုတ် သက်တမ်းကုန်နိုင်သည်။"
+    "resetFailed": "စကားဝှက် ပြင်၍ မရပါ။ Token မမှန်ပါ သို့မဟုတ် သက်တမ်းကုန်နိုင်သည်။",
+    "unknownTenant": "ဤအမည်ဖြင့် ကျောင်းကို ရှာမတွေ့ပါ။ ကျောင်း / tenant ကို စစ်ဆေးပါ။",
+    "unknownIdentifier": "ဤကျောင်းတွင် ထိုအီးမေးလ်/ဖုန်းဖြင့် အကောင့် မရှိပါ။",
+    "accountInactive": "ဤအကောင့် အသက်မဝင်သေးပါ။ ကျောင်း အက်ဒမင်ကို ဆက်သွယ်ပါ။",
+    "wrongPassword": "စကားဝှက် မှားနေပါသည်။ ထပ်ကြိုးစားပါ သို့မဟုတ် ပြန်လည်သတ်မှတ်ပါ။"
   },
   "platformAuth": {
     "eyebrow": "SMS Platform Console",
@@ -159,7 +163,10 @@
     "apiUnavailable": "Sign-in server ကို မချိတ်ဆက်နိုင်ပါ။ Project root မှ npm run dev ဖြင့် API + web ကို တပြေးညီ ဖွင့်ပါ။ Docker လည်း ဖွင့်ထားပါ: npm run db:up။",
     "identifierRequired": "အီးမေးလ် သို့မဟုတ် ဖုန်းကို ဖြည့်ပါ။",
     "passwordRequired": "စကားဝှက်ကို ဖြည့်ပါ။",
-    "schoolSignIn": "ကျောင်း အကောင့်ဝင်ရန်"
+    "schoolSignIn": "ကျောင်း အကောင့်ဝင်ရန်",
+    "unknownIdentifier": "ထိုအီးမေးလ်/ဖုန်းဖြင့် platform အကောင့် မရှိပါ။",
+    "accountInactive": "ဤအကောင့် အသက်မဝင်ပါ။",
+    "wrongPassword": "စကားဝှက် မှားနေပါသည်။"
   },
   "platformNav": {
     "console": "Platform",
@@ -1124,7 +1131,7 @@
       "collectionViewHelp": "Row တစ်ခုစီတွင် ကျောင်းသား တစ်ဦး၏ နှစ်စဉ် ကြေး စုစုပေါင်းဖြစ်သည်။ Cashier desk တွင် ငွေပေးချေမှု အမြန် ကောက်ခံရန် သုံးပါ။",
       "collect": "ကောက်ခံ",
       "settled": "ပြီးစီး",
-      "pendingVerification": "Verification စောင့်ဆိုင်းနေသည်",
+      "pendingVerification": "စိစစ်နေသည်",
       "empty": "ဤစစ်ထုတ်မှုများနှင့် ကိုက်ညီသော ကျောင်းသားမရှိပါ။",
       "statusFilters": {
         "all": "အခြေအနေ အားလုံး",
@@ -1473,7 +1480,7 @@
     "recordPayment": "ငွေပေးချေမှု မှတ်မည်",
     "method": "နည်းလမ်း",
     "verified": "အတည်ပြုပြီး",
-    "pendingVerification": "Verification စောင့်ဆိုင်းနေသည်",
+    "pendingVerification": "စိစစ်နေသည်",
     "verifyPaymentNow": "ငွေပေးချေမှု အတည်ပြုမည်",
     "verifyReason": "Verify လုပ်ရခြင်း အကြောင်းရင်း",
     "verifyReasonPlaceholder": "ဥပမာ - 15 Jun ဘဏ်လွှဲ ref 12345 နှင့် တိုက်ဆိုင်သည်",

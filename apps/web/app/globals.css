@@ -879,7 +879,8 @@ h3,
   gap: var(--pds-gap-small);
   min-width: var(--pds-width-240);
   padding: var(--pds-gap-medium);
-  z-index: 100;
+  /* Above the mobile nav drawer (--pds-z-modal: 101) so sign-out stays reachable. */
+  z-index: var(--pds-z-popover, 1000);
 }.dash-user-menu__section {
   display: grid;
   gap: var(--pds-gap-x-small);
@@ -1853,6 +1854,30 @@ h3,
 .padauk-table--pinned-end > tbody tr:hover td:last-child,
 .padauk-table--pinned-end > tbody tr.table-row--clickable:focus-visible td:last-child {
   background: var(--pds-notification-background-success-hover);
+}
+
+@media (max-width: 720px) { /* = --pds-breakpoint-md */
+  /* A pinned actions column with labeled buttons covers most of a phone
+     screen — let it scroll with the table instead, and stack the actions so
+     the column stays as narrow as its widest single control. */
+  .padauk-table th.col-actions,
+  .padauk-table td.col-actions,
+  .padauk-table--pinned-end > thead th:last-child,
+  .padauk-table--pinned-end > tbody td:last-child {
+    position: static;
+  }
+
+  [data-pin-overlay="true"] .padauk-table th.col-actions,
+  [data-pin-overlay="true"] .padauk-table td.col-actions,
+  [data-pin-overlay="true"] .padauk-table--pinned-end > thead th:last-child,
+  [data-pin-overlay="true"] .padauk-table--pinned-end > tbody td:last-child {
+    box-shadow: none;
+  }
+
+  .table-row-actions {
+    align-items: flex-end;
+    flex-direction: column;
+  }
 }
 .padauk-table code {
   background: var(--pds-background-layout-secondary);
@@ -4595,6 +4620,31 @@ button.btn-hero-outline:hover {
 
 .student-recurrent-billing__invoice-view:hover {
   background: var(--pds-background-layout-secondary);
+}
+
+@media (max-width: 640px) { /* = --pds-breakpoint-sm */
+  /* Three columns collide at phone widths — number+source and the view button
+     share the top row; the amount gets its own full-width line below. */
+  .student-recurrent-billing__invoice-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: var(--pds-gap-x-small);
+  }
+
+  .student-recurrent-billing__invoice-main {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .student-recurrent-billing__invoice-actions {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .student-recurrent-billing__invoice-amount {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: flex-start;
+  }
 }
 
 .student-recurrent-billing__service-card {
