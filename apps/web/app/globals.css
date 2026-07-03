@@ -4433,6 +4433,42 @@ button.btn-hero-outline:hover {
   gap: var(--pds-gap-small);
 }
 
+.school-profile-logo {
+  align-items: center;
+  display: flex;
+  gap: var(--pds-gap-large);
+}
+
+.school-profile-logo__preview {
+  align-items: center;
+  background: var(--pds-background-layout-secondary);
+  border: 1px solid var(--pds-border-color-primary);
+  border-radius: var(--pds-border-radius-8);
+  display: flex;
+  flex-shrink: 0;
+  height: var(--pds-width-92);
+  justify-content: center;
+  overflow: hidden;
+  width: var(--pds-width-92);
+}
+
+.school-profile-logo__preview img {
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+.school-profile-logo__actions {
+  display: grid;
+  gap: var(--pds-gap-x-small);
+}
+
+.school-profile-logo__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pds-gap-small);
+}
+
 .student-recurrent-billing {
   display: grid;
   gap: 0;

@@ -2376,7 +2376,7 @@ export class FinanceService {
       .from(tenantSettings)
       .where(eq(tenantSettings.tenantId, tenantId))
     const [tenant] = await this.db
-      .select({ name: tenants.name })
+      .select({ name: tenants.name, currency: tenants.currency })
       .from(tenants)
       .where(eq(tenants.id, tenantId))
     const [student] = await this.db
@@ -2401,6 +2401,7 @@ export class FinanceService {
       schoolName: settings?.schoolName ?? tenant?.name ?? 'School',
       schoolAddress: settings?.address ?? null,
       schoolContactPhone: settings?.contactPhone ?? null,
+      currency: tenant?.currency ?? 'MMK',
       academicYearName,
       termName,
     }
@@ -2465,7 +2466,7 @@ export class FinanceService {
       cashier: cashier?.displayName ?? '—',
       amountPaid: input.amountPaid,
       remainingBalance: input.remainingBalance,
-      currency: 'MMK',
+      currency: context.currency,
       invoiceNumber: input.invoiceNumber ?? null,
     }
   }

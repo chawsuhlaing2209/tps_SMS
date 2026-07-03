@@ -7,6 +7,7 @@ import {
   payrollRecords,
   payrollRuns,
   staff,
+  tenantSettings,
   tenants
 } from "../db/schema.js";
 import { S3StorageService } from "../storage/s3-storage.service.js";
@@ -22,6 +23,7 @@ function formatMoney(value: string | number): string {
 
 async function renderPdfBuffer(input: {
   tenantName: string;
+  schoolContact: string | null;
   staffName: string;
   employeeNumber: string | null;
   departmentName: string | null;
@@ -42,6 +44,10 @@ async function renderPdfBuffer(input: {
     doc.on("error", reject);
 
     doc.fontSize(18).text(input.tenantName, { align: "center" });
+    if (input.schoolContact) {
+      doc.moveDown(0.25);
+      doc.fontSize(9).text(input.schoolContact, { align: "center" });
+    }
     doc.moveDown(0.5);
     doc.fontSize(14).text("Payslip", { align: "center" });
     doc.moveDown();
@@ -113,6 +119,15 @@ export class PayslipRenderService {
       .from(tenants)
       .where(eq(tenants.id, tenantId));
 
+    const [settingsRow] = await this.db
+      .select({
+        schoolName: tenantSettings.schoolName,
+        address: tenantSettings.address,
+        contactPhone: tenantSettings.contactPhone
+      })
+      .from(tenantSettings)
+      .where(eq(tenantSettings.tenantId, tenantId));
+
     const lines = await this.db
       .select({ label: payrollLineItems.label, amount: payrollLineItems.amount })
       .from(payrollLineItems)
@@ -124,7 +139,9 @@ export class PayslipRenderService {
       : "—";
 
     const pdfBuffer = await renderPdfBuffer({
-      tenantName: tenantRow?.name ?? "School",
+      tenantName: settingsRow?.schoolName ?? tenantRow?.name ?? "School",
+      schoolContact:
+        [settingsRow?.address, settingsRow?.contactPhone].filter(Boolean).join(" · ") || null,
       staffName: staffRow?.fullName ?? "Staff",
       employeeNumber: staffRow?.employeeNumber ?? null,
       departmentName: record.departmentName,

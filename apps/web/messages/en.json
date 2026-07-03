@@ -1854,6 +1854,68 @@
     "navFinance": "Finance",
     "navOperations": "Operations",
     "navSystem": "System",
+    "schoolProfile": {
+      "title": "School profile",
+      "identityTitle": "School identity",
+      "identityHelp": "The name, type, and logo shown across the app and on official documents.",
+      "schoolName": "School name",
+      "schoolType": "School type",
+      "schoolTypePlaceholder": "Select a type",
+      "schoolTypes": {
+        "private": "Private school",
+        "international": "International school",
+        "monastic": "Monastic school",
+        "public": "Public school",
+        "tutoring": "Tutoring center",
+        "other": "Other"
+      },
+      "motto": "School motto",
+      "mottoPlaceholder": "e.g. Learning for life",
+      "logoLabel": "School logo",
+      "logoHelp": "PNG, JPEG, or WebP, up to 2 MB. Shown on invoices, receipts, and payslips.",
+      "logoAlt": "School logo",
+      "uploadLogo": "Upload logo",
+      "removeLogo": "Remove",
+      "logoUploaded": "Logo updated.",
+      "contactTitle": "Contact",
+      "contactHelp": "Shown on customer-facing documents such as invoices and receipts.",
+      "contactEmail": "Contact email",
+      "contactPhone": "Contact phone",
+      "address": "Address",
+      "registrationTitle": "Leadership & registration",
+      "registrationHelp": "Official details for reports and government paperwork.",
+      "principalName": "Principal",
+      "registrationNumber": "Registration number",
+      "establishedYear": "Established year",
+      "saved": "School profile saved."
+    },
+    "preferences": {
+      "title": "Preferences",
+      "localizationTitle": "Language & timezone",
+      "localizationHelp": "Defaults applied for every member of this school.",
+      "defaultLanguage": "Default language",
+      "languages": {
+        "en": "English",
+        "my": "Myanmar"
+      },
+      "timezone": "Timezone",
+      "formatsTitle": "Formats",
+      "formatsHelp": "How money, dates, and times appear across the app and on documents.",
+      "currency": "Currency",
+      "currencies": {
+        "MMK": "MMK — Myanmar kyat",
+        "USD": "USD — US dollar",
+        "THB": "THB — Thai baht",
+        "SGD": "SGD — Singapore dollar"
+      },
+      "dateFormat": "Date format",
+      "timeFormat": "Time format",
+      "timeFormats": {
+        "12h": "12-hour (2:30 PM)",
+        "24h": "24-hour (14:30)"
+      },
+      "saved": "Preferences saved."
+    },
     "userRoles": "User roles",
     "gradingSystem": "Grading system",
     "schoolSchedule": {

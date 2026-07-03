@@ -180,7 +180,7 @@ export function buildPayrollInvoiceDetails({
 
 /** Demo fixture for Storybook and local previews. */
 export const payrollInvoiceDemoFixture = {
-  schoolName: "Demo Alpha International School",
+  schoolName: "Aung Myint Myat Private School",
   schoolContact: "No. 12 Pyay Road · Yangon · +95 1 234 5678",
   staffFullName: "Daw Ei Mon",
   staffRole: "Teacher",
