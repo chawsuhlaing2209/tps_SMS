@@ -8,7 +8,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { setSession } from "./lib/session";
-import { loginHttpError, resolveLoginError } from "./lib/login-error";
+import { loginHttpFailure, resolveLoginError } from "./lib/login-error";
 import { LanguageSwitcher } from "./lib/language-switcher";
 import { zodResolver } from "./lib/zod-resolver";
 
@@ -41,6 +41,7 @@ export default function LoginPage() {
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors, isSubmitting }
   } = useForm<LoginValues>({
     resolver: zodResolver(schema),
@@ -61,13 +62,23 @@ export default function LoginPage() {
       );
 
       if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as { message?: string } | null;
-        throw new Error(
-          loginHttpError(response.status, body, {
-            invalid: t("invalid"),
-            apiUnavailable: t("apiUnavailable")
-          })
-        );
+        const body = (await response.json().catch(() => null)) as
+          | { message?: string; code?: string }
+          | null;
+        const failure = loginHttpFailure(response.status, body, {
+          invalid: t("invalid"),
+          apiUnavailable: t("apiUnavailable"),
+          unknownTenant: t("unknownTenant"),
+          unknownIdentifier: t("unknownIdentifier"),
+          accountInactive: t("accountInactive"),
+          wrongPassword: t("wrongPassword")
+        });
+        if (failure.field) {
+          setError(failure.field, { type: "server", message: failure.message });
+        } else {
+          setServerError(failure.message);
+        }
+        return;
       }
 
       const data = (await response.json()) as LoginResponse;
