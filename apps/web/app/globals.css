@@ -7835,57 +7835,6 @@ button.btn-hero-outline:hover {
   height: 100%;
 }
 
-/* Grade filter */
-.fees-grades {display: flex;
-  flex-direction: column;
-  gap: var(--pds-gap-small);
-}
-
-@media (min-width: 640px) {
-  .fees-grades {
-    align-items: center;
-    flex-direction: row;
-  }}
-
-.fees-grades__label {
-  color: var(--pds-muted);
-  flex-shrink: 0;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}.fees-grades__chips {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: var(--pds-gap-x-small);
-  max-width: 100%;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  -webkit-overflow-scrolling: touch;
-  padding-block: 2px;
-  scrollbar-width: thin;
-  width: 100%;
-}.fees-grade-chip {
-  background: var(--pds-background-card);
-  border: 1px solid var(--pds-border-color-primary);
-  border-radius: var(--pds-radius-pill);
-  color: var(--pds-text-secondary);
-  cursor: pointer;
-  flex-shrink: 0;
-  font-weight: 600;
-  padding: var(--pds-padding-x-small) var(--pds-padding-medium);
-  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
-  white-space: nowrap;
-}.fees-grade-chip:hover {
-  border-color: var(--pds-primary);
-}.fees-grade-chip--active {
-  background: var(--pds-primary);
-  border-color: var(--pds-primary);
-  color: var(--pds-text-invert-primary);
-}.fees-grade-chip:focus-visible {
-  box-shadow: 0 0 0 3px var(--pds-states-focus);
-  outline: none;
-}
-
 /* Fees segmented control (legacy reports / discounts) */
 .fees-segmented {
   background: var(--pds-background-card);

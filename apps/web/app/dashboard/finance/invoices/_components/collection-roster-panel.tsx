@@ -271,41 +271,6 @@ export function CollectionRosterPanel() {
         </article>
       </section>
 
-      <section className="fees-grades">
-        <span className="pds-type-caption-s fees-grades__label" id="fees-grade-filter-label">
-          {tFees("grade")}
-        </span>
-        <div
-          className="fees-grades__chips"
-          role="tablist"
-          aria-labelledby="fees-grade-filter-label"
-        >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={!gradeId}
-            className={!gradeId ? "fees-grade-chip fees-grade-chip--active" : "fees-grade-chip"}
-            onClick={() => setGradeId("")}
-          >
-            {tFees("allGrades")}
-          </button>
-          {grades.map((grade) => (
-            <button
-              key={grade.id}
-              type="button"
-              role="tab"
-              aria-selected={gradeId === grade.id}
-              className={
-                gradeId === grade.id ? "fees-grade-chip fees-grade-chip--active" : "fees-grade-chip"
-              }
-              onClick={() => setGradeId(grade.id)}
-            >
-              {grade.name}
-            </button>
-          ))}
-        </div>
-      </section>
-
       <PdsSearchFiltersRow
         filters={
           <>
@@ -315,6 +280,15 @@ export function CollectionRosterPanel() {
               placeholder={tFees("searchPlaceholder")}
               aria-label={tFees("searchPlaceholder")}
             />
+            <div className="pds-search-filters-row__filter--160">
+              <PdsSelectField
+                variant="filter"
+                value={gradeId}
+                onValueChange={(value) => setGradeId(typeof value === "string" ? value : "")}
+                placeholder={tFees("allGrades")}
+                options={grades.map((grade) => ({ value: grade.id, label: grade.name }))}
+              />
+            </div>
             <div className="pds-search-filters-row__filter--160">
               <PdsSelectField
                 variant="filter"
