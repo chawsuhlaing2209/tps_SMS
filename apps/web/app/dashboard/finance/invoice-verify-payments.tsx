@@ -181,7 +181,7 @@ export function InvoiceVerifyPayments({
           <Field label={t("verifyReason")}>
             <TextAreaInput
               rows={3}
-              showCount={false}
+              maxLength={300}
               value={verifyReason}
               placeholder={t("verifyReasonPlaceholder")}
               onChange={(e) => setVerifyReason(e.target.value)}

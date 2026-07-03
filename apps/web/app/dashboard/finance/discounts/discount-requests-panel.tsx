@@ -12,6 +12,7 @@ import { hasAnyPermission } from "../../../lib/permissions";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { getSession } from "../../../lib/session";
 import { Badge, type BadgeTone } from "../../../../components/shared/badge";
+import { TextAreaInput } from "../../../../components/shared/form-input";
 import { FinanceTableShell } from "../finance-table-shell";
 
 type StudentDiscountRow = {
@@ -277,7 +278,7 @@ export function DiscountRequestsPanel() {
             {approveTarget.studentName} · {approveTarget.ruleName}
           </p>
           <Field label={t("approveNotes")}>
-            <textarea
+            <TextAreaInput
               rows={3}
               value={approveNotes}
               placeholder={t("approveNotesPlaceholder")}
@@ -321,7 +322,7 @@ export function DiscountRequestsPanel() {
             {rejectTarget.studentName} · {rejectTarget.ruleName}
           </p>
           <Field label={t("rejectReason")}>
-            <textarea
+            <TextAreaInput
               rows={3}
               value={rejectReason}
               placeholder={t("rejectReasonPlaceholder")}

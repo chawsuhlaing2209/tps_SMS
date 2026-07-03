@@ -2,7 +2,11 @@
 
 import * as React from "react";
 import { clampPercentString } from "@sms/shared";
-import { cn } from "../../lib/utils";
+// Plain clsx, NOT the twMerge-wrapped `cn` from lib/utils: these are Padauk
+// design-system classes (`text-input`, `text-area-input--sm`, …) and
+// tailwind-merge misreads them as conflicting `text-*` utilities, silently
+// dropping the base class from the DOM.
+import { clsx as cn } from "clsx";
 import { Icon } from "../../app/lib/material-icon";
 import { PdsSelectField, type SelectFieldOption } from "../pds/fields/select-field";
 import { PdsDatePickerField, type PdsDatePickerFieldProps } from "../pds/fields/date-picker-field";

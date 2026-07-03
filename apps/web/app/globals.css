@@ -6524,8 +6524,8 @@ button.btn-hero-outline:hover {
 
 .text-area-input:focus-within {
   background: var(--pds-input-background-default);
-  border-color: var(--pds-border-color-active);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--pds-states-focus) 18%, transparent);
+  border: var(--pds-border-weight-1, 1px) solid var(--pds-border-color-active);
+  box-shadow: 0 0 0 3px var(--pds-color-spring-green-focus-ring);
 }
 
 .text-area-input.form-input--error,
@@ -6558,7 +6558,9 @@ button.btn-hero-outline:hover {
 }
 
 .text-area-input__body {
-  background: var(--pds-background-layout-secondary);
+  /* Figma 124:8799 — the text container is transparent; only the outer shell
+     carries background/border. */
+  background: transparent;
   min-width: 0;
   padding: var(--pds-padding-small) var(--pds-padding-medium);
   width: 100%;
