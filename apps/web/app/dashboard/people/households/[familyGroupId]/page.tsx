@@ -5,15 +5,10 @@ import { useTranslations } from "next-intl";
 import { useState, use } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Chip } from "../../../../../components/shared/chip";
 import { ConfirmDialog } from "../../../../../components/shared/confirm-dialog";
-import { EmptyState } from "../../../../../components/shared/empty-state";
-import { RowMoreActionsMenu } from "../../../../../components/shared/row-more-actions";
-import { StatusBadge } from "../../../../../components/shared/badge";
-import { TrailLink } from "../../../../../components/shared/trail-link";
 import { ApiError, useApiMutation, useApiQuery } from "../../../../lib/api";
-import { DirectoryMemberCell } from "../../../../lib/data-table";
 import { Field } from "../../../../lib/form";
+import { FamilyTree } from "../../family-tree";
 import {
   HeroMoreActionsMenu,
   HeroPrimaryAction
@@ -75,7 +70,6 @@ export default function HouseholdDetailPage({
   const c = useTranslations("common");
   const nav = useTranslations("nav");
   const p = useTranslations("people");
-  const s = useTranslations("students");
   const permissions = getSession()?.permissions;
   const canManage = hasAnyPermission(permissions, ["student.manage"]);
   const canCollect = hasAnyPermission(permissions, ["finance.manage"]);
@@ -170,14 +164,6 @@ export default function HouseholdDetailPage({
 
   const data = household.data;
   const memberIds = data.students.map((student) => student.id);
-  const relationshipLabel = (relationship: string) => {
-    const key = `relationship_${relationship}` as
-      | "relationship_father"
-      | "relationship_mother"
-      | "relationship_guardian"
-      | "relationship_other";
-    return t(key);
-  };
   const heroMeta = [
     data.primaryGuardian
       ? t("primaryGuardianLine", { name: data.primaryGuardian.fullName })
@@ -253,85 +239,16 @@ export default function HouseholdDetailPage({
       <section className="panel household-members-panel">
         <div className="dash-page-title">
           <h2 className="pds-type-title-s-extrabold dash-page-title__heading">
-            {t("treeGuardians")}
+            {t("familyTreeTitle")}
           </h2>
         </div>
-        {data.guardians.length ? (
-          <ul className="household-member-list">
-            {data.guardians.map((guardian) => (
-              <li key={guardian.id} className="household-member-row">
-                <TrailLink
-                  href={`/dashboard/people/guardians/${guardian.id}`}
-                  className="household-member-row__link"
-                  from={{ label: data.name, href: `/dashboard/people/households/${familyGroupId}` }}
-                >
-                  <DirectoryMemberCell
-                    name={guardian.fullName}
-                    subtitle={guardian.phone ?? undefined}
-                  />
-                </TrailLink>
-                {guardian.isPrimary ? <Chip>{t("primaryGuardian")}</Chip> : null}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <EmptyState compact embedded icon="supervisor_account" title={t("treeEmpty")} />
-        )}
-      </section>
-
-      <section className="panel household-members-panel">
-        <div className="dash-page-title">
-          <h2 className="pds-type-title-s-extrabold dash-page-title__heading">
-            {t("treeStudents")}
-          </h2>
-        </div>
-        {data.students.length ? (
-          <ul className="household-member-list">
-            {data.students.map((student) => (
-              <li key={student.id} className="household-member-row">
-                <TrailLink
-                  href={`/dashboard/students/${student.id}`}
-                  className="household-member-row__link"
-                  from={{ label: data.name, href: `/dashboard/people/households/${familyGroupId}` }}
-                >
-                  <DirectoryMemberCell
-                    name={student.fullName}
-                    subtitle={student.admissionNumber}
-                  />
-                </TrailLink>
-                <div className="household-member-row__trailing">
-                  {student.guardians.length ? (
-                    <span className="pds-type-body-s-regular muted">
-                      {student.guardians
-                        .map((link) => relationshipLabel(link.relationship))
-                        .join(", ")}
-                    </span>
-                  ) : null}
-                  <StatusBadge
-                    status={student.status}
-                    label={s(`status_${student.status}` as "status_draft")}
-                  />
-                  {canManage ? (
-                    <RowMoreActionsMenu
-                      ariaLabel={t("removeStudentAria", { name: student.fullName })}
-                      items={[
-                        {
-                          id: "remove",
-                          label: t("removeStudentConfirm"),
-                          icon: "person_remove",
-                          destructive: true,
-                          onSelect: () => setRemoveStudent(student)
-                        }
-                      ]}
-                    />
-                  ) : null}
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <EmptyState compact embedded icon="school" title={t("treeEmpty")} />
-        )}
+        <FamilyTree
+          guardians={data.guardians}
+          students={data.students}
+          from={{ label: data.name, href: `/dashboard/people/households/${familyGroupId}` }}
+          canManage={canManage}
+          onRemoveStudent={(student) => setRemoveStudent(student)}
+        />
       </section>
 
       {canCollect ? (

@@ -989,6 +989,7 @@
     "treeTitle": "မိသားစုဇယား",
     "treeHelp": "Guardians အပေါ်၊ ကျောင်းသားများ အောက်။ Siblings သည် စာရင်းသွင်းမှု discount အတွက် အိမ်ထောင်စု တစ်ခု မျှဝေသည်။",
     "treeEmpty": "ဤ အိမ်ထောင်စု တွင် အုပ်ထိန်းသူ သို့မဟုတ် ကျောင်းသား မရှိသေးပါ။",
+    "familyTreeTitle": "မိသားစုဇယား",
     "treeGuardians": "အုပ်ထိန်းသူများ",
     "treeStudents": "ကျောင်းသားများ",
     "primaryGuardianLine": "အဓိက အုပ်ထိန်းသူ: {name}",

@@ -989,6 +989,7 @@
     "treeTitle": "Family tree",
     "treeHelp": "Guardians above, students below. Siblings share this household for enrollment discounts.",
     "treeEmpty": "No guardians or students in this household yet.",
+    "familyTreeTitle": "Family tree",
     "treeGuardians": "Guardians",
     "treeStudents": "Students",
     "primaryGuardianLine": "Primary guardian: {name}",
