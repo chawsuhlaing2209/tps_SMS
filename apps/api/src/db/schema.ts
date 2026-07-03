@@ -464,25 +464,34 @@ export const familyGroups = pgTable("family_groups", {
   primaryGuardianId: uuid("primary_guardian_id").references(() => guardians.id)
 });
 
-export const students = pgTable("students", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  ...tenantFields,
-  familyGroupId: uuid("family_group_id").references(() => familyGroups.id),
-  admissionNumber: text("admission_number").notNull(),
-  fullName: text("full_name").notNull(),
-  dateOfBirth: date("date_of_birth"),
-  gender: text("gender"),
-  photoFileId: uuid("photo_file_id"),
-  address: text("address"),
-  township: text("township"),
-  identityNumber: text("identity_number"),
-  medicalNotes: text("medical_notes"),
-  status: studentStatusEnum("status").default("draft").notNull(),
-  // Archive lifecycle: orthogonal to `status` so the lifecycle state
-  // (enrolled/graduated/…) is preserved and restore returns to it.
-  archivedAt: timestamp("archived_at", { withTimezone: true }),
-  archivedBy: uuid("archived_by")
-});
+export const students = pgTable(
+  "students",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...tenantFields,
+    familyGroupId: uuid("family_group_id").references(() => familyGroups.id),
+    admissionNumber: text("admission_number").notNull(),
+    fullName: text("full_name").notNull(),
+    dateOfBirth: date("date_of_birth"),
+    gender: text("gender"),
+    photoFileId: uuid("photo_file_id"),
+    address: text("address"),
+    township: text("township"),
+    identityNumber: text("identity_number"),
+    medicalNotes: text("medical_notes"),
+    status: studentStatusEnum("status").default("draft").notNull(),
+    // Archive lifecycle: orthogonal to `status` so the lifecycle state
+    // (enrolled/graduated/…) is preserved and restore returns to it.
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    archivedBy: uuid("archived_by")
+  },
+  (table) => ({
+    tenantAdmissionUnique: uniqueIndex("students_tenant_admission_unique").on(
+      table.tenantId,
+      table.admissionNumber
+    )
+  })
+);
 
 export const studentGuardians = pgTable("student_guardians", {
   id: uuid("id").primaryKey().defaultRandom(),
