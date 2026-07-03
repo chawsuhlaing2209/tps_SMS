@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { SubjectChip, SubjectChipGroup, SegmentedControl } from "../../../components/pds";
+import { SubjectChip, SubjectChipGroup } from "../../../components/pds";
 import { FilterTab } from "../../../components/pds/composites/filter-tabs";
 import { ConfirmDialog } from "../../../components/shared/confirm-dialog";
 import { ExportCsvButton } from "../../../components/shared/export-csv-button";
@@ -26,8 +26,6 @@ import { hasAnyPermission } from "../../lib/permissions";
 import { getSession } from "../../lib/session";
 import { useCurrentAcademicYear } from "../../lib/use-current-academic-year";
 import { ClassroomFormSheet, type ClassroomFormValues, type FacilityRoomOption } from "./classroom-form-sheet";
-import { StructureLeaderboardPanel } from "./structure-leaderboard-panel";
-import { LEADERBOARD_DEMO_CHIEF, LEADERBOARD_DEMO_STREAM } from "./structure-leaderboard-demo";
 import { roomAccentColor, roomLetter, resolveSubjectChipColorKey } from "./subject-colors";
 import { PageHeader } from "../page-header-context";
 
@@ -68,14 +66,6 @@ type StaffMember = { id: string; fullName: string };
 
 type Term = { id: string; academicYearId: string; name: string };
 
-type GradeTab = "classrooms" | "gradebook" | "leaderboard";
-
-const GRADE_TABS: GradeTab[] = ["classrooms", "gradebook", "leaderboard"];
-
-function isGradeTab(value: string | null): value is GradeTab {
-  return value !== null && GRADE_TABS.includes(value as GradeTab);
-}
-
 const CLASSROOMS_PATH = (tenant: string) => `/tenants/${tenant}/classrooms`;
 
 function formatDateRange(startsOn: string, endsOn: string) {
@@ -96,7 +86,6 @@ export default function SchoolStructurePage() {
   const currentYear = useCurrentAcademicYear();
   const yearId = currentYear.data?.id ?? "";
   const [selectedGradeId, setSelectedGradeId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<GradeTab>("classrooms");
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
   const [editingRoom, setEditingRoom] = useState<ClassroomOverview | null>(null);
   const [deletingRoom, setDeletingRoom] = useState<ClassroomOverview | null>(null);
@@ -141,35 +130,11 @@ export default function SchoolStructurePage() {
     }
   }, [visibleGrades, searchParams, selectedGradeId]);
 
-  useEffect(() => {
-    const tabFromUrl = searchParams.get("tab");
-    if (isGradeTab(tabFromUrl)) {
-      setActiveTab(tabFromUrl);
-      return;
-    }
-    setActiveTab("classrooms");
-  }, [searchParams, selectedGradeId]);
-
   const selectGrade = (gradeId: string) => {
     setSelectedGradeId(gradeId);
     const params = new URLSearchParams(searchParams.toString());
     params.set("grade", gradeId);
     params.delete("gradeId");
-    router.replace(`/dashboard/structure?${params.toString()}`, { scroll: false });
-  };
-
-  const selectTab = (tab: GradeTab) => {
-    setActiveTab(tab);
-    const params = new URLSearchParams(searchParams.toString());
-    if (selectedGradeId) {
-      params.set("grade", selectedGradeId);
-      params.delete("gradeId");
-    }
-    if (tab === "classrooms") {
-      params.delete("tab");
-    } else {
-      params.set("tab", tab);
-    }
     router.replace(`/dashboard/structure?${params.toString()}`, { scroll: false });
   };
 
@@ -312,12 +277,6 @@ export default function SchoolStructurePage() {
     );
   }
 
-  const gradeTabs: { id: GradeTab; label: string; icon: string }[] = [
-    { id: "classrooms", label: t("classroomsTab"), icon: "meeting_room" },
-    { id: "gradebook", label: t("gradebookTab"), icon: "bar_chart_4_bars" },
-    { id: "leaderboard", label: t("leaderboardTab"), icon: "trophy" }
-  ];
-
   return (
     <div className="structure-page">
       <PageHeader
@@ -406,23 +365,10 @@ export default function SchoolStructurePage() {
                   students: selectedGrade.studentCount
                 })}
               </h3>
-              <p className="pds-type-body-s-regular structure-grade-head__meta">
-                {t("gradeSectionMeta", {
-                  chief: LEADERBOARD_DEMO_CHIEF,
-                  stream: LEADERBOARD_DEMO_STREAM
-                })}
-              </p>
             </div>
-            <SegmentedControl
-              ariaLabel={t("gradeViewsLabel")}
-              value={activeTab}
-              onChange={(id) => selectTab(id as GradeTab)}
-              options={gradeTabs}
-            />
           </header>
 
-          {activeTab === "classrooms" ? (
-            <div className="structure-grade-body" role="tabpanel">
+          <div className="structure-grade-body">
               {selectedGradeArchived ? (
                 <p className="pds-type-body-s-regular muted structure-grade-body__archived-note">
                   {c("archivedViewOnly")}
@@ -520,16 +466,7 @@ export default function SchoolStructurePage() {
               ) : (
                 <EmptyState icon="meeting_room" title={t("structureNoRooms")} />
               )}
-            </div>
-          ) : activeTab === "leaderboard" ? (
-            <div className="structure-grade-body" role="tabpanel">
-              <StructureLeaderboardPanel studentCount={selectedGrade.studentCount} />
-            </div>
-          ) : (
-            <div className="structure-grade-body" role="tabpanel">
-              <p className="pds-type-body-m-medium structure-tab-placeholder">{t("gradebookComingSoon")}</p>
-            </div>
-          )}
+          </div>
         </section>
       ) : null}
 

@@ -58,8 +58,8 @@ Ask: **what is the user actually doing?**
 composites — import from pds in new code.
 
 **Pending migrations (documented debt, migrate when touching these files):**
-- Classroom ops tabs (Classrooms | Gradebook | Leaderboard on structure/room pages) use `SegmentedControl` but are a *tab* job → should become `FilterTab`.
-- Student/teacher profile section tabs use `SegmentedControl` → same note.
+- Student/teacher profile section tabs use `SegmentedControl` but are a *tab* job → should become `FilterTab`.
+- ~~Classroom ops tabs (Classrooms | Gradebook | Leaderboard)~~ — resolved 2026-07-03: Gradebook/Leaderboard descoped to `post-mvp/grade-leaderboard`; the tabs are gone.
 
 ---
 
