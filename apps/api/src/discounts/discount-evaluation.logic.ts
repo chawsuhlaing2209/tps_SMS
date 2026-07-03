@@ -16,7 +16,13 @@ import {
 import type { EnrollmentPreviewDiscountOption } from "@sms/shared";
 import { and, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { Database } from "../db/db.module.js";
-import { discountRules, invoiceDiscountLines, studentDiscounts } from "../db/schema.js";
+import {
+  discountRules,
+  enrollments,
+  invoiceDiscountLines,
+  invoices,
+  studentDiscounts
+} from "../db/schema.js";
 
 type EvaluateInput = {
   tenantId: string;
@@ -188,9 +194,12 @@ export async function evaluateDiscountsFromDb(
       )
     );
 
-  // Early-bird recipient limits: count invoices already granted per limited
-  // rule so maxRecipients can be enforced. Callers may pre-populate
-  // grantedCountByRuleId (e.g. inside a confirm transaction) to narrow races.
+  // Early-bird recipient limits: count enrollment invoices already granted
+  // per limited rule so maxRecipients can be enforced. The count is scoped to
+  // the academic year being enrolled for — "first N" resets each year, and
+  // pre-enrollments for a future year compete for that year's quota. Callers
+  // may pre-populate grantedCountByRuleId (e.g. inside a confirm transaction)
+  // to narrow races.
   if (!input.context.grantedCountByRuleId) {
     const limitedRuleIds = autoRules
       .filter((rule) => {
@@ -212,10 +221,13 @@ export async function evaluateDiscountsFromDb(
           n: sql<number>`count(distinct ${invoiceDiscountLines.invoiceId})::int`
         })
         .from(invoiceDiscountLines)
+        .innerJoin(invoices, eq(invoiceDiscountLines.invoiceId, invoices.id))
+        .innerJoin(enrollments, eq(invoices.enrollmentId, enrollments.id))
         .where(
           and(
             eq(invoiceDiscountLines.tenantId, input.tenantId),
-            inArray(invoiceDiscountLines.discountRuleId, limitedRuleIds)
+            inArray(invoiceDiscountLines.discountRuleId, limitedRuleIds),
+            eq(enrollments.academicYearId, input.context.academicYearId)
           )
         )
         .groupBy(invoiceDiscountLines.discountRuleId);
