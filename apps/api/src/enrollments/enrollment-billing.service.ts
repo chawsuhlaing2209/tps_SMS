@@ -1384,6 +1384,27 @@ export class EnrollmentBillingService {
           )
         );
 
+      // Remove the student from the classroom roster this enrollment placed
+      // them in.
+      if (enr.classroomId) {
+        await tx
+          .update(classroomStudents)
+          .set({
+            effectiveTo: today,
+            movementReason: "enrollment_cancelled",
+            updatedBy: actorUserId,
+            updatedAt: new Date()
+          })
+          .where(
+            and(
+              eq(classroomStudents.tenantId, tenantId),
+              eq(classroomStudents.studentId, enr.studentId),
+              eq(classroomStudents.classroomId, enr.classroomId),
+              isNull(classroomStudents.effectiveTo)
+            )
+          );
+      }
+
       await tx
         .update(enrollments)
         .set({
@@ -1394,6 +1415,27 @@ export class EnrollmentBillingService {
           updatedAt: new Date()
         })
         .where(eq(enrollments.id, enrollmentId));
+
+      // Revert the student to draft when no other active enrollment remains.
+      const [otherActive] = await tx
+        .select({ id: enrollments.id })
+        .from(enrollments)
+        .where(
+          and(
+            eq(enrollments.tenantId, tenantId),
+            eq(enrollments.studentId, enr.studentId),
+            ne(enrollments.id, enrollmentId),
+            isNull(enrollments.cancelledAt),
+            inArray(enrollments.status, ["approved", "published"])
+          )
+        )
+        .limit(1);
+      if (!otherActive) {
+        await tx
+          .update(students)
+          .set({ status: "draft", updatedBy: actorUserId, updatedAt: new Date() })
+          .where(and(eq(students.tenantId, tenantId), eq(students.id, enr.studentId)));
+      }
 
       return {
         studentId: enr.studentId,
