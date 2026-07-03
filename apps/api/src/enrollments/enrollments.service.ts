@@ -50,7 +50,10 @@ export class EnrollmentsService {
       eq(enrollments.tenantId, tenantId),
       eq(enrollments.studentId, studentId),
       eq(enrollments.academicYearId, academicYearId),
-      inArray(enrollments.status, [...EnrollmentsService.ACTIVE_ENROLLMENT_STATUSES])
+      inArray(enrollments.status, [...EnrollmentsService.ACTIVE_ENROLLMENT_STATUSES]),
+      // Cancellation stamps cancelledAt without changing status — cancelled
+      // enrollments must not block re-enrolling for the same year.
+      isNull(enrollments.cancelledAt)
     ];
 
     if (classroomId) {
