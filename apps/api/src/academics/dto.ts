@@ -23,6 +23,11 @@ export class CreateAcademicYearDto {
 
   @IsDateString()
   endsOn!: string;
+
+  /** Clone classrooms + grade-subject assignments from this year (never enrollments). */
+  @IsOptional()
+  @IsUUID()
+  importStructureFromYearId?: string;
 }
 
 export class UpdateAcademicYearDto {

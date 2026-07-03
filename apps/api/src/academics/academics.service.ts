@@ -290,20 +290,118 @@ export class AcademicsService {
     const current = await this.getCurrentAcademicYearRecord(tenantId);
     const initialStatus = current ? ("draft" as const) : ("active" as const);
 
-    const [academicYear] = await this.db
-      .insert(academicYears)
-      .values({
+    if (dto.importStructureFromYearId) {
+      await this.getAcademicYearOrThrow(tenantId, dto.importStructureFromYearId);
+    }
+
+    const academicYear = await this.db.transaction(async (tx) => {
+      const [year] = await tx
+        .insert(academicYears)
+        .values({
+          tenantId,
+          name: dto.name,
+          startsOn: dto.startsOn,
+          endsOn: dto.endsOn,
+          status: initialStatus,
+          createdBy: actorUserId,
+          updatedBy: actorUserId
+        })
+        .returning();
+
+      if (dto.importStructureFromYearId) {
+        await this.importStructureIntoYearTx(
+          tx,
+          tenantId,
+          dto.importStructureFromYearId,
+          year!.id,
+          actorUserId
+        );
+      }
+
+      return year!;
+    });
+
+    if (dto.importStructureFromYearId) {
+      await this.auditService.recordEvent({
         tenantId,
-        name: dto.name,
-        startsOn: dto.startsOn,
-        endsOn: dto.endsOn,
-        status: initialStatus,
-        createdBy: actorUserId,
-        updatedBy: actorUserId
-      })
-      .returning();
+        actorUserId: actorUserId ?? null,
+        action: "academic_year.import_structure",
+        recordType: "academic_year",
+        recordId: academicYear.id,
+        after: { importedFromYearId: dto.importStructureFromYearId }
+      });
+    }
 
     return academicYear;
+  }
+
+  /**
+   * Clones the year-scoped structure — active classrooms (name, section,
+   * capacity, room, homeroom teacher) and grade↔subject assignments — from a
+   * source year into a freshly created one. Enrollments, placements, and
+   * financial data are never copied.
+   */
+  private async importStructureIntoYearTx(
+    tx: Pick<Database, "select" | "insert">,
+    tenantId: string,
+    sourceYearId: string,
+    targetYearId: string,
+    actorUserId?: string
+  ) {
+    const sourceClassrooms = await tx
+      .select()
+      .from(classrooms)
+      .where(
+        and(
+          eq(classrooms.tenantId, tenantId),
+          eq(classrooms.academicYearId, sourceYearId),
+          eq(classrooms.status, "active")
+        )
+      );
+
+    if (sourceClassrooms.length) {
+      await tx.insert(classrooms).values(
+        sourceClassrooms.map((room) => ({
+          tenantId,
+          academicYearId: targetYearId,
+          gradeId: room.gradeId,
+          sectionId: room.sectionId,
+          branchId: room.branchId,
+          name: room.name,
+          capacity: room.capacity,
+          room: room.room,
+          facilityRoomId: room.facilityRoomId,
+          classTeacherStaffId: room.classTeacherStaffId,
+          createdBy: actorUserId,
+          updatedBy: actorUserId
+        }))
+      );
+    }
+
+    const sourceGradeSubjects = await tx
+      .select()
+      .from(gradeSubjects)
+      .where(
+        and(
+          eq(gradeSubjects.tenantId, tenantId),
+          eq(gradeSubjects.academicYearId, sourceYearId)
+        )
+      );
+
+    if (sourceGradeSubjects.length) {
+      await tx.insert(gradeSubjects).values(
+        sourceGradeSubjects.map((row) => ({
+          tenantId,
+          academicYearId: targetYearId,
+          gradeId: row.gradeId,
+          subjectId: row.subjectId,
+          weight: row.weight,
+          isRequired: row.isRequired,
+          createdBy: actorUserId,
+          updatedBy: actorUserId
+        }))
+      );
+    }
   }
 
   async updateAcademicYear(
