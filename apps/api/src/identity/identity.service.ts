@@ -16,6 +16,24 @@ export interface ProvisionedOwner {
   credentialsSent: boolean;
 }
 
+/**
+ * The only user columns that may leave the API. Never select or return the
+ * full users row — it contains passwordHash.
+ */
+const publicUserColumns = {
+  id: users.id,
+  tenantId: users.tenantId,
+  email: users.email,
+  phone: users.phone,
+  displayName: users.displayName,
+  status: users.status,
+  lastLoginAt: users.lastLoginAt,
+  createdAt: users.createdAt,
+  updatedAt: users.updatedAt
+};
+
+export type PublicUser = Omit<typeof users.$inferSelect, "passwordHash">;
+
 @Injectable()
 export class IdentityService {
   constructor(
@@ -57,7 +75,11 @@ export class IdentityService {
   }
 
   listTenantUsers(tenantId: string) {
-    return this.db.select().from(users).where(eq(users.tenantId, tenantId)).limit(200);
+    return this.db
+      .select(publicUserColumns)
+      .from(users)
+      .where(eq(users.tenantId, tenantId))
+      .limit(200);
   }
 
   listTenantRoles(tenantId: string) {
@@ -371,7 +393,7 @@ export class IdentityService {
         status: "active",
         passwordHash
       })
-      .returning();
+      .returning({ id: users.id });
 
     if (!user) {
       throw new BadRequestException("Failed to create the school owner account.");
@@ -435,7 +457,7 @@ export class IdentityService {
       passwordHash = await this.passwordService.hash(plainPassword);
     }
 
-    let user: typeof users.$inferSelect | undefined;
+    let user: PublicUser | undefined;
     try {
       [user] = await this.db
         .insert(users)
@@ -447,7 +469,7 @@ export class IdentityService {
           status: dto.email ? "active" : "invited",
           passwordHash
         })
-        .returning();
+        .returning(publicUserColumns);
     } catch (error) {
       if (this.isUniqueViolation(error)) {
         throw new ConflictException(
@@ -570,7 +592,15 @@ export class IdentityService {
         userAgent: dto.userAgent,
         ipAddress: dto.ipAddress
       })
-      .returning();
+      .returning({
+        id: sessions.id,
+        tenantId: sessions.tenantId,
+        userId: sessions.userId,
+        expiresAt: sessions.expiresAt,
+        userAgent: sessions.userAgent,
+        ipAddress: sessions.ipAddress,
+        createdAt: sessions.createdAt
+      });
 
     return session;
   }
