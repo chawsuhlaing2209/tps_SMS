@@ -8,6 +8,7 @@ import type { ClassroomsService } from "../classrooms/classrooms.service.js";
 import * as schema from "../db/schema.js";
 import {
   academicYears,
+  auditLogs,
   classrooms,
   gradeSubjects,
   grades,
@@ -174,6 +175,7 @@ describe.skipIf(!databaseUrl)("TimetableService schedule conflicts", () => {
       await db.delete(staff).where(eq(staff.tenantId, tenantId));
       await db.delete(grades).where(eq(grades.tenantId, tenantId));
       await db.delete(academicYears).where(eq(academicYears.tenantId, tenantId));
+      await db.delete(auditLogs).where(eq(auditLogs.tenantId, tenantId));
       await db.delete(users).where(eq(users.tenantId, tenantId));
       await db.delete(tenants).where(eq(tenants.id, tenantId));
     }
