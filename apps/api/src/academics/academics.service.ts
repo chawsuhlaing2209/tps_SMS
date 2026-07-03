@@ -10,6 +10,7 @@ import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
 import {
   academicYears,
+  calendarEvents,
   classroomStudents,
   classrooms,
   discountRules,
@@ -23,7 +24,9 @@ import {
   sections,
   staff,
   subjects,
-  terms
+  terms,
+  timetablePeriods,
+  timetableSlots
 } from "../db/schema.js";
 /** Postgres foreign-key violation — a delete blocked by a referencing row. */
 function isForeignKeyViolation(err: unknown): boolean {
@@ -593,29 +596,120 @@ export class AcademicsService {
       throw new BadRequestException("Close the academic year before deleting it.");
     }
 
+    // Structure (terms, classrooms, subject assignments, fee plans) is
+    // recreatable and cascades with the year. Only student and financial
+    // records block deletion: enrollments and classroom placements.
     const n = sql<number>`count(*)::int`;
-    const [termsN, classroomsN, enrollmentsN] = await Promise.all([
-      this.db.select({ n }).from(terms).where(and(eq(terms.tenantId, tenantId), eq(terms.academicYearId, academicYearId))),
-      this.db.select({ n }).from(classrooms).where(and(eq(classrooms.tenantId, tenantId), eq(classrooms.academicYearId, academicYearId))),
-      this.db.select({ n }).from(enrollments).where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.academicYearId, academicYearId)))
+    const [enrollmentsN, placementsN] = await Promise.all([
+      this.db
+        .select({ n })
+        .from(enrollments)
+        .where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.academicYearId, academicYearId))),
+      this.db
+        .select({ n })
+        .from(classroomStudents)
+        .innerJoin(classrooms, eq(classroomStudents.classroomId, classrooms.id))
+        .where(
+          and(
+            eq(classroomStudents.tenantId, tenantId),
+            eq(classrooms.academicYearId, academicYearId)
+          )
+        )
     ]);
     const dependencies = {
-      terms: termsN[0]?.n ?? 0,
-      classrooms: classroomsN[0]?.n ?? 0,
-      enrollments: enrollmentsN[0]?.n ?? 0
+      enrollments: enrollmentsN[0]?.n ?? 0,
+      classroomPlacements: placementsN[0]?.n ?? 0
     };
     if (Object.values(dependencies).some((c) => c > 0)) {
       throw new ConflictException({
         message:
-          "This academic year has terms, classrooms, or enrolments and cannot be deleted. Keep it closed instead.",
+          "This academic year has enrollments or student placements and cannot be deleted. Keep it closed instead.",
         dependencies
       });
     }
 
     try {
-      await this.db
-        .delete(academicYears)
-        .where(and(eq(academicYears.tenantId, tenantId), eq(academicYears.id, academicYearId)));
+      await this.db.transaction(async (tx) => {
+        const yearClassroomIds = (
+          await tx
+            .select({ id: classrooms.id })
+            .from(classrooms)
+            .where(and(eq(classrooms.tenantId, tenantId), eq(classrooms.academicYearId, academicYearId)))
+        ).map((row) => row.id);
+
+        const yearPeriodIds = (
+          await tx
+            .select({ id: timetablePeriods.id })
+            .from(timetablePeriods)
+            .where(
+              and(
+                eq(timetablePeriods.tenantId, tenantId),
+                eq(timetablePeriods.academicYearId, academicYearId)
+              )
+            )
+        ).map((row) => row.id);
+
+        if (yearPeriodIds.length) {
+          await tx.delete(timetableSlots).where(inArray(timetableSlots.periodId, yearPeriodIds));
+        }
+        if (yearClassroomIds.length) {
+          await tx.delete(timetableSlots).where(inArray(timetableSlots.classroomId, yearClassroomIds));
+        }
+        await tx
+          .delete(timetablePeriods)
+          .where(
+            and(
+              eq(timetablePeriods.tenantId, tenantId),
+              eq(timetablePeriods.academicYearId, academicYearId)
+            )
+          );
+        await tx
+          .delete(calendarEvents)
+          .where(
+            and(eq(calendarEvents.tenantId, tenantId), eq(calendarEvents.academicYearId, academicYearId))
+          );
+        await tx
+          .delete(gradeChiefAssignments)
+          .where(
+            and(
+              eq(gradeChiefAssignments.tenantId, tenantId),
+              eq(gradeChiefAssignments.academicYearId, academicYearId)
+            )
+          );
+
+        const yearPlanIds = (
+          await tx
+            .select({ id: enrollmentFeePlans.id })
+            .from(enrollmentFeePlans)
+            .where(
+              and(
+                eq(enrollmentFeePlans.tenantId, tenantId),
+                eq(enrollmentFeePlans.academicYearId, academicYearId)
+              )
+            )
+        ).map((row) => row.id);
+        if (yearPlanIds.length) {
+          await tx
+            .delete(enrollmentFeePlanGrades)
+            .where(inArray(enrollmentFeePlanGrades.planId, yearPlanIds));
+          await tx.delete(enrollmentFeePlans).where(inArray(enrollmentFeePlans.id, yearPlanIds));
+        }
+
+        await tx
+          .delete(gradeSubjects)
+          .where(
+            and(eq(gradeSubjects.tenantId, tenantId), eq(gradeSubjects.academicYearId, academicYearId))
+          );
+        if (yearClassroomIds.length) {
+          await tx.delete(classrooms).where(inArray(classrooms.id, yearClassroomIds));
+        }
+        await tx
+          .delete(terms)
+          .where(and(eq(terms.tenantId, tenantId), eq(terms.academicYearId, academicYearId)));
+        await tx
+          .delete(academicYears)
+          .where(and(eq(academicYears.tenantId, tenantId), eq(academicYears.id, academicYearId)));
+      });
     } catch (err) {
       if (isForeignKeyViolation(err)) {
         throw new ConflictException({

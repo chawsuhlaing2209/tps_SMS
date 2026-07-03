@@ -573,7 +573,7 @@
     "importSummary": "Imported {grades} grades and {subjects} subjects.",
     "invalidJson": "That is not valid JSON.",
     "deleteYearTitle": "Delete academic year permanently?",
-    "deleteYearHelp": "This permanently removes “{name}” and cannot be undone. Years with terms, classrooms, or enrolments cannot be deleted — keep them closed instead."
+    "deleteYearHelp": "This permanently removes “{name}” along with its structure — terms, classrooms, subject assignments, and fee plans — and cannot be undone. Years with enrollments or student placements cannot be deleted — keep them closed instead."
   },
   "people": {
     "title": "People",
