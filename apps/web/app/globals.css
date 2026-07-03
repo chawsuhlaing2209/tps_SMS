@@ -1855,6 +1855,30 @@ h3,
 .padauk-table--pinned-end > tbody tr.table-row--clickable:focus-visible td:last-child {
   background: var(--pds-notification-background-success-hover);
 }
+
+@media (max-width: 720px) { /* = --pds-breakpoint-md */
+  /* A pinned actions column with labeled buttons covers most of a phone
+     screen — let it scroll with the table instead, and stack the actions so
+     the column stays as narrow as its widest single control. */
+  .padauk-table th.col-actions,
+  .padauk-table td.col-actions,
+  .padauk-table--pinned-end > thead th:last-child,
+  .padauk-table--pinned-end > tbody td:last-child {
+    position: static;
+  }
+
+  [data-pin-overlay="true"] .padauk-table th.col-actions,
+  [data-pin-overlay="true"] .padauk-table td.col-actions,
+  [data-pin-overlay="true"] .padauk-table--pinned-end > thead th:last-child,
+  [data-pin-overlay="true"] .padauk-table--pinned-end > tbody td:last-child {
+    box-shadow: none;
+  }
+
+  .table-row-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
 .padauk-table code {
   background: var(--pds-background-layout-secondary);
   border-radius: var(--pds-gap-x-small);
