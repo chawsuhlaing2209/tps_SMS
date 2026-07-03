@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { PdsSearchBar, PdsSearchFiltersRow, PdsSelectField } from "../../../components/pds";
 import { StatusBadge } from "../../../components/shared/badge";
+import { ArchiveVisibilityFilter } from "../../../components/shared/archive-visibility-filter";
 import { Chip, ChipGroup } from "../../../components/shared/chip";
 import { ExportCsvButton } from "../../../components/shared/export-csv-button";
 import { useApiMutation, useApiQuery } from "../../lib/api";
@@ -294,20 +295,7 @@ export function TeachersDirectory() {
                   ]}
                 />
               </div>
-              <div className="pds-search-filters-row__filter--160">
-                <PdsSelectField
-                  variant="filter"
-                  value={viewFilter}
-                  onValueChange={(value) =>
-                    setViewFilter(value === "archived" || value === "all" ? value : "active")
-                  }
-                  options={[
-                    { value: "active", label: c("viewActive") },
-                    { value: "archived", label: c("viewArchived") },
-                    { value: "all", label: c("viewAll") }
-                  ]}
-                />
-              </div>
+              <ArchiveVisibilityFilter value={viewFilter} onChange={setViewFilter} />
             </>
           }
         />

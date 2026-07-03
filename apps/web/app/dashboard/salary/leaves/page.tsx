@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { IconTagControl } from "../../../../components/pds/composites/icon-tag";
+import { FilterTab, FilterTabGroup } from "../../../../components/pds/composites/filter-tabs";
 import { PdsSelectField } from "../../../../components/pds";
 import { ArchiveVisibilityFilter } from "../../../../components/shared/archive-visibility-filter";
 import { StatusBadge } from "../../../../components/shared/badge";
@@ -330,15 +330,18 @@ export default function LeavesPage() {
       />
 
       <div className="benefits-workspace-toolbar">
-        <IconTagControl
-          ariaLabel={t("tabsLabel")}
-          value={tab}
-          onChange={(value) => setTab(value === "staff" ? "staff" : "types")}
-          options={[
-            { id: "types", label: t("tabTypes"), icon: "category" },
-            { id: "staff", label: t("tabStaff"), icon: "person" }
-          ]}
-        />
+        <FilterTabGroup aria-label={t("tabsLabel")}>
+          <FilterTab
+            label={t("tabTypes")}
+            active={tab === "types"}
+            onClick={() => setTab("types")}
+          />
+          <FilterTab
+            label={t("tabStaff")}
+            active={tab === "staff"}
+            onClick={() => setTab("staff")}
+          />
+        </FilterTabGroup>
       </div>
 
       {tab === "types" ? (

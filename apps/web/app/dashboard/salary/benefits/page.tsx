@@ -1,6 +1,6 @@
 "use client";
 
-import { IconTagControl } from "../../../../components/pds/composites/icon-tag";
+import { FilterTab, FilterTabGroup } from "../../../../components/pds/composites/filter-tabs";
 import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
 import { formatMMK } from "../../../lib/money";
 import { StatCard, StatGrid } from "../../../../components/shared/stat-card";
@@ -238,15 +238,18 @@ export default function SalaryBenefitsPage() {
       </StatGrid>
 
       <div className="benefits-workspace-toolbar">
-        <IconTagControl
-          ariaLabel={t("benefitsTabLabel")}
-          value={tab}
-          onChange={(id: string) => setTab(id as "packages" | "incentives")}
-          options={[
-            { id: "packages", label: t("tabComplimentaryPackages"), icon: "redeem" },
-            { id: "incentives", label: t("tabBonusIncentives"), icon: "military_tech" }
-          ]}
-        />
+        <FilterTabGroup aria-label={t("benefitsTabLabel")}>
+          <FilterTab
+            label={t("tabComplimentaryPackages")}
+            active={tab === "packages"}
+            onClick={() => setTab("packages")}
+          />
+          <FilterTab
+            label={t("tabBonusIncentives")}
+            active={tab === "incentives"}
+            onClick={() => setTab("incentives")}
+          />
+        </FilterTabGroup>
         {tab === "packages" ? (
           <button
             type="button"

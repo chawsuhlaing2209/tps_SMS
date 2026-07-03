@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { Icon } from "../../../lib/material-icon";
+import { OptionChip, OptionChipGrid } from "../../../../components/shared/option-chip";
 import { cn } from "../../../../lib/utils";
 import {
   SUBJECT_COLOR_OPTIONS,
@@ -87,25 +88,16 @@ export function SubjectAppearanceFields({
 
       <div className="subject-form-field">
         <span className="pds-type-caption-s subject-form-field__label">{t("applicableGrades")}</span>
-        <div className="subject-grade-picker">
-          {grades.map((grade) => {
-            const selected = gradeIds.includes(grade.id);
-            return (
-              <button
-                key={grade.id}
-                type="button"
-                aria-pressed={selected}
-                className={cn(
-                  "pds-type-body-s-semibold subject-grade-picker__pill",
-                  selected && "subject-grade-picker__pill--selected"
-                )}
-                onClick={() => toggleGrade(grade.id)}
-              >
-                {gradeBadgeLabel(grade.name)}
-              </button>
-            );
-          })}
-        </div>
+        <OptionChipGrid layout="wrap">
+          {grades.map((grade) => (
+            <OptionChip
+              key={grade.id}
+              selected={gradeIds.includes(grade.id)}
+              label={gradeBadgeLabel(grade.name)}
+              onClick={() => toggleGrade(grade.id)}
+            />
+          ))}
+        </OptionChipGrid>
       </div>
     </>
   );

@@ -30,6 +30,7 @@ import {
   formatEnrollmentAmount,
   resolveOptionalFeeIcon,
 } from "./enrollment-ceremony-ui";
+import { OptionChipGrid } from "../../../components/shared/option-chip";
 import "./enrollment-ceremony.css";
 
 type Classroom = { id: string; name: string; gradeId: string; academicYearId: string };
@@ -839,13 +840,13 @@ export function EnrollmentWizard({
           <div className="enrollment-ceremony__section">
             <p className="pds-type-caption-s enrollment-ceremony__section-title">{t("grade")}</p>
             {lockClassroom && initialClassroomId ? (
-              <div className="enrollment-chip-grid">
+              <OptionChipGrid layout="wrap">
                 <EnrollmentChip selected disabled>
                   {lockedGradeName}
                 </EnrollmentChip>
-              </div>
+              </OptionChipGrid>
             ) : (
-              <div className="enrollment-chip-grid">
+              <OptionChipGrid layout="wrap">
                 {gradeOptions.map((grade) => (
                   <EnrollmentChip
                     key={grade.id}
@@ -858,7 +859,7 @@ export function EnrollmentWizard({
                     {grade.name}
                   </EnrollmentChip>
                 ))}
-              </div>
+              </OptionChipGrid>
             )}
             {form.formState.errors.gradeId?.message ? (
               <p className="pds-type-body-s-regular error-text">{form.formState.errors.gradeId.message}</p>
@@ -871,13 +872,13 @@ export function EnrollmentWizard({
               <p className="pds-type-body-s-regular enrollment-ceremony__section-hint">{t("selectGrade")}</p>
             ) : null}
             {lockClassroom && initialClassroomId ? (
-              <div className="enrollment-chip-grid">
+              <OptionChipGrid layout="wrap">
                 <EnrollmentChip selected disabled>
                   {classroomDisplayName ?? lockedClassroom?.name ?? ""}
                 </EnrollmentChip>
-              </div>
+              </OptionChipGrid>
             ) : (
-              <div className="enrollment-chip-grid">
+              <OptionChipGrid layout="wrap">
                 {filteredClassrooms.map((room) => (
                   <EnrollmentChip
                     key={room.id}
@@ -890,7 +891,7 @@ export function EnrollmentWizard({
                     {room.name}
                   </EnrollmentChip>
                 ))}
-              </div>
+              </OptionChipGrid>
             )}
             {form.formState.errors.classroomId?.message ? (
               <p className="pds-type-body-s-regular error-text">{form.formState.errors.classroomId.message}</p>

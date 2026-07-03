@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 import { type ColumnDef } from "@tanstack/react-table";
 import { PdsSearchBar, PdsSearchFiltersRow, PdsSelectField } from "../../../components/pds";
 import { StatusBadge } from "../../../components/shared/badge";
+import { ArchiveVisibilityFilter } from "../../../components/shared/archive-visibility-filter";
 import { ConfirmDialog } from "../../../components/shared/confirm-dialog";
 import { ExportCsvButton } from "../../../components/shared/export-csv-button";
 import { RowMoreActionsMenu } from "../../../components/shared/row-more-actions";
@@ -243,23 +244,13 @@ export function StudentsDirectory() {
                 ]}
               />
             </div>
-            <div className="pds-search-filters-row__filter--160">
-              <PdsSelectField
-                variant="filter"
-                value={viewFilter}
-                onValueChange={(value) => {
-                  setViewFilter(
-                    value === "archived" || value === "all" ? value : "active"
-                  );
-                  setPage(0);
-                }}
-                options={[
-                  { value: "active", label: c("viewActive") },
-                  { value: "archived", label: c("viewArchived") },
-                  { value: "all", label: c("viewAll") }
-                ]}
-              />
-            </div>
+            <ArchiveVisibilityFilter
+              value={viewFilter}
+              onChange={(value) => {
+                setViewFilter(value);
+                setPage(0);
+              }}
+            />
           </>
         }
       />

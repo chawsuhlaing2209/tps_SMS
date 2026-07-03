@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { CheckboxList, PdsSearchFiltersRow, PdsSelectField } from "../../../../components/pds";
+import { FilterTab } from "../../../../components/pds/composites/filter-tabs";
 import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
 import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
 import { EmptyState } from "../../../../components/shared/empty-state";
@@ -442,30 +443,23 @@ export default function GradesClassroomsPage() {
         </div>
         <div className="setup-grade-row">
           <div className="setup-grade-scroll">
-            <div className="setup-grade-rail" aria-label={setup("selectGradeLevel")}>
+            <div className="setup-grade-rail" role="tablist" aria-label={setup("selectGradeLevel")}>
               {visibleGrades.map((grade) => {
                 const active = grade.id === selectedGradeId;
                 const archived = isArchivedRecord(grade.status);
                 return (
-                  <button
+                  <FilterTab
                     key={grade.id}
-                    type="button"
-                    className={cn(
-                      "pds-type-body-s-semibold setup-grade-chip",
-                      active && "setup-grade-chip--active",
-                      archived && "setup-grade-chip--archived"
-                    )}
+                    label={grade.name}
+                    active={active}
+                    className={archived ? "pds-filter-tab--archived" : undefined}
+                    badge={
+                      archived ? (
+                        <StatusBadge status="archived" label={c("archivedBadge")} />
+                      ) : null
+                    }
                     onClick={() => selectGrade(grade.id)}
-                  >
-                    {grade.name}
-                    {archived ? (
-                      <StatusBadge
-                        status="archived"
-                        label={c("archivedBadge")}
-                        className="setup-grade-chip__badge"
-                      />
-                    ) : null}
-                  </button>
+                  />
                 );
               })}
             </div>

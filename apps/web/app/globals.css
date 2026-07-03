@@ -2866,34 +2866,6 @@ h3,
   gap: var(--pds-gap-xx-small);
 }.structure-grade-body__archived-note {
   margin-bottom: var(--pds-gap-small);
-}.structure-grade-chip {
-  background: var(--pds-background-card);
-  border: 1px solid var(--pds-background-frame);
-  border-radius: var(--pds-border-radius-16);
-  color: var(--pds-text-primary);
-  cursor: pointer;
-  display: grid;
-  flex-shrink: 0;
-  gap: var(--pds-gap-xx-small);
-  min-width: var(--pds-width-92);
-  padding: var(--pds-padding-small) var(--pds-padding-medium);
-  text-align: left;
-}.structure-grade-chip--active {
-  background: var(--pds-shell);
-  border-color: var(--pds-shell);
-  color: var(--pds-text-invert-primary);
-}.structure-grade-chip__name {
-  font-family: var(--pds-font-family-display-stack);
-  font-size: var(--pds-padding-large);
-  font-weight: 800;
-}.structure-grade-chip__meta {
-  color: var(--pds-muted);
-  font-size: var(--pds-padding-small);
-  font-weight: 600;
-  opacity: 0.7;
-}.structure-grade-chip--active .structure-grade-chip__meta {
-  color: var(--pds-muted-on-dark);
-  opacity: 1;
 }.structure-grade-head {
   align-items: flex-start;
   display: flex;
@@ -3974,6 +3946,30 @@ button.btn-hero-outline:hover {
 .pds-filter-tab--active .pds-filter-tab__count {
   background: var(--pds-compliment-brand);
   color: var(--pds-brand-ink);
+}
+
+.pds-filter-tab__meta {
+  color: var(--pds-muted);
+}
+
+.pds-filter-tab--active .pds-filter-tab__meta {
+  color: color-mix(in srgb, var(--pds-background-card) 72%, transparent);
+}
+
+.pds-filter-tab--archived {
+  border-style: dashed;
+  opacity: 0.75;
+}
+
+.pds-filter-tab--archived.pds-filter-tab--active {
+  opacity: 0.9;
+}
+
+/* Record rails scroll horizontally — tabs must not shrink or wrap. */
+.setup-grade-rail .pds-filter-tab,
+.structure-grade-rail .pds-filter-tab {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .pds-subject-tab--active.pds-subject-tab--azure { background: var(--pds-color-azure-60); border-color: var(--pds-color-azure-60); color: var(--pds-background-card); }
@@ -5327,34 +5323,6 @@ button.btn-hero-outline:hover {
   gap: var(--pds-gap-small);
   min-width: min-content;
   padding-bottom: var(--pds-gap-xx-small);
-}.setup-grade-chip {
-  background: var(--pds-background-card);
-  border: 1px solid var(--pds-border-color-primary);
-  border-radius: var(--pds-radius-pill);
-  color: var(--pds-text-primary);
-  cursor: pointer;
-  flex-shrink: 0;
-  padding: var(--pds-button-padding-y) var(--pds-button-padding-x);
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease;
-  white-space: nowrap;
-}.setup-grade-chip:hover:not(.setup-grade-chip--active) {
-  border-color: var(--pds-brand-dark);
-  color: var(--pds-brand-dark);
-}.setup-grade-chip--active {
-  background: var(--pds-shell);
-  border-color: var(--pds-shell);
-  color: var(--pds-text-invert-primary);
-}.setup-grade-chip--active:hover {
-  filter: brightness(1.05);
-}.setup-grade-chip--archived {
-  border-style: dashed;
-  color: var(--pds-text-secondary);
-  opacity: 0.75;
-}.setup-grade-chip--archived.setup-grade-chip--active {
-  opacity: 0.9;
 }.setup-classroom-card--archived {
   border-style: dashed;
   opacity: 0.8;
@@ -5372,15 +5340,9 @@ button.btn-hero-outline:hover {
   color: var(--pds-text-secondary);
   flex: 1 1 12rem;
   min-width: 0;
-}.structure-grade-chip--archived {
-  border-style: dashed;
-  opacity: 0.75;
 }.structure-room-card--archived {
   border-style: dashed;
   opacity: 0.8;
-}.setup-grade-chip__badge {
-  margin-inline-start: var(--pds-gap-xx-small);
-  vertical-align: middle;
 }.setup-grade-add-wrap {
   flex-shrink: 0;
   position: relative;
@@ -7479,6 +7441,12 @@ button.btn-hero-outline:hover {
   display: grid;
   gap: var(--pds-gap-medium);
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}.option-chip-grid--wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pds-gap-small);
+}.option-chip-grid--wrap .option-chip {
+  width: auto;
 }.option-chip {
   align-items: center;
   background: var(--pds-background-card);
@@ -10202,27 +10170,6 @@ button.btn-hero-outline:hover {
 
 .subject-icon-picker__label {
   line-height: 1.2;
-}
-
-.subject-grade-picker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--pds-gap-small);
-}
-
-.subject-grade-picker__pill {
-  background: var(--pds-background-card);
-  border: 1px solid var(--pds-border-color-primary);
-  border-radius: var(--pds-radius-pill);
-  color: var(--pds-text-primary);
-  cursor: pointer;
-  padding: var(--pds-gap-small) var(--pds-gap-medium);
-}
-
-.subject-grade-picker__pill--selected {
-  background: var(--pds-background-frame);
-  border-color: var(--pds-shell);
-  color: var(--pds-text-primary);
 }
 
 /* ── Home dashboard (/dashboard) ── */

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { SubjectChip, SubjectChipGroup, SegmentedControl } from "../../../components/pds";
+import { FilterTab } from "../../../components/pds/composites/filter-tabs";
 import { ConfirmDialog } from "../../../components/shared/confirm-dialog";
 import { ExportCsvButton } from "../../../components/shared/export-csv-button";
 import { EmptyState } from "../../../components/shared/empty-state";
@@ -367,26 +368,19 @@ export default function SchoolStructurePage() {
       </div>
 
       <div className="structure-grade-scroll">
-        <section className="structure-grade-rail" aria-label={t("selectGrade")}>
+        <section className="structure-grade-rail" role="tablist" aria-label={t("selectGrade")}>
           {visibleGrades.map((grade) => {
             const active = grade.id === selectedGradeId;
             const archived = isArchivedRecord(grade.status);
             return (
-              <button
+              <FilterTab
                 key={grade.id}
-                type="button"
-                className={cn(
-                  "structure-grade-chip",
-                  active && "structure-grade-chip--active",
-                  archived && "structure-grade-chip--archived"
-                )}
+                label={grade.name}
+                meta={t("roomsCount", { count: grade.classroomCount })}
+                active={active}
+                className={archived ? "pds-filter-tab--archived" : undefined}
                 onClick={() => selectGrade(grade.id)}
-              >
-                <span className="structure-grade-chip__name">{grade.name}</span>
-                <span className="structure-grade-chip__meta">
-                  {t("roomsCount", { count: grade.classroomCount })}
-                </span>
-              </button>
+              />
             );
           })}
           {!visibleGrades.length ? (

@@ -60,7 +60,10 @@ export type IconTagControlProps = {
   className?: string;
 };
 
-/** Mutually exclusive icon tag row — drop-in for SegmentedControl on benefits-style tabs. */
+/**
+ * @deprecated for tab jobs — use `FilterTab`/`FilterTabGroup` instead (docs/COMPONENTS.md, job 1).
+ * Reserve IconTag for decorative icon-led tag rows only.
+ */
 export function IconTagControl({ options, value, onChange, ariaLabel, className }: IconTagControlProps) {
   return (
     <IconTagGroup ariaLabel={ariaLabel} className={className}>
