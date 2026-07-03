@@ -3,10 +3,13 @@ import {
   IsBoolean,
   IsEmail,
   IsIn,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   Matches,
+  Max,
+  Min,
   MinLength,
   ValidateNested
 } from "class-validator";
@@ -81,6 +84,13 @@ export class UpsertTenantSettingsDto {
   @IsOptional()
   @IsString()
   invoicePrefix?: string;
+
+  /** Auto-purge archived records after N days. 0 or null disables it. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(3650)
+  archiveRetentionDays?: number | null;
 }
 
 export class SetFeatureFlagDto {

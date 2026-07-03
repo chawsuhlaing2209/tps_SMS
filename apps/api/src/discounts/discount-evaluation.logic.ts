@@ -14,9 +14,15 @@ import {
   type DiscountRuleCriteria
 } from "@sms/shared";
 import type { EnrollmentPreviewDiscountOption } from "@sms/shared";
-import { and, eq, gte, isNull, lte, or } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { Database } from "../db/db.module.js";
-import { discountRules, invoiceDiscountLines, studentDiscounts } from "../db/schema.js";
+import {
+  discountRules,
+  enrollments,
+  invoiceDiscountLines,
+  invoices,
+  studentDiscounts
+} from "../db/schema.js";
 
 type EvaluateInput = {
   tenantId: string;
@@ -30,16 +36,27 @@ type EvaluateInput = {
 function autoRuleTypeMatches(
   normalizedType: string,
   criteria: DiscountRuleCriteria,
-  context: DiscountEvaluationContext
+  context: DiscountEvaluationContext,
+  ruleId?: string
 ): boolean {
   if (normalizedType === "sibling") {
     return criteria.type === "sibling" && siblingRuleMatches(criteria, context.siblingSummary);
   }
   if (normalizedType === "early_payment") {
-    return criteria.type === "early_payment" && earlyPaymentRuleMatches(criteria, context);
+    return (
+      criteria.type === "early_payment" &&
+      earlyPaymentRuleMatches(criteria, context, {
+        grantedCount: ruleId ? context.grantedCountByRuleId?.[ruleId] : undefined
+      })
+    );
   }
   if (normalizedType === "custom") {
-    return criteria.type === "custom" && customRuleMatches(criteria, context);
+    return (
+      criteria.type === "custom" &&
+      customRuleMatches(criteria, context, {
+        grantedCount: ruleId ? context.grantedCountByRuleId?.[ruleId] : undefined
+      })
+    );
   }
   return false;
 }
@@ -177,6 +194,56 @@ export async function evaluateDiscountsFromDb(
       )
     );
 
+  // Early-bird recipient limits: count enrollment invoices already granted
+  // per limited rule so maxRecipients can be enforced. The count is scoped to
+  // the academic year being enrolled for — "first N" resets each year, and
+  // pre-enrollments for a future year compete for that year's quota. Callers
+  // may pre-populate grantedCountByRuleId (e.g. inside a confirm transaction)
+  // to narrow races.
+  if (!input.context.grantedCountByRuleId) {
+    const limitedRuleIds = autoRules
+      .filter((rule) => {
+        const criteria = parseDiscountCriteria(
+          rule.discountType,
+          rule.criteria as Record<string, unknown>
+        );
+        return (
+          (criteria.type === "early_payment" || criteria.type === "custom") &&
+          criteria.maxRecipients != null
+        );
+      })
+      .map((rule) => rule.id);
+
+    if (limitedRuleIds.length) {
+      const rows = await db
+        .select({
+          ruleId: invoiceDiscountLines.discountRuleId,
+          n: sql<number>`count(distinct ${invoiceDiscountLines.invoiceId})::int`
+        })
+        .from(invoiceDiscountLines)
+        .innerJoin(invoices, eq(invoiceDiscountLines.invoiceId, invoices.id))
+        .innerJoin(enrollments, eq(invoices.enrollmentId, enrollments.id))
+        .where(
+          and(
+            eq(invoiceDiscountLines.tenantId, input.tenantId),
+            inArray(invoiceDiscountLines.discountRuleId, limitedRuleIds),
+            eq(enrollments.academicYearId, input.context.academicYearId)
+          )
+        )
+        .groupBy(invoiceDiscountLines.discountRuleId);
+
+      input = {
+        ...input,
+        context: {
+          ...input.context,
+          grantedCountByRuleId: Object.fromEntries(
+            rows.filter((row) => row.ruleId).map((row) => [row.ruleId as string, row.n])
+          )
+        }
+      };
+    }
+  }
+
   for (const rule of autoRules) {
     if (excluded.has(rule.id)) continue;
 
@@ -192,11 +259,21 @@ export async function evaluateDiscountsFromDb(
           continue;
         }
       } else if (normalizedType === "early_payment") {
-        if (criteria.type !== "early_payment" || !earlyPaymentRuleMatches(criteria, input.context)) {
+        if (
+          criteria.type !== "early_payment" ||
+          !earlyPaymentRuleMatches(criteria, input.context, {
+            grantedCount: input.context.grantedCountByRuleId?.[rule.id]
+          })
+        ) {
           continue;
         }
       } else if (normalizedType === "custom") {
-        if (criteria.type !== "custom" || !customRuleMatches(criteria, input.context)) {
+        if (
+          criteria.type !== "custom" ||
+          !customRuleMatches(criteria, input.context, {
+            grantedCount: input.context.grantedCountByRuleId?.[rule.id]
+          })
+        ) {
           continue;
         }
       } else {
@@ -295,7 +372,7 @@ export async function evaluateDiscountsFromDb(
     const normalizedType = normalizeDiscountType(rule.discountType);
     const criteria = parseDiscountCriteria(rule.discountType, rule.criteria as Record<string, unknown>);
     const contextMatches = ruleMatchesContext(criteria, input.context);
-    const typeMatches = autoRuleTypeMatches(normalizedType, criteria, input.context);
+    const typeMatches = autoRuleTypeMatches(normalizedType, criteria, input.context, rule.id);
     const amount = computeDiscountAmount(
       input.context.feeLines,
       criteria.appliesTo,

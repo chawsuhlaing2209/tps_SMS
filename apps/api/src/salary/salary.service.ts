@@ -130,7 +130,7 @@ export class SalaryService {
     return component;
   }
 
-  async reactivateComponent(
+  async restoreComponent(
     tenantId: string,
     componentId: string,
     actorUserId: string | undefined
@@ -149,7 +149,7 @@ export class SalaryService {
     await this.auditService.recordEvent({
       tenantId,
       actorUserId: actorUserId ?? null,
-      action: "salary_component.reactivate",
+      action: "salary_component.restore",
       recordType: "SalaryComponent",
       recordId: componentId,
       before: { status: previous.status },
@@ -157,6 +157,15 @@ export class SalaryService {
     });
 
     return component;
+  }
+
+  /** @deprecated Use {@link restoreComponent}. Kept for the legacy /reactivate route. */
+  async reactivateComponent(
+    tenantId: string,
+    componentId: string,
+    actorUserId: string | undefined
+  ) {
+    return this.restoreComponent(tenantId, componentId, actorUserId);
   }
 
   async listRecords(tenantId: string, query: ListSalaryRecordsQueryDto) {

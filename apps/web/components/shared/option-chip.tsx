@@ -11,16 +11,23 @@ export type OptionChipProps = {
   detail?: ReactNode;
   onClick?: () => void;
   className?: string;
+  /**
+   * `checkbox` (default) — multi-select: shows a checked indicator.
+   * `none` — single-select: radio-like pill highlight only.
+   * See docs/COMPONENTS.md (job 4).
+   */
+  indicator?: "checkbox" | "none";
 };
 
-/** Selectable pill with leading indicator — fee components, payment plans, etc. */
+/** Canonical selectable chip for form inputs — see docs/COMPONENTS.md (job 4). */
 export function OptionChip({
   selected,
   disabled,
   label,
   detail,
   onClick,
-  className
+  className,
+  indicator = "checkbox"
 }: OptionChipProps) {
   return (
     <button
@@ -30,13 +37,15 @@ export function OptionChip({
       aria-pressed={selected}
       onClick={onClick}
     >
-      <span className="option-chip__indicator" aria-hidden>
-        <Icon
-          name={selected ? "check_box" : "check_box_outline_blank"}
-          filled={selected}
-          size={16}
-        />
-      </span>
+      {indicator === "checkbox" ? (
+        <span className="option-chip__indicator" aria-hidden>
+          <Icon
+            name={selected ? "check_box" : "check_box_outline_blank"}
+            filled={selected}
+            size={16}
+          />
+        </span>
+      ) : null}
       <span className="pds-type-body-m-medium option-chip__label">{label}</span>
       {detail ? <span className="pds-type-body-m-medium option-chip__detail">{detail}</span> : null}
     </button>
@@ -45,10 +54,20 @@ export function OptionChip({
 
 export function OptionChipGrid({
   children,
-  className
+  className,
+  layout = "grid"
 }: {
   children: ReactNode;
   className?: string;
+  /**
+   * `grid` (default) — two-column card grid for chips with details.
+   * `wrap` — wrapping pill row for compact label-only chips (grade/classroom pickers).
+   */
+  layout?: "grid" | "wrap";
 }) {
-  return <div className={cn("option-chip-grid", className)}>{children}</div>;
+  return (
+    <div className={cn("option-chip-grid", layout === "wrap" && "option-chip-grid--wrap", className)}>
+      {children}
+    </div>
+  );
 }

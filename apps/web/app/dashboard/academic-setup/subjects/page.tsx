@@ -23,6 +23,7 @@ import {
 } from "../../../lib/archive-filter";
 import { hasAnyPermission } from "../../../lib/permissions";
 import { getSession } from "../../../lib/session";
+import { PadaukTableWrap } from "../../../lib/padauk-table-wrap";
 import { toastSuccess } from "../../../lib/toast";
 import { useAcademicYearContext } from "../use-academic-year-context";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
@@ -94,6 +95,7 @@ export default function SubjectsPage() {
   const requiredMessage = c("required");
   const [formMode, setFormMode] = useState<FormMode | null>(null);
   const [deletingSubject, setDeletingSubject] = useState<SubjectOverview | null>(null);
+  const [permanentDeleteSubject, setPermanentDeleteSubject] = useState<SubjectOverview | null>(null);
   const [archiveVisibility, setArchiveVisibility] = useState<ArchiveVisibility>("active");
 
   const currentYear = useCurrentAcademicYear();
@@ -140,10 +142,21 @@ export default function SubjectsPage() {
     }
   );
 
-  const reactivateSubject = useApiMutation<{ id: string }>(
+  const restoreSubject = useApiMutation<{ id: string }>(
     ({ id }, tenantId) => ({
-      path: `${SUBJECTS_PATH(tenantId)}/${id}/reactivate`,
+      path: `${SUBJECTS_PATH(tenantId)}/${id}/restore`,
       init: { method: "POST" }
+    }),
+    {
+      invalidatePaths: (_body, tenantId) =>
+        contextYearId ? mappingInvalidationPaths(tenantId, contextYearId) : [SUBJECTS_PATH(tenantId)]
+    }
+  );
+
+  const deleteSubject = useApiMutation<{ id: string }>(
+    ({ id }, tenantId) => ({
+      path: `${SUBJECTS_PATH(tenantId)}/${id}`,
+      init: { method: "DELETE" }
     }),
     {
       invalidatePaths: (_body, tenantId) =>
@@ -269,6 +282,7 @@ export default function SubjectsPage() {
           archiveVisibility === "archived" ? t("archivedSubjectsEmpty") : undefined
         }
       >
+        <PadaukTableWrap>
         <table className="pds-type-body-m-medium padauk-table padauk-table--pinned-end setup-subjects-table">
           <thead>
             <tr>
@@ -345,13 +359,20 @@ export default function SubjectsPage() {
                           subjectArchived
                             ? [
                                 {
-                                  id: "reactivate",
-                                  label: c("reactivate"),
+                                  id: "restore",
+                                  label: c("restore"),
                                   icon: "unarchive",
                                   onSelect: async () => {
-                                    await reactivateSubject.mutateAsync({ id: subject.id });
+                                    await restoreSubject.mutateAsync({ id: subject.id });
                                     toastSuccess(t("subjectReactivated"));
                                   }
+                                },
+                                {
+                                  id: "deleteForever",
+                                  label: c("deletePermanently"),
+                                  icon: "delete_forever",
+                                  destructive: true,
+                                  onSelect: () => setPermanentDeleteSubject(subject)
                                 }
                               ]
                             : [
@@ -378,6 +399,7 @@ export default function SubjectsPage() {
             })}
           </tbody>
         </table>
+        </PadaukTableWrap>
       </TablePanelBody>
 
       <RecordFormSheet
@@ -457,6 +479,23 @@ export default function SubjectsPage() {
           if (!deletingSubject) return;
           await archiveSubject.mutateAsync({ id: deletingSubject.id });
           setDeletingSubject(null);
+        }}
+      />
+
+      <ConfirmDialog
+        open={permanentDeleteSubject !== null}
+        onOpenChange={(open) => {
+          if (!open) setPermanentDeleteSubject(null);
+        }}
+        title={t("deleteSubjectTitle")}
+        description={t("deleteSubjectHelp", { name: permanentDeleteSubject?.name ?? "" })}
+        confirmLabel={c("deletePermanently")}
+        destructive
+        loading={deleteSubject.isPending}
+        onConfirm={async () => {
+          if (!permanentDeleteSubject) return;
+          await deleteSubject.mutateAsync({ id: permanentDeleteSubject.id });
+          setPermanentDeleteSubject(null);
         }}
       />
     </>

@@ -12,6 +12,7 @@ import {
   academicYears,
   classroomStudents,
   classrooms,
+  enrollments,
   gradeChiefAssignments,
   gradeSubjects,
   grades,
@@ -21,6 +22,11 @@ import {
   subjects,
   terms
 } from "../db/schema.js";
+/** Postgres foreign-key violation — a delete blocked by a referencing row. */
+function isForeignKeyViolation(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { code?: string }).code === "23503";
+}
+
 import type {
   AssignGradeSubjectDto,
   CreateAcademicYearDto,
@@ -169,6 +175,41 @@ export class AcademicsService {
       createdBy: actorUserId,
       updatedBy: actorUserId
     });
+
+    // A grade chief must be able to teach that grade. Auto-grant grade
+    // eligibility so the assignment is reflected on the teacher profile and the
+    // "chief ⟹ eligible" invariant holds. (Additive only — never revokes here.)
+    await this.grantGradeEligibility(tenantId, staffId, gradeId, actorUserId);
+  }
+
+  /** Ensure the teacher's profile lists this grade as eligible (idempotent). */
+  private async grantGradeEligibility(
+    tenantId: string,
+    staffId: string,
+    gradeId: string,
+    actorUserId?: string
+  ) {
+    const [row] = await this.db
+      .select({ profile: staff.teacherProfile })
+      .from(staff)
+      .where(and(eq(staff.tenantId, tenantId), eq(staff.id, staffId)))
+      .limit(1);
+    if (!row) {
+      return;
+    }
+    const profile = row.profile ?? {};
+    const current = profile.eligibleGradeIds ?? [];
+    if (current.includes(gradeId)) {
+      return;
+    }
+    await this.db
+      .update(staff)
+      .set({
+        teacherProfile: { ...profile, eligibleGradeIds: [...current, gradeId] },
+        updatedBy: actorUserId,
+        updatedAt: new Date()
+      })
+      .where(and(eq(staff.tenantId, tenantId), eq(staff.id, staffId)));
   }
 
   private async syncSubjectGrades(
@@ -359,8 +400,67 @@ export class AcademicsService {
     return this.setAcademicYearActive(tenantId, academicYearId, false, actorUserId);
   }
 
-  async reactivateAcademicYear(tenantId: string, academicYearId: string, actorUserId?: string) {
+  async restoreAcademicYear(tenantId: string, academicYearId: string, actorUserId?: string) {
     return this.setAcademicYearActive(tenantId, academicYearId, true, actorUserId);
+  }
+
+  /** @deprecated Use {@link restoreAcademicYear}. Kept for the legacy /reactivate route. */
+  async reactivateAcademicYear(tenantId: string, academicYearId: string, actorUserId?: string) {
+    return this.restoreAcademicYear(tenantId, academicYearId, actorUserId);
+  }
+
+  async deleteAcademicYear(tenantId: string, academicYearId: string, actorUserId?: string) {
+    const year = await this.getAcademicYearOrThrow(tenantId, academicYearId);
+
+    // Two-step safety: only an archived (closed) year can be permanently deleted.
+    if (year.status !== "archived") {
+      throw new BadRequestException("Close the academic year before deleting it.");
+    }
+
+    const n = sql<number>`count(*)::int`;
+    const [termsN, classroomsN, enrollmentsN] = await Promise.all([
+      this.db.select({ n }).from(terms).where(and(eq(terms.tenantId, tenantId), eq(terms.academicYearId, academicYearId))),
+      this.db.select({ n }).from(classrooms).where(and(eq(classrooms.tenantId, tenantId), eq(classrooms.academicYearId, academicYearId))),
+      this.db.select({ n }).from(enrollments).where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.academicYearId, academicYearId)))
+    ]);
+    const dependencies = {
+      terms: termsN[0]?.n ?? 0,
+      classrooms: classroomsN[0]?.n ?? 0,
+      enrollments: enrollmentsN[0]?.n ?? 0
+    };
+    if (Object.values(dependencies).some((c) => c > 0)) {
+      throw new ConflictException({
+        message:
+          "This academic year has terms, classrooms, or enrolments and cannot be deleted. Keep it closed instead.",
+        dependencies
+      });
+    }
+
+    try {
+      await this.db
+        .delete(academicYears)
+        .where(and(eq(academicYears.tenantId, tenantId), eq(academicYears.id, academicYearId)));
+    } catch (err) {
+      if (isForeignKeyViolation(err)) {
+        throw new ConflictException({
+          message:
+            "This academic year is still referenced by other records and cannot be deleted. Keep it closed instead."
+        });
+      }
+      throw err;
+    }
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "academic_year.delete",
+      recordType: "AcademicYear",
+      recordId: academicYearId,
+      before: { name: year.name, status: year.status },
+      after: { deleted: true }
+    });
+
+    return { id: academicYearId, deleted: true };
   }
 
   listTerms(tenantId: string) {
@@ -599,7 +699,7 @@ export class AcademicsService {
     return grade;
   }
 
-  async reactivateGrade(tenantId: string, gradeId: string, actorUserId?: string) {
+  async restoreGrade(tenantId: string, gradeId: string, actorUserId?: string) {
     const previous = await this.getGradeOrThrow(tenantId, gradeId);
 
     if (previous.status === "active") {
@@ -615,7 +715,7 @@ export class AcademicsService {
     await this.auditService.recordEvent({
       tenantId,
       actorUserId: actorUserId ?? null,
-      action: "grade.reactivate",
+      action: "grade.restore",
       recordType: "Grade",
       recordId: gradeId,
       before: { status: previous.status },
@@ -623,6 +723,63 @@ export class AcademicsService {
     });
 
     return grade;
+  }
+
+  /** @deprecated Use {@link restoreGrade}. Kept for the legacy /reactivate route. */
+  async reactivateGrade(tenantId: string, gradeId: string, actorUserId?: string) {
+    return this.restoreGrade(tenantId, gradeId, actorUserId);
+  }
+
+  async deleteGrade(tenantId: string, gradeId: string, actorUserId?: string) {
+    const grade = await this.getGradeOrThrow(tenantId, gradeId);
+
+    // Two-step safety: only an archived grade can be permanently deleted.
+    if (grade.status !== "archived") {
+      throw new BadRequestException("Archive the grade before deleting permanently.");
+    }
+
+    const n = sql<number>`count(*)::int`;
+    const [classroomsN, subjectsN, enrollmentsN] = await Promise.all([
+      this.db.select({ n }).from(classrooms).where(and(eq(classrooms.tenantId, tenantId), eq(classrooms.gradeId, gradeId))),
+      this.db.select({ n }).from(gradeSubjects).where(and(eq(gradeSubjects.tenantId, tenantId), eq(gradeSubjects.gradeId, gradeId))),
+      this.db.select({ n }).from(enrollments).where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.gradeId, gradeId)))
+    ]);
+    const dependencies = {
+      classrooms: classroomsN[0]?.n ?? 0,
+      subjects: subjectsN[0]?.n ?? 0,
+      enrollments: enrollmentsN[0]?.n ?? 0
+    };
+    if (Object.values(dependencies).some((c) => c > 0)) {
+      throw new ConflictException({
+        message:
+          "This grade has classrooms, subject assignments, or enrolments and cannot be deleted. Keep it archived instead.",
+        dependencies
+      });
+    }
+
+    try {
+      await this.db.delete(grades).where(and(eq(grades.tenantId, tenantId), eq(grades.id, gradeId)));
+    } catch (err) {
+      if (isForeignKeyViolation(err)) {
+        throw new ConflictException({
+          message:
+            "This grade is still referenced by other records and cannot be deleted. Keep it archived instead."
+        });
+      }
+      throw err;
+    }
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "grade.delete",
+      recordType: "Grade",
+      recordId: gradeId,
+      before: { name: grade.name, status: grade.status },
+      after: { deleted: true }
+    });
+
+    return { id: gradeId, deleted: true };
   }
 
   listSections(tenantId: string) {
@@ -693,7 +850,7 @@ export class AcademicsService {
     return section;
   }
 
-  async reactivateSection(tenantId: string, sectionId: string, actorUserId?: string) {
+  async restoreSection(tenantId: string, sectionId: string, actorUserId?: string) {
     const previous = await this.getSectionOrThrow(tenantId, sectionId);
 
     if (previous.status === "active") {
@@ -706,7 +863,68 @@ export class AcademicsService {
       .where(and(eq(sections.tenantId, tenantId), eq(sections.id, sectionId)))
       .returning();
 
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "section.restore",
+      recordType: "Section",
+      recordId: sectionId,
+      before: { status: previous.status },
+      after: { status: "active" }
+    });
+
     return section;
+  }
+
+  /** @deprecated Use {@link restoreSection}. Kept for the legacy /reactivate route. */
+  async reactivateSection(tenantId: string, sectionId: string, actorUserId?: string) {
+    return this.restoreSection(tenantId, sectionId, actorUserId);
+  }
+
+  async deleteSection(tenantId: string, sectionId: string, actorUserId?: string) {
+    const section = await this.getSectionOrThrow(tenantId, sectionId);
+
+    if (section.status !== "archived") {
+      throw new BadRequestException("Archive the section before deleting permanently.");
+    }
+
+    const n = sql<number>`count(*)::int`;
+    const [classroomsN] = await this.db
+      .select({ n })
+      .from(classrooms)
+      .where(and(eq(classrooms.tenantId, tenantId), eq(classrooms.sectionId, sectionId)));
+    const dependencies = { classrooms: classroomsN?.n ?? 0 };
+    if (dependencies.classrooms > 0) {
+      throw new ConflictException({
+        message:
+          "This section is used by classrooms and cannot be deleted. Keep it archived instead.",
+        dependencies
+      });
+    }
+
+    try {
+      await this.db.delete(sections).where(and(eq(sections.tenantId, tenantId), eq(sections.id, sectionId)));
+    } catch (err) {
+      if (isForeignKeyViolation(err)) {
+        throw new ConflictException({
+          message:
+            "This section is still referenced by other records and cannot be deleted. Keep it archived instead."
+        });
+      }
+      throw err;
+    }
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "section.delete",
+      recordType: "Section",
+      recordId: sectionId,
+      before: { name: section.name, status: section.status },
+      after: { deleted: true }
+    });
+
+    return { id: sectionId, deleted: true };
   }
 
   listSubjects(tenantId: string) {
@@ -805,7 +1023,7 @@ export class AcademicsService {
     return subject;
   }
 
-  async reactivateSubject(tenantId: string, subjectId: string, actorUserId?: string) {
+  async restoreSubject(tenantId: string, subjectId: string, actorUserId?: string) {
     const previous = await this.getSubjectOrThrow(tenantId, subjectId);
 
     if (previous.status === "active") {
@@ -818,7 +1036,68 @@ export class AcademicsService {
       .where(and(eq(subjects.tenantId, tenantId), eq(subjects.id, subjectId)))
       .returning();
 
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "subject.restore",
+      recordType: "Subject",
+      recordId: subjectId,
+      before: { status: previous.status },
+      after: { status: "active" }
+    });
+
     return subject;
+  }
+
+  /** @deprecated Use {@link restoreSubject}. Kept for the legacy /reactivate route. */
+  async reactivateSubject(tenantId: string, subjectId: string, actorUserId?: string) {
+    return this.restoreSubject(tenantId, subjectId, actorUserId);
+  }
+
+  async deleteSubject(tenantId: string, subjectId: string, actorUserId?: string) {
+    const subject = await this.getSubjectOrThrow(tenantId, subjectId);
+
+    if (subject.status !== "archived") {
+      throw new BadRequestException("Archive the subject before deleting permanently.");
+    }
+
+    const n = sql<number>`count(*)::int`;
+    const [assignmentsN] = await this.db
+      .select({ n })
+      .from(gradeSubjects)
+      .where(and(eq(gradeSubjects.tenantId, tenantId), eq(gradeSubjects.subjectId, subjectId)));
+    const dependencies = { gradeSubjects: assignmentsN?.n ?? 0 };
+    if (dependencies.gradeSubjects > 0) {
+      throw new ConflictException({
+        message:
+          "This subject is assigned to grades and cannot be deleted. Keep it archived instead.",
+        dependencies
+      });
+    }
+
+    try {
+      await this.db.delete(subjects).where(and(eq(subjects.tenantId, tenantId), eq(subjects.id, subjectId)));
+    } catch (err) {
+      if (isForeignKeyViolation(err)) {
+        throw new ConflictException({
+          message:
+            "This subject is still referenced by other records and cannot be deleted. Keep it archived instead."
+        });
+      }
+      throw err;
+    }
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "subject.delete",
+      recordType: "Subject",
+      recordId: subjectId,
+      before: { name: subject.name, status: subject.status },
+      after: { deleted: true }
+    });
+
+    return { id: subjectId, deleted: true };
   }
 
   listGradeSubjects(tenantId: string) {

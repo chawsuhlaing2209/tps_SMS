@@ -96,6 +96,17 @@ export class FinanceController {
     return this.financeService.archiveFeeItem(tenantId, feeItemId, actorUserId)
   }
 
+  @Post('fee-items/:feeItemId/restore')
+  @RequirePermissions('finance.manage')
+  restoreFeeItem(
+    @Param('tenantId') tenantId: string,
+    @Param('feeItemId') feeItemId: string,
+    @Headers('x-user-id') actorUserId: string,
+  ) {
+    return this.financeService.restoreFeeItem(tenantId, feeItemId, actorUserId)
+  }
+
+  /** @deprecated Use POST fee-items/:feeItemId/restore. */
   @Post('fee-items/:feeItemId/reactivate')
   @RequirePermissions('finance.manage')
   reactivateFeeItem(
@@ -103,7 +114,7 @@ export class FinanceController {
     @Param('feeItemId') feeItemId: string,
     @Headers('x-user-id') actorUserId: string,
   ) {
-    return this.financeService.reactivateFeeItem(tenantId, feeItemId, actorUserId)
+    return this.financeService.restoreFeeItem(tenantId, feeItemId, actorUserId)
   }
 
   // ── Enrollment Fee Plans ───────────────────────────────────────────────────

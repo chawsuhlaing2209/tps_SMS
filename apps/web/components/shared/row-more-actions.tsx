@@ -51,7 +51,12 @@ export function RowMoreActionsMenu({
           </button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
-          <DropdownMenu.Content className="hero-actions-menu" align="end" sideOffset={6}>
+          <DropdownMenu.Content
+            className="hero-actions-menu"
+            align="end"
+            sideOffset={6}
+            onClick={(event) => event.stopPropagation()}
+          >
             {items.map((item, index) => (
               <Fragment key={item.id}>
                 {index > 0 ? <DropdownMenu.Separator className="hero-actions-menu__sep" /> : null}

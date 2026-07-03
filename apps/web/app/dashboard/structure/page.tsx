@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { SubjectChip, SubjectChipGroup, SegmentedControl } from "../../../components/pds";
+import { FilterTab } from "../../../components/pds/composites/filter-tabs";
 import { ConfirmDialog } from "../../../components/shared/confirm-dialog";
 import { ExportCsvButton } from "../../../components/shared/export-csv-button";
 import { EmptyState } from "../../../components/shared/empty-state";
@@ -19,6 +20,7 @@ import {
   type ArchiveVisibility
 } from "../../lib/archive-filter";
 import { cn } from "../../../lib/utils";
+import { isPadaukRowInteractiveTarget } from "../../lib/table-row-interaction";
 import { useDashPageTitleActionsTarget } from "../dashboard-page-title";
 import { hasAnyPermission } from "../../lib/permissions";
 import { getSession } from "../../lib/session";
@@ -366,26 +368,19 @@ export default function SchoolStructurePage() {
       </div>
 
       <div className="structure-grade-scroll">
-        <section className="structure-grade-rail" aria-label={t("selectGrade")}>
+        <section className="structure-grade-rail" role="tablist" aria-label={t("selectGrade")}>
           {visibleGrades.map((grade) => {
             const active = grade.id === selectedGradeId;
             const archived = isArchivedRecord(grade.status);
             return (
-              <button
+              <FilterTab
                 key={grade.id}
-                type="button"
-                className={cn(
-                  "structure-grade-chip",
-                  active && "structure-grade-chip--active",
-                  archived && "structure-grade-chip--archived"
-                )}
+                label={grade.name}
+                meta={t("roomsCount", { count: grade.classroomCount })}
+                active={active}
+                className={archived ? "pds-filter-tab--archived" : undefined}
                 onClick={() => selectGrade(grade.id)}
-              >
-                <span className="structure-grade-chip__name">{grade.name}</span>
-                <span className="structure-grade-chip__meta">
-                  {t("roomsCount", { count: grade.classroomCount })}
-                </span>
-              </button>
+              />
             );
           })}
           {!visibleGrades.length ? (
@@ -443,7 +438,19 @@ export default function SchoolStructurePage() {
                       return (
                         <article
                           key={room.id}
-                          className={cn("structure-room-card", roomArchived && "structure-room-card--archived")}
+                          className={cn("structure-room-card", "structure-room-card--clickable", roomArchived && "structure-room-card--archived")}
+                          role="link"
+                          tabIndex={0}
+                          aria-label={room.name}
+                          onClick={(event) => {
+                            if (isPadaukRowInteractiveTarget(event.target)) return;
+                            router.push(`/dashboard/structure/rooms/${room.id}`);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key !== "Enter" && event.key !== " ") return;
+                            event.preventDefault();
+                            router.push(`/dashboard/structure/rooms/${room.id}`);
+                          }}
                         >
                           <div className="structure-room-card__head">
                             <span className="pds-type-title-s-extrabold structure-room-card__mark" style={{ background: accent }}>

@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { CheckboxList, PdsSearchFiltersRow, PdsSelectField } from "../../../../components/pds";
+import { FilterTab } from "../../../../components/pds/composites/filter-tabs";
 import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
 import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
 import { EmptyState } from "../../../../components/shared/empty-state";
@@ -118,6 +119,7 @@ export default function GradesClassroomsPage() {
   const [gradeFormMode, setGradeFormMode] = useState<GradeFormMode | null>(null);
   const [roomFormMode, setRoomFormMode] = useState<RoomFormMode | null>(null);
   const [deletingGrade, setDeletingGrade] = useState<GradeOverview | null>(null);
+  const [permanentDeleteGrade, setPermanentDeleteGrade] = useState<GradeOverview | null>(null);
   const [deletingRoom, setDeletingRoom] = useState<ClassroomOverview | null>(null);
   const [archiveVisibility, setArchiveVisibility] = useState<ArchiveVisibility>("active");
 
@@ -262,10 +264,21 @@ export default function GradesClassroomsPage() {
     }
   );
 
-  const reactivateGrade = useApiMutation<{ id: string }>(
+  const restoreGrade = useApiMutation<{ id: string }>(
     ({ id }, tenant) => ({
-      path: `${GRADES_PATH(tenant)}/${id}/reactivate`,
+      path: `${GRADES_PATH(tenant)}/${id}/restore`,
       init: { method: "POST" }
+    }),
+    {
+      invalidatePaths: (_b, tenant) =>
+        contextYearId ? invalidatePaths(tenant, contextYearId) : [GRADES_PATH(tenant)]
+    }
+  );
+
+  const deleteGrade = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({
+      path: `${GRADES_PATH(tenant)}/${id}`,
+      init: { method: "DELETE" }
     }),
     {
       invalidatePaths: (_b, tenant) =>
@@ -430,30 +443,23 @@ export default function GradesClassroomsPage() {
         </div>
         <div className="setup-grade-row">
           <div className="setup-grade-scroll">
-            <div className="setup-grade-rail" aria-label={setup("selectGradeLevel")}>
+            <div className="setup-grade-rail" role="tablist" aria-label={setup("selectGradeLevel")}>
               {visibleGrades.map((grade) => {
                 const active = grade.id === selectedGradeId;
                 const archived = isArchivedRecord(grade.status);
                 return (
-                  <button
+                  <FilterTab
                     key={grade.id}
-                    type="button"
-                    className={cn(
-                      "pds-type-body-s-semibold setup-grade-chip",
-                      active && "setup-grade-chip--active",
-                      archived && "setup-grade-chip--archived"
-                    )}
+                    label={grade.name}
+                    active={active}
+                    className={archived ? "pds-filter-tab--archived" : undefined}
+                    badge={
+                      archived ? (
+                        <StatusBadge status="archived" label={c("archivedBadge")} />
+                      ) : null
+                    }
                     onClick={() => selectGrade(grade.id)}
-                  >
-                    {grade.name}
-                    {archived ? (
-                      <StatusBadge
-                        status="archived"
-                        label={c("archivedBadge")}
-                        className="setup-grade-chip__badge"
-                      />
-                    ) : null}
-                  </button>
+                  />
                 );
               })}
             </div>
@@ -499,13 +505,20 @@ export default function GradesClassroomsPage() {
                       selectedGradeArchived
                         ? [
                             {
-                              id: "reactivate",
-                              label: c("reactivate"),
+                              id: "restore",
+                              label: c("restore"),
                               icon: "unarchive",
                               onSelect: async () => {
-                                await reactivateGrade.mutateAsync({ id: selectedGrade.id });
+                                await restoreGrade.mutateAsync({ id: selectedGrade.id });
                                 toastSuccess(t("gradeReactivated"));
                               }
+                            },
+                            {
+                              id: "deleteForever",
+                              label: c("deletePermanently"),
+                              icon: "delete_forever",
+                              destructive: true,
+                              onSelect: () => setPermanentDeleteGrade(selectedGrade)
                             }
                           ]
                         : [
@@ -861,6 +874,27 @@ export default function GradesClassroomsPage() {
           await archiveGrade.mutateAsync({ id: deletingGrade.id });
           setDeletingGrade(null);
           if (selectedGradeId === deletingGrade.id) {
+            setSelectedGradeId(null);
+          }
+        }}
+      />
+
+      <ConfirmDialog
+        open={permanentDeleteGrade !== null}
+        onOpenChange={(open) => {
+          if (!open) setPermanentDeleteGrade(null);
+        }}
+        title={t("deleteGradeTitle")}
+        description={t("deleteGradeHelp", { name: permanentDeleteGrade?.name ?? "" })}
+        confirmLabel={c("deletePermanently")}
+        destructive
+        loading={deleteGrade.isPending}
+        onConfirm={async () => {
+          if (!permanentDeleteGrade) return;
+          await deleteGrade.mutateAsync({ id: permanentDeleteGrade.id });
+          const removedId = permanentDeleteGrade.id;
+          setPermanentDeleteGrade(null);
+          if (selectedGradeId === removedId) {
             setSelectedGradeId(null);
           }
         }}

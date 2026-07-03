@@ -86,16 +86,21 @@ export class FinanceService {
     return item
   }
 
-  async reactivateFeeItem(tenantId: string, feeItemId: string, actorUserId: string) {
+  async restoreFeeItem(tenantId: string, feeItemId: string, actorUserId: string) {
     const previous = await this.getFeeItemOrThrow(tenantId, feeItemId)
     if (previous.status === 'active') return previous
     const [item] = await this.db.update(feeItems).set({
       status: 'active', updatedBy: actorUserId, updatedAt: new Date(),
     }).where(and(eq(feeItems.id, feeItemId), eq(feeItems.tenantId, tenantId))).returning()
     await this.auditService.recordEvent(
-      this.auditService.createEvent({ tenantId, actorUserId, action: 'fee_item.reactivate', recordType: 'fee_item', recordId: feeItemId, before: { status: previous.status }, after: { status: 'active' } })
+      this.auditService.createEvent({ tenantId, actorUserId, action: 'fee_item.restore', recordType: 'fee_item', recordId: feeItemId, before: { status: previous.status }, after: { status: 'active' } })
     )
     return item
+  }
+
+  /** @deprecated Use {@link restoreFeeItem}. Kept for the legacy /reactivate route. */
+  async reactivateFeeItem(tenantId: string, feeItemId: string, actorUserId: string) {
+    return this.restoreFeeItem(tenantId, feeItemId, actorUserId)
   }
 
   /**
@@ -106,6 +111,11 @@ export class FinanceService {
    */
   async deleteFeeItem(tenantId: string, feeItemId: string, actorUserId: string) {
     const previous = await this.getFeeItemOrThrow(tenantId, feeItemId)
+
+    // Two-step safety: archive the fee item before deleting it permanently.
+    if (previous.status !== 'archived') {
+      throw new BadRequestException('Archive the fee item before deleting it.')
+    }
 
     const today = new Date().toISOString().slice(0, 10)
     const [activeRow] = await this.db

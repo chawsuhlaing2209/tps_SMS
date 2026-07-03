@@ -57,7 +57,12 @@ export default function PayComponentsPage() {
   );
 
   const filteredPayComponents = useMemo(
-    () => filterByArchiveVisibility(payComponents.data ?? [], archiveVisibility),
+    () =>
+      filterByArchiveVisibility(payComponents.data ?? [], archiveVisibility).filter(
+        // MVP-1: this page manages deductions only; legacy earning components
+        // stay in the DB for payroll history but are hidden here.
+        (component) => component.kind === "deduction"
+      ),
     [payComponents.data, archiveVisibility]
   );
 
@@ -87,7 +92,7 @@ export default function PayComponentsPage() {
 
   const reactivatePayComponent = useApiMutation<{ id: string }>(
     ({ id }, tenant) => ({
-      path: `${PAY_COMPONENTS_PATH(tenant)}/${id}/reactivate`,
+      path: `${PAY_COMPONENTS_PATH(tenant)}/${id}/restore`,
       init: { method: "POST" }
     }),
     { invalidatePaths: (_b, tenant) => [PAY_COMPONENTS_PATH(tenant)] }

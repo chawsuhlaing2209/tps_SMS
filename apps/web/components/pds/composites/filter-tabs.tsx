@@ -7,6 +7,10 @@ import type { PdsSubjectColorKey } from "../palettes";
 export type FilterTabProps = {
   label: ReactNode;
   count?: number | string;
+  /** Secondary text after the label (e.g. "3 rooms") — for record-rail tabs (docs/COMPONENTS.md job 5). */
+  meta?: ReactNode;
+  /** Trailing slot for a StatusBadge or similar (e.g. Archived) — for record-rail tabs. */
+  badge?: ReactNode;
   active?: boolean;
   disabled?: boolean;
   onClick?: () => void;
@@ -14,7 +18,7 @@ export type FilterTabProps = {
 };
 
 /** Filter tab with optional count pill — forest fill when active, count flips lime-on-forest. */
-export function FilterTab({ label, count, active, disabled, onClick, className }: FilterTabProps) {
+export function FilterTab({ label, count, meta, badge, active, disabled, onClick, className }: FilterTabProps) {
   return (
     <button
       type="button"
@@ -28,11 +32,15 @@ export function FilterTab({ label, count, active, disabled, onClick, className }
       onClick={onClick}
     >
       <span className="pds-type-body-m-bold pds-filter-tab__label">{label}</span>
+      {meta != null ? (
+        <span className="pds-type-body-s-regular pds-filter-tab__meta">{meta}</span>
+      ) : null}
       {count != null ? (
         <span className="pds-type-body-s-bold pds-filter-tab__count">
           {typeof count === "number" ? count.toLocaleString() : count}
         </span>
       ) : null}
+      {badge}
     </button>
   );
 }
@@ -40,11 +48,17 @@ export function FilterTab({ label, count, active, disabled, onClick, className }
 export function FilterTabGroup({
   children,
   className,
+  "aria-label": ariaLabel,
 }: {
   children: ReactNode;
   className?: string;
+  "aria-label"?: string;
 }) {
-  return <div className={cn("pds-filter-tab-group", className)} role="tablist">{children}</div>;
+  return (
+    <div className={cn("pds-filter-tab-group", className)} role="tablist" aria-label={ariaLabel}>
+      {children}
+    </div>
+  );
 }
 
 export type SubjectTabProps = {

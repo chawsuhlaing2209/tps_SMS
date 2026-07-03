@@ -257,6 +257,36 @@ export class StudentsController {
     return this.studentsService.withdraw(tenantId, studentId, actorUserId, dto);
   }
 
+  @Post(":studentId/archive")
+  @RequirePermissions("student.manage")
+  archive(
+    @Param("tenantId") tenantId: string,
+    @Param("studentId") studentId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.studentsService.archive(tenantId, studentId, actorUserId);
+  }
+
+  @Post(":studentId/restore")
+  @RequirePermissions("student.manage")
+  restore(
+    @Param("tenantId") tenantId: string,
+    @Param("studentId") studentId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.studentsService.restore(tenantId, studentId, actorUserId);
+  }
+
+  @Delete(":studentId")
+  @RequirePermissions("student.manage")
+  remove(
+    @Param("tenantId") tenantId: string,
+    @Param("studentId") studentId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.studentsService.permanentlyDelete(tenantId, studentId, actorUserId);
+  }
+
   @Get(":studentId")
   @RequireAnyPermissions("student.manage", "student.view")
   getById(

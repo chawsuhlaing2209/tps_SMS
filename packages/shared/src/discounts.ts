@@ -78,8 +78,18 @@ export type DiscountPaymentPlanFrequency = (typeof discountPaymentPlanFrequencie
 export const earlyPaymentRuleCriteriaSchema = z.object({
   type: z.literal("early_payment"),
   appliesTo: discountAppliesToSchema,
-  requiresPaymentAtEnrollment: z.boolean().default(true),
+  // Payment-at-enrollment gating was dropped from the product model
+  // (2026-07-03): early-bird eligibility is date/limit based only. Legacy
+  // rules that explicitly stored `true` keep their old gating behavior.
+  requiresPaymentAtEnrollment: z.boolean().default(false),
   paymentMethods: z.array(z.string()).optional(),
+  /** Early-bird: only enrollments confirmed on/before this date qualify (yyyy-mm-dd). */
+  cutoffDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  /** Early-bird: only the first N granted recipients qualify. */
+  maxRecipients: z.number().int().min(1).optional(),
   notes: z.string().optional()
 });
 
@@ -94,6 +104,13 @@ export const customRuleCriteriaSchema = z.object({
   parentIsFullTimeStaff: z.boolean().optional(),
   topRankInGrade: z.number().int().min(1).optional(),
   newEnrollmentThisYear: z.boolean().optional(),
+  /** Early-bird: only enrollments confirmed on/before this date qualify (yyyy-mm-dd). */
+  cutoffDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  /** Early-bird: only the first N granted recipients qualify. */
+  maxRecipients: z.number().int().min(1).optional(),
   requiresPaymentAtEnrollment: z.boolean().optional(),
   requiresDocumentation: z.boolean().optional(),
   prorateAcrossInstallments: z.boolean().optional(),
@@ -183,6 +200,10 @@ export type DiscountEvaluationContext = {
   /** Student rank in grade by GPA (1 = top). */
   gradeRank?: number;
   isNewEnrollmentThisYear?: boolean;
+  /** Date the eligibility is evaluated for (yyyy-mm-dd); defaults to today. */
+  evaluationDate?: string;
+  /** Grants already recorded per rule id — enforces early-bird maxRecipients. */
+  grantedCountByRuleId?: Record<string, number>;
 };
 
 export type DiscountCandidate = {
@@ -268,6 +289,14 @@ export function parseDiscountCriteria(
       appliesTo,
       requiresPaymentAtEnrollment: raw?.requiresPaymentAtEnrollment !== false,
       paymentMethods: Array.isArray(raw?.paymentMethods) ? raw.paymentMethods : undefined,
+      cutoffDate:
+        typeof raw?.cutoffDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw.cutoffDate)
+          ? raw.cutoffDate
+          : undefined,
+      maxRecipients:
+        typeof raw?.maxRecipients === "number" && raw.maxRecipients >= 1
+          ? Math.floor(raw.maxRecipients)
+          : undefined,
       notes: typeof raw?.notes === "string" ? raw.notes : typeof raw?.description === "string" ? raw.description : undefined
     });
   }
@@ -300,6 +329,8 @@ export function parseDiscountCriteria(
       parentIsFullTimeStaff: raw?.parentIsFullTimeStaff === true ? true : undefined,
       topRankInGrade: typeof raw?.topRankInGrade === "number" ? raw.topRankInGrade : undefined,
       newEnrollmentThisYear: raw?.newEnrollmentThisYear === true ? true : undefined,
+      cutoffDate: typeof raw?.cutoffDate === "string" ? raw.cutoffDate : undefined,
+      maxRecipients: typeof raw?.maxRecipients === "number" ? raw.maxRecipients : undefined,
       requiresPaymentAtEnrollment:
         raw?.requiresPaymentAtEnrollment === true ? true : undefined,
       requiresDocumentation: raw?.requiresDocumentation === true ? true : undefined,
@@ -388,7 +419,8 @@ export function siblingRuleMatches(
 
 export function earlyPaymentRuleMatches(
   criteria: z.infer<typeof earlyPaymentRuleCriteriaSchema>,
-  context: DiscountEvaluationContext
+  context: DiscountEvaluationContext,
+  options?: { grantedCount?: number }
 ): boolean {
   if (criteria.requiresPaymentAtEnrollment && !context.collectPayment) {
     return false;
@@ -400,12 +432,23 @@ export function earlyPaymentRuleMatches(
   ) {
     return false;
   }
+  if (criteria.cutoffDate) {
+    // yyyy-mm-dd strings compare correctly lexicographically.
+    const evaluated = context.evaluationDate ?? new Date().toISOString().slice(0, 10);
+    if (evaluated > criteria.cutoffDate) {
+      return false;
+    }
+  }
+  if (criteria.maxRecipients != null && (options?.grantedCount ?? 0) >= criteria.maxRecipients) {
+    return false;
+  }
   return true;
 }
 
 export function customRuleMatches(
   criteria: z.infer<typeof customRuleCriteriaSchema>,
-  context: DiscountEvaluationContext
+  context: DiscountEvaluationContext,
+  options?: { grantedCount?: number }
 ): boolean {
   const checks: boolean[] = [];
 
@@ -414,6 +457,19 @@ export function customRuleMatches(
     context.paymentPlanFrequency &&
     !criteria.paymentPlanFrequencies.includes(context.paymentPlanFrequency)
   ) {
+    return false;
+  }
+
+  // Early-bird cutoff and recipient cap are hard gates, not eligibility
+  // signals — they must never pass a rule via eligibilityMatchMode "any".
+  if (criteria.cutoffDate) {
+    // yyyy-mm-dd strings compare correctly lexicographically.
+    const evaluated = context.evaluationDate ?? new Date().toISOString().slice(0, 10);
+    if (evaluated > criteria.cutoffDate) {
+      return false;
+    }
+  }
+  if (criteria.maxRecipients != null && (options?.grantedCount ?? 0) >= criteria.maxRecipients) {
     return false;
   }
 

@@ -37,6 +37,16 @@ export class EnrollmentsController {
     return this.enrollmentsService.listEnrollments(tenantId, query);
   }
 
+  /** Breakdown counts (by status / grade / month) for the enrollments dashboard. */
+  @Get("enrollments/stats")
+  @RequirePermissions("student.manage")
+  getEnrollmentStats(
+    @Param("tenantId") tenantId: string,
+    @Query("academicYearId") academicYearId?: string
+  ) {
+    return this.enrollmentsService.getEnrollmentStats(tenantId, academicYearId);
+  }
+
   @Get("enrollments/:enrollmentId")
   @RequirePermissions("student.manage")
   getEnrollment(

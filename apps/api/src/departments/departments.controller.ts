@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Headers, Param, Patch, Post, UseGuards } from "@nestjs/common";
 import { RequireAnyPermissions, RequirePermissions } from "../identity/permissions.decorator.js";
 import { PermissionsGuard } from "../identity/permissions.guard.js";
 import { DepartmentsService } from "./departments.service.js";
@@ -40,5 +40,35 @@ export class DepartmentsController {
     @Headers("x-user-id") actorUserId?: string
   ) {
     return this.departmentsService.updateDepartment(tenantId, departmentId, actorUserId, dto);
+  }
+
+  @Post(":departmentId/archive")
+  @RequirePermissions("hr.manage")
+  archiveDepartment(
+    @Param("tenantId") tenantId: string,
+    @Param("departmentId") departmentId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.departmentsService.archiveDepartment(tenantId, departmentId, actorUserId);
+  }
+
+  @Post(":departmentId/restore")
+  @RequirePermissions("hr.manage")
+  restoreDepartment(
+    @Param("tenantId") tenantId: string,
+    @Param("departmentId") departmentId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.departmentsService.restoreDepartment(tenantId, departmentId, actorUserId);
+  }
+
+  @Delete(":departmentId")
+  @RequirePermissions("hr.manage")
+  deleteDepartment(
+    @Param("tenantId") tenantId: string,
+    @Param("departmentId") departmentId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.departmentsService.deleteDepartment(tenantId, departmentId, actorUserId);
   }
 }

@@ -3,6 +3,7 @@ import { FormInput } from "../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
+import { RowMoreActionsMenu } from "../../../components/shared/row-more-actions";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -86,7 +87,27 @@ export function GuardiansDirectory() {
       cell: ({ row }) => <DirectoryMemberCell name={row.original.fullName} />
     },
     { id: "phone", header: t("phone"), accessorFn: (row) => row.phone ?? "—" },
-    { id: "email", header: t("email"), accessorFn: (row) => row.email ?? "—" }
+    { id: "email", header: t("email"), accessorFn: (row) => row.email ?? "—" },
+    {
+      id: "actions",
+      header: "",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <RowMoreActionsMenu
+          ariaLabel={c("moreActions")}
+          items={[
+            {
+              id: "view",
+              label: c("view"),
+              icon: "visibility",
+              onSelect: () => {
+                window.location.href = `/dashboard/people/guardians/${row.original.id}`;
+              }
+            }
+          ]}
+        />
+      )
+    } satisfies ColumnDef<GuardianRow, unknown>
   ];
 
   return (

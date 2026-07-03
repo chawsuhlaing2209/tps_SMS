@@ -11,16 +11,25 @@ import {
   personTypeToRoleKey,
   type PersonType
 } from "@sms/shared";
-import { and, desc, eq, ilike, inArray, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
 import { DepartmentsService } from "../departments/departments.service.js";
 import {
+  assignments,
   classroomStudents,
   classroomSubjectTeachers,
   classrooms,
+  gradeChiefAssignments,
+  learningMaterials,
+  payrollRecords,
   roles,
+  salaryRecords,
   staff,
+  staffBenefitEnrollments,
+  staffCompensationProfiles,
+  staffIncentiveEligibility,
+  timetableSlots,
   userRoles,
   users
 } from "../db/schema.js";
@@ -35,6 +44,11 @@ import type {
 } from "./dto.js";
 import { TeacherAssignmentsService } from "./teacher-assignments.service.js";
 
+/** Postgres foreign-key violation — a delete blocked by a referencing row. */
+function isForeignKeyViolation(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { code?: string }).code === "23503";
+}
+
 @Injectable()
 export class HrService {
   constructor(
@@ -47,6 +61,14 @@ export class HrService {
 
   private buildStaffFilters(tenantId: string, query: ListStaffQueryDto) {
     const filters = [eq(staff.tenantId, tenantId)];
+
+    // Archive lifecycle: default view hides archived staff; "archived" shows
+    // only them; "all" shows both.
+    if (query.view === "archived") {
+      filters.push(isNotNull(staff.archivedAt));
+    } else if (query.view !== "all") {
+      filters.push(isNull(staff.archivedAt));
+    }
 
     if (query.status) {
       filters.push(eq(staff.status, query.status as typeof staff.status._.data));
@@ -244,6 +266,156 @@ export class HrService {
       );
 
     return { ...member, teachingAssignments };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Archive lifecycle: Active → Archived (reviewable) → Restore | Permanent delete.
+  // `archivedAt` is orthogonal to `status`, so the employment state
+  // (active/probation/resigned/…) is preserved and restore returns to it.
+  // ---------------------------------------------------------------------------
+
+  private async getStaffOrThrow(tenantId: string, staffId: string) {
+    const [member] = await this.db
+      .select()
+      .from(staff)
+      .where(and(eq(staff.tenantId, tenantId), eq(staff.id, staffId)));
+    if (!member) {
+      throw new NotFoundException("Staff member not found.");
+    }
+    return member;
+  }
+
+  async archiveStaff(tenantId: string, staffId: string, actorUserId?: string) {
+    const before = await this.getStaffOrThrow(tenantId, staffId);
+    if (before.archivedAt) {
+      return before;
+    }
+
+    const [updated] = await this.db
+      .update(staff)
+      .set({
+        archivedAt: new Date(),
+        archivedBy: actorUserId,
+        updatedBy: actorUserId,
+        updatedAt: new Date()
+      })
+      .where(and(eq(staff.tenantId, tenantId), eq(staff.id, staffId)))
+      .returning();
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "staff.archive",
+      recordType: "staff",
+      recordId: staffId,
+      before: { archivedAt: null },
+      after: { archivedAt: updated!.archivedAt }
+    });
+
+    return updated!;
+  }
+
+  async restoreStaff(tenantId: string, staffId: string, actorUserId?: string) {
+    const before = await this.getStaffOrThrow(tenantId, staffId);
+    if (!before.archivedAt) {
+      return before;
+    }
+
+    const [updated] = await this.db
+      .update(staff)
+      .set({
+        archivedAt: null,
+        archivedBy: null,
+        updatedBy: actorUserId,
+        updatedAt: new Date()
+      })
+      .where(and(eq(staff.tenantId, tenantId), eq(staff.id, staffId)))
+      .returning();
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "staff.restore",
+      recordType: "staff",
+      recordId: staffId,
+      before: { archivedAt: before.archivedAt },
+      after: { archivedAt: null }
+    });
+
+    return updated!;
+  }
+
+  /** Counts of teaching/operational/payroll records that block permanent deletion. */
+  private async getStaffBlockingDependencies(tenantId: string, staffId: string) {
+    const n = sql<number>`count(*)::int`;
+    const [subjectTeaching, gradeChief, homerooms, timetable, salary, payroll] = await Promise.all([
+      this.db.select({ n }).from(classroomSubjectTeachers).where(and(eq(classroomSubjectTeachers.tenantId, tenantId), eq(classroomSubjectTeachers.teacherStaffId, staffId))),
+      this.db.select({ n }).from(gradeChiefAssignments).where(and(eq(gradeChiefAssignments.tenantId, tenantId), eq(gradeChiefAssignments.staffId, staffId))),
+      this.db.select({ n }).from(classrooms).where(and(eq(classrooms.tenantId, tenantId), eq(classrooms.classTeacherStaffId, staffId))),
+      this.db.select({ n }).from(timetableSlots).where(and(eq(timetableSlots.tenantId, tenantId), eq(timetableSlots.teacherStaffId, staffId))),
+      this.db.select({ n }).from(salaryRecords).where(and(eq(salaryRecords.tenantId, tenantId), eq(salaryRecords.staffId, staffId))),
+      this.db.select({ n }).from(payrollRecords).where(and(eq(payrollRecords.tenantId, tenantId), eq(payrollRecords.staffId, staffId)))
+    ]);
+    return {
+      subjectTeaching: subjectTeaching[0]?.n ?? 0,
+      gradeChief: gradeChief[0]?.n ?? 0,
+      homerooms: homerooms[0]?.n ?? 0,
+      timetable: timetable[0]?.n ?? 0,
+      salary: salary[0]?.n ?? 0,
+      payroll: payroll[0]?.n ?? 0
+    };
+  }
+
+  async permanentlyDeleteStaff(tenantId: string, staffId: string, actorUserId?: string) {
+    const member = await this.getStaffOrThrow(tenantId, staffId);
+
+    // Two-step safety: only an archived staff member can be permanently deleted.
+    if (!member.archivedAt) {
+      throw new BadRequestException("Archive the staff member before deleting permanently.");
+    }
+
+    const dependencies = await this.getStaffBlockingDependencies(tenantId, staffId);
+    if (Object.values(dependencies).some((c) => c > 0)) {
+      throw new ConflictException({
+        message:
+          "This staff member has teaching, timetable, or payroll records and cannot be permanently deleted. Keep them archived instead.",
+        dependencies
+      });
+    }
+
+    try {
+      await this.db.transaction(async (tx) => {
+        // Cascade the owned compensation config — not teaching/payroll history.
+        await tx.delete(staffCompensationProfiles).where(and(eq(staffCompensationProfiles.tenantId, tenantId), eq(staffCompensationProfiles.staffId, staffId)));
+        await tx.delete(staffIncentiveEligibility).where(and(eq(staffIncentiveEligibility.tenantId, tenantId), eq(staffIncentiveEligibility.staffId, staffId)));
+        await tx.delete(staffBenefitEnrollments).where(and(eq(staffBenefitEnrollments.tenantId, tenantId), eq(staffBenefitEnrollments.staffId, staffId)));
+        await tx.delete(staff).where(and(eq(staff.tenantId, tenantId), eq(staff.id, staffId)));
+      });
+    } catch (err) {
+      if (isForeignKeyViolation(err)) {
+        throw new ConflictException({
+          message:
+            "This staff member is still referenced by other records and cannot be deleted. Keep them archived instead."
+        });
+      }
+      throw err;
+    }
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "staff.delete",
+      recordType: "staff",
+      recordId: staffId,
+      before: {
+        fullName: member.fullName,
+        employeeNumber: member.employeeNumber,
+        status: member.status
+      },
+      after: { deleted: true }
+    });
+
+    return { id: staffId, deleted: true };
   }
 
   async createStaff(tenantId: string, actorUserId: string | undefined, dto: CreateStaffDto) {

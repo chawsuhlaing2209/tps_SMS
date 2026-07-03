@@ -6,9 +6,11 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { PdsSearchBar, PdsSearchFiltersRow, PdsSelectField } from "../../../components/pds";
 import { StatusBadge } from "../../../components/shared/badge";
+import { ArchiveVisibilityFilter } from "../../../components/shared/archive-visibility-filter";
 import { Chip, ChipGroup } from "../../../components/shared/chip";
 import { ExportCsvButton } from "../../../components/shared/export-csv-button";
-import { useApiQuery } from "../../lib/api";
+import { useApiMutation, useApiQuery } from "../../lib/api";
+import { toastSuccess } from "../../lib/toast";
 import { useDashPageTitleActionsTarget } from "../dashboard-page-title";
 import { fetchAllPaginated } from "../../lib/export-csv";
 import { DataTable, DirectoryMemberCell } from "../../lib/data-table";
@@ -17,6 +19,8 @@ import { hasAnyPermission } from "../../lib/permissions";
 import { getSession } from "../../lib/session";
 import { TablePanelBody, DataTableSection } from "../../lib/table-panel";
 import { TeacherCreateSheet } from "./teacher-create-sheet";
+import { ConfirmDialog } from "../../../components/shared/confirm-dialog";
+import { RowMoreActionsMenu } from "../../../components/shared/row-more-actions";
 import { useTeachersActions } from "./teachers-actions-provider";
 
 type TeacherProfile = {
@@ -30,6 +34,7 @@ type TeacherOverview = {
   phone: string | null;
   department: string | null;
   status: string;
+  archivedAt?: string | null;
   homeroomCount: number;
   classroomCount: number;
   subjectCount: number;
@@ -54,12 +59,14 @@ const teachersPath = (
   page: number,
   search: string,
   status: string,
-  gradeId: string
+  gradeId: string,
+  view: "active" | "archived" | "all"
 ) => {
   const params = new URLSearchParams({
     employmentRole: "teacher",
     limit: String(PAGE_SIZE),
-    offset: String(page * PAGE_SIZE)
+    offset: String(page * PAGE_SIZE),
+    view
   });
   if (search.trim()) params.set("search", search.trim());
   if (status) params.set("status", status);
@@ -88,18 +95,33 @@ export function TeachersDirectory() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [gradeFilter, setGradeFilter] = useState("");
+  const [viewFilter, setViewFilter] = useState<"active" | "archived" | "all">("active");
   const [page, setPage] = useState(0);
 
   useEffect(() => {
     setPage(0);
-  }, [search, statusFilter, gradeFilter]);
+  }, [search, statusFilter, gradeFilter, viewFilter]);
 
   const queryPath = useMemo(
-    () => (tenant: string) => teachersPath(tenant, page, search, statusFilter, gradeFilter),
-    [page, search, statusFilter, gradeFilter]
+    () => (tenant: string) =>
+      teachersPath(tenant, page, search, statusFilter, gradeFilter, viewFilter),
+    [page, search, statusFilter, gradeFilter, viewFilter]
   );
 
   const teachers = useApiQuery<StaffOverviewPage>(canView ? queryPath : () => null);
+  const STAFF_PATH = (tenant: string) => `/tenants/${tenant}/hr/staff`;
+
+  const [deletingTeacher, setDeletingTeacher] = useState<TeacherOverview | null>(null);
+
+  const archiveOne = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({ path: `${STAFF_PATH(tenant)}/${id}/archive`, init: { method: "POST" } })
+  );
+  const restoreOne = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({ path: `${STAFF_PATH(tenant)}/${id}/restore`, init: { method: "POST" } })
+  );
+  const deleteOne = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({ path: `${STAFF_PATH(tenant)}/${id}`, init: { method: "DELETE" } })
+  );
   const grades = useApiQuery<GradeOption[]>((tenant) =>
     canView ? `/tenants/${tenant}/academics/grades` : null
   );
@@ -157,8 +179,70 @@ export function TeachersDirectory() {
       id: "status",
       header: c("status"),
       accessorKey: "status",
-      cell: ({ row }) => <StatusBadge status={row.original.status} />
-    }
+      cell: ({ row }) =>
+        row.original.archivedAt ? (
+          <StatusBadge status="archived" label={t("statusArchived")} />
+        ) : (
+          <StatusBadge status={row.original.status} />
+        )
+    },
+    ...(canManageHr
+      ? ([
+          {
+            id: "actions",
+            header: "",
+            enableSorting: false,
+            cell: ({ row }) => (
+              <RowMoreActionsMenu
+                ariaLabel={c("moreActions")}
+                items={[
+                  {
+                    id: "view",
+                    label: c("view"),
+                    icon: "visibility",
+                    onSelect: () => {
+                      window.location.href = `/dashboard/teachers/${row.original.id}`;
+                    }
+                  },
+                  ...(row.original.archivedAt
+                    ? [
+                        {
+                          id: "restore",
+                          label: c("restore"),
+                          icon: "restore",
+                          onSelect: () =>
+                            void restoreOne.mutateAsync({ id: row.original.id }).then(() => {
+                              toastSuccess(c("restore"));
+                              void teachers.refetch();
+                            })
+                        },
+                        {
+                          id: "delete",
+                          label: c("deletePermanently"),
+                          icon: "delete_forever",
+                          destructive: true,
+                          onSelect: () => setDeletingTeacher(row.original)
+                        }
+                      ]
+                    : [
+                        {
+                          id: "archive",
+                          label: c("archive"),
+                          icon: "archive",
+                          destructive: true,
+                          onSelect: () =>
+                            void archiveOne.mutateAsync({ id: row.original.id }).then(() => {
+                              toastSuccess(c("archive"));
+                              void teachers.refetch();
+                            })
+                        }
+                      ])
+                ]}
+              />
+            )
+          }
+        ] satisfies ColumnDef<TeacherOverview, unknown>[])
+      : [])
   ];
 
   if (!canView) {
@@ -207,11 +291,11 @@ export function TeachersDirectory() {
                     { value: "active", label: t("statusActive") },
                     { value: "probation", label: t("statusProbation") },
                     { value: "resigned", label: t("statusResigned") },
-                    { value: "terminated", label: t("statusTerminated") },
-                    { value: "archived", label: t("statusArchived") }
+                    { value: "terminated", label: t("statusTerminated") }
                   ]}
                 />
               </div>
+              <ArchiveVisibilityFilter value={viewFilter} onChange={setViewFilter} />
             </>
           }
         />
@@ -241,6 +325,25 @@ export function TeachersDirectory() {
         open={createOpen}
         onOpenChange={setCreateOpen}
         onCreated={() => void teachers.refetch()}
+      />
+
+      <ConfirmDialog
+        open={deletingTeacher !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeletingTeacher(null);
+        }}
+        title={t("deleteTeacherTitle")}
+        description={t("deleteTeacherHelp")}
+        confirmLabel={c("deletePermanently")}
+        cancelLabel={c("cancel")}
+        destructive
+        loading={deleteOne.isPending}
+        onConfirm={async () => {
+          if (!deletingTeacher) return;
+          await deleteOne.mutateAsync({ id: deletingTeacher.id });
+          setDeletingTeacher(null);
+          void teachers.refetch();
+        }}
       />
     </>
   );

@@ -77,22 +77,17 @@ export function buildDiscountPreview(
       ? "Payment collected at enrollment confirm"
       : "Requires payment at enrollment confirm";
   } else if (criteria.type === "custom") {
-    if (payload.triggerMode === "request") {
-      eligible = false;
-      eligibilityReason = "Applied only after staff request and approval";
-    } else {
-      eligible = customRuleMatches(criteria, {
-        billingContext: form.billingContexts.includes("enrollment") ? "enrollment" : "recurring",
-        academicYearId: "preview",
-        gradeId: "preview",
-        feeLines: sample.feeLines,
-        siblingSummary: sample.siblingSummary,
-        collectPayment
-      });
-      eligibilityReason = eligible
-        ? "Custom rule conditions met for sample student"
-        : "Sample student does not meet configured conditions";
-    }
+    eligible = customRuleMatches(criteria, {
+      billingContext: form.billingContexts.includes("enrollment") ? "enrollment" : "recurring",
+      academicYearId: "preview",
+      gradeId: "preview",
+      feeLines: sample.feeLines,
+      siblingSummary: sample.siblingSummary,
+      collectPayment
+    });
+    eligibilityReason = eligible
+      ? "Custom rule conditions met for sample student"
+      : "Sample student does not meet configured conditions";
   } else {
     eligible = false;
     eligibilityReason = "Applied only after staff request and approval";

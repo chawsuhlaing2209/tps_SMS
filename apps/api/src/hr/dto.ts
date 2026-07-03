@@ -2,6 +2,7 @@ import { IsArray, IsBoolean, IsDateString, IsEmail, IsIn, IsNotEmpty, IsNumber, 
 import { Type } from "class-transformer";
 import { personTypes } from "@sms/shared";
 
+
 export class CreateStaffDto {
   @IsString()
   @IsNotEmpty()
@@ -101,6 +102,11 @@ export class ListStaffQueryDto {
   @IsString()
   @IsOptional()
   status?: string;
+
+  /** Archive lifecycle filter. Defaults to "active" (non-archived) when omitted. */
+  @IsIn(["active", "archived", "all"])
+  @IsOptional()
+  view?: "active" | "archived" | "all";
 
   @IsString()
   @IsOptional()

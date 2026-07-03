@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { EntityAvatar } from "../../../components/pds/subcomponents/entity-avatar";
 import { DirectoryNameCell } from "../../lib/data-table";
 import { Icon } from "../../lib/material-icon";
+import { PadaukTableWrap } from "../../lib/padauk-table-wrap";
 import { TablePanelBody } from "../../lib/table-panel";
 import {
   LEADERBOARD_DEMO_ENTRIES,
@@ -131,7 +132,7 @@ export function StructureLeaderboardPanel({ studentCount }: StructureLeaderboard
       </section>
 
       <TablePanelBody>
-        <div className="padauk-table-wrap">
+        <PadaukTableWrap>
           <table className="pds-type-body-m-medium padauk-table structure-leaderboard-padauk-table">
             <thead>
               <tr>
@@ -180,7 +181,7 @@ export function StructureLeaderboardPanel({ studentCount }: StructureLeaderboard
               ))}
             </tbody>
           </table>
-        </div>
+        </PadaukTableWrap>
         <p className="pds-type-caption-m muted structure-leaderboard-table__footnote">
           {t("demoFootnote", { count: studentCount })}
         </p>

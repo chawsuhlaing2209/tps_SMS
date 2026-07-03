@@ -5,6 +5,7 @@ import { cn } from "../../../../lib/utils";
 import { StatusPill } from "../../../../components/pds/subcomponents/status-pill";
 import { StatusBadge, Badge } from "../../../../components/shared/badge";
 import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 import { NavigationBackLink } from "../../../../components/shared/navigation-back-link";
 import { TrailLink } from "../../../../components/shared/trail-link";
 import { useEffect, useMemo, useState, use } from "react";
@@ -34,6 +35,7 @@ import {
   type TeachingSetupOptions
 } from "../teacher-teaching-setup";
 import styles from "../teacher-profile.module.css";
+import { subjectColor } from "../../structure/subject-colors";
 import "../teacher-teaching-setup-modal.css";
 import { StaffCompensationSection } from "../../salary/staff-compensation-section";
 
@@ -48,6 +50,7 @@ type TeacherProfile = {
   joinDate: string | null;
   promotionTitle: string | null;
   status: string;
+  archivedAt: string | null;
   loginEmail: string | null;
   yearsExperience: number | null;
   qualifications: Array<{ title?: string; institution?: string; year?: string }>;
@@ -331,6 +334,10 @@ export default function TeacherProfilePage({
   const [setupModal, setSetupModal] = useState<TeachingSetupModal>(null);
   const [confirmSaveKind, setConfirmSaveKind] = useState<"grades" | "classrooms" | null>(null);
   const [statusConfirm, setStatusConfirm] = useState<"deactivate" | "activate" | null>(null);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [deleteForeverOpen, setDeleteForeverOpen] = useState(false);
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<ProfileTab>("overview");
   const [draft, setDraft] = useState<TeachingSetupDraft>(emptyTeachingSetupDraft);
   const [formError, setFormError] = useState<string | null>(null);
@@ -373,6 +380,29 @@ export default function TeacherProfilePage({
         `/tenants/${tenant}/hr/staff/overview?employmentRole=teacher`
       ]
     }
+  );
+
+  const archiveTeacher = useApiMutation<Record<string, never>>(
+    (_body, tenant) => ({
+      path: `/tenants/${tenant}/hr/staff/${teacherId}/archive`,
+      init: { method: "POST" }
+    }),
+    { invalidatePaths: (_b, tenant) => [profilePath(tenant, teacherId)] }
+  );
+
+  const restoreTeacher = useApiMutation<Record<string, never>>(
+    (_body, tenant) => ({
+      path: `/tenants/${tenant}/hr/staff/${teacherId}/restore`,
+      init: { method: "POST" }
+    }),
+    { invalidatePaths: (_b, tenant) => [profilePath(tenant, teacherId)] }
+  );
+
+  const deleteTeacher = useApiMutation<Record<string, never>>(
+    (_body, tenant) => ({
+      path: `/tenants/${tenant}/hr/staff/${teacherId}`,
+      init: { method: "DELETE" }
+    })
   );
 
   useEffect(() => {
@@ -505,6 +535,25 @@ export default function TeacherProfilePage({
     void profile.refetch();
   }
 
+  async function handleArchive() {
+    await archiveTeacher.mutateAsync({});
+    setArchiveOpen(false);
+    void profile.refetch();
+  }
+
+  async function handleRestore() {
+    await restoreTeacher.mutateAsync({});
+    setRestoreOpen(false);
+    void profile.refetch();
+  }
+
+  async function handlePermanentDelete() {
+    // A blocking-dependency 409 surfaces its message via the shared error toast.
+    await deleteTeacher.mutateAsync({});
+    setDeleteForeverOpen(false);
+    router.push("/dashboard/teachers");
+  }
+
   if (profile.isLoading) {
     return <p className="pds-type-body-s-regular muted">{c("loading")}</p>;
   }
@@ -539,7 +588,7 @@ export default function TeacherProfilePage({
 
       <DetailCard
         className={styles.teacherProfileDetailCard}
-        avatar={{ initials: initials(teacher.fullName), tone: "teacher" }}
+        avatar={{ initials: initials(teacher.fullName), tone: "custom", background: subjectColor(teacher.fullName).bg }}
         title={teacher.fullName}
         status={
           <StatusPill tone={isTeacherActive ? "active" : "inactive"}>
@@ -571,7 +620,32 @@ export default function TeacherProfilePage({
                           }
                         }
                       ]
-                    : [])
+                    : []),
+                  ...(teacher.archivedAt
+                    ? [
+                        {
+                          id: "restore",
+                          label: c("restore"),
+                          icon: "restore",
+                          onSelect: () => setRestoreOpen(true)
+                        },
+                        {
+                          id: "deleteForever",
+                          label: c("deletePermanently"),
+                          icon: "delete_forever",
+                          destructive: true,
+                          onSelect: () => setDeleteForeverOpen(true)
+                        }
+                      ]
+                    : [
+                        {
+                          id: "archive",
+                          label: c("archive"),
+                          icon: "archive",
+                          destructive: true,
+                          onSelect: () => setArchiveOpen(true)
+                        }
+                      ])
                 ]}
               />
               <HeroPrimaryAction onClick={() => setEditOpen(true)}>
@@ -1222,6 +1296,41 @@ export default function TeacherProfilePage({
         cancelLabel={c("cancel")}
         loading={updateStaffStatus.isPending}
         onConfirm={() => void confirmStatusChange()}
+      />
+
+      <ConfirmDialog
+        open={archiveOpen}
+        onOpenChange={setArchiveOpen}
+        title={t("archiveTeacherTitle")}
+        description={t("archiveTeacherHelp")}
+        confirmLabel={c("archive")}
+        cancelLabel={c("cancel")}
+        destructive
+        loading={archiveTeacher.isPending}
+        onConfirm={() => void handleArchive()}
+      />
+
+      <ConfirmDialog
+        open={restoreOpen}
+        onOpenChange={setRestoreOpen}
+        title={t("restoreTeacherTitle")}
+        description={t("restoreTeacherHelp")}
+        confirmLabel={c("restore")}
+        cancelLabel={c("cancel")}
+        loading={restoreTeacher.isPending}
+        onConfirm={() => void handleRestore()}
+      />
+
+      <ConfirmDialog
+        open={deleteForeverOpen}
+        onOpenChange={setDeleteForeverOpen}
+        title={t("deleteTeacherTitle")}
+        description={t("deleteTeacherHelp")}
+        confirmLabel={c("deletePermanently")}
+        cancelLabel={c("cancel")}
+        destructive
+        loading={deleteTeacher.isPending}
+        onConfirm={() => void handlePermanentDelete()}
       />
     </div>
   );

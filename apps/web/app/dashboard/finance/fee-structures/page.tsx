@@ -11,6 +11,8 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ApiError, useApiMutation, useApiQuery } from "../../../lib/api";
 import { Icon } from "../../../lib/material-icon";
+import { ArchiveVisibilityFilter } from "../../../../components/shared/archive-visibility-filter";
+import { filterByArchiveVisibility, type ArchiveVisibility } from "../../../lib/archive-filter";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { toastSuccess } from "../../../lib/toast";
 import { zodResolver } from "../../../lib/zod-resolver";
@@ -99,7 +101,10 @@ export default function FeeStructuresPage() {
   const [renaming, setRenaming] = useState<FeeItem | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [deleting, setDeleting] = useState<FeeItem | null>(null);
+  const [restoring, setRestoring] = useState<FeeItem | null>(null);
+  const [permanentDeleting, setPermanentDeleting] = useState<FeeItem | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [componentView, setComponentView] = useState<ArchiveVisibility>("active");
   const [lastEditedGrade, setLastEditedGrade] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -126,19 +131,28 @@ export default function FeeStructuresPage() {
     [feeItems.data]
   );
 
+  const displayedComponents = useMemo(
+    () => filterByArchiveVisibility(feeItems.data ?? [], componentView),
+    [feeItems.data, componentView]
+  );
+
   const yearPlans = useMemo(
     () => plans.data?.filter((plan) => plan.academicYearId === workingYearId) ?? [],
     [plans.data, workingYearId]
   );
 
-  const selectedComponent = activeComponents.find((item) => item.id === selectedFeeItemId) ?? null;
+  const selectedComponent =
+    (feeItems.data ?? []).find((item) => item.id === selectedFeeItemId) ?? null;
+  const selectedArchived = selectedComponent?.status === "archived";
   const amountSuffix = t(`amountSuffix.${billingAmountSuffixKey(selectedComponent?.billingType ?? "annual")}`);
 
+  // Keep a valid selection within the current view.
   useEffect(() => {
-    if (!selectedFeeItemId && activeComponents.length) {
-      setSelectedFeeItemId(activeComponents[0]!.id);
+    const inView = displayedComponents.some((item) => item.id === selectedFeeItemId);
+    if (!inView) {
+      setSelectedFeeItemId(displayedComponents[0]?.id ?? null);
     }
-  }, [activeComponents, selectedFeeItemId]);
+  }, [displayedComponents, selectedFeeItemId]);
 
   // Build the grade/amount editor state from the selected component's plans.
   useEffect(() => {
@@ -222,6 +236,16 @@ export default function FeeStructuresPage() {
     { invalidatePaths: (_b, tenant) => [FEE_ITEMS_PATH(tenant)] }
   );
 
+  const archiveFeeItem = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({ path: `${FEE_ITEMS_PATH(tenant)}/${id}/archive`, init: { method: "POST" } }),
+    { showErrorToast: false, invalidatePaths: (_b, tenant) => [FEE_ITEMS_PATH(tenant), PLANS_PATH(tenant)] }
+  );
+
+  const restoreFeeItem = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({ path: `${FEE_ITEMS_PATH(tenant)}/${id}/restore`, init: { method: "POST" } }),
+    { showErrorToast: false, invalidatePaths: (_b, tenant) => [FEE_ITEMS_PATH(tenant), PLANS_PATH(tenant)] }
+  );
+
   const deleteFeeItem = useApiMutation<{ id: string }>(
     ({ id }, tenant) => ({ path: `${FEE_ITEMS_PATH(tenant)}/${id}`, init: { method: "DELETE" } }),
     { showErrorToast: false, invalidatePaths: (_b, tenant) => [FEE_ITEMS_PATH(tenant), PLANS_PATH(tenant)] }
@@ -284,6 +308,9 @@ export default function FeeStructuresPage() {
           { label: nav("finance"), href: "/dashboard/finance/invoices" },
           { label: t("feeStructuresTitle") }
         ]}
+        actions={
+          <ArchiveVisibilityFilter value={componentView} onChange={setComponentView} />
+        }
       />
 
       {!workingYearId ? (
@@ -314,12 +341,13 @@ export default function FeeStructuresPage() {
                 </Button>
               ) : null}
             </div>
-            {!activeComponents.length ? (
+            {!displayedComponents.length ? (
               <p className="pds-type-body-s-regular muted">{t("noComponentsYet")}</p>
             ) : (
-              activeComponents.map((item) => {
+              displayedComponents.map((item) => {
                 const active = item.id === selectedFeeItemId;
                 const totals = componentTotals.get(item.id);
+                const archived = item.status === "archived";
                 return (
                   <button
                     key={item.id}
@@ -331,6 +359,11 @@ export default function FeeStructuresPage() {
                       <span className={cn("pds-type-body-m-bold", styles.gradeNavName)}>
                         <span className={styles.componentDot} style={{ background: feeTypeColor(item.feeType) }} aria-hidden />
                         {item.name}
+                        {archived ? (
+                          <span className="badge badge--neutral" style={{ marginInlineStart: 6 }}>
+                            {c("viewArchived")}
+                          </span>
+                        ) : null}
                       </span>
                       <span className={cn("pds-type-body-s-regular", styles.gradeNavAmount)}>
                         {t(`billingTypes.${item.billingType}`)} · {t("appliesToGrades", { count: totals?.grades ?? 0 })}
@@ -392,16 +425,41 @@ export default function FeeStructuresPage() {
                                 setRenameValue(selectedComponent.name);
                               }
                             },
-                            {
-                              id: "delete",
-                              label: t("deleteComponent"),
-                              icon: "delete",
-                              destructive: true,
-                              onSelect: () => {
-                                setDeleteError(null);
-                                setDeleting(selectedComponent);
-                              }
-                            }
+                            ...(selectedArchived
+                              ? [
+                                  {
+                                    id: "restore",
+                                    label: c("restore"),
+                                    icon: "restore",
+                                    onSelect: () => {
+                                      void restoreFeeItem.mutateAsync({ id: selectedComponent.id }).then(() => {
+                                        void feeItems.refetch();
+                                      });
+                                    }
+                                  },
+                                  {
+                                    id: "delete",
+                                    label: c("deletePermanently"),
+                                    icon: "delete_forever",
+                                    destructive: true,
+                                    onSelect: () => {
+                                      setDeleteError(null);
+                                      setPermanentDeleting(selectedComponent);
+                                    }
+                                  }
+                                ]
+                              : [
+                                  {
+                                    id: "archive",
+                                    label: c("archive"),
+                                    icon: "archive",
+                                    destructive: true,
+                                    onSelect: () => {
+                                      setDeleteError(null);
+                                      setDeleting(selectedComponent);
+                                    }
+                                  }
+                                ])
                           ]}
                         />
                       </div>
@@ -586,19 +644,49 @@ export default function FeeStructuresPage() {
             setDeleteError(null);
           }
         }}
-        title={t("deleteComponent")}
-        description={deleteError ?? (deleting ? t("deleteComponentHelp", { name: deleting.name }) : "")}
-        confirmLabel={t("deleteComponent")}
+        title={t("archiveComponent")}
+        description={deleteError ?? (deleting ? t("archiveComponentHelp", { name: deleting.name }) : "")}
+        confirmLabel={c("archive")}
         cancelLabel={c("cancel")}
         destructive
-        loading={deleteFeeItem.isPending}
+        loading={archiveFeeItem.isPending}
         onConfirm={async () => {
           if (!deleting) return;
           setDeleteError(null);
           try {
-            await deleteFeeItem.mutateAsync({ id: deleting.id });
+            await archiveFeeItem.mutateAsync({ id: deleting.id });
             if (selectedFeeItemId === deleting.id) setSelectedFeeItemId(null);
             setDeleting(null);
+          } catch (error) {
+            setDeleteError(error instanceof ApiError ? error.message : c("somethingWrong"));
+          }
+        }}
+      />
+
+      <ConfirmDialog
+        open={permanentDeleting !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPermanentDeleting(null);
+            setDeleteError(null);
+          }
+        }}
+        title={t("deleteComponent")}
+        description={
+          deleteError ??
+          (permanentDeleting ? t("deleteComponentHelp", { name: permanentDeleting.name }) : "")
+        }
+        confirmLabel={c("deletePermanently")}
+        cancelLabel={c("cancel")}
+        destructive
+        loading={deleteFeeItem.isPending}
+        onConfirm={async () => {
+          if (!permanentDeleting) return;
+          setDeleteError(null);
+          try {
+            await deleteFeeItem.mutateAsync({ id: permanentDeleting.id });
+            if (selectedFeeItemId === permanentDeleting.id) setSelectedFeeItemId(null);
+            setPermanentDeleting(null);
           } catch (error) {
             setDeleteError(error instanceof ApiError ? error.message : c("somethingWrong"));
           }

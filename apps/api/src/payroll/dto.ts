@@ -24,8 +24,10 @@ export class CreatePayComponentDto {
   @IsNotEmpty()
   declare name: string;
 
-  @IsIn(["earning", "deduction"])
-  declare kind: "earning" | "deduction";
+  /** MVP-1: components are deductions only — earnings are covered by base
+   *  salary, benefit packages, and incentives. */
+  @IsIn(["deduction"])
+  declare kind: "deduction";
 
   @IsIn(["fixed", "percent_of_basic"])
   @IsOptional()

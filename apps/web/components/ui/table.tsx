@@ -1,13 +1,14 @@
 import * as React from 'react'
 import { cn } from '../../lib/utils'
+import { PadaukTableWrap } from '../../app/lib/padauk-table-wrap'
 
 const Table = React.forwardRef<
   HTMLTableElement,
   React.HTMLAttributes<HTMLTableElement>
 >(({ className, ...props }, ref) => (
-  <div className="padauk-table-wrap">
+  <PadaukTableWrap>
     <table ref={ref} className={cn('pds-type-body-m-medium padauk-table', className)} {...props} />
-  </div>
+  </PadaukTableWrap>
 ))
 Table.displayName = 'Table'
 

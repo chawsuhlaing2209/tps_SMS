@@ -18,6 +18,7 @@ import { StatusPill } from "../../../../components/pds/subcomponents/status-pill
 import { StatusBadge } from "../../../../components/shared/badge";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { DataTable } from "../../../lib/data-table";
+import { subjectColor } from "../../structure/subject-colors";
 import { Field } from "../../../lib/form";
 import { HeroMoreActionsMenu, HeroPrimaryAction } from "../../../lib/hero-more-actions";
 import { Icon } from "../../../lib/material-icon";
@@ -44,6 +45,7 @@ type StudentProfile = {
   fullName: string;
   admissionNumber: string;
   status: string;
+  archivedAt: string | null;
   familyGroupId: string | null;
   dateOfBirth: string | null;
   gender: string | null;
@@ -252,6 +254,8 @@ export default function StudentDetailPage({
 
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [deleteForeverOpen, setDeleteForeverOpen] = useState(false);
   const [statusConfirm, setStatusConfirm] = useState<"deactivate" | "activate" | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [resumeDraft, setResumeDraft] = useState<Enrollment | null>(null);
@@ -278,6 +282,42 @@ export default function StudentDetailPage({
         `/tenants/${tenant}/students/${studentId}/profile`,
         `/tenants/${tenant}/students`
       ]
+    }
+  );
+
+  const archiveStudent = useApiMutation<Record<string, never>, StudentProfile>(
+    (_body, tenant) => ({
+      path: `/tenants/${tenant}/students/${studentId}/archive`,
+      init: { method: "POST" }
+    }),
+    {
+      invalidatePaths: (_b, tenant) => [
+        `/tenants/${tenant}/students/${studentId}/profile`,
+        `/tenants/${tenant}/students`
+      ]
+    }
+  );
+
+  const restoreStudent = useApiMutation<Record<string, never>, StudentProfile>(
+    (_body, tenant) => ({
+      path: `/tenants/${tenant}/students/${studentId}/restore`,
+      init: { method: "POST" }
+    }),
+    {
+      invalidatePaths: (_b, tenant) => [
+        `/tenants/${tenant}/students/${studentId}/profile`,
+        `/tenants/${tenant}/students`
+      ]
+    }
+  );
+
+  const deleteStudent = useApiMutation<Record<string, never>, { id: string; deleted: boolean }>(
+    (_body, tenant) => ({
+      path: `/tenants/${tenant}/students/${studentId}`,
+      init: { method: "DELETE" }
+    }),
+    {
+      invalidatePaths: (_b, tenant) => [`/tenants/${tenant}/students`]
     }
   );
 
@@ -589,9 +629,21 @@ export default function StudentDetailPage({
     setStatusConfirm(null);
   }
 
-  async function handleDelete() {
-    await update.mutateAsync({ status: "archived" });
+  async function handleArchive() {
+    await archiveStudent.mutateAsync({});
     setDeleteOpen(false);
+    router.push("/dashboard/people?tab=students");
+  }
+
+  async function handleRestore() {
+    await restoreStudent.mutateAsync({});
+    setRestoreOpen(false);
+  }
+
+  async function handlePermanentDelete() {
+    // A blocking-dependency 409 surfaces its message via the shared error toast.
+    await deleteStudent.mutateAsync({});
+    setDeleteForeverOpen(false);
     router.push("/dashboard/people?tab=students");
   }
 
@@ -622,7 +674,12 @@ export default function StudentDetailPage({
 
           <section className="structure-room-banner student-profile-banner">
             <div className="structure-room-banner__main student-profile-banner__main">
-              <span className="student-profile-avatar">{studentInitials(data.fullName)}</span>
+              <span
+                className="student-profile-avatar"
+                style={{ background: subjectColor(data.fullName).bg, color: subjectColor(data.fullName).text }}
+              >
+                {studentInitials(data.fullName)}
+              </span>
               <div>
                 <div className="student-profile-banner__title-row">
                   <h2 className="structure-room-banner__title">{data.fullName}</h2>
@@ -634,54 +691,60 @@ export default function StudentDetailPage({
               </div>
             </div>
             <div className="structure-room-banner__actions student-profile-banner__actions">
-              <HeroPrimaryAction
-                onClick={() =>
-                  navigateWithTrail(
-                    router,
-                    `/dashboard/exams/report-cards?studentId=${studentId}`,
-                    { label: data.fullName, href: studentHref }
-                  )
-                }
-              >
-                <Icon name="grading" />
-                {t("reportCard")}
-              </HeroPrimaryAction>
+              {canManage ? (
+                <HeroPrimaryAction onClick={() => setEditOpen(true)}>
+                  <Icon name="edit" />
+                  {t("editProfile")}
+                </HeroPrimaryAction>
+              ) : null}
               {canManage ? (
                 <HeroMoreActionsMenu
                   label={t("moreActions")}
                   items={[
-                    {
-                      id: "message",
-                      label: t("messageGuardian"),
-                      icon: "send",
-                      onSelect: () => {
-                        const phone = profile.primaryGuardian?.phone?.replace(/\s+/g, "");
-                        if (phone) {
-                          window.location.href = `tel:${phone}`;
-                        } else {
-                          router.push("/dashboard/communication");
-                        }
-                      }
-                    },
-                    {
-                      id: "edit",
-                      label: t("editProfile"),
-                      icon: "edit",
-                      onSelect: () => setEditOpen(true)
-                    },
+                    ...(profile.primaryGuardian?.phone
+                      ? [
+                          {
+                            id: "message",
+                            label: t("messageGuardian"),
+                            icon: "send",
+                            onSelect: () => {
+                              const phone = profile.primaryGuardian!.phone!.replace(/\s+/g, "");
+                              window.location.href = `tel:${phone}`;
+                            }
+                          }
+                        ]
+                      : []),
                     {
                       id: "active",
                       label: isActive ? t("setAsInactive") : t("markActive"),
                       icon: isActive ? "pause_circle" : "check_circle",
                       onSelect: () => void handleStatusToggle(!isActive)
                     },
-                    {
-                      id: "delete",
-                      label: c("delete"),
-                      icon: "delete",
-                      destructive: true,
-                      onSelect: () => setDeleteOpen(true)
-                    }
+                    ...(data?.archivedAt
+                      ? [
+                          {
+                            id: "restore",
+                            label: c("restore"),
+                            icon: "restore",
+                            onSelect: () => setRestoreOpen(true)
+                          },
+                          {
+                            id: "deleteForever",
+                            label: c("deletePermanently"),
+                            icon: "delete_forever",
+                            destructive: true,
+                            onSelect: () => setDeleteForeverOpen(true)
+                          }
+                        ]
+                      : [
+                          {
+                            id: "archive",
+                            label: c("archive"),
+                            icon: "archive",
+                            destructive: true,
+                            onSelect: () => setDeleteOpen(true)
+                          }
+                        ])
                   ]}
                 />
               ) : null}
@@ -984,13 +1047,36 @@ export default function StudentDetailPage({
               <ConfirmDialog
                 open={deleteOpen}
                 onOpenChange={setDeleteOpen}
-                title={t("deleteStudentTitle")}
-                description={t("deleteStudentHelp")}
-                confirmLabel={c("delete")}
+                title={t("archiveStudentTitle")}
+                description={t("archiveStudentHelp")}
+                confirmLabel={c("archive")}
                 cancelLabel={c("cancel")}
                 destructive
-                loading={update.isPending}
-                onConfirm={() => void handleDelete()}
+                loading={archiveStudent.isPending}
+                onConfirm={() => void handleArchive()}
+              />
+
+              <ConfirmDialog
+                open={restoreOpen}
+                onOpenChange={setRestoreOpen}
+                title={t("restoreStudentTitle")}
+                description={t("restoreStudentHelp")}
+                confirmLabel={c("restore")}
+                cancelLabel={c("cancel")}
+                loading={restoreStudent.isPending}
+                onConfirm={() => void handleRestore()}
+              />
+
+              <ConfirmDialog
+                open={deleteForeverOpen}
+                onOpenChange={setDeleteForeverOpen}
+                title={t("deleteStudentTitle")}
+                description={t("deleteStudentHelp")}
+                confirmLabel={c("deletePermanently")}
+                cancelLabel={c("cancel")}
+                destructive
+                loading={deleteStudent.isPending}
+                onConfirm={() => void handlePermanentDelete()}
               />
 
               <ConfirmDialog

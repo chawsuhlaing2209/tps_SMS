@@ -3,7 +3,8 @@ export const queueNames = {
   notifications: "notifications",
   documents: "documents",
   imports: "imports",
-  exports: "exports"
+  exports: "exports",
+  maintenance: "maintenance"
 } as const;
 
 export type QueueName = (typeof queueNames)[keyof typeof queueNames];
@@ -48,6 +49,10 @@ export type SmsJob =
         fileId: string;
         requestedByUserId: string;
       };
+    }
+  | {
+      name: "purge-archived-records";
+      data: Record<string, never>;
     }
   | {
       name: "render-payslip-pdf";

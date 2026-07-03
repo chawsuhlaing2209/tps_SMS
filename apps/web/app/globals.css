@@ -1696,6 +1696,14 @@ h3,
 .padauk-table--pinned-end > tbody td:last-child {
   position: sticky;
   right: 0;
+}
+/* The floating shadow only renders while more columns remain to the right
+   (data-pin-overlay is managed by PadaukTableWrap). At scroll-end — or when
+   the table fits — the pinned column sits flush like a normal column. */
+[data-pin-overlay="true"] .padauk-table th.col-actions,
+[data-pin-overlay="true"] .padauk-table td.col-actions,
+[data-pin-overlay="true"] .padauk-table--pinned-end > thead th:last-child,
+[data-pin-overlay="true"] .padauk-table--pinned-end > tbody td:last-child {
   box-shadow: -10px 0 10px -10px rgb(15 23 20 / 18%);
 }
 .padauk-table th.col-actions {
@@ -2858,34 +2866,6 @@ h3,
   gap: var(--pds-gap-xx-small);
 }.structure-grade-body__archived-note {
   margin-bottom: var(--pds-gap-small);
-}.structure-grade-chip {
-  background: var(--pds-background-card);
-  border: 1px solid var(--pds-background-frame);
-  border-radius: var(--pds-border-radius-16);
-  color: var(--pds-text-primary);
-  cursor: pointer;
-  display: grid;
-  flex-shrink: 0;
-  gap: var(--pds-gap-xx-small);
-  min-width: var(--pds-width-92);
-  padding: var(--pds-padding-small) var(--pds-padding-medium);
-  text-align: left;
-}.structure-grade-chip--active {
-  background: var(--pds-shell);
-  border-color: var(--pds-shell);
-  color: var(--pds-text-invert-primary);
-}.structure-grade-chip__name {
-  font-family: var(--pds-font-family-display-stack);
-  font-size: var(--pds-padding-large);
-  font-weight: 800;
-}.structure-grade-chip__meta {
-  color: var(--pds-muted);
-  font-size: var(--pds-padding-small);
-  font-weight: 600;
-  opacity: 0.7;
-}.structure-grade-chip--active .structure-grade-chip__meta {
-  color: var(--pds-muted-on-dark);
-  opacity: 1;
 }.structure-grade-head {
   align-items: flex-start;
   display: flex;
@@ -3175,6 +3155,14 @@ h3,
   display: grid;
   gap: var(--pds-gap-x-small);
   padding: var(--pds-padding-large);
+}.structure-room-card--clickable {
+  cursor: pointer;
+  transition: box-shadow 120ms ease, transform 120ms ease;
+}.structure-room-card--clickable:hover,
+.structure-room-card--clickable:focus-visible {
+  box-shadow: 0 10px 24px -14px rgb(15 23 20 / 25%);
+  outline: none;
+  transform: translateY(-2px);
 }.structure-room-card__head {
   align-items: center;
   display: flex;
@@ -3958,6 +3946,30 @@ button.btn-hero-outline:hover {
 .pds-filter-tab--active .pds-filter-tab__count {
   background: var(--pds-compliment-brand);
   color: var(--pds-brand-ink);
+}
+
+.pds-filter-tab__meta {
+  color: var(--pds-muted);
+}
+
+.pds-filter-tab--active .pds-filter-tab__meta {
+  color: color-mix(in srgb, var(--pds-background-card) 72%, transparent);
+}
+
+.pds-filter-tab--archived {
+  border-style: dashed;
+  opacity: 0.75;
+}
+
+.pds-filter-tab--archived.pds-filter-tab--active {
+  opacity: 0.9;
+}
+
+/* Record rails scroll horizontally — tabs must not shrink or wrap. */
+.setup-grade-rail .pds-filter-tab,
+.structure-grade-rail .pds-filter-tab {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .pds-subject-tab--active.pds-subject-tab--azure { background: var(--pds-color-azure-60); border-color: var(--pds-color-azure-60); color: var(--pds-background-card); }
@@ -4818,7 +4830,7 @@ button.btn-hero-outline:hover {
 }.student-profile-avatar {
   align-items: center;
   background: var(--pds-color-blue-700);
-  border-radius: var(--pds-radius-pill);
+  border-radius: var(--pds-radius-base);
   color: var(--pds-background-card);
   display: inline-flex;
   flex-shrink: 0;
@@ -5124,80 +5136,33 @@ button.btn-hero-outline:hover {
   justify-content: center;
   background: var(--pds-background-layout-secondary);
   color: var(--pds-text-secondary);
-}.family-tree {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+}.household-member-list {
+  display: grid;
   gap: var(--pds-gap-small);
-  padding: var(--pds-gap-large) var(--pds-gap-small);
-}.family-tree__level {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--pds-gap-medium);
-}.family-tree__level-label {
+  list-style: none;
   margin: 0;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--pds-text-secondary);
-}.family-tree__nodes {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--pds-gap-medium);
-  width: 100%;
-}.family-tree__connector {
-  position: relative;
-  width: min(100%, 28rem);
-  height: 2rem;
-  display: flex;
-  flex-direction: column;
+  padding: 0;
+}.household-member-row {
   align-items: center;
-}.family-tree__stem {
-  width: 2px;
-  height: 1rem;
-  background: var(--pds-border-color-primary);
-}.family-tree__rail {
-  width: min(100%, 24rem);
-  height: 2px;
-  background: var(--pds-border-color-primary);
-  border-radius: 999px;
-}.family-tree-node {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--pds-gap-x-small);
-  min-width: 9rem;
-  max-width: 12rem;
-  padding: var(--pds-gap-medium);
   border: 1px solid var(--pds-border-color-primary);
-  border-radius: var(--pds-radius-14);
-  background: var(--pds-background-layout-primary);
-  text-align: center;
-  text-decoration: none;
+  border-radius: var(--pds-border-radius-12, 12px);
+  display: flex;
+  gap: var(--pds-gap-medium);
+  justify-content: space-between;
+  padding: var(--pds-padding-small) var(--pds-padding-medium);
+}.household-member-row__link {
   color: inherit;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}.family-tree-node:hover {
-  border-color: var(--pds-brand-accent);
-  box-shadow: 0 1px 2px var(--pds-color-spring-green-1000a);
-}.family-tree-node--primary {
-  border-color: var(--pds-brand-accent);
-  background: color-mix(in srgb, var(--pds-background-layout-primary) 60%, var(--pds-background-layout-primary));
-}.family-tree-node__icon {
-  display: inline-flex;
-  color: var(--pds-primary);
-}.family-tree-node__name {
-  font-weight: 600;
-}.family-tree-node__meta {
-  color: var(--pds-text-secondary);
-}.family-tree-node__badge {
-  font-weight: 600;
-  color: var(--pds-primary);
-  background: var(--pds-background-layout-primary);
-  border-radius: 999px;
-  padding: var(--pds-gap-xx-small) var(--pds-gap-x-small);
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  text-decoration: none;
+}.household-member-row__link:hover .directory-member__name {
+  text-decoration: underline;
+}.household-member-row__trailing {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--pds-gap-small);
 }.student-profile-placements {
   margin-bottom: var(--pds-gap-large);
 }.student-profile-placements h4 {
@@ -5311,34 +5276,6 @@ button.btn-hero-outline:hover {
   gap: var(--pds-gap-small);
   min-width: min-content;
   padding-bottom: var(--pds-gap-xx-small);
-}.setup-grade-chip {
-  background: var(--pds-background-card);
-  border: 1px solid var(--pds-border-color-primary);
-  border-radius: var(--pds-radius-pill);
-  color: var(--pds-text-primary);
-  cursor: pointer;
-  flex-shrink: 0;
-  padding: var(--pds-button-padding-y) var(--pds-button-padding-x);
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease;
-  white-space: nowrap;
-}.setup-grade-chip:hover:not(.setup-grade-chip--active) {
-  border-color: var(--pds-brand-dark);
-  color: var(--pds-brand-dark);
-}.setup-grade-chip--active {
-  background: var(--pds-shell);
-  border-color: var(--pds-shell);
-  color: var(--pds-text-invert-primary);
-}.setup-grade-chip--active:hover {
-  filter: brightness(1.05);
-}.setup-grade-chip--archived {
-  border-style: dashed;
-  color: var(--pds-text-secondary);
-  opacity: 0.75;
-}.setup-grade-chip--archived.setup-grade-chip--active {
-  opacity: 0.9;
 }.setup-classroom-card--archived {
   border-style: dashed;
   opacity: 0.8;
@@ -5356,15 +5293,9 @@ button.btn-hero-outline:hover {
   color: var(--pds-text-secondary);
   flex: 1 1 12rem;
   min-width: 0;
-}.structure-grade-chip--archived {
-  border-style: dashed;
-  opacity: 0.75;
 }.structure-room-card--archived {
   border-style: dashed;
   opacity: 0.8;
-}.setup-grade-chip__badge {
-  margin-inline-start: var(--pds-gap-xx-small);
-  vertical-align: middle;
 }.setup-grade-add-wrap {
   flex-shrink: 0;
   position: relative;
@@ -7056,11 +6987,6 @@ button.btn-hero-outline:hover {
   text-decoration: none;
 }.discount-list-card__configure:hover {
   color: var(--pds-brand-dark);
-}.discount-table-wrap {
-  background: var(--pds-background-card);
-  border: 1px solid var(--pds-border-color-primary);
-  border-radius: var(--pds-border-radius-16);
-  overflow: hidden;
 }.discount-table thead th {
   background: var(--pds-background-layout-secondary);
   border-bottom: 1px solid var(--pds-border-color-primary);
@@ -7457,11 +7383,6 @@ button.btn-hero-outline:hover {
   margin-bottom: var(--pds-gap-large);
 }
 
-.discount-table-panel {
-  overflow: hidden;
-  padding: 0;
-}
-
 @media (max-width: 960px) {
   .award-basis-grid,
   .discount-rules-config-grid {
@@ -7473,6 +7394,12 @@ button.btn-hero-outline:hover {
   display: grid;
   gap: var(--pds-gap-medium);
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}.option-chip-grid--wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pds-gap-small);
+}.option-chip-grid--wrap .option-chip {
+  width: auto;
 }.option-chip {
   align-items: center;
   background: var(--pds-background-card);
@@ -7859,57 +7786,6 @@ button.btn-hero-outline:hover {
   border-radius: var(--pds-radius-pill);
   display: block;
   height: 100%;
-}
-
-/* Grade filter */
-.fees-grades {display: flex;
-  flex-direction: column;
-  gap: var(--pds-gap-small);
-}
-
-@media (min-width: 640px) {
-  .fees-grades {
-    align-items: center;
-    flex-direction: row;
-  }}
-
-.fees-grades__label {
-  color: var(--pds-muted);
-  flex-shrink: 0;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}.fees-grades__chips {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: var(--pds-gap-x-small);
-  max-width: 100%;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  -webkit-overflow-scrolling: touch;
-  padding-block: 2px;
-  scrollbar-width: thin;
-  width: 100%;
-}.fees-grade-chip {
-  background: var(--pds-background-card);
-  border: 1px solid var(--pds-border-color-primary);
-  border-radius: var(--pds-radius-pill);
-  color: var(--pds-text-secondary);
-  cursor: pointer;
-  flex-shrink: 0;
-  font-weight: 600;
-  padding: var(--pds-padding-x-small) var(--pds-padding-medium);
-  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
-  white-space: nowrap;
-}.fees-grade-chip:hover {
-  border-color: var(--pds-primary);
-}.fees-grade-chip--active {
-  background: var(--pds-primary);
-  border-color: var(--pds-primary);
-  color: var(--pds-text-invert-primary);
-}.fees-grade-chip:focus-visible {
-  box-shadow: 0 0 0 3px var(--pds-states-focus);
-  outline: none;
 }
 
 /* Fees segmented control (legacy reports / discounts) */
@@ -10198,27 +10074,6 @@ button.btn-hero-outline:hover {
   line-height: 1.2;
 }
 
-.subject-grade-picker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--pds-gap-small);
-}
-
-.subject-grade-picker__pill {
-  background: var(--pds-background-card);
-  border: 1px solid var(--pds-border-color-primary);
-  border-radius: var(--pds-radius-pill);
-  color: var(--pds-text-primary);
-  cursor: pointer;
-  padding: var(--pds-gap-small) var(--pds-gap-medium);
-}
-
-.subject-grade-picker__pill--selected {
-  background: var(--pds-background-frame);
-  border-color: var(--pds-shell);
-  color: var(--pds-text-primary);
-}
-
 /* ── Home dashboard (/dashboard) ── */
 .home-dashboard__search {
   min-width: var(--pds-width-240);
@@ -10402,4 +10257,54 @@ button.btn-hero-outline:hover {
   .dash-page-title {
     display: none !important;
   }
+}
+/* Enrollments breakdown dashboard */
+.enrollments-stat-grid {
+  margin-bottom: 12px;
+}
+
+.enrollments-breakdown-panel {
+  margin-bottom: 12px;
+}
+
+.enrollments-breakdown-panel__title {
+  margin-bottom: 10px;
+}
+
+.enrollments-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.enrollments-breakdown__row {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 110px 1fr 32px;
+}
+
+.enrollments-breakdown__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.enrollments-breakdown__track {
+  background: var(--pds-background-layout-secondary);
+  border-radius: 999px;
+  display: block;
+  height: 8px;
+  overflow: hidden;
+}
+
+.enrollments-breakdown__bar {
+  background: var(--pds-brand-dark);
+  border-radius: 999px;
+  display: block;
+  height: 100%;
+}
+
+.enrollments-breakdown__count {
+  text-align: right;
 }

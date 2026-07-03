@@ -13,9 +13,12 @@ import { Field } from "../../../../lib/form";
 import { HeroMoreActionsMenu, HeroOutlineAction, HeroPrimaryAction } from "../../../../lib/hero-more-actions";
 import { Icon } from "../../../../lib/material-icon";
 import { hasAnyPermission } from "../../../../lib/permissions";
+import { RecordFormModal } from "../../../../lib/record-modal";
 import { RecordFormSheet } from "../../../../lib/record-sheet";
+import { ConfirmDialog } from "../../../../../components/shared/confirm-dialog";
 import { getSession } from "../../../../lib/session";
 import { TablePanelBody, TablePanelHead } from "../../../../lib/table-panel";
+import { PdsSelectField } from "../../../../../components/pds";
 import { StatusBadge } from "../../../../../components/shared/badge";
 import { NavigationBackLink } from "../../../../../components/shared/navigation-back-link";
 import { TrailLink } from "../../../../../components/shared/trail-link";
@@ -29,6 +32,8 @@ type GuardianDetail = {
   fullName: string;
   phone: string | null;
   email: string | null;
+  staffId: string | null;
+  staff: { id: string; fullName: string; status: string } | null;
   household: { id: string; name: string } | null;
   students: Array<{
     id: string;
@@ -64,9 +69,17 @@ export default function GuardianDetailPage({
   const currentYear = useCurrentAcademicYear();
   const [editOpen, setEditOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [staffModalOpen, setStaffModalOpen] = useState(false);
+  const [staffSelection, setStaffSelection] = useState("");
+  const [staffModalError, setStaffModalError] = useState<string | null>(null);
+  const [unmarkStaffOpen, setUnmarkStaffOpen] = useState(false);
 
   const guardian = useApiQuery<GuardianDetail>(
     (tenant) => `/tenants/${tenant}/students/guardians/${guardianId}`
+  );
+
+  const staffOptions = useApiQuery<{ data: Array<{ id: string; fullName: string }> }>((tenant) =>
+    canManage && staffModalOpen ? `/tenants/${tenant}/hr/staff?limit=200` : null
   );
 
   const billing = useApiQuery<{ students: BillingMember[] }>((tenant) =>
@@ -76,7 +89,13 @@ export default function GuardianDetailPage({
   );
 
   const update = useApiMutation<
-    { firstName: string; lastName: string; phone?: string; email?: string },
+    {
+      firstName?: string;
+      lastName?: string;
+      phone?: string;
+      email?: string;
+      staffId?: string | null;
+    },
     unknown
   >(
     (body, tenant) => ({
@@ -201,30 +220,54 @@ export default function GuardianDetailPage({
           </div>
         </div>
         <div className="structure-room-banner__actions student-profile-banner__actions">
-          {canManage ? (
+          {canManage || data.phone ? (
             <HeroMoreActionsMenu
-              label={t("editGuardian")}
+              label={c("moreActions")}
               items={[
-                {
-                  id: "edit",
-                  label: t("editGuardian"),
-                  icon: "edit",
-                  onSelect: () => setEditOpen(true)
-                }
+                ...(data.phone
+                  ? [
+                      {
+                        id: "call",
+                        label: t("messageGuardian"),
+                        icon: "call",
+                        onSelect: () => {
+                          window.location.href = `tel:${data.phone!.replace(/\s+/g, "")}`;
+                        }
+                      }
+                    ]
+                  : []),
+                ...(canManage
+                  ? data.staffId
+                    ? [
+                        {
+                          id: "unmark-staff",
+                          label: t("unmarkAsStaff"),
+                          icon: "person_remove",
+                          onSelect: () => setUnmarkStaffOpen(true)
+                        }
+                      ]
+                    : [
+                        {
+                          id: "mark-staff",
+                          label: t("markAsStaff"),
+                          icon: "badge",
+                          onSelect: () => {
+                            setStaffSelection("");
+                            setStaffModalError(null);
+                            setStaffModalOpen(true);
+                          }
+                        }
+                      ]
+                  : [])
               ]}
             />
           ) : null}
-          {data.phone ? (
-            <HeroPrimaryAction href={`tel:${data.phone.replace(/\s+/g, "")}`}>
-              <Icon name="call" />
-              {t("messageGuardian")}
+          {canManage ? (
+            <HeroPrimaryAction onClick={() => setEditOpen(true)}>
+              <Icon name="edit" />
+              {t("editGuardian")}
             </HeroPrimaryAction>
-          ) : (
-            <HeroPrimaryAction href="/dashboard/communication">
-              <Icon name="send" />
-              {t("messageGuardian")}
-            </HeroPrimaryAction>
-          )}
+          ) : null}
           {data.household ? (
             <HeroOutlineAction href={`/dashboard/people/households/${data.household.id}`}>
               <Icon name="family_restroom" />
@@ -262,6 +305,19 @@ export default function GuardianDetailPage({
           <span className="pds-type-body-s-regular student-profile-stat__label">{t("linkedStudentsStat")}</span>
           <strong className="student-profile-stat__value">{data.students.length}</strong>
         </article>
+        {data.staff ? (
+          <article className="student-profile-stat">
+            <span className="pds-type-body-s-regular student-profile-stat__label">{t("staffStat")}</span>
+            <strong className="student-profile-stat__value">
+              <TrailLink
+                href={`/dashboard/teachers/${data.staff.id}`}
+                from={{ label: data.fullName, href: `/dashboard/people/guardians/${guardianId}` }}
+              >
+                {data.staff.fullName}
+              </TrailLink>
+            </strong>
+          </article>
+        ) : null}
       </div>
 
       <TablePanelBody variant="card-plain" loading={false} error={null} empty={!data.students.length}>
@@ -334,15 +390,93 @@ export default function GuardianDetailPage({
         <Field label={t("phone")} error={form.formState.errors.phone?.message}>
           <FormInput {...form.register("phone")} />
         </Field>
-        <Field label={t("email")} error={form.formState.errors.email?.message}>
-          <FormInput type="email" {...form.register("email")} />
-        </Field>
         {formError ? (
           <p className="pds-type-body-m-medium error-text" role="alert">
             {formError}
           </p>
         ) : null}
       </RecordFormSheet>
+
+      <RecordFormModal
+        open={staffModalOpen}
+        onOpenChange={(open) => {
+          setStaffModalOpen(open);
+          if (!open) {
+            setStaffModalError(null);
+          }
+        }}
+        title={t("markAsStaff")}
+        help={t("staffLinkHelp")}
+        headerIcon="badge"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (!staffSelection) {
+            setStaffModalError(c("required"));
+            return;
+          }
+          setStaffModalError(null);
+          try {
+            await update.mutateAsync({ staffId: staffSelection });
+            setStaffModalOpen(false);
+            void guardian.refetch();
+          } catch (error) {
+            setStaffModalError(error instanceof ApiError ? error.message : c("somethingWrong"));
+          }
+        }}
+        footer={
+          <>
+            <button
+              type="button"
+              className="pds-type-body-m-bold btn-ghost"
+              onClick={() => setStaffModalOpen(false)}
+            >
+              {c("cancel")}
+            </button>
+            <button
+              type="submit"
+              className="pds-type-body-m-bold btn-primary"
+              disabled={update.isPending || !staffSelection}
+            >
+              <Icon name="link" />
+              {update.isPending ? c("loading") : t("linkStaffConfirm")}
+            </button>
+          </>
+        }
+      >
+        <Field label={t("staffLinkLabel")}>
+          <PdsSelectField
+            value={staffSelection}
+            onValueChange={(value) =>
+              setStaffSelection(typeof value === "string" ? value : "")
+            }
+            placeholder={t("staffLinkPlaceholder")}
+            options={(staffOptions.data?.data ?? []).map((member) => ({
+              value: member.id,
+              label: member.fullName
+            }))}
+          />
+        </Field>
+        {staffModalError ? (
+          <p className="pds-type-body-m-medium error-text" role="alert">
+            {staffModalError}
+          </p>
+        ) : null}
+      </RecordFormModal>
+
+      <ConfirmDialog
+        open={unmarkStaffOpen}
+        onOpenChange={setUnmarkStaffOpen}
+        title={t("unmarkAsStaff")}
+        description={t("unmarkAsStaffConfirm", { name: data.staff?.fullName ?? "" })}
+        confirmLabel={t("unmarkAsStaff")}
+        cancelLabel={c("cancel")}
+        loading={update.isPending}
+        onConfirm={async () => {
+          await update.mutateAsync({ staffId: null });
+          setUnmarkStaffOpen(false);
+          void guardian.refetch();
+        }}
+      />
     </div>
   );
 }

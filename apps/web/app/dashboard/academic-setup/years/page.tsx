@@ -8,6 +8,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
+import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
 import { Toggle } from "../../../../components/shared/toggle";
 import { StatusBadge } from "../../../../components/shared/badge";
 import { useApiMutation, useReferenceApiQuery } from "../../../lib/api";
@@ -55,6 +56,7 @@ export default function AcademicYearsPage() {
   const c = useTranslations("common");
   const [formMode, setFormMode] = useState<FormMode | null>(null);
   const [toggleConfirm, setToggleConfirm] = useState<ToggleConfirm | null>(null);
+  const [deletingYear, setDeletingYear] = useState<AcademicYearOverview | null>(null);
 
   const years = useReferenceApiQuery<AcademicYearOverview[]>(SETUP_PATH);
   const activeYear = years.data?.find((year) => year.status === "active");
@@ -73,6 +75,14 @@ export default function AcademicYearsPage() {
       init: { method: "PATCH", body: JSON.stringify({ active }) }
     }),
     { invalidatePaths: (_b, tenant) => invalidateYearPaths(tenant) }
+  );
+
+  const deleteYear = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({
+      path: `/tenants/${tenant}/academics/academic-years/${id}`,
+      init: { method: "DELETE" }
+    }),
+    { invalidatePaths: (_b, tenant) => [SETUP_PATH(tenant)] }
   );
 
   const update = useApiMutation<YearValues & { id: string }>(
@@ -153,22 +163,44 @@ export default function AcademicYearsPage() {
       id: "actions",
       header: t("actions"),
       enableSorting: false,
-      cell: ({ row }) =>
-        row.original.status !== "archived" ? (
-          <span data-row-stop className="row-more-actions">
-            <button
-              type="button"
-              className="row-more-actions__trigger"
-              aria-label={c("edit")}
-              onClick={(event) => {
-                event.stopPropagation();
-                openEdit(row.original);
-              }}
-            >
-              <Icon name="edit" size={20} />
-            </button>
-          </span>
-        ) : null
+      cell: ({ row }) => (
+        <RowMoreActionsMenu
+          ariaLabel={c("moreActions")}
+          items={[
+            ...(row.original.status !== "archived"
+              ? [
+                  {
+                    id: "edit",
+                    label: c("edit"),
+                    icon: "edit",
+                    onSelect: () => openEdit(row.original)
+                  },
+                  {
+                    id: "archive",
+                    label: c("archive"),
+                    icon: "archive",
+                    destructive: true,
+                    onSelect: () => requestToggle(row.original, false)
+                  }
+                ]
+              : [
+                  {
+                    id: "restore",
+                    label: c("restore"),
+                    icon: "restore",
+                    onSelect: () => requestToggle(row.original, true)
+                  },
+                  {
+                    id: "delete",
+                    label: c("deletePermanently"),
+                    icon: "delete_forever",
+                    destructive: true,
+                    onSelect: () => setDeletingYear(row.original)
+                  }
+                ])
+          ]}
+        />
+      )
     }
   ];
 
@@ -301,6 +333,24 @@ export default function AcademicYearsPage() {
           void setActive
             .mutateAsync({ id: toggleConfirm.year.id, active: toggleConfirm.nextActive })
             .then(() => setToggleConfirm(null));
+        }}
+      />
+
+      <ConfirmDialog
+        open={deletingYear !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeletingYear(null);
+        }}
+        title={t("deleteYearTitle")}
+        description={t("deleteYearHelp", { name: deletingYear?.name ?? "" })}
+        confirmLabel={c("deletePermanently")}
+        cancelLabel={c("cancel")}
+        destructive
+        loading={deleteYear.isPending}
+        onConfirm={async () => {
+          if (!deletingYear) return;
+          await deleteYear.mutateAsync({ id: deletingYear.id });
+          setDeletingYear(null);
         }}
       />
     </>

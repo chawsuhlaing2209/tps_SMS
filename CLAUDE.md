@@ -125,6 +125,7 @@ See `DESIGN.md` for the full visual language (**Padauk School OS** — ink-green
 **Token pipeline:** edit `tokens.json` (Figma export) and/or `composite_tokens.json` → `npm run tokens:build` → `apps/web/app/design-tokens.css` (generated). Component classes live in `apps/web/app/globals.css`. `apps/web/tailwind.config.ts` mirrors the same CSS variables for utilities. Never hardcode hex in components.
 
 **UI conventions:**
+- **Selection controls (tabs / chips / segmented / filters): consult `docs/COMPONENTS.md` BEFORE building.** It maps each job-to-be-done to its one canonical component. Never add a page-local chip/tab variant.
 - Wise-inspired: 1px borders, restrained color, trustworthy finance UX
 - Adaline-inspired: dense `.padauk-table`, compact sidebar, keyboard-navigable rows
 - Reuse Padauk patterns: `.panel` + `PanelHead`, `TablePanelHead`/`TablePanelBody`, `TableSearchInput`, `.badge badge--*`, `.btn-primary` / `.btn-ghost`

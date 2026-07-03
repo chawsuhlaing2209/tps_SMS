@@ -7,6 +7,7 @@ import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { DirectoryMemberCell } from "../../../lib/data-table";
 import { Field } from "../../../lib/form";
 import { Icon } from "../../../lib/material-icon";
+import { PadaukTableWrap } from "../../../lib/padauk-table-wrap";
 import { hasAnyPermission } from "../../../lib/permissions";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { getSession } from "../../../lib/session";
@@ -158,7 +159,7 @@ export function DiscountRequestsPanel() {
         empty={!rows.length}
         emptyMessage={t("noRequests")}
       >
-        <div className="padauk-table-wrap">
+        <PadaukTableWrap>
           <table className="pds-type-body-m-medium padauk-table padauk-table--pinned-end">
             <thead>
               <tr>
@@ -239,7 +240,7 @@ export function DiscountRequestsPanel() {
               })}
             </tbody>
           </table>
-        </div>
+        </PadaukTableWrap>
       </FinanceTableShell>
 
       {approveTarget ? (

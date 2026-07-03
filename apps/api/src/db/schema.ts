@@ -173,6 +173,9 @@ export const tenantSettings = pgTable(
     branding: jsonb("branding").$type<Record<string, unknown>>().default({}).notNull(),
     receiptPrefix: text("receipt_prefix").default("RCPT").notNull(),
     invoicePrefix: text("invoice_prefix").default("INV").notNull(),
+    // Archive retention: auto-purge archived records older than N days.
+    // NULL or 0 disables auto-purge (records stay archived until manually deleted).
+    archiveRetentionDays: integer("archive_retention_days"),
     ...actorFields,
     ...timestamps
   },
@@ -449,7 +452,9 @@ export const guardians = pgTable("guardians", {
   phone: text("phone"),
   email: text("email"),
   address: text("address"),
-  preferredChannel: text("preferred_channel").default("email").notNull()
+  preferredChannel: text("preferred_channel").default("email").notNull(),
+  /** Marks the guardian as school staff — powers the staff-parent discount criterion. */
+  staffId: uuid("staff_id").references(() => staff.id)
 });
 
 export const familyGroups = pgTable("family_groups", {
@@ -459,21 +464,34 @@ export const familyGroups = pgTable("family_groups", {
   primaryGuardianId: uuid("primary_guardian_id").references(() => guardians.id)
 });
 
-export const students = pgTable("students", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  ...tenantFields,
-  familyGroupId: uuid("family_group_id").references(() => familyGroups.id),
-  admissionNumber: text("admission_number").notNull(),
-  fullName: text("full_name").notNull(),
-  dateOfBirth: date("date_of_birth"),
-  gender: text("gender"),
-  photoFileId: uuid("photo_file_id"),
-  address: text("address"),
-  township: text("township"),
-  identityNumber: text("identity_number"),
-  medicalNotes: text("medical_notes"),
-  status: studentStatusEnum("status").default("draft").notNull()
-});
+export const students = pgTable(
+  "students",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...tenantFields,
+    familyGroupId: uuid("family_group_id").references(() => familyGroups.id),
+    admissionNumber: text("admission_number").notNull(),
+    fullName: text("full_name").notNull(),
+    dateOfBirth: date("date_of_birth"),
+    gender: text("gender"),
+    photoFileId: uuid("photo_file_id"),
+    address: text("address"),
+    township: text("township"),
+    identityNumber: text("identity_number"),
+    medicalNotes: text("medical_notes"),
+    status: studentStatusEnum("status").default("draft").notNull(),
+    // Archive lifecycle: orthogonal to `status` so the lifecycle state
+    // (enrolled/graduated/…) is preserved and restore returns to it.
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    archivedBy: uuid("archived_by")
+  },
+  (table) => ({
+    tenantAdmissionUnique: uniqueIndex("students_tenant_admission_unique").on(
+      table.tenantId,
+      table.admissionNumber
+    )
+  })
+);
 
 export const studentGuardians = pgTable("student_guardians", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -492,7 +510,7 @@ export const departments = pgTable(
     ...tenantFields,
     name: text("name").notNull(),
     description: text("description"),
-    status: text("status").$type<"active" | "inactive">().default("active").notNull()
+    status: text("status").$type<"active" | "inactive" | "archived">().default("active").notNull()
   },
   (table) => ({
     tenantNameUnique: uniqueIndex("departments_tenant_name_unique").on(table.tenantId, table.name)
@@ -508,7 +526,7 @@ export const facilityRooms = pgTable(
     name: text("name").notNull(),
     capacity: integer("capacity"),
     note: text("note"),
-    status: text("status").$type<"active" | "inactive">().default("active").notNull()
+    status: text("status").$type<"active" | "inactive" | "archived">().default("active").notNull()
   },
   (table) => ({
     tenantNameUnique: uniqueIndex("facility_rooms_tenant_name_unique").on(table.tenantId, table.name)
@@ -557,7 +575,11 @@ export const staff = pgTable("staff", {
     .$type<TeacherProfileCapability>()
     .default({})
     .notNull(),
-  status: staffStatusEnum("status").default("active").notNull()
+  status: staffStatusEnum("status").default("active").notNull(),
+  // Archive lifecycle: orthogonal to `status` so employment state
+  // (active/probation/resigned/…) is preserved and restore returns to it.
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
+  archivedBy: uuid("archived_by")
 });
 
 export const classrooms = pgTable("classrooms", {
@@ -1307,4 +1329,53 @@ export const studentDocuments = pgTable("student_documents", {
   expiresOn: date("expires_on"),
   verifiedByUserId: uuid("verified_by_user_id").references(() => users.id),
   verifiedAt: timestamp("verified_at", { withTimezone: true })
+});
+
+/** Leave management: admin-defined leave types with yearly quotas. */
+export const leaveTypes = pgTable(
+  "leave_types",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...tenantFields,
+    name: text("name").notNull(),
+    /** Default allowance in days per calendar year. */
+    yearlyQuota: numeric("yearly_quota").notNull(),
+    status: text("status").$type<"active" | "archived">().default("active").notNull()
+  },
+  (table) => ({
+    tenantNameUnique: uniqueIndex("leave_types_tenant_name_unique").on(table.tenantId, table.name)
+  })
+);
+
+/** Per-staff allocation override for a leave type in a calendar year. */
+export const staffLeaveBalances = pgTable(
+  "staff_leave_balances",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...tenantFields,
+    staffId: uuid("staff_id").references(() => staff.id).notNull(),
+    leaveTypeId: uuid("leave_type_id").references(() => leaveTypes.id).notNull(),
+    calendarYear: integer("calendar_year").notNull(),
+    allocatedDays: numeric("allocated_days").notNull()
+  },
+  (table) => ({
+    tenantStaffTypeYearUnique: uniqueIndex("staff_leave_balances_unique").on(
+      table.tenantId,
+      table.staffId,
+      table.leaveTypeId,
+      table.calendarYear
+    )
+  })
+);
+
+/** A recorded leave for a staff member. Used days = sum of records per year. */
+export const leaveRecords = pgTable("leave_records", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ...tenantFields,
+  staffId: uuid("staff_id").references(() => staff.id).notNull(),
+  leaveTypeId: uuid("leave_type_id").references(() => leaveTypes.id).notNull(),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date").notNull(),
+  days: numeric("days").notNull(),
+  note: text("note")
 });

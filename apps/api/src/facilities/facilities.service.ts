@@ -1,13 +1,14 @@
 import {
+  BadRequestException,
   ConflictException,
   Inject,
   Injectable,
   NotFoundException
 } from "@nestjs/common";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
-import { facilityRooms } from "../db/schema.js";
+import { classrooms, facilityRooms } from "../db/schema.js";
 import type { CreateFacilityRoomDto, UpdateFacilityRoomDto } from "./dto.js";
 
 @Injectable()
@@ -164,5 +165,87 @@ export class FacilitiesService {
     });
 
     return this.getFacilityRoom(tenantId, roomId);
+  }
+
+  private async getRoomOrThrow(tenantId: string, roomId: string) {
+    const [room] = await this.db
+      .select()
+      .from(facilityRooms)
+      .where(and(eq(facilityRooms.tenantId, tenantId), eq(facilityRooms.id, roomId)));
+    if (!room) {
+      throw new NotFoundException("Facility room not found.");
+    }
+    return room;
+  }
+
+  private async setStatus(
+    tenantId: string,
+    roomId: string,
+    status: "active" | "archived",
+    action: string,
+    actorUserId: string | undefined
+  ) {
+    const previous = await this.getRoomOrThrow(tenantId, roomId);
+
+    await this.db
+      .update(facilityRooms)
+      .set({ status, updatedBy: actorUserId, updatedAt: new Date() })
+      .where(and(eq(facilityRooms.tenantId, tenantId), eq(facilityRooms.id, roomId)));
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action,
+      recordType: "FacilityRoom",
+      recordId: roomId,
+      before: { status: previous.status },
+      after: { status }
+    });
+
+    return this.getFacilityRoom(tenantId, roomId);
+  }
+
+  archiveFacilityRoom(tenantId: string, roomId: string, actorUserId: string | undefined) {
+    return this.setStatus(tenantId, roomId, "archived", "facility_room.archive", actorUserId);
+  }
+
+  restoreFacilityRoom(tenantId: string, roomId: string, actorUserId: string | undefined) {
+    return this.setStatus(tenantId, roomId, "active", "facility_room.restore", actorUserId);
+  }
+
+  async deleteFacilityRoom(tenantId: string, roomId: string, actorUserId: string | undefined) {
+    const room = await this.getRoomOrThrow(tenantId, roomId);
+
+    // Two-step safety: archive the room before deleting it permanently.
+    if (room.status !== "archived") {
+      throw new BadRequestException("Archive the room before deleting it.");
+    }
+
+    const [used] = await this.db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(classrooms)
+      .where(and(eq(classrooms.tenantId, tenantId), eq(classrooms.facilityRoomId, roomId)));
+    if ((used?.n ?? 0) > 0) {
+      throw new ConflictException({
+        message: "This room is assigned to classrooms and cannot be deleted. Keep it archived instead.",
+        dependencies: { classrooms: used?.n ?? 0 }
+      });
+    }
+
+    await this.db
+      .delete(facilityRooms)
+      .where(and(eq(facilityRooms.tenantId, tenantId), eq(facilityRooms.id, roomId)));
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "facility_room.delete",
+      recordType: "FacilityRoom",
+      recordId: roomId,
+      before: { name: room.name, status: room.status },
+      after: { deleted: true }
+    });
+
+    return { id: roomId, deleted: true };
   }
 }

@@ -10,9 +10,8 @@ export type ChipProps = {
 
 /**
  * Compact, read-only tag for enumerating values inline — grade levels on a
- * subject row, categories on a role, tags on a discount. Replaces the divergent
- * `.setup-grade-badge` / `.structure-grade-chip` / inline `.tag` styles with one
- * shape. For selectable pills use `OptionChip` instead.
+ * subject row, categories on a role, tags on a discount. Display-only; see
+ * docs/COMPONENTS.md. For selectable pills use `OptionChip` instead.
  */
 export function Chip({ children, dotColor, className }: ChipProps) {
   return (

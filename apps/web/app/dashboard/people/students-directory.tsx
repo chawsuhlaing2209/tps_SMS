@@ -7,8 +7,12 @@ import { createPortal } from "react-dom";
 import { type ColumnDef } from "@tanstack/react-table";
 import { PdsSearchBar, PdsSearchFiltersRow, PdsSelectField } from "../../../components/pds";
 import { StatusBadge } from "../../../components/shared/badge";
+import { ArchiveVisibilityFilter } from "../../../components/shared/archive-visibility-filter";
+import { ConfirmDialog } from "../../../components/shared/confirm-dialog";
 import { ExportCsvButton } from "../../../components/shared/export-csv-button";
-import { useApiQuery } from "../../lib/api";
+import { RowMoreActionsMenu } from "../../../components/shared/row-more-actions";
+import { useApiMutation, useApiQuery } from "../../lib/api";
+import { toastSuccess } from "../../lib/toast";
 import { useDashPageTitleActionsTarget } from "../dashboard-page-title";
 import { fetchAllPaginated } from "../../lib/export-csv";
 import { DataTable, DirectoryMemberCell } from "../../lib/data-table";
@@ -28,6 +32,7 @@ type Student = {
   gender: string | null;
   familyGroupId: string | null;
   householdName: string | null;
+  archivedAt?: string | null;
   updatedAt?: string;
 };
 
@@ -57,13 +62,15 @@ export function StudentsDirectory() {
   const canManage = hasAnyPermission(permissions, ["student.manage"]);
   const { studentsRegisterOpen, setStudentsRegisterOpen } = usePeopleDirectoryActions();
   const [statusFilter, setStatusFilter] = useState("");
+  const [viewFilter, setViewFilter] = useState<"active" | "archived" | "all">("active");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
 
   const queryPath = (tenant: string) => {
     const params = new URLSearchParams({
       limit: String(PAGE_SIZE),
-      offset: String(page * PAGE_SIZE)
+      offset: String(page * PAGE_SIZE),
+      view: viewFilter
     });
     if (statusFilter) {
       params.set("status", statusFilter);
@@ -75,6 +82,21 @@ export function StudentsDirectory() {
   };
 
   const students = useApiQuery<StudentList>(queryPath);
+
+  const [deletingStudent, setDeletingStudent] = useState<Student | null>(null);
+
+  const archiveOne = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({ path: `${STUDENTS_PATH(tenant)}/${id}/archive`, init: { method: "POST" } }),
+    { invalidatePaths: (_b, tenant) => [STUDENTS_PATH(tenant)] }
+  );
+  const restoreOne = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({ path: `${STUDENTS_PATH(tenant)}/${id}/restore`, init: { method: "POST" } }),
+    { invalidatePaths: (_b, tenant) => [STUDENTS_PATH(tenant)] }
+  );
+  const deleteOne = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({ path: `${STUDENTS_PATH(tenant)}/${id}`, init: { method: "DELETE" } }),
+    { invalidatePaths: (_b, tenant) => [STUDENTS_PATH(tenant)] }
+  );
 
   const columns: ColumnDef<Student, unknown>[] = [
     {
@@ -110,19 +132,79 @@ export function StudentsDirectory() {
       id: "status",
       header: c("status"),
       accessorKey: "status",
-      cell: ({ row }) => (
-        <StatusBadge
-          status={row.original.status}
-          label={t(`status_${row.original.status}` as "status_draft")}
-        />
-      )
+      cell: ({ row }) =>
+        row.original.archivedAt ? (
+          <StatusBadge status="archived" label={t("status_archived")} />
+        ) : (
+          <StatusBadge
+            status={row.original.status}
+            label={t(`status_${row.original.status}` as "status_draft")}
+          />
+        )
     },
     {
       id: "dateOfBirth",
       header: t("dateOfBirth"),
       accessorFn: (row) => row.dateOfBirth ?? "",
       cell: ({ row }) => formatDateOfBirth(row.original.dateOfBirth)
-    }
+    },
+    ...(canManage
+      ? ([
+          {
+            id: "actions",
+            header: "",
+            enableSorting: false,
+            cell: ({ row }) => (
+              <RowMoreActionsMenu
+                ariaLabel={c("moreActions")}
+                items={[
+                  {
+                    id: "view",
+                    label: c("view"),
+                    icon: "visibility",
+                    onSelect: () => {
+                      window.location.href = `/dashboard/students/${row.original.id}`;
+                    }
+                  },
+                  ...(row.original.archivedAt
+                    ? [
+                        {
+                          id: "restore",
+                          label: c("restore"),
+                          icon: "restore",
+                          onSelect: () =>
+                            void restoreOne.mutateAsync({ id: row.original.id }).then(() => {
+                              toastSuccess(c("restore"));
+                              void students.refetch();
+                            })
+                        },
+                        {
+                          id: "delete",
+                          label: c("deletePermanently"),
+                          icon: "delete_forever",
+                          destructive: true,
+                          onSelect: () => setDeletingStudent(row.original)
+                        }
+                      ]
+                    : [
+                        {
+                          id: "archive",
+                          label: c("archive"),
+                          icon: "archive",
+                          destructive: true,
+                          onSelect: () =>
+                            void archiveOne.mutateAsync({ id: row.original.id }).then(() => {
+                              toastSuccess(c("archive"));
+                              void students.refetch();
+                            })
+                        }
+                      ])
+                ]}
+              />
+            )
+          }
+        ] satisfies ColumnDef<Student, unknown>[])
+      : [])
   ];
 
   return (
@@ -162,6 +244,13 @@ export function StudentsDirectory() {
                 ]}
               />
             </div>
+            <ArchiveVisibilityFilter
+              value={viewFilter}
+              onChange={(value) => {
+                setViewFilter(value);
+                setPage(0);
+              }}
+            />
           </>
         }
       />
@@ -194,6 +283,25 @@ export function StudentsDirectory() {
           onSaved={() => void students.refetch()}
         />
       ) : null}
+
+      <ConfirmDialog
+        open={deletingStudent !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeletingStudent(null);
+        }}
+        title={t("deleteStudentTitle")}
+        description={t("deleteStudentHelp")}
+        confirmLabel={c("deletePermanently")}
+        cancelLabel={c("cancel")}
+        destructive
+        loading={deleteOne.isPending}
+        onConfirm={async () => {
+          if (!deletingStudent) return;
+          await deleteOne.mutateAsync({ id: deletingStudent.id });
+          setDeletingStudent(null);
+          void students.refetch();
+        }}
+      />
     </DataTableSection>
   );
 }

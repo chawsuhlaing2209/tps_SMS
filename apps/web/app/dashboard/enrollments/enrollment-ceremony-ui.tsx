@@ -7,6 +7,7 @@ import {
   type ToggleListIconTone,
 } from "../../../components/pds/composites/toggle-list";
 import { Icon } from "../../lib/material-icon";
+import { OptionChip } from "../../../components/shared/option-chip";
 import { cn } from "../../../lib/utils";
 
 export function studentInitials(name: string) {
@@ -102,6 +103,10 @@ export function EnrollmentStudentBanner({
   );
 }
 
+/**
+ * @deprecated Use `OptionChip` with `indicator="none"` directly — see docs/COMPONENTS.md (job 4).
+ * Thin wrapper kept so the ceremony's existing call sites share the canonical chip.
+ */
 export function EnrollmentChip({
   selected,
   disabled,
@@ -116,15 +121,14 @@ export function EnrollmentChip({
   className?: string;
 }) {
   return (
-    <button
-      type="button"
-      className={cn("enrollment-chip", selected && "enrollment-chip--selected", className)}
+    <OptionChip
+      indicator="none"
+      selected={selected}
       disabled={disabled}
       onClick={onClick}
-      aria-pressed={selected}
-    >
-      {children}
-    </button>
+      label={children}
+      className={className}
+    />
   );
 }
 

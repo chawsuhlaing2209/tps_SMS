@@ -86,40 +86,6 @@
   padding: 5.5px 11px;
 }
 
-.enrollment-chip-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--pds-gap-small);
-}
-
-.enrollment-chip {
-  align-items: center;
-  background: var(--pds-background-canvas);
-  border: 1.5px solid var(--pds-border-color-soft);
-  border-radius: var(--pds-radius-12);
-  color: var(--pds-text-primary);
-  cursor: pointer;
-  display: inline-flex;
-  font-size: 13px;
-  font-weight: 700;
-  gap: 7px;
-  padding: 9px 15px;
-}
-
-.enrollment-chip:hover:not(:disabled) {
-  border-color: var(--pds-border-color-active);
-}
-
-.enrollment-chip--selected {
-  background: var(--pds-color-chartreuse-green-100);
-  border-color: var(--pds-compliment-brand);
-}
-
-.enrollment-chip:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
 .enrollment-fee-card {
   align-items: center;
   background: var(--pds-background-layout-primary);

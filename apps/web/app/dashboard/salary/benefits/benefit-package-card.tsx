@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { formatMMK } from "../../../lib/money";
 import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
 import { Icon } from "../../../lib/material-icon";
+import { isPadaukRowInteractiveTarget } from "../../../lib/table-row-interaction";
 import { cn } from "../../../../lib/utils";
 import { benefitIconTone } from "./benefit-icon-themes";
 import type { BenefitPackageRecord } from "./benefit-package-form-sheet";
@@ -16,9 +17,11 @@ type Props = {
   pkg: BenefitPackageRecord;
   onEdit: (pkg: BenefitPackageRecord) => void;
   onArchive?: (pkg: BenefitPackageRecord) => void;
+  onRestore?: (pkg: BenefitPackageRecord) => void;
+  onDelete?: (pkg: BenefitPackageRecord) => void;
 };
 
-export function BenefitPackageCard({ pkg, onEdit, onArchive }: Props) {
+export function BenefitPackageCard({ pkg, onEdit, onArchive, onRestore, onDelete }: Props) {
   const t = useTranslations("salary");
   const c = useTranslations("common");
   const tone = benefitIconTone(pkg.icon);
@@ -29,7 +32,7 @@ export function BenefitPackageCard({ pkg, onEdit, onArchive }: Props) {
       className="benefit-package-card"
       tabIndex={0}
       onClick={(event) => {
-        if ((event.target as HTMLElement).closest("[data-row-stop]")) return;
+        if (isPadaukRowInteractiveTarget(event.target)) return;
         onEdit(pkg);
       }}
       onKeyDown={(event) => {
@@ -70,6 +73,27 @@ export function BenefitPackageCard({ pkg, onEdit, onArchive }: Props) {
                       icon: "archive",
                       destructive: true,
                       onSelect: () => onArchive(pkg)
+                    }
+                  ]
+                : []),
+              ...(!isActive && onRestore
+                ? [
+                    {
+                      id: "restore",
+                      label: c("restore"),
+                      icon: "restore",
+                      onSelect: () => onRestore(pkg)
+                    }
+                  ]
+                : []),
+              ...(!isActive && onDelete
+                ? [
+                    {
+                      id: "delete",
+                      label: c("deletePermanently"),
+                      icon: "delete_forever",
+                      destructive: true,
+                      onSelect: () => onDelete(pkg)
                     }
                   ]
                 : [])

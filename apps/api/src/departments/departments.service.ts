@@ -195,4 +195,86 @@ export class DepartmentsService {
 
     return this.getDepartment(tenantId, departmentId);
   }
+
+  private async getDepartmentOrThrow(tenantId: string, departmentId: string) {
+    const [department] = await this.db
+      .select()
+      .from(departments)
+      .where(and(eq(departments.tenantId, tenantId), eq(departments.id, departmentId)));
+    if (!department) {
+      throw new NotFoundException("Department not found.");
+    }
+    return department;
+  }
+
+  private async setStatus(
+    tenantId: string,
+    departmentId: string,
+    status: "active" | "archived",
+    action: string,
+    actorUserId: string | undefined
+  ) {
+    const previous = await this.getDepartmentOrThrow(tenantId, departmentId);
+
+    await this.db
+      .update(departments)
+      .set({ status, updatedBy: actorUserId, updatedAt: new Date() })
+      .where(and(eq(departments.tenantId, tenantId), eq(departments.id, departmentId)));
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action,
+      recordType: "Department",
+      recordId: departmentId,
+      before: { status: previous.status },
+      after: { status }
+    });
+
+    return this.getDepartment(tenantId, departmentId);
+  }
+
+  archiveDepartment(tenantId: string, departmentId: string, actorUserId: string | undefined) {
+    return this.setStatus(tenantId, departmentId, "archived", "department.archive", actorUserId);
+  }
+
+  restoreDepartment(tenantId: string, departmentId: string, actorUserId: string | undefined) {
+    return this.setStatus(tenantId, departmentId, "active", "department.restore", actorUserId);
+  }
+
+  async deleteDepartment(tenantId: string, departmentId: string, actorUserId: string | undefined) {
+    const department = await this.getDepartmentOrThrow(tenantId, departmentId);
+
+    // Two-step safety: archive the department before deleting it permanently.
+    if (department.status !== "archived") {
+      throw new BadRequestException("Archive the department before deleting it.");
+    }
+
+    const [used] = await this.db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(staff)
+      .where(and(eq(staff.tenantId, tenantId), eq(staff.departmentId, departmentId)));
+    if ((used?.n ?? 0) > 0) {
+      throw new ConflictException({
+        message: "This department has staff assigned and cannot be deleted. Keep it archived instead.",
+        dependencies: { staff: used?.n ?? 0 }
+      });
+    }
+
+    await this.db
+      .delete(departments)
+      .where(and(eq(departments.tenantId, tenantId), eq(departments.id, departmentId)));
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "department.delete",
+      recordType: "Department",
+      recordId: departmentId,
+      before: { name: department.name, status: department.status },
+      after: { deleted: true }
+    });
+
+    return { id: departmentId, deleted: true };
+  }
 }

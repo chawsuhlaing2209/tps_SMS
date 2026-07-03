@@ -2,7 +2,10 @@
 
 import { useTranslations } from "next-intl";
 import { Icon } from "../../../lib/material-icon";
+import { PadaukTableWrap } from "../../../lib/padauk-table-wrap";
 import { cn } from "../../../../lib/utils";
+import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
+import { StatusBadge } from "../../../../components/shared/badge";
 import { benefitIconTone } from "./benefit-icon-themes";
 import type { IncentiveProgramRecord } from "./incentive-program-form-sheet";
 
@@ -37,14 +40,23 @@ function paidDisplay(program: IncentiveProgramRecord) {
 type Props = {
   programs: IncentiveProgramRecord[];
   onEdit: (program: IncentiveProgramRecord) => void;
+  onArchive?: (program: IncentiveProgramRecord) => void;
+  onRestore?: (program: IncentiveProgramRecord) => void;
+  onDelete?: (program: IncentiveProgramRecord) => void;
 };
 
-export function IncentiveProgramsTable({ programs, onEdit }: Props) {
+export function IncentiveProgramsTable({
+  programs,
+  onEdit,
+  onArchive,
+  onRestore,
+  onDelete
+}: Props) {
   const t = useTranslations("salary");
   const c = useTranslations("common");
 
   return (
-    <div className="padauk-table-wrap incentive-programs-table-wrap">
+    <PadaukTableWrap className="incentive-programs-table-wrap">
       <table className="pds-type-body-m-medium padauk-table padauk-table--pinned-end incentive-programs-table">
         <thead>
           <tr>
@@ -87,6 +99,9 @@ export function IncentiveProgramsTable({ programs, onEdit }: Props) {
                       <Icon name={iconName} size={20} />
                     </span>
                     <span className="pds-type-body-m-bold incentive-programs-table__name">{program.name}</span>
+                    {program.status !== "active" ? (
+                      <StatusBadge status="archived" label={t("status.archived")} />
+                    ) : null}
                   </div>
                 </td>
                 <td>
@@ -121,20 +136,50 @@ export function IncentiveProgramsTable({ programs, onEdit }: Props) {
                   )}
                 </td>
                 <td className="padauk-table__actions">
-                  <button
-                    type="button"
-                    className="incentive-programs-table__edit"
-                    aria-label={c("edit")}
-                    onClick={() => onEdit(program)}
-                  >
-                    <Icon name="edit" size={16} />
-                  </button>
+                  <RowMoreActionsMenu
+                    ariaLabel={c("moreActions")}
+                    items={[
+                      { id: "edit", label: c("edit"), icon: "edit", onSelect: () => onEdit(program) },
+                      ...(onArchive && program.status === "active"
+                        ? [
+                            {
+                              id: "archive",
+                              label: c("archive"),
+                              icon: "archive",
+                              destructive: true,
+                              onSelect: () => onArchive(program)
+                            }
+                          ]
+                        : []),
+                      ...(program.status !== "active" && onRestore
+                        ? [
+                            {
+                              id: "restore",
+                              label: c("restore"),
+                              icon: "restore",
+                              onSelect: () => onRestore(program)
+                            }
+                          ]
+                        : []),
+                      ...(program.status !== "active" && onDelete
+                        ? [
+                            {
+                              id: "delete",
+                              label: c("deletePermanently"),
+                              icon: "delete_forever",
+                              destructive: true,
+                              onSelect: () => onDelete(program)
+                            }
+                          ]
+                        : [])
+                    ]}
+                  />
                 </td>
               </tr>
             );
           })}
         </tbody>
       </table>
-    </div>
+    </PadaukTableWrap>
   );
 }
