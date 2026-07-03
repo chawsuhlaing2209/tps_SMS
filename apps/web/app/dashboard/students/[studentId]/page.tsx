@@ -10,9 +10,9 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { SegmentedControl } from "../../../../components/pds/composites/segmented-control";
 import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
+import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
 import { EmptyState } from "../../../../components/shared/empty-state";
 import { NavigationBackLink } from "../../../../components/shared/navigation-back-link";
-import { TrailLink } from "../../../../components/shared/trail-link";
 import { Button } from "../../../../components/ui/button";
 import { StatusPill } from "../../../../components/pds/subcomponents/status-pill";
 import { StatusBadge } from "../../../../components/shared/badge";
@@ -484,70 +484,61 @@ export default function StudentDetailPage({
       accessorFn: (row) => formatRelativeUpdated(row.lastUpdated ?? row.startDate, t("updatedToday"))
     },
     {
-      id: "details",
-      header: t("membershipDetails"),
+      id: "actions",
+      header: c("actions"),
       enableSorting: false,
       cell: ({ row }) => {
         const enrollment = row.original.enrollment;
-        if (enrollment?.status === "draft" && !enrollment.invoiceId) {
-          return (
-            <button
-              type="button"
-              className="pds-type-body-s-regular row-action"
-              onClick={() => openEnrollmentWizard(enrollment)}
-            >
-              {e("continueEnrollment")}
-            </button>
-          );
-        }
-        if (enrollment?.status === "approved" && !enrollment.invoiceId) {
-          return (
-            <button
-              type="button"
-              className="pds-type-body-s-regular row-action"
-              onClick={() => openEnrollmentWizard(enrollment)}
-            >
-              {e("continueEnrollment")}
-            </button>
-          );
+        const items = [];
+
+        if (
+          enrollment &&
+          !enrollment.invoiceId &&
+          (enrollment.status === "draft" || enrollment.status === "approved")
+        ) {
+          items.push({
+            id: "continue",
+            label: e("continueEnrollment"),
+            icon: "play_arrow",
+            onSelect: () => openEnrollmentWizard(enrollment)
+          });
         }
         if (enrollment?.invoiceId) {
           const invoiceId = enrollment.invoiceId;
-          const enrollmentId = enrollment.id;
-          const isCancelled = Boolean(enrollment.cancelledAt);
-          return (
-            <div className="row-action-group">
-              <button
-                type="button"
-                className="pds-type-body-s-regular row-action"
-                onClick={() => setPreviewInvoiceId(invoiceId)}
-              >
-                {e("viewInvoice")}
-              </button>
-              {canViewFinance && !isCancelled ? (
-                <button
-                  type="button"
-                  className="pds-type-body-s-regular row-action row-action--danger"
-                  onClick={() => setCancelTarget({ id: enrollmentId, invoiceId })}
-                >
-                  {e("cancelEnrollment")}
-                </button>
-              ) : null}
-            </div>
-          );
+          items.push({
+            id: "invoice",
+            label: e("viewInvoice"),
+            icon: "receipt_long",
+            onSelect: () => setPreviewInvoiceId(invoiceId)
+          });
+          if (canViewFinance && !enrollment.cancelledAt) {
+            items.push({
+              id: "cancel",
+              label: e("cancelEnrollment"),
+              icon: "cancel",
+              destructive: true,
+              onSelect: () => setCancelTarget({ id: enrollment.id, invoiceId })
+            });
+          }
         }
         if (row.original.classroomId) {
-          return (
-            <TrailLink
-              className="pds-type-body-s-regular row-action"
-              href={`/dashboard/structure/rooms/${row.original.classroomId}`}
-              from={{ label: data?.fullName ?? t("profileTitle"), href: studentHref }}
-            >
-              {t("membershipDetailsLink")}
-            </TrailLink>
-          );
+          const classroomId = row.original.classroomId;
+          items.push({
+            id: "classroom",
+            label: t("membershipDetailsLink"),
+            icon: "meeting_room",
+            onSelect: () =>
+              navigateWithTrail(router, `/dashboard/structure/rooms/${classroomId}`, {
+                label: data?.fullName ?? t("profileTitle"),
+                href: studentHref
+              })
+          });
         }
-        return "—";
+
+        if (!items.length) {
+          return "—";
+        }
+        return <RowMoreActionsMenu ariaLabel={c("moreActions")} items={items} />;
       }
     }
   ];
@@ -861,7 +852,11 @@ export default function StudentDetailPage({
                     }
                   >
                     {membershipRows.length ? (
-                      <DataTable columns={membershipColumns} data={membershipRows} />
+                      <DataTable
+                        columns={membershipColumns}
+                        data={membershipRows}
+                        showUpdatedAt={false}
+                      />
                     ) : null}
                   </TablePanelBody>
                 </DataTableSection>
