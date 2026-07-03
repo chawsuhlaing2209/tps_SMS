@@ -100,6 +100,16 @@ export class EnrollmentsController {
     );
   }
 
+  @Post("enrollments/:enrollmentId/unassign-classroom")
+  @RequirePermissions("student.manage")
+  unassignClassroom(
+    @ReqTenantContext() context: TenantContext,
+    @Param("tenantId") tenantId: string,
+    @Param("enrollmentId") enrollmentId: string
+  ) {
+    return this.enrollmentsService.unassignClassroom(tenantId, enrollmentId, context.actorUserId);
+  }
+
   @Patch("enrollments/:enrollmentId")
   @RequirePermissions("student.manage")
   updateEnrollment(

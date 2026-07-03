@@ -8,6 +8,9 @@ import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { ApiError, useApiMutation, useApiQuery, useLiveApiQuery, useReferenceApiQuery, apiFetch } from "../../../lib/api";
 import { RecordFormModal } from "../../../lib/record-modal";
+import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
+import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
+import { CancelEnrollmentDialog } from "../../students/cancel-enrollment-dialog";
 import { useDashPageTitleActionsTarget } from "../../dashboard-page-title";
 import { getSession } from "../../../lib/session";
 import { DataTable } from "../../../lib/data-table";
@@ -40,6 +43,9 @@ type ClassroomStudent = {
   fullName: string;
   admissionNumber?: string | null;
   status?: string;
+  /** Active enrollment that placed the student here (null for legacy placements). */
+  enrollmentId?: string | null;
+  invoiceId?: string | null;
 };
 
 type AttendanceSession = {
@@ -126,6 +132,11 @@ export function ClassroomOpsTabs({
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignEnrollmentId, setAssignEnrollmentId] = useState("");
   const [assignError, setAssignError] = useState<string | null>(null);
+  const [moveTarget, setMoveTarget] = useState<ClassroomStudent | null>(null);
+  const [moveClassroomId, setMoveClassroomId] = useState("");
+  const [moveError, setMoveError] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<ClassroomStudent | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<ClassroomStudent | null>(null);
   const [sessionDate, setSessionDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [markSubjectId, setMarkSubjectId] = useState("");
   const [markingSession, setMarkingSession] = useState<AttendanceSession | null>(null);
@@ -145,7 +156,7 @@ export function ClassroomOpsTabs({
     enrollOpen ? `/tenants/${tenant}/academics/grades` : null
   );
   const classrooms = useReferenceApiQuery<Classroom[]>((tenant) =>
-    enrollOpen || assignOpen ? `/tenants/${tenant}/classrooms` : null
+    enrollOpen || assignOpen || moveTarget !== null ? `/tenants/${tenant}/classrooms` : null
   );
   const thisClassroom = classrooms.data?.find((room) => room.id === classroomId);
   const unassignedEnrollments = useApiQuery<
@@ -200,6 +211,32 @@ export function ClassroomOpsTabs({
     (body, tenant) => ({
       path: `/tenants/${tenant}/enrollments/${body.enrollmentId}/assign-classroom`,
       init: { method: "POST", body: JSON.stringify({ classroomId }) }
+    }),
+    {
+      invalidatePaths: (_b, tenant) => [
+        `/tenants/${tenant}/classrooms/${classroomId}/students`,
+        `/tenants/${tenant}/classrooms/${classroomId}/room-detail`
+      ]
+    }
+  );
+
+  const moveStudent = useApiMutation<{ enrollmentId: string; targetClassroomId: string }, unknown>(
+    (body, tenant) => ({
+      path: `/tenants/${tenant}/enrollments/${body.enrollmentId}/assign-classroom`,
+      init: { method: "POST", body: JSON.stringify({ classroomId: body.targetClassroomId }) }
+    }),
+    {
+      invalidatePaths: (_b, tenant) => [
+        `/tenants/${tenant}/classrooms/${classroomId}/students`,
+        `/tenants/${tenant}/classrooms/${classroomId}/room-detail`
+      ]
+    }
+  );
+
+  const unassignStudent = useApiMutation<{ enrollmentId: string }, unknown>(
+    (body, tenant) => ({
+      path: `/tenants/${tenant}/enrollments/${body.enrollmentId}/unassign-classroom`,
+      init: { method: "POST" }
     }),
     {
       invalidatePaths: (_b, tenant) => [
@@ -378,6 +415,38 @@ export function ClassroomOpsTabs({
                   nameForColor={student.fullName}
                   href={`/dashboard/students/${student.id}`}
                   navigationFrom={roomTrailFrom}
+                  trailing={
+                    canEnroll && student.enrollmentId ? (
+                      <RowMoreActionsMenu
+                        ariaLabel={c("moreActions")}
+                        items={[
+                          {
+                            id: "move",
+                            label: t("moveStudent"),
+                            icon: "sync_alt",
+                            onSelect: () => {
+                              setMoveClassroomId("");
+                              setMoveError(null);
+                              setMoveTarget(student);
+                            }
+                          },
+                          {
+                            id: "remove",
+                            label: t("removeFromClass"),
+                            icon: "person_remove",
+                            onSelect: () => setRemoveTarget(student)
+                          },
+                          {
+                            id: "cancel",
+                            label: t("cancelEnrollmentAction"),
+                            icon: "cancel",
+                            destructive: true,
+                            onSelect: () => setCancelTarget(student)
+                          }
+                        ]}
+                      />
+                    ) : undefined
+                  }
                 />
               ))}
             </EntityList>
@@ -677,6 +746,115 @@ export function ClassroomOpsTabs({
           </p>
         ) : null}
       </RecordFormModal>
+
+      <RecordFormModal
+        open={moveTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setMoveTarget(null);
+            setMoveError(null);
+          }
+        }}
+        title={t("moveStudentTitle", { name: moveTarget?.fullName ?? "" })}
+        help={t("moveStudentHelp")}
+        headerIcon="sync_alt"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (!moveTarget?.enrollmentId) return;
+          if (!moveClassroomId) {
+            setMoveError(c("required"));
+            return;
+          }
+          setMoveError(null);
+          try {
+            await moveStudent.mutateAsync({
+              enrollmentId: moveTarget.enrollmentId,
+              targetClassroomId: moveClassroomId
+            });
+            setMoveTarget(null);
+            void roster.refetch();
+          } catch (error) {
+            setMoveError(error instanceof ApiError ? error.message : c("somethingWrong"));
+          }
+        }}
+        footer={
+          <>
+            <button
+              type="button"
+              className="pds-type-body-m-bold btn-ghost"
+              onClick={() => setMoveTarget(null)}
+            >
+              {c("cancel")}
+            </button>
+            <button
+              type="submit"
+              className="pds-type-body-m-bold btn-primary"
+              disabled={moveStudent.isPending || !moveClassroomId}
+            >
+              <Icon name="sync_alt" />
+              {moveStudent.isPending ? c("loading") : t("moveStudentConfirm")}
+            </button>
+          </>
+        }
+      >
+        <Field label={t("moveStudentTarget")}>
+          <PdsSelectField
+            value={moveClassroomId}
+            onValueChange={(value) =>
+              setMoveClassroomId(typeof value === "string" ? value : "")
+            }
+            placeholder={t("moveStudentPlaceholder")}
+            options={(classrooms.data ?? [])
+              .filter(
+                (room) =>
+                  room.id !== classroomId &&
+                  room.gradeId === thisClassroom?.gradeId &&
+                  room.academicYearId === thisClassroom?.academicYearId
+              )
+              .map((room) => ({ value: room.id, label: room.name }))}
+          />
+        </Field>
+        {moveError ? (
+          <p className="pds-type-body-m-medium error-text" role="alert">
+            {moveError}
+          </p>
+        ) : null}
+      </RecordFormModal>
+
+      <ConfirmDialog
+        open={removeTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setRemoveTarget(null);
+        }}
+        title={t("removeFromClassTitle")}
+        description={t("removeFromClassBody", { name: removeTarget?.fullName ?? "" })}
+        confirmLabel={t("removeFromClass")}
+        cancelLabel={c("cancel")}
+        destructive
+        loading={unassignStudent.isPending}
+        onConfirm={async () => {
+          if (!removeTarget?.enrollmentId) return;
+          await unassignStudent.mutateAsync({ enrollmentId: removeTarget.enrollmentId });
+          setRemoveTarget(null);
+          void roster.refetch();
+        }}
+      />
+
+      {cancelTarget?.enrollmentId ? (
+        <CancelEnrollmentDialog
+          open={Boolean(cancelTarget)}
+          onOpenChange={(open) => {
+            if (!open) setCancelTarget(null);
+          }}
+          enrollmentId={cancelTarget.enrollmentId}
+          invoiceId={cancelTarget.invoiceId ?? null}
+          studentName={cancelTarget.fullName}
+          onCancelled={() => {
+            setCancelTarget(null);
+            void roster.refetch();
+          }}
+        />
+      ) : null}
     </>
   );
 }

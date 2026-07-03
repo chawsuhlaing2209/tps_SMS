@@ -9,6 +9,7 @@ import {
   classroomStudents,
   classroomSubjectTeachers,
   classrooms,
+  enrollments,
   facilityRooms,
   gradeChiefAssignments,
   gradeSubjects,
@@ -757,10 +758,23 @@ export class ClassroomsService {
         id: students.id,
         fullName: students.fullName,
         admissionNumber: students.admissionNumber,
-        status: students.status
+        status: students.status,
+        // The active enrollment that placed the student here — powers roster
+        // actions (move / remove / cancel).
+        enrollmentId: enrollments.id,
+        invoiceId: enrollments.invoiceId
       })
       .from(classroomStudents)
       .innerJoin(students, eq(classroomStudents.studentId, students.id))
+      .leftJoin(
+        enrollments,
+        and(
+          eq(enrollments.studentId, classroomStudents.studentId),
+          eq(enrollments.classroomId, classroomStudents.classroomId),
+          eq(enrollments.tenantId, tenantId),
+          isNull(enrollments.cancelledAt)
+        )
+      )
       .where(
         and(
           eq(classroomStudents.tenantId, tenantId),

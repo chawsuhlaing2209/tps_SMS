@@ -268,6 +268,10 @@ export class EnrollmentsService {
     );
   }
 
+  unassignClassroom(tenantId: string, enrollmentId: string, actorUserId: string) {
+    return this.enrollmentBillingService.unassignClassroom(tenantId, enrollmentId, actorUserId);
+  }
+
   async updateEnrollment(
     tenantId: string,
     enrollmentId: string,

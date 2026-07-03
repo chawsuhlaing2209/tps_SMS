@@ -823,6 +823,67 @@ export class EnrollmentBillingService {
     return updated;
   }
 
+  /**
+   * Takes the student off the classroom roster without touching the
+   * enrollment's status or billing — the enrollment stays active with no
+   * classroom until reassigned.
+   */
+  async unassignClassroom(tenantId: string, enrollmentId: string, actorUserId: string) {
+    const [enrollment] = await this.db
+      .select()
+      .from(enrollments)
+      .where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.id, enrollmentId)));
+
+    if (!enrollment) {
+      throw new NotFoundException("Enrollment not found.");
+    }
+    if (!enrollment.classroomId) {
+      return enrollment;
+    }
+
+    const previousClassroomId = enrollment.classroomId;
+    const today = new Date().toISOString().slice(0, 10);
+
+    const updated = await this.db.transaction(async (tx) => {
+      await tx
+        .update(classroomStudents)
+        .set({
+          effectiveTo: today,
+          movementReason: "classroom_unassigned",
+          updatedBy: actorUserId,
+          updatedAt: new Date()
+        })
+        .where(
+          and(
+            eq(classroomStudents.tenantId, tenantId),
+            eq(classroomStudents.studentId, enrollment.studentId),
+            eq(classroomStudents.classroomId, previousClassroomId),
+            isNull(classroomStudents.effectiveTo)
+          )
+        );
+
+      const [row] = await tx
+        .update(enrollments)
+        .set({ classroomId: null, updatedBy: actorUserId, updatedAt: new Date() })
+        .where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.id, enrollmentId)))
+        .returning();
+
+      return row!;
+    });
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId,
+      action: "enrollment.unassign_classroom",
+      recordType: "enrollment",
+      recordId: enrollmentId,
+      before: { classroomId: previousClassroomId },
+      after: { classroomId: null }
+    });
+
+    return updated;
+  }
+
   private async syncClassroomPlacementTx(
     tx: Pick<Database, "select" | "insert" | "update">,
     tenantId: string,
