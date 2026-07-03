@@ -86,7 +86,7 @@ Permanent delete and even archive must respect relationships:
   - Follow-up ✅ — the `discounts` module `reactivate` route was also renamed to `restore` (deprecated alias kept), completing the system-wide verb standardization.
 
 **Phase 4 — Polish** ✅
-- **Bulk archive/restore ✅** — opt-in row selection on the shared DataTable + a bulk action bar; bulk-archive/bulk-restore endpoints for students & staff (idempotent, capped at 200).
+- **Bulk archive/restore — REMOVED** (product decision 2026-07-02): the row-selection UI, bulk action bar, and students/staff bulk endpoints were built and later removed as unnecessary. Per-row archive/restore/delete via each table's "…" menu is the supported path.
 - **Global recycle bin ✅** — `archive` module aggregates archived records across modules; `/dashboard/archive` page with per-row restore + guarded permanent-delete; admin sidebar entry.
 - **Retention / auto-purge ✅** — `tenant_settings.archiveRetentionDays` (null/0 = off); a shared purge runner deletes archived students/staff older than the window, skipping any with financial/academic dependents and writing an "auto-purge" audit tombstone; manual `POST archive/purge` trigger + a daily BullMQ repeatable job (03:00) on a new `maintenance` queue.
 

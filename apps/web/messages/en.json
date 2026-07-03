@@ -21,7 +21,6 @@
     "cancel": "Cancel",
     "close": "Close",
     "clear": "Clear",
-    "selectAll": "Select all",
     "deselectAll": "Deselect all",
     "checkboxListSelectedCount": "{selected} of {total} selected",
     "checkboxListSelectedTotal": "Selected total",
@@ -58,12 +57,7 @@
     "deletePermanently": "Delete permanently",
     "viewActive": "Active",
     "viewArchived": "Archived",
-    "viewAll": "All",
-    "selectRow": "Select row",
-    "selectedCount": "{count} selected",
-    "clearSelection": "Clear",
-    "bulkArchived": "{count} archived",
-    "bulkRestored": "{count} restored"
+    "viewAll": "All"
   },
   "language": {
     "label": "Language",

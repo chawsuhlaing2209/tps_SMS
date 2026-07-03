@@ -244,16 +244,6 @@ export function DirectoryNameCell({
  * Sortable table wrapper. Appends a "Last updated" column by default and sorts
  * active records first, then newest by last updated unless overridden.
  */
-/** Opt-in multi-select. Controlled by the parent so it can drive a bulk action bar. */
-export type RowSelectionConfig<TData> = {
-  getRowId: (row: TData) => string;
-  isSelected: (id: string) => boolean;
-  onToggle: (id: string, checked: boolean) => void;
-  allSelected: boolean;
-  someSelected: boolean;
-  onToggleAll: (checked: boolean) => void;
-};
-
 export function DataTable<TData>({
   columns,
   data,
@@ -263,8 +253,7 @@ export function DataTable<TData>({
   getRowHref,
   onRowClick,
   navigationFrom,
-  renderSubRow,
-  rowSelection
+  renderSubRow
 }: {
   columns: ColumnDef<TData, unknown>[];
   data: TData[];
@@ -277,8 +266,6 @@ export function DataTable<TData>({
   navigationFrom?: NavigationSegment;
   /** Optional detail row rendered immediately after each data row. */
   renderSubRow?: (row: Row<TData>) => ReactNode | null;
-  /** When provided, renders a leading checkbox column for multi-select. */
-  rowSelection?: RowSelectionConfig<TData>;
 }) {
   const c = useTranslations("common");
   const router = useRouter();
@@ -288,43 +275,10 @@ export function DataTable<TData>({
   const [sorting, setSorting] = useState<SortingState>(resolvedInitialSorting);
   const rowIsInteractive = Boolean(getRowHref || onRowClick);
 
-  const tableColumns = useMemo(() => {
-    const prepared = prepareColumns(columns, resolvedUpdatedAtLabel, showUpdatedAt);
-    if (!rowSelection) {
-      return prepared;
-    }
-    const selectColumn: ColumnDef<TData, unknown> = {
-      id: "__select",
-      enableSorting: false,
-      header: () => (
-        <input
-          type="checkbox"
-          className="table-select-checkbox"
-          aria-label={c("selectAll")}
-          checked={rowSelection.allSelected}
-          ref={(el) => {
-            if (el) el.indeterminate = rowSelection.someSelected && !rowSelection.allSelected;
-          }}
-          onChange={(event) => rowSelection.onToggleAll(event.target.checked)}
-        />
-      ),
-      cell: ({ row }) => {
-        const id = rowSelection.getRowId(row.original);
-        return (
-          <input
-            type="checkbox"
-            className="table-select-checkbox"
-            data-row-stop
-            aria-label={c("selectRow")}
-            checked={rowSelection.isSelected(id)}
-            onClick={(event) => event.stopPropagation()}
-            onChange={(event) => rowSelection.onToggle(id, event.target.checked)}
-          />
-        );
-      }
-    };
-    return [selectColumn, ...prepared];
-  }, [columns, showUpdatedAt, resolvedUpdatedAtLabel, rowSelection, c]);
+  const tableColumns = useMemo(
+    () => prepareColumns(columns, resolvedUpdatedAtLabel, showUpdatedAt),
+    [columns, showUpdatedAt, resolvedUpdatedAtLabel]
+  );
 
   const table = useReactTable({
     data,

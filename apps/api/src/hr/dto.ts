@@ -1,15 +1,7 @@
-import { ArrayMaxSize, ArrayNotEmpty, IsArray, IsBoolean, IsDateString, IsEmail, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Max, Min, ValidateNested } from "class-validator";
+import { IsArray, IsBoolean, IsDateString, IsEmail, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Max, Min, ValidateNested } from "class-validator";
 import { Type } from "class-transformer";
 import { personTypes } from "@sms/shared";
 
-/** Batch of record ids for bulk archive/restore actions. */
-export class BulkIdsDto {
-  @IsArray()
-  @ArrayNotEmpty()
-  @ArrayMaxSize(200)
-  @IsUUID("4", { each: true })
-  ids!: string[];
-}
 
 export class CreateStaffDto {
   @IsString()

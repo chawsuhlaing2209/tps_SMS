@@ -790,32 +790,6 @@ export class StudentsService {
     return updated!;
   }
 
-  /** Archive many students at once. Returns how many were newly archived. */
-  async bulkArchive(tenantId: string, ids: string[], actorUserId?: string) {
-    let archived = 0;
-    for (const id of ids) {
-      const before = await this.getStudentOrThrow(tenantId, id);
-      if (!before.archivedAt) {
-        await this.archive(tenantId, id, actorUserId);
-        archived += 1;
-      }
-    }
-    return { archived };
-  }
-
-  /** Restore many students at once. Returns how many were newly restored. */
-  async bulkRestore(tenantId: string, ids: string[], actorUserId?: string) {
-    let restored = 0;
-    for (const id of ids) {
-      const before = await this.getStudentOrThrow(tenantId, id);
-      if (before.archivedAt) {
-        await this.restore(tenantId, id, actorUserId);
-        restored += 1;
-      }
-    }
-    return { restored };
-  }
-
   /** Counts of financial/academic records that block permanent deletion. */
   private async getBlockingDependencies(tenantId: string, studentId: string) {
     const n = sql<number>`count(*)::int`;
