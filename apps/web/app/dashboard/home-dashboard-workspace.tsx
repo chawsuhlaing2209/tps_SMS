@@ -26,17 +26,11 @@ type DashboardHome = {
   termProgressPercent: number;
   weekLabel: string;
   approvals: { total: number; leave: number; feeWaivers: number };
-  featuredGrade: { id: string; name: string } | null;
   classrooms: Array<{
     id: string;
     name: string;
     homeroomTeacherName: string | null;
     studentCount: number;
-  }>;
-  monthlyLeaders: Array<{
-    studentName: string;
-    gradeName: string;
-    scorePercent: number;
   }>;
   todaySchedule: Array<{
     timeLabel: string;
@@ -126,20 +120,6 @@ export function HomeDashboardWorkspace() {
                         <Icon name="account_tree" />
                         {t("openStructure")}
                       </Link>
-                      {home.data?.featuredGrade ? (
-                        <Link
-                          href={`/dashboard/structure?gradeId=${home.data.featuredGrade.id}&tab=leaderboard`}
-                          className="home-dashboard__ghost-btn"
-                        >
-                          <Icon name="leaderboard" />
-                          {t("leaderboard")}
-                        </Link>
-                      ) : (
-                        <span className="home-dashboard__ghost-btn home-dashboard__ghost-btn--disabled">
-                          <Icon name="leaderboard" />
-                          {t("leaderboard")}
-                        </span>
-                      )}
                     </div>
                   </div>
                 }
@@ -163,43 +143,6 @@ export function HomeDashboardWorkspace() {
                 hint={home.data?.weekLabel ?? t("noTerm")}
               />
             </section>
-
-            <InfoCard
-              className="home-dashboard__leaders"
-              badge={t("monthlyLeadersBadge")}
-              title={
-                <span className="home-dashboard__leaders-heading">
-                  <Icon name="emoji_events" size={22} />
-                  {t("monthlyLeadersTitle")}
-                </span>
-              }
-              description={
-                home.data?.monthlyLeaders.length ? (
-                  <div className="home-dashboard__leaders-body">
-                    <ul className="home-dashboard__leaders-list">
-                      {home.data.monthlyLeaders.map((leader) => (
-                        <li key={`${leader.gradeName}-${leader.studentName}`}>
-                          <span className="home-dashboard__leader-grade">{leader.gradeName}</span>
-                          <span className="home-dashboard__leader-name">{leader.studentName}</span>
-                          <span className="home-dashboard__leader-score">{leader.scorePercent}%</span>
-                        </li>
-                      ))}
-                    </ul>
-                    {home.data.featuredGrade ? (
-                      <Link
-                        href={`/dashboard/structure?gradeId=${home.data.featuredGrade.id}&tab=leaderboard`}
-                        className="home-dashboard__leaders-link"
-                      >
-                        {t("viewAllLeaders")}
-                        <Icon name="chevron_right" size={18} />
-                      </Link>
-                    ) : null}
-                  </div>
-                ) : (
-                  <p className="home-dashboard__leaders-empty">{t("noLeaders")}</p>
-                )
-              }
-            />
 
             <section className="home-dashboard__bottom">
               <EntityListPanel

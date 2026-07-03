@@ -37,17 +37,11 @@ export type DashboardHome = {
   termProgressPercent: number;
   weekLabel: string;
   approvals: { total: number; leave: number; feeWaivers: number };
-  featuredGrade: { id: string; name: string } | null;
   classrooms: Array<{
     id: string;
     name: string;
     homeroomTeacherName: string | null;
     studentCount: number;
-  }>;
-  monthlyLeaders: Array<{
-    studentName: string;
-    gradeName: string;
-    scorePercent: number;
   }>;
   todaySchedule: Array<{
     timeLabel: string;
@@ -214,58 +208,6 @@ export class DashboardService {
     return upcomingTerm ?? null;
   }
 
-  private async fetchMonthlyLeaders(tenantId: string, monthScoped: boolean) {
-    const monthFilter = monthScoped
-      ? sql`AND es.exam_date >= date_trunc('month', CURRENT_DATE)::date
-            AND es.exam_date < (date_trunc('month', CURRENT_DATE) + interval '1 month')::date`
-      : sql``;
-
-    const result = await this.db.execute<{
-      student_name: string;
-      grade_name: string;
-      grade_id: string;
-      score_percent: number;
-    }>(sql`
-      WITH student_scores AS (
-        SELECT
-          s.full_name AS student_name,
-          g.name AS grade_name,
-          g.id AS grade_id,
-          AVG((ar.marks::numeric / NULLIF(es.full_marks::numeric, 0)) * 100) AS score_percent
-        FROM assessment_results ar
-        INNER JOIN exam_schedules es ON es.id = ar.exam_schedule_id AND es.tenant_id = ar.tenant_id
-        INNER JOIN students s ON s.id = ar.student_id AND s.tenant_id = ar.tenant_id
-        INNER JOIN classroom_students cs ON cs.student_id = s.id AND cs.tenant_id = ar.tenant_id
-        INNER JOIN classrooms c ON c.id = cs.classroom_id AND c.tenant_id = ar.tenant_id
-        INNER JOIN grades g ON g.id = c.grade_id AND g.tenant_id = ar.tenant_id
-        WHERE ar.tenant_id = ${tenantId}
-          AND ar.marks IS NOT NULL
-          ${monthFilter}
-        GROUP BY s.id, s.full_name, g.id, g.name
-      ),
-      ranked AS (
-        SELECT
-          student_name,
-          grade_name,
-          grade_id,
-          score_percent,
-          ROW_NUMBER() OVER (PARTITION BY grade_id ORDER BY score_percent DESC) AS rn
-        FROM student_scores
-      )
-      SELECT
-        student_name,
-        grade_name,
-        grade_id,
-        ROUND(score_percent)::int AS score_percent
-      FROM ranked
-      WHERE rn = 1
-      ORDER BY grade_name
-      LIMIT 8
-    `);
-
-    return result.rows;
-  }
-
   async getHome(tenantId: string): Promise<DashboardHome> {
     const today = this.todayIsoDate();
     const dayOfWeek = this.jsDayToTimetableDay();
@@ -342,33 +284,6 @@ export class DashboardService {
       }));
     }
 
-    let monthlyLeaderRows = await this.fetchMonthlyLeaders(tenantId, true);
-    if (monthlyLeaderRows.length === 0) {
-      monthlyLeaderRows = await this.fetchMonthlyLeaders(tenantId, false);
-    }
-
-    const monthlyLeaders = monthlyLeaderRows.map((row) => ({
-      studentName: row.student_name,
-      gradeName: row.grade_name,
-      scorePercent: row.score_percent
-    }));
-
-    let featuredGrade: DashboardHome["featuredGrade"] = null;
-    if (monthlyLeaderRows[0]) {
-      featuredGrade = {
-        id: monthlyLeaderRows[0].grade_id,
-        name: monthlyLeaderRows[0].grade_name
-      };
-    } else if (year) {
-      const [grade] = await this.db
-        .select({ id: grades.id, name: grades.name })
-        .from(grades)
-        .where(and(eq(grades.tenantId, tenantId), eq(grades.status, "active")))
-        .orderBy(grades.sortOrder, grades.name)
-        .limit(1);
-      featuredGrade = grade ?? null;
-    }
-
     let todaySchedule: DashboardHome["todaySchedule"] = [];
     if (year) {
       const slots = await this.db
@@ -411,9 +326,7 @@ export class DashboardService {
       termProgressPercent,
       weekLabel,
       approvals,
-      featuredGrade,
       classrooms: classroomRows,
-      monthlyLeaders,
       todaySchedule
     };
   }
