@@ -31,11 +31,14 @@ import {
   enrollmentFeePlanGrades,
   enrollments,
   feeItems,
+  guardians,
   invoiceItems,
   invoices,
   payments,
   enquiries,
+  staff,
   studentDiscounts,
+  studentGuardians,
   studentServices,
   students
 } from "../db/schema.js";
@@ -692,6 +695,8 @@ export class EnrollmentBillingService {
     discountApprovalRequired: boolean;
     discountOptions: EnrollmentPreviewResult["discountOptions"];
   }> {
+    const parentIsFullTimeStaff = await this.hasActiveStaffGuardian(tenantId, studentId);
+
     const result = await evaluateDiscountsFromDb(this.db, {
       tenantId,
       studentId,
@@ -706,7 +711,8 @@ export class EnrollmentBillingService {
           studentPosition: siblingSummary.studentPosition ?? siblingSummary.enrolledSiblingCount + 1
         },
         collectPayment: options?.collectPayment,
-        paymentMethod: options?.paymentMethod
+        paymentMethod: options?.paymentMethod,
+        parentIsFullTimeStaff
       },
       excludedDiscountRuleIds: options?.excludedDiscountRuleIds,
       forcedDiscountRuleIds: options?.forcedDiscountRuleIds
@@ -729,6 +735,28 @@ export class EnrollmentBillingService {
       discountApprovalRequired: result.discountApprovalRequired,
       discountOptions: result.discountOptions
     };
+  }
+
+  /**
+   * A guardian linked to an active staff record marks the student as a
+   * staff child — powers the parentIsFullTimeStaff discount criterion.
+   */
+  private async hasActiveStaffGuardian(tenantId: string, studentId: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: guardians.id })
+      .from(studentGuardians)
+      .innerJoin(guardians, eq(studentGuardians.guardianId, guardians.id))
+      .innerJoin(staff, eq(guardians.staffId, staff.id))
+      .where(
+        and(
+          eq(studentGuardians.tenantId, tenantId),
+          eq(studentGuardians.studentId, studentId),
+          eq(staff.tenantId, tenantId),
+          eq(staff.status, "active")
+        )
+      )
+      .limit(1);
+    return Boolean(row);
   }
 
   private async syncClassroomPlacementTx(

@@ -239,6 +239,13 @@
       "when": 1783900000007,
       "tag": "0033_backfill_leave_manage_permission",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1783900000008,
+      "tag": "0034_fluffy_raider",
+      "breakpoints": true
     }
   ]
 }

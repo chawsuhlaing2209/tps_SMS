@@ -949,6 +949,10 @@
     "emailStat": "Email",
     "householdStat": "Household",
     "linkedStudentsStat": "Linked students",
+    "staffStat": "School staff",
+    "staffLinkLabel": "Linked staff member",
+    "staffLinkHelp": "Marks this guardian as school staff — used for the staff-parent discount.",
+    "staffLinkNone": "Not school staff",
     "householdBalanceTitle": "Household balance",
     "messageGuardian": "Message guardian",
     "household": "Household",
@@ -2881,7 +2885,9 @@
     "earlyBirdCutoffDate": "Early bird cutoff date",
     "earlyBirdCutoffDateHelp": "Only enrollments confirmed on or before this date qualify. Leave empty for no date limit.",
     "earlyBirdMaxRecipients": "Early bird limit",
-    "earlyBirdMaxRecipientsHelp": "Only the first N enrollments receive the discount. Leave empty for no limit."
+    "earlyBirdMaxRecipientsHelp": "Only the first N enrollments receive the discount. Leave empty for no limit.",
+    "criterionEarlyBirdTitle": "Early bird",
+    "criterionEarlyBirdDesc": "Enrollments before a cutoff date and/or within the first N recipients"
   },
   "leaves": {
     "nav": "Leaves",

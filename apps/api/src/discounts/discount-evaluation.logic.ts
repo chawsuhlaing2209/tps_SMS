@@ -45,7 +45,12 @@ function autoRuleTypeMatches(
     );
   }
   if (normalizedType === "custom") {
-    return criteria.type === "custom" && customRuleMatches(criteria, context);
+    return (
+      criteria.type === "custom" &&
+      customRuleMatches(criteria, context, {
+        grantedCount: ruleId ? context.grantedCountByRuleId?.[ruleId] : undefined
+      })
+    );
   }
   return false;
 }
@@ -193,7 +198,10 @@ export async function evaluateDiscountsFromDb(
           rule.discountType,
           rule.criteria as Record<string, unknown>
         );
-        return criteria.type === "early_payment" && criteria.maxRecipients != null;
+        return (
+          (criteria.type === "early_payment" || criteria.type === "custom") &&
+          criteria.maxRecipients != null
+        );
       })
       .map((rule) => rule.id);
 
@@ -248,7 +256,12 @@ export async function evaluateDiscountsFromDb(
           continue;
         }
       } else if (normalizedType === "custom") {
-        if (criteria.type !== "custom" || !customRuleMatches(criteria, input.context)) {
+        if (
+          criteria.type !== "custom" ||
+          !customRuleMatches(criteria, input.context, {
+            grantedCount: input.context.grantedCountByRuleId?.[rule.id]
+          })
+        ) {
           continue;
         }
       } else {

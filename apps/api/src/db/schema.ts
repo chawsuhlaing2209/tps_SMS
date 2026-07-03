@@ -452,7 +452,9 @@ export const guardians = pgTable("guardians", {
   phone: text("phone"),
   email: text("email"),
   address: text("address"),
-  preferredChannel: text("preferred_channel").default("email").notNull()
+  preferredChannel: text("preferred_channel").default("email").notNull(),
+  /** Marks the guardian as school staff — powers the staff-parent discount criterion. */
+  staffId: uuid("staff_id").references(() => staff.id)
 });
 
 export const familyGroups = pgTable("family_groups", {

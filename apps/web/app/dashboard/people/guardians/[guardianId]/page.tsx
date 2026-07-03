@@ -16,6 +16,7 @@ import { hasAnyPermission } from "../../../../lib/permissions";
 import { RecordFormSheet } from "../../../../lib/record-sheet";
 import { getSession } from "../../../../lib/session";
 import { TablePanelBody, TablePanelHead } from "../../../../lib/table-panel";
+import { PdsSelectField } from "../../../../../components/pds";
 import { StatusBadge } from "../../../../../components/shared/badge";
 import { NavigationBackLink } from "../../../../../components/shared/navigation-back-link";
 import { TrailLink } from "../../../../../components/shared/trail-link";
@@ -29,6 +30,8 @@ type GuardianDetail = {
   fullName: string;
   phone: string | null;
   email: string | null;
+  staffId: string | null;
+  staff: { id: string; fullName: string; status: string } | null;
   household: { id: string; name: string } | null;
   students: Array<{
     id: string;
@@ -69,6 +72,10 @@ export default function GuardianDetailPage({
     (tenant) => `/tenants/${tenant}/students/guardians/${guardianId}`
   );
 
+  const staffOptions = useApiQuery<{ data: Array<{ id: string; fullName: string }> }>((tenant) =>
+    canManage ? `/tenants/${tenant}/hr/staff?limit=200` : null
+  );
+
   const billing = useApiQuery<{ students: BillingMember[] }>((tenant) =>
     canCollect && guardian.data?.household?.id
       ? `/tenants/${tenant}/finance/family-groups/${guardian.data.household.id}/billing`
@@ -76,7 +83,13 @@ export default function GuardianDetailPage({
   );
 
   const update = useApiMutation<
-    { firstName: string; lastName: string; phone?: string; email?: string },
+    {
+      firstName: string;
+      lastName: string;
+      phone?: string;
+      email?: string;
+      staffId?: string | null;
+    },
     unknown
   >(
     (body, tenant) => ({
@@ -96,7 +109,8 @@ export default function GuardianDetailPage({
     firstName: z.string().trim().min(1, c("required")),
     lastName: z.string().trim().min(1, c("required")),
     phone: z.string(),
-    email: z.union([z.string().email(c("required")), z.literal("")])
+    email: z.union([z.string().email(c("required")), z.literal("")]),
+    staffId: z.string()
   });
 
   const form = useForm<z.infer<typeof schema>>({
@@ -105,7 +119,8 @@ export default function GuardianDetailPage({
       firstName: nameParts[0] ?? "",
       lastName: nameParts.slice(1).join(" ") ?? "",
       phone: guardian.data?.phone ?? "",
-      email: guardian.data?.email ?? ""
+      email: guardian.data?.email ?? "",
+      staffId: guardian.data?.staffId ?? ""
     }
   });
 
@@ -263,6 +278,21 @@ export default function GuardianDetailPage({
           <span className="pds-type-body-s-regular student-profile-stat__label">{t("linkedStudentsStat")}</span>
           <strong className="student-profile-stat__value">{data.students.length}</strong>
         </article>
+        <article className="student-profile-stat">
+          <span className="pds-type-body-s-regular student-profile-stat__label">{t("staffStat")}</span>
+          <strong className="student-profile-stat__value">
+            {data.staff ? (
+              <TrailLink
+                href={`/dashboard/teachers/${data.staff.id}`}
+                from={{ label: data.fullName, href: `/dashboard/people/guardians/${guardianId}` }}
+              >
+                {data.staff.fullName}
+              </TrailLink>
+            ) : (
+              "—"
+            )}
+          </strong>
+        </article>
       </div>
 
       <TablePanelBody variant="card-plain" loading={false} error={null} empty={!data.students.length}>
@@ -306,7 +336,8 @@ export default function GuardianDetailPage({
               firstName: values.firstName,
               lastName: values.lastName,
               phone: values.phone || undefined,
-              email: values.email || undefined
+              email: values.email || undefined,
+              staffId: values.staffId || null
             });
             setEditOpen(false);
             void guardian.refetch();
@@ -335,8 +366,19 @@ export default function GuardianDetailPage({
         <Field label={t("phone")} error={form.formState.errors.phone?.message}>
           <FormInput {...form.register("phone")} />
         </Field>
-        <Field label={t("email")} error={form.formState.errors.email?.message}>
-          <FormInput type="email" {...form.register("email")} />
+        <Field label={t("staffLinkLabel")}>
+          <PdsSelectField
+            value={form.watch("staffId")}
+            onValueChange={(value) =>
+              form.setValue("staffId", typeof value === "string" ? value : "")
+            }
+            placeholder={t("staffLinkNone")}
+            options={(staffOptions.data?.data ?? []).map((member) => ({
+              value: member.id,
+              label: member.fullName
+            }))}
+          />
+          <p className="pds-type-body-s-regular muted">{t("staffLinkHelp")}</p>
         </Field>
         {formError ? (
           <p className="pds-type-body-m-medium error-text" role="alert">

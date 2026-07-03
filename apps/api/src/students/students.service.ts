@@ -17,6 +17,7 @@ import {
   invoices,
   reportCards,
   sections,
+  staff,
   studentDiscounts,
   studentDocuments,
   studentGuardians,
@@ -933,6 +934,15 @@ export class StudentsService {
       household = family ?? null;
     }
 
+    let linkedStaff: { id: string; fullName: string; status: string } | null = null;
+    if (guardian.staffId) {
+      const [staffMember] = await this.db
+        .select({ id: staff.id, fullName: staff.fullName, status: staff.status })
+        .from(staff)
+        .where(and(eq(staff.tenantId, tenantId), eq(staff.id, guardian.staffId)));
+      linkedStaff = staffMember ?? null;
+    }
+
     return {
       id: guardian.id,
       fullName: guardian.fullName,
@@ -940,6 +950,8 @@ export class StudentsService {
       email: guardian.email,
       relationshipLabel: guardian.relationshipLabel,
       preferredChannel: guardian.preferredChannel,
+      staffId: guardian.staffId,
+      staff: linkedStaff,
       household,
       students: linkedStudents.map((row) => ({
         id: row.id,
@@ -972,12 +984,23 @@ export class StudentsService {
         ? `${dto.firstName ?? before.fullName.split(" ")[0]} ${dto.lastName ?? before.fullName.split(" ").slice(1).join(" ")}`.trim()
         : undefined;
 
+    if (dto.staffId) {
+      const [staffMember] = await this.db
+        .select({ id: staff.id })
+        .from(staff)
+        .where(and(eq(staff.tenantId, tenantId), eq(staff.id, dto.staffId)));
+      if (!staffMember) {
+        throw new NotFoundException("Staff member not found.");
+      }
+    }
+
     const [updated] = await this.db
       .update(guardians)
       .set({
         ...(fullName ? { fullName } : {}),
         ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
         ...(dto.email !== undefined ? { email: dto.email } : {}),
+        ...(dto.staffId !== undefined ? { staffId: dto.staffId } : {}),
         updatedBy: actorUserId,
         updatedAt: new Date()
       })

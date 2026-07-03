@@ -675,6 +675,35 @@ export function DiscountSetupModal({ open, onOpenChange, mode, ruleId, onSaved }
                     checked={form.requireNewEnrollmentThisYear}
                     onCheckedChange={(checked) => setField("requireNewEnrollmentThisYear", checked)}
                   />
+
+                  <ToggleListItem
+                    variant="expandable"
+                    icon="alarm"
+                    iconTone="success"
+                    title={t("criterionEarlyBirdTitle")}
+                    description={t("criterionEarlyBirdDesc")}
+                    checked={form.requireEarlyBird}
+                    onCheckedChange={(checked) => setField("requireEarlyBird", checked)}
+                  >
+                    <InputWrapper label={t("earlyBirdCutoffDate")} hint={t("earlyBirdCutoffDateHelp")}>
+                      <TextInput
+                        type="date"
+                        value={form.earlyBirdCutoffDate}
+                        onChange={(event) => setField("earlyBirdCutoffDate", event.target.value)}
+                      />
+                    </InputWrapper>
+                    <InputWrapper
+                      label={t("earlyBirdMaxRecipients")}
+                      hint={t("earlyBirdMaxRecipientsHelp")}
+                    >
+                      <TextInput
+                        inputMode="numeric"
+                        value={form.earlyBirdMaxRecipients}
+                        onChange={(event) => setField("earlyBirdMaxRecipients", event.target.value)}
+                        placeholder="10"
+                      />
+                    </InputWrapper>
+                  </ToggleListItem>
                 </ToggleList>
               </section>
             ) : null}
@@ -700,48 +729,9 @@ export function DiscountSetupModal({ open, onOpenChange, mode, ruleId, onSaved }
                     description={t("applicationManualDesc")}
                     onClick={() => setField("triggerMode", "manual")}
                   />
-                  <SelectionCard
-                    variant="stack"
-                    selected={form.triggerMode === "request"}
-                    icon={<Icon name="description" size={20} />}
-                    title={t("applicationRequestTitle")}
-                    description={t("applicationRequestDesc")}
-                    onClick={() => setField("triggerMode", "request")}
-                  />
                 </SelectionCardGrid>
 
                 <ToggleList aria-label={t("setupRulesTitle")}>
-                  <ToggleListItem
-                    variant="expandable"
-                    icon="verified_user"
-                    iconTone="info"
-                    title={t("requiresPaymentAtEnrollment")}
-                    description={t("requiresPaymentAtEnrollmentHelp")}
-                    checked={form.requiresPaymentAtEnrollment}
-                    onCheckedChange={(checked) => setField("requiresPaymentAtEnrollment", checked)}
-                  />
-                  {form.recordDiscountType === "early_payment" ? (
-                    <div className="pds-toggle-list__expandable-fields">
-                      <InputWrapper label={t("earlyBirdCutoffDate")} hint={t("earlyBirdCutoffDateHelp")}>
-                        <TextInput
-                          type="date"
-                          value={form.earlyBirdCutoffDate}
-                          onChange={(event) => setField("earlyBirdCutoffDate", event.target.value)}
-                        />
-                      </InputWrapper>
-                      <InputWrapper
-                        label={t("earlyBirdMaxRecipients")}
-                        hint={t("earlyBirdMaxRecipientsHelp")}
-                      >
-                        <TextInput
-                          inputMode="numeric"
-                          value={form.earlyBirdMaxRecipients}
-                          onChange={(event) => setField("earlyBirdMaxRecipients", event.target.value)}
-                          placeholder="10"
-                        />
-                      </InputWrapper>
-                    </div>
-                  ) : null}
                   <ToggleListItem
                     variant="expandable"
                     icon="layers"
@@ -750,15 +740,6 @@ export function DiscountSetupModal({ open, onOpenChange, mode, ruleId, onSaved }
                     description={t("stackableHelp")}
                     checked={form.stackable}
                     onCheckedChange={(checked) => setField("stackable", checked)}
-                  />
-                  <ToggleListItem
-                    variant="expandable"
-                    icon="account_balance_wallet"
-                    iconTone="warning"
-                    title={t("prorateLabel")}
-                    description={t("prorateHelp")}
-                    checked={form.prorateAcrossInstallments}
-                    onCheckedChange={(checked) => setField("prorateAcrossInstallments", checked)}
                   />
                 </ToggleList>
 
@@ -826,9 +807,7 @@ export function DiscountSetupModal({ open, onOpenChange, mode, ruleId, onSaved }
                     <dd>
                       {form.triggerMode === "auto"
                         ? t("applicationAutomaticTitle")
-                        : form.triggerMode === "manual"
-                          ? t("applicationManualTitle")
-                          : t("applicationRequestTitle")}
+                        : t("applicationManualTitle")}
                     </dd>
                   </div>
                   <div>

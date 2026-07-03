@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyDiscountStacking,
   computeDiscountAmount,
+  customRuleMatches,
   defaultAppliesTo,
   earlyPaymentRuleMatches,
   siblingRuleMatches,
@@ -197,10 +198,58 @@ describe("earlyPaymentRuleMatches (early bird)", () => {
     ).toBe(false);
   });
 
-  it("still requires payment at enrollment", () => {
+  it("still requires payment at enrollment when explicitly configured", () => {
     const criteria = { ...baseCriteria, cutoffDate: "2099-01-01" };
     expect(
       earlyPaymentRuleMatches(criteria, { ...baseContext, collectPayment: false })
+    ).toBe(false);
+  });
+});
+
+describe("customRuleMatches (early bird gates)", () => {
+  const baseContext = {
+    billingContext: "enrollment" as const,
+    academicYearId: "year-1",
+    gradeId: "grade-1",
+    feeLines: [tuitionLine],
+    siblingSummary: { eligible: false, enrolledSiblingCount: 0, studentPosition: 1 }
+  };
+  const baseCriteria = {
+    type: "custom" as const,
+    appliesTo: defaultAppliesTo("custom")
+  };
+
+  it("gates on the cutoff date", () => {
+    const criteria = { ...baseCriteria, cutoffDate: "2026-05-01" };
+    expect(
+      customRuleMatches(criteria, { ...baseContext, evaluationDate: "2026-05-01" })
+    ).toBe(true);
+    expect(
+      customRuleMatches(criteria, { ...baseContext, evaluationDate: "2026-05-02" })
+    ).toBe(false);
+  });
+
+  it("gates on the recipient limit", () => {
+    const criteria = { ...baseCriteria, maxRecipients: 3 };
+    expect(customRuleMatches(criteria, baseContext, { grantedCount: 2 })).toBe(true);
+    expect(customRuleMatches(criteria, baseContext, { grantedCount: 3 })).toBe(false);
+    expect(customRuleMatches(criteria, baseContext)).toBe(true);
+  });
+
+  it("early-bird gates are hard even with eligibilityMatchMode any", () => {
+    const criteria = {
+      ...baseCriteria,
+      eligibilityMatchMode: "any" as const,
+      newEnrollmentThisYear: true,
+      cutoffDate: "2026-05-01"
+    };
+    // Criterion satisfied, but past the cutoff — must NOT match.
+    expect(
+      customRuleMatches(criteria, {
+        ...baseContext,
+        isNewEnrollmentThisYear: true,
+        evaluationDate: "2026-06-01"
+      })
     ).toBe(false);
   });
 });

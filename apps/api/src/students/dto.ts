@@ -160,6 +160,12 @@ export class UpdateGuardianDto {
   @IsOptional()
   @IsString()
   email?: string;
+
+  /** Link to a staff record (marks the guardian as school staff); null unlinks. */
+  @IsOptional()
+  @ValidateIf((o) => o.staffId !== null)
+  @IsUUID()
+  staffId?: string | null;
 }
 
 export class CreateGuardianDto {

@@ -24,7 +24,7 @@ export type DiscountRuleFormValues = {
   name: string;
   valueType: "percentage" | "fixed";
   value: string;
-  triggerMode: "auto" | "manual" | "request";
+  triggerMode: "auto" | "manual";
   stackable: boolean;
   billingContexts: string[];
   feeItemIds: string[];
@@ -42,11 +42,10 @@ export type DiscountRuleFormValues = {
   requireTopRankInGrade: boolean;
   topRankInGrade: string;
   requireNewEnrollmentThisYear: boolean;
-  requiresPaymentAtEnrollment: boolean;
+  requireEarlyBird: boolean;
   earlyBirdCutoffDate: string;
   earlyBirdMaxRecipients: string;
   requiresDocumentation: boolean;
-  prorateAcrossInstallments: boolean;
   priorityOrder: string;
   maxCombinedPercent: string;
   notes: string;
@@ -77,11 +76,10 @@ export function emptyDiscountForm(): DiscountRuleFormValues {
     requireTopRankInGrade: false,
     topRankInGrade: "3",
     requireNewEnrollmentThisYear: false,
-    requiresPaymentAtEnrollment: false,
+    requireEarlyBird: false,
     earlyBirdCutoffDate: "",
     earlyBirdMaxRecipients: "",
     requiresDocumentation: false,
-    prorateAcrossInstallments: false,
     priorityOrder: "1",
     maxCombinedPercent: "60",
     notes: ""
@@ -139,7 +137,8 @@ function readCustomCriteria(raw: DiscountRuleCriteria & Record<string, unknown>)
     parentIsFullTimeStaff: raw.parentIsFullTimeStaff === true,
     topRankInGrade: typeof raw.topRankInGrade === "number" ? String(raw.topRankInGrade) : "3",
     newEnrollmentThisYear: raw.newEnrollmentThisYear === true,
-    prorateAcrossInstallments: raw.prorateAcrossInstallments === true,
+    cutoffDate: typeof raw.cutoffDate === "string" ? raw.cutoffDate : "",
+    maxRecipients: typeof raw.maxRecipients === "number" ? String(raw.maxRecipients) : "",
     priorityOrder: typeof raw.priorityOrder === "number" ? String(raw.priorityOrder) : "1"
   };
 }
@@ -151,12 +150,9 @@ export function ruleToForm(rule: DiscountRuleRecord): DiscountRuleFormValues {
   const isLegacy = discountType !== "custom";
   const customFields = criteria.type === "custom" ? readCustomCriteria(criteria) : null;
 
-  const triggerMode =
-    rule.triggerMode === "auto"
-      ? "auto"
-      : rule.triggerMode === "manual"
-        ? "manual"
-        : "request";
+  // "request" (on-application) mode was removed from the product; legacy
+  // rules fall back to manual so staff apply them explicitly.
+  const triggerMode = rule.triggerMode === "auto" ? "auto" : "manual";
 
   return mergeDiscountForm({
     name: rule.name,
@@ -195,23 +191,22 @@ export function ruleToForm(rule: DiscountRuleRecord): DiscountRuleFormValues {
       criteria.type === "custom" && criteria.topRankInGrade != null,
     topRankInGrade: customFields?.topRankInGrade ?? "3",
     requireNewEnrollmentThisYear: customFields?.newEnrollmentThisYear ?? false,
-    requiresPaymentAtEnrollment:
-      criteria.type === "early_payment"
-        ? criteria.requiresPaymentAtEnrollment !== false
-        : criteria.type === "custom"
-          ? criteria.requiresPaymentAtEnrollment === true
-          : false,
+    requireEarlyBird:
+      criteria.type === "early_payment" ||
+      (criteria.type === "custom" &&
+        (criteria.cutoffDate != null || criteria.maxRecipients != null)),
     earlyBirdCutoffDate:
-      criteria.type === "early_payment" && criteria.cutoffDate ? criteria.cutoffDate : "",
+      criteria.type === "early_payment" && criteria.cutoffDate
+        ? criteria.cutoffDate
+        : (customFields?.cutoffDate ?? ""),
     earlyBirdMaxRecipients:
       criteria.type === "early_payment" && criteria.maxRecipients != null
         ? String(criteria.maxRecipients)
-        : "",
+        : (customFields?.maxRecipients ?? ""),
     requiresDocumentation:
       criteria.type === "scholarship" ||
       criteria.type === "staff_child" ||
       (criteria.type === "custom" && criteria.requiresDocumentation === true),
-    prorateAcrossInstallments: customFields?.prorateAcrossInstallments ?? false,
     priorityOrder: customFields?.priorityOrder ?? String(rule.sortOrder ?? 1),
     maxCombinedPercent: "60",
     notes:
@@ -230,8 +225,7 @@ function buildCustomCriteriaFields(form: DiscountRuleFormValues) {
     form.requireMinEnrollmentYears ||
     form.requireParentFullTimeStaff ||
     form.requireTopRankInGrade ||
-    form.requireNewEnrollmentThisYear ||
-    form.requiresPaymentAtEnrollment;
+    form.requireNewEnrollmentThisYear;
 
   return {
     eligibilityMatchMode: hasEligibility ? form.eligibilityMatchMode : undefined,
@@ -253,9 +247,15 @@ function buildCustomCriteriaFields(form: DiscountRuleFormValues) {
       ? Number(form.topRankInGrade || "1")
       : undefined,
     newEnrollmentThisYear: form.requireNewEnrollmentThisYear || undefined,
-    requiresPaymentAtEnrollment: form.requiresPaymentAtEnrollment || undefined,
+    cutoffDate:
+      form.requireEarlyBird && form.earlyBirdCutoffDate.trim()
+        ? form.earlyBirdCutoffDate.trim()
+        : undefined,
+    maxRecipients:
+      form.requireEarlyBird && form.earlyBirdMaxRecipients.trim()
+        ? Number(form.earlyBirdMaxRecipients.trim())
+        : undefined,
     requiresDocumentation: form.requiresDocumentation || undefined,
-    prorateAcrossInstallments: form.prorateAcrossInstallments || undefined,
     priorityOrder: Number(form.priorityOrder || "1"),
     notes: form.notes.trim() || undefined
   };
@@ -313,7 +313,8 @@ export function formToPayload(
       criteria: {
         type: "early_payment" as const,
         appliesTo,
-        requiresPaymentAtEnrollment: form.requiresPaymentAtEnrollment,
+        // Payment-at-enrollment gating removed — early bird is date/limit only.
+        requiresPaymentAtEnrollment: false,
         cutoffDate: form.earlyBirdCutoffDate.trim() || undefined,
         maxRecipients: form.earlyBirdMaxRecipients.trim()
           ? Number(form.earlyBirdMaxRecipients.trim())
