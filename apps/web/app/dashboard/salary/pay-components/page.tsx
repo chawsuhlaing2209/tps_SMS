@@ -1,7 +1,6 @@
 "use client";
 
 import { ArchiveVisibilityFilter } from "../../../../components/shared/archive-visibility-filter";
-import { formatMMK } from "../../../lib/money";
 import { StatusBadge } from "../../../../components/shared/badge";
 import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
 import { type ColumnDef } from "@tanstack/react-table";
@@ -23,8 +22,9 @@ import {
 
 const PAY_COMPONENTS_PATH = (tenant: string) => `/tenants/${tenant}/pay-components`;
 
+/** Bare formatted number — the awardFixedValue message supplies the "MMK". */
 function formatMoney(value: number): string {
-  return formatMMK(value);
+  return Math.round(value).toLocaleString("en-US");
 }
 
 function formatDefaultAmount(
@@ -243,7 +243,7 @@ export default function PayComponentsPage() {
         }
       />
 
-      <div className="benefits-workspace-toolbar">
+      <div className="benefits-workspace-toolbar benefits-workspace-toolbar--end">
         <ArchiveVisibilityFilter value={archiveVisibility} onChange={setArchiveVisibility} />
         <button
           type="button"

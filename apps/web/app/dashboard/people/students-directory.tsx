@@ -244,14 +244,16 @@ export function StudentsDirectory() {
                 ]}
               />
             </div>
-            <ArchiveVisibilityFilter
-              value={viewFilter}
-              onChange={(value) => {
-                setViewFilter(value);
-                setPage(0);
-              }}
-            />
           </>
+        }
+        statusControl={
+          <ArchiveVisibilityFilter
+            value={viewFilter}
+            onChange={(value) => {
+              setViewFilter(value);
+              setPage(0);
+            }}
+          />
         }
       />
 

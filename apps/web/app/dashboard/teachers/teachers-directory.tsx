@@ -295,8 +295,10 @@ export function TeachersDirectory() {
                   ]}
                 />
               </div>
-              <ArchiveVisibilityFilter value={viewFilter} onChange={setViewFilter} />
             </>
+          }
+          statusControl={
+            <ArchiveVisibilityFilter value={viewFilter} onChange={setViewFilter} />
           }
         />
 

@@ -9331,6 +9331,16 @@ button.btn-hero-outline:hover {
   justify-content: space-between;
 }
 
+/* Archive visibility filters sit right-aligned everywhere. */
+.benefits-workspace-toolbar--end {
+  justify-content: flex-end;
+}
+
+.discount-view-filter {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .benefits-workspace-toolbar .pds-icon-tag-group {
   flex: 1;
   min-width: min(100%, 28rem);
