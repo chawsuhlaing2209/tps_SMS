@@ -21,6 +21,7 @@
     "cancel": "Cancel",
     "close": "Close",
     "clear": "Clear",
+    "selectAll": "Select all",
     "deselectAll": "Deselect all",
     "checkboxListSelectedCount": "{selected} of {total} selected",
     "checkboxListSelectedTotal": "Selected total",

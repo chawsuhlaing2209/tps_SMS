@@ -21,6 +21,7 @@
     "cancel": "မလုပ်တော့ပါ",
     "close": "ပိတ်မည်",
     "clear": "ရှင်းမည်",
+    "selectAll": "အားလုံးရွေးပါ",
     "deselectAll": "အားလုံး မရွေးတော့",
     "checkboxListSelectedCount": "{total} ခုအနက် {selected} ခု ရွေးထားသည်",
     "checkboxListSelectedTotal": "ရွေးထားသော စုစုပေါင်း",
