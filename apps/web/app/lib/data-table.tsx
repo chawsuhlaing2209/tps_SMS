@@ -14,7 +14,9 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, Fragment, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { appendNavigationTrail, type NavigationSegment } from "./navigation-trail";
 import { isPadaukRowInteractiveTarget } from "./table-row-interaction";
+import { useIsMobileTable } from "./use-media-query";
 import { subjectColor } from "../dashboard/structure/subject-colors";
+import { EntityList, EntityListItem } from "../../components/pds/composites/entity-list";
 import {
   Table,
   TableBody,
@@ -241,6 +243,22 @@ export function DirectoryNameCell({
 }
 
 /**
+ * Card-list projection of a table row for small screens. Pages opt in by
+ * mapping their key columns onto an {@link EntityListItem}; tables without a
+ * `mobileItem` keep the horizontal-scroll fallback.
+ */
+export type DataTableMobileItem<TData> = {
+  title: (row: TData) => string;
+  /** 1–2 line summary of the key columns. */
+  meta?: (row: TData) => ReactNode;
+  /** Status badge, amount, or row actions (mark menus with `data-row-stop`). */
+  trailing?: (row: TData) => ReactNode;
+  icon?: string;
+  initials?: (row: TData) => string;
+  nameForColor?: (row: TData) => string;
+};
+
+/**
  * Sortable table wrapper. Appends a "Last updated" column by default and sorts
  * active records first, then newest by last updated unless overridden.
  */
@@ -253,7 +271,8 @@ export function DataTable<TData>({
   getRowHref,
   onRowClick,
   navigationFrom,
-  renderSubRow
+  renderSubRow,
+  mobileItem
 }: {
   columns: ColumnDef<TData, unknown>[];
   data: TData[];
@@ -266,6 +285,8 @@ export function DataTable<TData>({
   navigationFrom?: NavigationSegment;
   /** Optional detail row rendered immediately after each data row. */
   renderSubRow?: (row: Row<TData>) => ReactNode | null;
+  /** Opt-in card rendering below the md breakpoint (no effect with `renderSubRow`). */
+  mobileItem?: DataTableMobileItem<TData>;
 }) {
   const c = useTranslations("common");
   const router = useRouter();
@@ -288,6 +309,33 @@ export function DataTable<TData>({
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel()
   });
+
+  const isMobileTable = useIsMobileTable();
+
+  if (mobileItem && !renderSubRow && isMobileTable) {
+    return (
+      <EntityList className="data-table-mobile-list">
+        {table.getRowModel().rows.map((row: Row<TData>) => {
+          const original = row.original;
+          const href = getRowHref?.(original) ?? undefined;
+          return (
+            <EntityListItem
+              key={row.id}
+              title={mobileItem.title(original)}
+              meta={mobileItem.meta?.(original)}
+              trailing={mobileItem.trailing?.(original)}
+              icon={mobileItem.icon}
+              initials={mobileItem.initials?.(original)}
+              nameForColor={mobileItem.nameForColor?.(original)}
+              href={href}
+              onClick={!href && onRowClick ? () => onRowClick(original) : undefined}
+              navigationFrom={navigationFrom}
+            />
+          );
+        })}
+      </EntityList>
+    );
+  }
 
   const activateRow = (row: TData) => {
     if (getRowHref) {

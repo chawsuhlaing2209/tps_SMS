@@ -100,7 +100,10 @@
     "language": "Language",
     "brandTagline": "School OS",
     "collapseSidebar": "Collapse sidebar",
-    "expandSidebar": "Expand sidebar"
+    "expandSidebar": "Expand sidebar",
+    "navigation": "Navigation",
+    "openNavigation": "Open navigation",
+    "closeNavigation": "Close navigation"
   },
   "auth": {
     "platform": "Myanmar SaaS School Platform",

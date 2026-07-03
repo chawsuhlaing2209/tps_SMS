@@ -15,7 +15,7 @@ import { useApiMutation, useApiQuery } from "../../lib/api";
 import { toastSuccess } from "../../lib/toast";
 import { useDashPageTitleActionsTarget } from "../dashboard-page-title";
 import { fetchAllPaginated } from "../../lib/export-csv";
-import { DataTable, DirectoryMemberCell } from "../../lib/data-table";
+import { DataTable, DirectoryMemberCell, deriveInitials } from "../../lib/data-table";
 import { PaginationControls } from "../../lib/pagination-controls";
 import { hasAnyPermission } from "../../lib/permissions";
 import { getSession } from "../../lib/session";
@@ -268,6 +268,21 @@ export function StudentsDirectory() {
           data={students.data?.data ?? []}
           getRowHref={(student) => `/dashboard/students/${student.id}`}
           navigationFrom={{ label: nav("students"), href: "/dashboard/people?tab=students" }}
+          mobileItem={{
+            title: (student) => student.fullName,
+            initials: (student) => deriveInitials(student.fullName),
+            nameForColor: (student) => student.fullName,
+            meta: (student) => student.admissionNumber,
+            trailing: (student) =>
+              student.archivedAt ? (
+                <StatusBadge status="archived" label={t("status_archived")} />
+              ) : (
+                <StatusBadge
+                  status={student.status}
+                  label={t(`status_${student.status}` as "status_draft")}
+                />
+              )
+          }}
         />
       </TablePanelBody>
 

@@ -100,7 +100,10 @@
     "language": "ဘာသာစကား",
     "brandTagline": "School OS",
     "collapseSidebar": "ဘေးဘားကို ပိတ်ရန်",
-    "expandSidebar": "ဘေးဘားကို ဖွင့်ရန်"
+    "expandSidebar": "ဘေးဘားကို ဖွင့်ရန်",
+    "navigation": "လမ်းညွှန်",
+    "openNavigation": "လမ်းညွှန်ကို ဖွင့်ရန်",
+    "closeNavigation": "လမ်းညွှန်ကို ပိတ်ရန်"
   },
   "auth": {
     "platform": "မြန်မာ ကျောင်းစီမံခန့်ခွဲမှု SaaS",

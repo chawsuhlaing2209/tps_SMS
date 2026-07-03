@@ -108,9 +108,11 @@ const config: Config = {
         pill: 'var(--pds-radius-pill)',
       },
       screens: {
-        sm: 'var(--pds-breakpoint-sm)',
-        md: 'var(--pds-breakpoint-md)',
-        lg: 'var(--pds-breakpoint-lg)',
+        // Literal px required — CSS vars are invalid in media query conditions.
+        // Keep in sync with --pds-breakpoint-* in tokens.json / design-tokens.css.
+        sm: '640px',
+        md: '720px',
+        lg: '960px',
       },
     },
   },

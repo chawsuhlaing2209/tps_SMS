@@ -10,7 +10,7 @@ import { createPortal } from "react-dom";
 import { apiFetch, useApiQuery, useReferenceApiQuery } from "../../lib/api";
 import { useCurrentAcademicYear } from "../../lib/use-current-academic-year";
 import { getSession } from "../../lib/session";
-import { DataTable } from "../../lib/data-table";
+import { DataTable, deriveInitials } from "../../lib/data-table";
 import { Icon } from "../../lib/material-icon";
 import { TablePanelBody } from "../../lib/table-panel";
 import { useDashPageTitleActionsTarget } from "../dashboard-page-title";
@@ -325,6 +325,14 @@ export function EnrollmentsWorkspace({
           <DataTable
             columns={enrollmentColumns}
             data={filteredEnrollments}
+            mobileItem={{
+              title: (enrollment) => studentName(enrollment),
+              initials: (enrollment) => deriveInitials(studentName(enrollment)),
+              nameForColor: (enrollment) => studentName(enrollment),
+              meta: (enrollment) =>
+                `${gradeName(enrollment.gradeId)} · ${classroomName(enrollment.classroomId)}`,
+              trailing: (enrollment) => <StatusBadge status={enrollment.status} />
+            }}
             onRowClick={(enrollment) => {
               // Smart row click: drafts resume the wizard; confirmed rows open
               // the student's profile.

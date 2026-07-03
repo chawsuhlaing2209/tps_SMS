@@ -40,6 +40,7 @@ html {
   background: var(--pds-background-frame);
   color: var(--pds-text-primary);
   font-family: var(--pds-font-family-body-stack);
+  overflow-x: clip;
 }h1,
 h2,
 h3,
@@ -259,7 +260,7 @@ h3,
 .dash-loading {align-items: center;
   display: flex;
   justify-content: center;
-  min-height: 100vh;
+  min-height: 100dvh;
   color: var(--pds-muted);
 }
 
@@ -273,6 +274,87 @@ h3,
 
 .dash:has(.dash-sidebar--collapsed) {
   grid-template-columns: var(--pds-size-sidebar-collapsed) 1fr;
+}
+
+/* ── Mobile shell: sidebar becomes an off-canvas drawer below lg ── */
+@media (max-width: 960px) { /* = --pds-breakpoint-lg; CSS vars don't work in @media conditions */
+  .dash,
+  .dash:has(.dash-sidebar--collapsed) {
+    grid-template-columns: 1fr;
+  }
+
+  /* .dash > : outrank the later .dash-sidebar base rule (same class specificity). */
+  .dash > .dash-sidebar {
+    display: none;
+  }
+}
+
+.dash-sidebar-drawer__overlay {
+  background: rgb(10 42 29 / 40%);
+  inset: 0;
+  position: fixed;
+  z-index: var(--pds-z-overlay, 100);
+}
+
+.dash-sidebar-drawer__overlay[data-state="open"] {
+  animation: pds-modal-fade-in 180ms ease;
+}
+
+.dash-sidebar-drawer__overlay[data-state="closed"] {
+  animation: pds-modal-fade-out 140ms ease;
+}
+
+.dash-sidebar-drawer {
+  --dash-nav-caret-col: 32px;
+  --dash-nav-icon-col: var(--pds-padding-large);
+  --dash-nav-icon-left: calc(var(--dash-nav-caret-col) + var(--pds-gap-small));
+  background: var(--pds-shell);
+  border-right: 1px solid var(--pds-shell-line);
+  color: var(--pds-color-neutral-250);
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  left: 0;
+  overflow-y: auto;
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-top: env(safe-area-inset-top);
+  position: fixed;
+  top: 0;
+  width: min(300px, 85vw);
+  z-index: var(--pds-z-modal, 101);
+}
+
+.dash-sidebar-drawer[data-state="open"] {
+  animation: dash-drawer-slide-in 200ms ease;
+}
+
+.dash-sidebar-drawer[data-state="closed"] {
+  animation: dash-drawer-slide-out 140ms ease;
+}
+
+@keyframes dash-drawer-slide-in {
+  from {
+    opacity: 0.6;
+    transform: translateX(-100%);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes dash-drawer-slide-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  to {
+    opacity: 0.6;
+    transform: translateX(-100%);
+  }
 }
 
 .dash-sidebar {
@@ -928,6 +1010,20 @@ h3,
   min-width: 0;
   padding: var(--pds-padding-large) var(--pds-padding-xx-large) var(--pds-padding-xx-large);
   width: 100%;
+}
+
+@media (max-width: 960px) { /* = --pds-breakpoint-lg */
+  .dash-content-body {
+    padding: var(--pds-padding-large);
+  }
+}
+
+@media (max-width: 640px) { /* = --pds-breakpoint-sm */
+  .dash-content-body {
+    gap: var(--pds-gap-large);
+    padding: var(--pds-padding-medium) var(--pds-padding-small)
+      calc(var(--pds-padding-large) + env(safe-area-inset-bottom));
+  }
 }
 
 .dash-page-title {
@@ -1603,6 +1699,17 @@ h3,
   display: grid;
   gap: var(--pds-gap-large);
   padding: var(--pds-padding-large);
+}
+
+@media (max-width: 640px) { /* = --pds-breakpoint-sm */
+  .panel,
+  .structure-panel {
+    padding: var(--pds-padding-medium);
+  }
+
+  .page-stack {
+    gap: var(--pds-gap-medium);
+  }
 }.panel-head {
   align-items: center;
   display: flex;
@@ -1658,6 +1765,28 @@ h3,
   background: var(--pds-background-layout-primary);
   color: var(--pds-muted);
   padding-block: var(--pds-gap-medium);
+}
+
+@media (max-width: 720px) { /* = --pds-breakpoint-md */
+  /* Shorter scroll distance for tables that stay tabular on phones. */
+  .padauk-table th,
+  .padauk-table td {
+    padding: var(--pds-padding-small) var(--pds-padding-medium);
+  }
+
+  /* When DataTable renders its card-list projection, the bordered scroll
+     wrapper the caller provides must disappear around it. */
+  .padauk-table-wrap:has(.data-table-mobile-list),
+  .table-card:has(.data-table-mobile-list) {
+    background: transparent;
+    border: none;
+    overflow: visible;
+  }
+
+  .table-card__body:has(.data-table-mobile-list) {
+    overflow: visible;
+    padding: 0;
+  }
 }.table-sort {
   align-items: center;
   background: transparent;
@@ -2284,7 +2413,8 @@ h3,
   min-width: 0;
 }
 
-.dash-sidebar .dash-nav-group-label {
+.dash-sidebar .dash-nav-group-label,
+.dash-sidebar-drawer .dash-nav-group-label {
   color: var(--pds-color-neutral-600);
   font-weight: 700;
   letter-spacing: 0.13em;
@@ -2321,6 +2451,13 @@ h3,
   display: flex;
   align-items: center;
   gap: var(--pds-gap-small);
+}
+
+@media (max-width: 640px) { /* = --pds-breakpoint-sm */
+  .pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
 }.checklist {
   list-style: none;
   margin: 0;
@@ -3268,12 +3405,12 @@ button.btn-hero-outline:hover {
   margin-bottom: var(--pds-gap-x-small);
 }.structure-room-stats-card span {
   font-weight: 600;
-}@media (max-width: var(--pds-breakpoint-lg)) {
+}@media (max-width: 960px) { /* = --pds-breakpoint-lg; CSS vars don't work in @media conditions */
   .structure-room-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }}
 
-@media (max-width: var(--pds-breakpoint-sm)) {
+@media (max-width: 640px) { /* = --pds-breakpoint-sm; CSS vars don't work in @media conditions */
   .structure-room-grid {
     grid-template-columns: minmax(0, 1fr);
   }.structure-grade-head {
@@ -3282,7 +3419,7 @@ button.btn-hero-outline:hover {
 
 .row-action--danger {
   color: var(--pds-color-red-danger-strong);
-}@media (max-width: var(--pds-breakpoint-lg)) {
+}@media (max-width: 960px) { /* = --pds-breakpoint-lg; CSS vars don't work in @media conditions */
   .structure-year-banner,
   .structure-room-layout,
   .structure-room-hero,
@@ -3409,6 +3546,28 @@ button.btn-hero-outline:hover {
 
 .detail-hero--classroom .detail-hero__actions {
   gap: var(--pds-gap-medium);
+}
+
+@media (max-width: 720px) { /* = --pds-breakpoint-md */
+  .detail-hero {
+    align-items: stretch;
+    flex-direction: column;
+    padding: var(--pds-padding-large);
+  }
+
+  .detail-hero__main {
+    min-width: 0;
+  }
+
+  .detail-hero__meta {
+    flex-wrap: wrap;
+    row-gap: var(--pds-gap-x-small);
+  }
+
+  .detail-hero__actions,
+  .detail-hero--classroom .detail-hero__actions {
+    justify-content: flex-start;
+  }
 }
 
 .panel > .panel-help {
@@ -3638,6 +3797,35 @@ button.btn-hero-outline:hover {
   display: flex;
   flex-wrap: wrap;
   gap: var(--pds-gap-small);
+}
+
+@media (max-width: 720px) { /* = --pds-breakpoint-md */
+  /* Long tab rails scroll sideways instead of stacking into tall wrapped rows. */
+  .pds-filter-tab-group,
+  .pds-subject-tab-group,
+  .pds-segmented-control,
+  .segmented-control {
+    flex-wrap: nowrap;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .pds-filter-tab-group::-webkit-scrollbar,
+  .pds-subject-tab-group::-webkit-scrollbar,
+  .pds-segmented-control::-webkit-scrollbar,
+  .segmented-control::-webkit-scrollbar {
+    display: none;
+  }
+
+  .pds-filter-tab,
+  .pds-subject-tab,
+  .pds-segmented-control__option,
+  .segmented-control__option {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
 }
 
 .pds-icon-tag {
@@ -5012,12 +5200,12 @@ button.btn-hero-outline:hover {
   color: var(--pds-text-primary);
   cursor: not-allowed;
   opacity: 1;
-}@media (max-width: var(--pds-breakpoint-lg)) {
+}@media (max-width: 960px) { /* = --pds-breakpoint-lg; CSS vars don't work in @media conditions */
   .student-profile-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }}
 
-@media (max-width: var(--pds-breakpoint-sm)) {
+@media (max-width: 640px) { /* = --pds-breakpoint-sm; CSS vars don't work in @media conditions */
   .student-profile-stats {
     grid-template-columns: 1fr;
   }.student-profile-banner__actions {
@@ -5549,7 +5737,7 @@ button.btn-hero-outline:hover {
 
 .dash-content > .dash-content-body {
   max-width: var(--pds-width-1180);
-}@media (max-width: var(--pds-breakpoint-md)) {
+}@media (max-width: 720px) { /* = --pds-breakpoint-md; CSS vars don't work in @media conditions */
   .dash-page-chrome__inner,
   .pds-top-nav-bar__inner {
     flex-wrap: wrap;
@@ -7506,7 +7694,7 @@ button.btn-hero-outline:hover {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }}
 
-@media (max-width: var(--pds-breakpoint-lg)) {
+@media (max-width: 960px) { /* = --pds-breakpoint-lg; CSS vars don't work in @media conditions */
   .discounts-config-page .stat-grid,
   .discount-list-group__grid,
   .discount-choice-grid,
@@ -9135,6 +9323,77 @@ button.btn-hero-outline:hover {
   text-align: center;
 }
 
+/* ── Mobile: dialogs take over the whole screen below sm ── */
+@keyframes pds-modal-slide-up-in {
+  from {
+    opacity: 0;
+    transform: translateY(8%);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pds-modal-slide-up-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(8%);
+  }
+}
+
+@media (max-width: 640px) { /* = --pds-breakpoint-sm */
+  .pds-modal,
+  .record-modal,
+  .record-modal--wide {
+    border-radius: 0;
+    height: 100dvh;
+    inset: 0;
+    max-height: 100dvh;
+    max-width: 100vw;
+    transform: none;
+    width: 100vw;
+  }
+
+  /* Desktop zoom keyframes embed the centering transform — mobile needs its own pair. */
+  .pds-modal[data-state="open"] {
+    animation: pds-modal-slide-up-in 200ms ease;
+  }
+
+  .pds-modal[data-state="closed"] {
+    animation: pds-modal-slide-up-out 140ms ease;
+  }
+
+  .pds-modal__close {
+    height: 40px;
+    width: 40px;
+  }
+
+  .pds-modal__footer {
+    padding-bottom: calc(var(--pds-padding-large) + env(safe-area-inset-bottom));
+  }
+
+  .pds-modal__footer button {
+    min-height: 44px;
+  }
+
+  /* iOS Safari auto-zooms focused inputs under 16px — keep form text at the floor. */
+  .pds-modal input,
+  .pds-modal select,
+  .pds-modal textarea,
+  .entity-form input,
+  .entity-form select,
+  .entity-form textarea {
+    font-size: max(16px, 1em);
+  }
+}
+
 /* Benefit package create/edit modal */
 .benefit-package-preview {
   align-items: center;
@@ -10005,7 +10264,7 @@ button.btn-hero-outline:hover {
   font-size: var(--pds-type-body-s-regular-font-size);
 }
 
-@media (max-width: var(--pds-breakpoint-lg)) {
+@media (max-width: 960px) { /* = --pds-breakpoint-lg; CSS vars don't work in @media conditions */
   .home-dashboard__hero,
   .home-dashboard__bottom {
     grid-template-columns: minmax(0, 1fr);
@@ -10081,4 +10340,35 @@ button.btn-hero-outline:hover {
 
 .enrollments-breakdown__count {
   text-align: right;
+}
+
+/* ── Mobile: collapse fixed multi-column page grids ──────────────────────
+   Keep literals in sync with --pds-breakpoint-* tokens; CSS vars cannot be
+   used inside @media conditions. */
+@media (max-width: 720px) { /* = --pds-breakpoint-md */
+  .finance-report-grid,
+  .teacher-assignment-sections,
+  .pay-tiles,
+  .fees-metrics,
+  .benefits-page__stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) { /* = --pds-breakpoint-sm */
+  .school-schedule-block__times,
+  .school-schedule-breaks,
+  .setup-grade-summary__stats,
+  .form-grid-2,
+  .award-basis-grid,
+  .discount-rules-config-grid,
+  .pay-methods,
+  .student-recurrent-billing > .stat-grid,
+  .finance-report-grid,
+  .teacher-assignment-sections,
+  .pay-tiles,
+  .fees-metrics,
+  .benefits-page__stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

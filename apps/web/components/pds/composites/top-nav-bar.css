@@ -4,6 +4,10 @@
   background: var(--pds-background-frame);
   border-bottom: 1px solid var(--pds-border-color-primary);
   flex-shrink: 0;
+  /* viewport-fit=cover: keep the bar clear of notches/cutouts. */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  padding-top: env(safe-area-inset-top);
   position: sticky;
   top: 0;
   width: 100%;
@@ -115,7 +119,32 @@
   width: var(--pds-gap-small);
 }
 
-@media (max-width: var(--pds-breakpoint-lg)) {
+.pds-top-nav-bar__menu-btn {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--pds-radius-8);
+  color: var(--pds-text-secondary);
+  cursor: pointer;
+  display: none;
+  flex-shrink: 0;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0;
+}
+
+.pds-top-nav-bar__menu-btn:hover {
+  background: var(--pds-background-frame);
+  color: var(--pds-text-primary);
+}
+
+.pds-top-nav-bar__menu-btn:focus-visible {
+  box-shadow: 0 0 0 3px var(--pds-states-focus);
+  outline: none;
+}
+
+@media (max-width: 960px) { /* = --pds-breakpoint-lg; CSS vars don't work in @media conditions */
   .pds-top-nav-bar__inner {
     flex-wrap: wrap;
   }
@@ -123,5 +152,21 @@
   .pds-top-nav-bar__page-actions {
     flex: 1 1 100%;
     order: 3;
+  }
+
+  .pds-top-nav-bar__menu-btn {
+    display: inline-flex;
+  }
+}
+
+@media (max-width: 640px) { /* = --pds-breakpoint-sm */
+  .pds-top-nav-bar__inner {
+    padding-left: var(--pds-padding-medium);
+    padding-right: var(--pds-padding-medium);
+  }
+
+  .pds-top-nav-bar__utilities {
+    flex-wrap: wrap;
+    row-gap: var(--pds-gap-x-small);
   }
 }

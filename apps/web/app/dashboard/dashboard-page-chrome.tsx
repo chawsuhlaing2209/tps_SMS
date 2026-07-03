@@ -9,7 +9,7 @@ import { WorkingYearBadge } from "./working-year-badge";
 import { useResolvedPageHeader } from "./page-header-context";
 
 /** Dashboard top navigation — breadcrumb, locale, academic year, notifications (Figma 119:9730). */
-export function DashboardPageChrome() {
+export function DashboardPageChrome({ onMenuClick }: { onMenuClick?: () => void }) {
   const t = useTranslations("nav");
   const pathname = usePathname();
   const { breadcrumbs, actions } = useResolvedPageHeader();
@@ -18,6 +18,18 @@ export function DashboardPageChrome() {
   return (
     <TopNavBar
       className="dash-page-chrome"
+      leading={
+        onMenuClick ? (
+          <button
+            type="button"
+            className="pds-top-nav-bar__menu-btn"
+            onClick={onMenuClick}
+            aria-label={t("openNavigation")}
+          >
+            <Icon name="menu" size={22} />
+          </button>
+        ) : null
+      }
       breadcrumbItems={breadcrumbs}
       utilities={
         <>

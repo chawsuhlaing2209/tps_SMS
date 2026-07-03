@@ -119,3 +119,26 @@
   min-height: 50px;
   padding: var(--pds-input-padding-y) var(--pds-input-padding-x);
 }
+
+@media (max-width: 720px) { /* = --pds-breakpoint-md; CSS vars don't work in @media conditions */
+  .pds-search-filters-row {
+    flex-wrap: wrap;
+  }
+
+  /* Search takes its own full row; filter selects pair up two per row. */
+  .pds-search-bar,
+  .pds-search-bar--fluid {
+    flex: 1 1 100%;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .pds-search-filters-row__filter--160 {
+    flex: 1 1 calc(50% - var(--pds-gap-small));
+    width: auto;
+  }
+
+  .pds-search-filters-row__status {
+    margin-left: 0;
+  }
+}
