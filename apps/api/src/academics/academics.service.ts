@@ -10,8 +10,12 @@ import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
 import {
   academicYears,
+  calendarEvents,
   classroomStudents,
   classrooms,
+  discountRules,
+  enrollmentFeePlanGrades,
+  enrollmentFeePlans,
   enrollments,
   gradeChiefAssignments,
   gradeSubjects,
@@ -20,7 +24,9 @@ import {
   sections,
   staff,
   subjects,
-  terms
+  terms,
+  timetablePeriods,
+  timetableSlots
 } from "../db/schema.js";
 /** Postgres foreign-key violation — a delete blocked by a referencing row. */
 function isForeignKeyViolation(err: unknown): boolean {
@@ -290,20 +296,193 @@ export class AcademicsService {
     const current = await this.getCurrentAcademicYearRecord(tenantId);
     const initialStatus = current ? ("draft" as const) : ("active" as const);
 
-    const [academicYear] = await this.db
-      .insert(academicYears)
-      .values({
+    if (dto.importStructureFromYearId) {
+      await this.getAcademicYearOrThrow(tenantId, dto.importStructureFromYearId);
+    }
+
+    const academicYear = await this.db.transaction(async (tx) => {
+      const [year] = await tx
+        .insert(academicYears)
+        .values({
+          tenantId,
+          name: dto.name,
+          startsOn: dto.startsOn,
+          endsOn: dto.endsOn,
+          status: initialStatus,
+          createdBy: actorUserId,
+          updatedBy: actorUserId
+        })
+        .returning();
+
+      if (dto.importStructureFromYearId) {
+        await this.importStructureIntoYearTx(
+          tx,
+          tenantId,
+          dto.importStructureFromYearId,
+          year!.id,
+          actorUserId
+        );
+      }
+
+      return year!;
+    });
+
+    if (dto.importStructureFromYearId) {
+      await this.auditService.recordEvent({
         tenantId,
-        name: dto.name,
-        startsOn: dto.startsOn,
-        endsOn: dto.endsOn,
-        status: initialStatus,
-        createdBy: actorUserId,
-        updatedBy: actorUserId
-      })
-      .returning();
+        actorUserId: actorUserId ?? null,
+        action: "academic_year.import_structure",
+        recordType: "academic_year",
+        recordId: academicYear.id,
+        after: { importedFromYearId: dto.importStructureFromYearId }
+      });
+    }
 
     return academicYear;
+  }
+
+  /**
+   * Clones the year-scoped setup from a source year into a freshly created
+   * one: active classrooms (name, section, capacity, room, homeroom teacher),
+   * grade↔subject assignments, enrollment fee plans with their amounts and
+   * grade scoping, and extends year-scoped discount rules to cover the new
+   * year. Enrollments, placements, invoices, and payments are never copied.
+   */
+  private async importStructureIntoYearTx(
+    tx: Pick<Database, "select" | "insert" | "update">,
+    tenantId: string,
+    sourceYearId: string,
+    targetYearId: string,
+    actorUserId?: string
+  ) {
+    const sourceClassrooms = await tx
+      .select()
+      .from(classrooms)
+      .where(
+        and(
+          eq(classrooms.tenantId, tenantId),
+          eq(classrooms.academicYearId, sourceYearId),
+          eq(classrooms.status, "active")
+        )
+      );
+
+    if (sourceClassrooms.length) {
+      await tx.insert(classrooms).values(
+        sourceClassrooms.map((room) => ({
+          tenantId,
+          academicYearId: targetYearId,
+          gradeId: room.gradeId,
+          sectionId: room.sectionId,
+          branchId: room.branchId,
+          name: room.name,
+          capacity: room.capacity,
+          room: room.room,
+          facilityRoomId: room.facilityRoomId,
+          classTeacherStaffId: room.classTeacherStaffId,
+          createdBy: actorUserId,
+          updatedBy: actorUserId
+        }))
+      );
+    }
+
+    const sourceGradeSubjects = await tx
+      .select()
+      .from(gradeSubjects)
+      .where(
+        and(
+          eq(gradeSubjects.tenantId, tenantId),
+          eq(gradeSubjects.academicYearId, sourceYearId)
+        )
+      );
+
+    if (sourceGradeSubjects.length) {
+      await tx.insert(gradeSubjects).values(
+        sourceGradeSubjects.map((row) => ({
+          tenantId,
+          academicYearId: targetYearId,
+          gradeId: row.gradeId,
+          subjectId: row.subjectId,
+          weight: row.weight,
+          isRequired: row.isRequired,
+          createdBy: actorUserId,
+          updatedBy: actorUserId
+        }))
+      );
+    }
+
+    // Fee structure: clone the source year's enrollment fee plans (amounts)
+    // and each plan's grade scoping.
+    const sourcePlans = await tx
+      .select()
+      .from(enrollmentFeePlans)
+      .where(
+        and(
+          eq(enrollmentFeePlans.tenantId, tenantId),
+          eq(enrollmentFeePlans.academicYearId, sourceYearId)
+        )
+      );
+
+    for (const plan of sourcePlans) {
+      const [newPlan] = await tx
+        .insert(enrollmentFeePlans)
+        .values({
+          tenantId,
+          academicYearId: targetYearId,
+          feeItemId: plan.feeItemId,
+          amount: plan.amount,
+          createdBy: actorUserId,
+          updatedBy: actorUserId
+        })
+        .returning();
+
+      const planGrades = await tx
+        .select()
+        .from(enrollmentFeePlanGrades)
+        .where(
+          and(
+            eq(enrollmentFeePlanGrades.tenantId, tenantId),
+            eq(enrollmentFeePlanGrades.planId, plan.id)
+          )
+        );
+
+      if (planGrades.length) {
+        await tx.insert(enrollmentFeePlanGrades).values(
+          planGrades.map((row) => ({
+            tenantId,
+            planId: newPlan!.id,
+            gradeId: row.gradeId,
+            createdBy: actorUserId,
+            updatedBy: actorUserId
+          }))
+        );
+      }
+    }
+
+    // Discounts: rules without year scoping already apply to every year.
+    // Rules explicitly scoped to the source year get the new year appended
+    // so the same setup keeps working.
+    const rules = await tx
+      .select()
+      .from(discountRules)
+      .where(and(eq(discountRules.tenantId, tenantId), eq(discountRules.status, "active")));
+
+    for (const rule of rules) {
+      const criteria = rule.criteria as Record<string, unknown>;
+      const appliesTo = criteria.appliesTo as Record<string, unknown> | undefined;
+      const container = appliesTo ?? criteria;
+      const yearIds = container.academicYearIds;
+      if (!Array.isArray(yearIds) || !yearIds.includes(sourceYearId) || yearIds.includes(targetYearId)) {
+        continue;
+      }
+      const nextCriteria = appliesTo
+        ? { ...criteria, appliesTo: { ...appliesTo, academicYearIds: [...yearIds, targetYearId] } }
+        : { ...criteria, academicYearIds: [...yearIds, targetYearId] };
+
+      await tx
+        .update(discountRules)
+        .set({ criteria: nextCriteria, updatedBy: actorUserId, updatedAt: new Date() })
+        .where(and(eq(discountRules.tenantId, tenantId), eq(discountRules.id, rule.id)));
+    }
   }
 
   async updateAcademicYear(
@@ -417,29 +596,120 @@ export class AcademicsService {
       throw new BadRequestException("Close the academic year before deleting it.");
     }
 
+    // Structure (terms, classrooms, subject assignments, fee plans) is
+    // recreatable and cascades with the year. Only student and financial
+    // records block deletion: enrollments and classroom placements.
     const n = sql<number>`count(*)::int`;
-    const [termsN, classroomsN, enrollmentsN] = await Promise.all([
-      this.db.select({ n }).from(terms).where(and(eq(terms.tenantId, tenantId), eq(terms.academicYearId, academicYearId))),
-      this.db.select({ n }).from(classrooms).where(and(eq(classrooms.tenantId, tenantId), eq(classrooms.academicYearId, academicYearId))),
-      this.db.select({ n }).from(enrollments).where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.academicYearId, academicYearId)))
+    const [enrollmentsN, placementsN] = await Promise.all([
+      this.db
+        .select({ n })
+        .from(enrollments)
+        .where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.academicYearId, academicYearId))),
+      this.db
+        .select({ n })
+        .from(classroomStudents)
+        .innerJoin(classrooms, eq(classroomStudents.classroomId, classrooms.id))
+        .where(
+          and(
+            eq(classroomStudents.tenantId, tenantId),
+            eq(classrooms.academicYearId, academicYearId)
+          )
+        )
     ]);
     const dependencies = {
-      terms: termsN[0]?.n ?? 0,
-      classrooms: classroomsN[0]?.n ?? 0,
-      enrollments: enrollmentsN[0]?.n ?? 0
+      enrollments: enrollmentsN[0]?.n ?? 0,
+      classroomPlacements: placementsN[0]?.n ?? 0
     };
     if (Object.values(dependencies).some((c) => c > 0)) {
       throw new ConflictException({
         message:
-          "This academic year has terms, classrooms, or enrolments and cannot be deleted. Keep it closed instead.",
+          "This academic year has enrollments or student placements and cannot be deleted. Keep it closed instead.",
         dependencies
       });
     }
 
     try {
-      await this.db
-        .delete(academicYears)
-        .where(and(eq(academicYears.tenantId, tenantId), eq(academicYears.id, academicYearId)));
+      await this.db.transaction(async (tx) => {
+        const yearClassroomIds = (
+          await tx
+            .select({ id: classrooms.id })
+            .from(classrooms)
+            .where(and(eq(classrooms.tenantId, tenantId), eq(classrooms.academicYearId, academicYearId)))
+        ).map((row) => row.id);
+
+        const yearPeriodIds = (
+          await tx
+            .select({ id: timetablePeriods.id })
+            .from(timetablePeriods)
+            .where(
+              and(
+                eq(timetablePeriods.tenantId, tenantId),
+                eq(timetablePeriods.academicYearId, academicYearId)
+              )
+            )
+        ).map((row) => row.id);
+
+        if (yearPeriodIds.length) {
+          await tx.delete(timetableSlots).where(inArray(timetableSlots.periodId, yearPeriodIds));
+        }
+        if (yearClassroomIds.length) {
+          await tx.delete(timetableSlots).where(inArray(timetableSlots.classroomId, yearClassroomIds));
+        }
+        await tx
+          .delete(timetablePeriods)
+          .where(
+            and(
+              eq(timetablePeriods.tenantId, tenantId),
+              eq(timetablePeriods.academicYearId, academicYearId)
+            )
+          );
+        await tx
+          .delete(calendarEvents)
+          .where(
+            and(eq(calendarEvents.tenantId, tenantId), eq(calendarEvents.academicYearId, academicYearId))
+          );
+        await tx
+          .delete(gradeChiefAssignments)
+          .where(
+            and(
+              eq(gradeChiefAssignments.tenantId, tenantId),
+              eq(gradeChiefAssignments.academicYearId, academicYearId)
+            )
+          );
+
+        const yearPlanIds = (
+          await tx
+            .select({ id: enrollmentFeePlans.id })
+            .from(enrollmentFeePlans)
+            .where(
+              and(
+                eq(enrollmentFeePlans.tenantId, tenantId),
+                eq(enrollmentFeePlans.academicYearId, academicYearId)
+              )
+            )
+        ).map((row) => row.id);
+        if (yearPlanIds.length) {
+          await tx
+            .delete(enrollmentFeePlanGrades)
+            .where(inArray(enrollmentFeePlanGrades.planId, yearPlanIds));
+          await tx.delete(enrollmentFeePlans).where(inArray(enrollmentFeePlans.id, yearPlanIds));
+        }
+
+        await tx
+          .delete(gradeSubjects)
+          .where(
+            and(eq(gradeSubjects.tenantId, tenantId), eq(gradeSubjects.academicYearId, academicYearId))
+          );
+        if (yearClassroomIds.length) {
+          await tx.delete(classrooms).where(inArray(classrooms.id, yearClassroomIds));
+        }
+        await tx
+          .delete(terms)
+          .where(and(eq(terms.tenantId, tenantId), eq(terms.academicYearId, academicYearId)));
+        await tx
+          .delete(academicYears)
+          .where(and(eq(academicYears.tenantId, tenantId), eq(academicYears.id, academicYearId)));
+      });
     } catch (err) {
       if (isForeignKeyViolation(err)) {
         throw new ConflictException({

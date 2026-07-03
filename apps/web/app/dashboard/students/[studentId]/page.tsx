@@ -10,13 +10,15 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { SegmentedControl } from "../../../../components/pds/composites/segmented-control";
 import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
+import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
 import { EmptyState } from "../../../../components/shared/empty-state";
 import { NavigationBackLink } from "../../../../components/shared/navigation-back-link";
-import { TrailLink } from "../../../../components/shared/trail-link";
 import { Button } from "../../../../components/ui/button";
 import { StatusPill } from "../../../../components/pds/subcomponents/status-pill";
 import { StatusBadge } from "../../../../components/shared/badge";
-import { useApiMutation, useApiQuery } from "../../../lib/api";
+import { ApiError, useApiMutation, useApiQuery } from "../../../lib/api";
+import { PdsSelectField } from "../../../../components/pds";
+import { RecordFormModal } from "../../../lib/record-modal";
 import { DataTable } from "../../../lib/data-table";
 import { subjectColor } from "../../structure/subject-colors";
 import { Field } from "../../../lib/form";
@@ -262,6 +264,10 @@ export default function StudentDetailPage({
   const [requestDiscountOpen, setRequestDiscountOpen] = useState(false);
   const [previewInvoiceId, setPreviewInvoiceId] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<{ id: string; invoiceId: string | null } | null>(null);
+  const [assignTarget, setAssignTarget] = useState<Enrollment | null>(null);
+  const [assignClassroomId, setAssignClassroomId] = useState("");
+  const [assignError, setAssignError] = useState<string | null>(null);
+  const [unassignTarget, setUnassignTarget] = useState<Enrollment | null>(null);
 
   const update = useApiMutation<
     {
@@ -318,6 +324,32 @@ export default function StudentDetailPage({
     }),
     {
       invalidatePaths: (_b, tenant) => [`/tenants/${tenant}/students`]
+    }
+  );
+
+  const assignClassroom = useApiMutation<{ enrollmentId: string; classroomId: string }, unknown>(
+    (body, tenant) => ({
+      path: `/tenants/${tenant}/enrollments/${body.enrollmentId}/assign-classroom`,
+      init: { method: "POST", body: JSON.stringify({ classroomId: body.classroomId }) }
+    }),
+    {
+      invalidatePaths: (_b, tenant) => [
+        `/tenants/${tenant}/students/${studentId}/profile`,
+        `/tenants/${tenant}/enrollments?studentId=${studentId}`
+      ]
+    }
+  );
+
+  const unassignClassroom = useApiMutation<{ enrollmentId: string }, unknown>(
+    (body, tenant) => ({
+      path: `/tenants/${tenant}/enrollments/${body.enrollmentId}/unassign-classroom`,
+      init: { method: "POST" }
+    }),
+    {
+      invalidatePaths: (_b, tenant) => [
+        `/tenants/${tenant}/students/${studentId}/profile`,
+        `/tenants/${tenant}/enrollments?studentId=${studentId}`
+      ]
     }
   );
 
@@ -484,70 +516,92 @@ export default function StudentDetailPage({
       accessorFn: (row) => formatRelativeUpdated(row.lastUpdated ?? row.startDate, t("updatedToday"))
     },
     {
-      id: "details",
-      header: t("membershipDetails"),
+      id: "actions",
+      header: c("actions"),
       enableSorting: false,
       cell: ({ row }) => {
         const enrollment = row.original.enrollment;
-        if (enrollment?.status === "draft" && !enrollment.invoiceId) {
-          return (
-            <button
-              type="button"
-              className="pds-type-body-s-regular row-action"
-              onClick={() => openEnrollmentWizard(enrollment)}
-            >
-              {e("continueEnrollment")}
-            </button>
-          );
-        }
-        if (enrollment?.status === "approved" && !enrollment.invoiceId) {
-          return (
-            <button
-              type="button"
-              className="pds-type-body-s-regular row-action"
-              onClick={() => openEnrollmentWizard(enrollment)}
-            >
-              {e("continueEnrollment")}
-            </button>
-          );
+        const items = [];
+
+        if (
+          enrollment &&
+          !enrollment.invoiceId &&
+          (enrollment.status === "draft" || enrollment.status === "approved")
+        ) {
+          items.push({
+            id: "continue",
+            label: e("continueEnrollment"),
+            icon: "play_arrow",
+            onSelect: () => openEnrollmentWizard(enrollment)
+          });
         }
         if (enrollment?.invoiceId) {
           const invoiceId = enrollment.invoiceId;
-          const enrollmentId = enrollment.id;
-          const isCancelled = Boolean(enrollment.cancelledAt);
-          return (
-            <div className="row-action-group">
-              <button
-                type="button"
-                className="pds-type-body-s-regular row-action"
-                onClick={() => setPreviewInvoiceId(invoiceId)}
-              >
-                {e("viewInvoice")}
-              </button>
-              {canViewFinance && !isCancelled ? (
-                <button
-                  type="button"
-                  className="pds-type-body-s-regular row-action row-action--danger"
-                  onClick={() => setCancelTarget({ id: enrollmentId, invoiceId })}
-                >
-                  {e("cancelEnrollment")}
-                </button>
-              ) : null}
-            </div>
-          );
+          items.push({
+            id: "invoice",
+            label: e("viewInvoice"),
+            icon: "receipt_long",
+            onSelect: () => setPreviewInvoiceId(invoiceId)
+          });
+          if (canViewFinance && !enrollment.cancelledAt) {
+            items.push({
+              id: "cancel",
+              label: e("cancelEnrollment"),
+              icon: "cancel",
+              destructive: true,
+              onSelect: () => setCancelTarget({ id: enrollment.id, invoiceId })
+            });
+          }
+        }
+        if (canManage && enrollment && !enrollment.cancelledAt) {
+          if (row.original.classroomId) {
+            items.push({
+              id: "move-classroom",
+              label: t("moveClassroom"),
+              icon: "sync_alt",
+              onSelect: () => {
+                setAssignClassroomId("");
+                setAssignError(null);
+                setAssignTarget(enrollment);
+              }
+            });
+            items.push({
+              id: "remove-classroom",
+              label: t("removeFromClassroom"),
+              icon: "person_remove",
+              onSelect: () => setUnassignTarget(enrollment)
+            });
+          } else {
+            items.push({
+              id: "assign-classroom",
+              label: t("assignClassroom"),
+              icon: "door_open",
+              onSelect: () => {
+                setAssignClassroomId("");
+                setAssignError(null);
+                setAssignTarget(enrollment);
+              }
+            });
+          }
         }
         if (row.original.classroomId) {
-          return (
-            <TrailLink
-              className="pds-type-body-s-regular row-action"
-              href={`/dashboard/structure/rooms/${row.original.classroomId}`}
-              from={{ label: data?.fullName ?? t("profileTitle"), href: studentHref }}
-            >
-              {t("membershipDetailsLink")}
-            </TrailLink>
-          );
+          const classroomId = row.original.classroomId;
+          items.push({
+            id: "classroom",
+            label: t("membershipDetailsLink"),
+            icon: "meeting_room",
+            onSelect: () =>
+              navigateWithTrail(router, `/dashboard/structure/rooms/${classroomId}`, {
+                label: data?.fullName ?? t("profileTitle"),
+                href: studentHref
+              })
+          });
         }
-        return "—";
+
+        if (!items.length) {
+          return "—";
+        }
+        return <RowMoreActionsMenu ariaLabel={c("moreActions")} items={items} />;
       }
     }
   ];
@@ -861,7 +915,11 @@ export default function StudentDetailPage({
                     }
                   >
                     {membershipRows.length ? (
-                      <DataTable columns={membershipColumns} data={membershipRows} />
+                      <DataTable
+                        columns={membershipColumns}
+                        data={membershipRows}
+                        showUpdatedAt={false}
+                      />
                     ) : null}
                   </TablePanelBody>
                 </DataTableSection>
@@ -1135,6 +1193,100 @@ export default function StudentDetailPage({
               }}
             />
           ) : null}
+
+          <RecordFormModal
+            open={assignTarget !== null}
+            onOpenChange={(open) => {
+              if (!open) {
+                setAssignTarget(null);
+                setAssignError(null);
+              }
+            }}
+            title={t("assignClassroom")}
+            help={t("assignClassroomHelp")}
+            headerIcon="door_open"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              if (!assignTarget) return;
+              if (!assignClassroomId) {
+                setAssignError(c("required"));
+                return;
+              }
+              setAssignError(null);
+              try {
+                await assignClassroom.mutateAsync({
+                  enrollmentId: assignTarget.id,
+                  classroomId: assignClassroomId
+                });
+                setAssignTarget(null);
+                refreshEnrollmentData();
+              } catch (error) {
+                setAssignError(error instanceof ApiError ? error.message : c("somethingWrong"));
+              }
+            }}
+            footer={
+              <>
+                <button
+                  type="button"
+                  className="pds-type-body-m-bold btn-ghost"
+                  onClick={() => setAssignTarget(null)}
+                >
+                  {c("cancel")}
+                </button>
+                <button
+                  type="submit"
+                  className="pds-type-body-m-bold btn-primary"
+                  disabled={assignClassroom.isPending || !assignClassroomId}
+                >
+                  <Icon name="door_open" />
+                  {assignClassroom.isPending ? c("loading") : t("assignClassroomConfirm")}
+                </button>
+              </>
+            }
+          >
+            <Field label={t("membershipClass")}>
+              <PdsSelectField
+                value={assignClassroomId}
+                onValueChange={(value) =>
+                  setAssignClassroomId(typeof value === "string" ? value : "")
+                }
+                placeholder={t("assignClassroomPlaceholder")}
+                options={(classrooms.data ?? [])
+                  .filter(
+                    (room) =>
+                      !assignTarget ||
+                      (room.gradeId === assignTarget.gradeId &&
+                        room.academicYearId === assignTarget.academicYearId &&
+                        room.id !== assignTarget.classroomId)
+                  )
+                  .map((room) => ({ value: room.id, label: room.name }))}
+              />
+            </Field>
+            {assignError ? (
+              <p className="pds-type-body-m-medium error-text" role="alert">
+                {assignError}
+              </p>
+            ) : null}
+          </RecordFormModal>
+
+          <ConfirmDialog
+            open={unassignTarget !== null}
+            onOpenChange={(open) => {
+              if (!open) setUnassignTarget(null);
+            }}
+            title={t("removeFromClassroom")}
+            description={t("removeFromClassroomBody", { name: data.fullName })}
+            confirmLabel={t("removeFromClassroom")}
+            cancelLabel={c("cancel")}
+            destructive
+            loading={unassignClassroom.isPending}
+            onConfirm={async () => {
+              if (!unassignTarget) return;
+              await unassignClassroom.mutateAsync({ enrollmentId: unassignTarget.id });
+              setUnassignTarget(null);
+              refreshEnrollmentData();
+            }}
+          />
 
           {canManage ? (
             <EnrollmentWizard

@@ -141,15 +141,19 @@ export function EnrollmentWizard({
   // at confirm: check whether the picked student already has an active enrollment
   // for this academic year.
   const placementYearId = academicYears?.[0]?.id ?? "";
-  const studentEnrollments = useApiQuery<Array<{ id: string; status: string }>>((tenant) =>
+  const studentEnrollments = useApiQuery<
+    Array<{ id: string; status: string; cancelledAt: string | null }>
+  >((tenant) =>
     open && step === 0 && watchedStudentId && placementYearId
       ? `/tenants/${tenant}/enrollments?studentId=${watchedStudentId}&academicYearId=${placementYearId}`
       : null
   );
   const duplicateEnrollment = useMemo(() => {
     const activeStatuses = new Set(["draft", "submitted", "reviewed", "approved", "published"]);
+    // Cancelled enrollments keep their status but carry cancelledAt — they
+    // must not block a re-enrollment.
     return (studentEnrollments.data ?? []).some(
-      (row) => row.id !== initialDraft?.id && activeStatuses.has(row.status)
+      (row) => row.id !== initialDraft?.id && !row.cancelledAt && activeStatuses.has(row.status)
     );
   }, [studentEnrollments.data, initialDraft?.id]);
 

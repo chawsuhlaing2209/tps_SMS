@@ -13,7 +13,7 @@ import { useApiMutation, useApiQuery } from "../../lib/api";
 import { toastSuccess } from "../../lib/toast";
 import { useDashPageTitleActionsTarget } from "../dashboard-page-title";
 import { fetchAllPaginated } from "../../lib/export-csv";
-import { DataTable, DirectoryMemberCell } from "../../lib/data-table";
+import { DataTable, DirectoryMemberCell, deriveInitials } from "../../lib/data-table";
 import { PaginationControls } from "../../lib/pagination-controls";
 import { hasAnyPermission } from "../../lib/permissions";
 import { getSession } from "../../lib/session";
@@ -295,8 +295,10 @@ export function TeachersDirectory() {
                   ]}
                 />
               </div>
-              <ArchiveVisibilityFilter value={viewFilter} onChange={setViewFilter} />
             </>
+          }
+          statusControl={
+            <ArchiveVisibilityFilter value={viewFilter} onChange={setViewFilter} />
           }
         />
 
@@ -310,6 +312,18 @@ export function TeachersDirectory() {
             data={teachers.data?.data ?? []}
             getRowHref={(teacher) => `/dashboard/teachers/${teacher.id}`}
             navigationFrom={{ label: nav("teachers"), href: "/dashboard/teachers" }}
+            mobileItem={{
+              title: (teacher) => teacher.fullName,
+              initials: (teacher) => deriveInitials(teacher.fullName),
+              nameForColor: (teacher) => teacher.fullName,
+              meta: (teacher) => teacher.email ?? teacher.department ?? undefined,
+              trailing: (teacher) =>
+                teacher.archivedAt ? (
+                  <StatusBadge status="archived" label={t("statusArchived")} />
+                ) : (
+                  <StatusBadge status={teacher.status} />
+                )
+            }}
           />
         </TablePanelBody>
       </DataTableSection>

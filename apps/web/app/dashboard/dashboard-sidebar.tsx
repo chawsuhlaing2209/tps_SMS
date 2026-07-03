@@ -1,11 +1,19 @@
 "use client";
 
+import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactElement,
+  type ReactNode
+} from "react";
 import { NAV_ICONS } from "../lib/dashboard-nav-icons";
 import {
   DASHBOARD_NAV_SUBMODULES,
@@ -107,18 +115,31 @@ function moduleExpandedForPath(
   return best?.key ?? null;
 }
 
-export function DashboardSidebar({
-  displayName,
-  roles,
-  tenantSlug,
-  permissions,
-  onSignOut
-}: {
+type SidebarIdentityProps = {
   displayName: string;
   roles?: string[];
   tenantSlug: string;
   permissions: readonly string[];
   onSignOut: () => void;
+};
+
+/**
+ * Brand block + nav groups + user card — shared by the desktop `<aside>` and
+ * the mobile drawer. `collapsed` is always false in drawer mode.
+ */
+function SidebarContent({
+  displayName,
+  roles,
+  tenantSlug,
+  permissions,
+  onSignOut,
+  collapsed,
+  onNavigate,
+  headerAction
+}: SidebarIdentityProps & {
+  collapsed: boolean;
+  onNavigate?: () => void;
+  headerAction?: ReactNode;
 }) {
   const pathname = usePathname();
   const t = useTranslations("nav");
@@ -155,38 +176,14 @@ export function DashboardSidebar({
     [prefetchNav]
   );
 
-  const [collapsed, setCollapsed] = useState(false);
   const [expandedModules, setExpandedModules] = useState<Set<DashboardNavKey>>(
     () => new Set()
   );
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
-      if (stored === "true") {
-        setCollapsed(true);
-      }
-    } catch {
-      // Ignore storage errors in private browsing.
-    }
-  }, []);
-
-  useEffect(() => {
     const activeModule = moduleExpandedForPath(pathname, navGroups, permissions);
     setExpandedModules(activeModule ? new Set([activeModule]) : new Set());
   }, [pathname, navGroups, permissions]);
-
-  const toggleCollapsed = useCallback(() => {
-    setCollapsed((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
-      } catch {
-        // Ignore storage errors.
-      }
-      return next;
-    });
-  }, []);
 
   const expandModule = useCallback((key: DashboardNavKey) => {
     setExpandedModules(new Set([key]));
@@ -209,6 +206,7 @@ export function DashboardSidebar({
 
   function handleNavClick(label: string, href: string) {
     resetNavigationTrail([{ label, href }]);
+    onNavigate?.();
   }
 
   function renderSubmoduleLink(item: NavSubmoduleDef) {
@@ -428,8 +426,7 @@ export function DashboardSidebar({
   }
 
   return (
-    <Tooltip.Provider>
-      <aside className={collapsed ? "dash-sidebar dash-sidebar--collapsed" : "dash-sidebar"}>
+    <>
       <div className="dash-brand">
         <span className="dash-brand-mark" aria-hidden>
           <span className="dash-brand-mark__dot" />
@@ -438,14 +435,7 @@ export function DashboardSidebar({
           <span className="pds-type-title-l-extrabold dash-brand-name">{tenantSlug}</span>
           <span className="pds-type-label-s-medium dash-brand-sub">{t("brandTagline")}</span>
         </span>
-        <button
-          type="button"
-          className="dash-sidebar-collapse-btn"
-          onClick={toggleCollapsed}
-          aria-label={collapsed ? t("expandSidebar") : t("collapseSidebar")}
-        >
-          <Icon name={collapsed ? "chevron_right" : "chevron_left"} size={20} />
-        </button>
+        {headerAction}
       </div>
       <nav className="dash-nav">
         {navGroups.map((group) => (
@@ -461,7 +451,108 @@ export function DashboardSidebar({
         collapsed={collapsed}
         onSignOut={onSignOut}
       />
+    </>
+  );
+}
+
+export function DashboardSidebar(props: SidebarIdentityProps) {
+  const t = useTranslations("nav");
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+      if (stored === "true") {
+        setCollapsed(true);
+      }
+    } catch {
+      // Ignore storage errors in private browsing.
+    }
+  }, []);
+
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
+      } catch {
+        // Ignore storage errors.
+      }
+      return next;
+    });
+  }, []);
+
+  return (
+    <Tooltip.Provider>
+      <aside className={collapsed ? "dash-sidebar dash-sidebar--collapsed" : "dash-sidebar"}>
+        <SidebarContent
+          {...props}
+          collapsed={collapsed}
+          headerAction={
+            <button
+              type="button"
+              className="dash-sidebar-collapse-btn"
+              onClick={toggleCollapsed}
+              aria-label={collapsed ? t("expandSidebar") : t("collapseSidebar")}
+            >
+              <Icon name={collapsed ? "chevron_right" : "chevron_left"} size={20} />
+            </button>
+          }
+        />
       </aside>
     </Tooltip.Provider>
+  );
+}
+
+/**
+ * Off-canvas navigation for small screens (<960px). Reuses the full sidebar
+ * content, never collapsed — the desktop collapse preference must not apply here.
+ */
+export function DashboardSidebarDrawer({
+  open,
+  onOpenChange,
+  ...props
+}: SidebarIdentityProps & {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const t = useTranslations("nav");
+  const pathname = usePathname();
+  const close = useCallback(() => onOpenChange(false), [onOpenChange]);
+
+  useEffect(() => {
+    // Safety net: close whenever the route actually changes.
+    onOpenChange(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="dash-sidebar-drawer__overlay" />
+        <Dialog.Content
+          className="dash-sidebar-drawer"
+          aria-describedby={undefined}
+        >
+          <Dialog.Title className="sr-only">{t("navigation")}</Dialog.Title>
+          <SidebarContent
+            {...props}
+            collapsed={false}
+            onNavigate={close}
+            headerAction={
+              <Dialog.Close asChild>
+                <button
+                  type="button"
+                  className="dash-sidebar-collapse-btn"
+                  aria-label={t("closeNavigation")}
+                >
+                  <Icon name="close" size={20} />
+                </button>
+              </Dialog.Close>
+            }
+          />
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }

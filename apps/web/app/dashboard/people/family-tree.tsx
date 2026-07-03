@@ -78,31 +78,57 @@ export function FamilyTree({
       <div className="ftree">
         {guardians.length > 0 ? (
           <div className={`ftree__guardians${connected ? " ftree__guardians--connected" : ""}`}>
-            {guardians.map((guardian) => (
-              <article
-                key={guardian.id}
-                className={`ftree-card${guardian.isPrimary ? " ftree-card--primary" : ""}`}
-              >
-                <TrailLink
-                  href={`/dashboard/people/guardians/${guardian.id}`}
-                  className="ftree-card__link"
-                  from={from}
+            {guardians.map((guardian) => {
+              // Only claim a blanket relationship when it is the same for every
+              // linked student; mixed cases are spelled out on the student cards.
+              const uniqueRelationships = [
+                ...new Set(guardian.studentLinks.map((link) => link.relationship))
+              ];
+              const relationships =
+                uniqueRelationships.length === 1
+                  ? [relationshipLabel(uniqueRelationships[0]!)]
+                  : [];
+              return (
+                <article
+                  key={guardian.id}
+                  className={`ftree-card${guardian.isPrimary ? " ftree-card--primary" : ""}`}
                 >
-                  <NodeAvatar name={guardian.fullName} />
-                  <span className="pds-type-body-m-bold ftree-card__name">{guardian.fullName}</span>
-                  {guardian.phone ? (
-                    <span className="pds-type-body-s-regular ftree-card__meta">{guardian.phone}</span>
-                  ) : null}
-                </TrailLink>
-                {guardian.isPrimary ? <Chip>{t("primaryGuardian")}</Chip> : null}
-              </article>
-            ))}
+                  <TrailLink
+                    href={`/dashboard/people/guardians/${guardian.id}`}
+                    className="ftree-card__link"
+                    from={from}
+                  >
+                    <NodeAvatar name={guardian.fullName} />
+                    <span className="pds-type-body-m-bold ftree-card__name">{guardian.fullName}</span>
+                    {guardian.phone ? (
+                      <span className="pds-type-body-s-regular ftree-card__meta">{guardian.phone}</span>
+                    ) : null}
+                  </TrailLink>
+                  <span className="ftree-card__tags">
+                    {relationships.map((label) => (
+                      <Chip key={label}>{label}</Chip>
+                    ))}
+                    {guardian.isPrimary ? <Chip>{t("primaryGuardian")}</Chip> : null}
+                  </span>
+                </article>
+              );
+            })}
           </div>
         ) : null}
 
         {students.length > 0 ? (
           <div className="ftree__students">
-            {students.map((student) => (
+            {students.map((student) => {
+              // Spell out each guardian link when relationships could be
+              // ambiguous: several guardians, or a guardian whose relationship
+              // differs per student.
+              const showLinks =
+                guardians.length > 1 ||
+                guardians.some(
+                  (guardian) =>
+                    new Set(guardian.studentLinks.map((link) => link.relationship)).size > 1
+                );
+              return (
               <div key={student.id} className={connected ? "ftree__branch" : "ftree__branch ftree__branch--loose"}>
                 <article className="ftree-card">
                   <TrailLink
@@ -115,15 +141,22 @@ export function FamilyTree({
                     <span className="pds-type-body-s-regular ftree-card__meta">
                       {student.admissionNumber}
                     </span>
+                    {showLinks
+                      ? student.guardians.map((link) => {
+                          const guardian = guardians.find((g) => g.id === link.guardianId);
+                          if (!guardian) return null;
+                          return (
+                            <span
+                              key={link.guardianId}
+                              className="pds-type-body-s-regular ftree-card__meta"
+                            >
+                              {relationshipLabel(link.relationship)} · {guardian.fullName}
+                            </span>
+                          );
+                        })
+                      : null}
                   </TrailLink>
                   <span className="ftree-card__tags">
-                    {student.guardians.length ? (
-                      <span className="pds-type-body-s-regular ftree-card__meta">
-                        {student.guardians
-                          .map((link) => relationshipLabel(link.relationship))
-                          .join(", ")}
-                      </span>
-                    ) : null}
                     <StatusBadge
                       status={student.status}
                       label={s(`status_${student.status}` as "status_draft")}
@@ -147,7 +180,8 @@ export function FamilyTree({
                   ) : null}
                 </article>
               </div>
-            ))}
+              );
+            })}
           </div>
         ) : null}
       </div>

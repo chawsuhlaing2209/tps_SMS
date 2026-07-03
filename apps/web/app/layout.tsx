@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import { Bricolage_Grotesque, Hanken_Grotesk } from "next/font/google";
@@ -29,6 +29,14 @@ export const metadata: Metadata = {
   icons: {
     icon: [{ url: "/favicon.svg", type: "image/svg+xml" }]
   }
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  // Draw under notches/home indicators; safe-area insets are handled in CSS.
+  viewportFit: "cover",
+  themeColor: "#0a2a1d" // --pds-color-spring-green-1000
 };
 
 export default async function RootLayout({

@@ -5,6 +5,7 @@ import { ReqTenantContext } from "../identity/tenant-context.decorator.js";
 import type { TenantContext } from "../tenancy/tenant-context.js";
 import {
   CancelEnrollmentDto,
+  AssignClassroomDto,
   ConfirmEnrollmentDto,
   CreateEnrollmentDto,
   CreateStudentServiceDto,
@@ -81,6 +82,32 @@ export class EnrollmentsController {
       dto,
       context.permissions
     );
+  }
+
+  @Post("enrollments/:enrollmentId/assign-classroom")
+  @RequirePermissions("student.manage")
+  assignClassroom(
+    @ReqTenantContext() context: TenantContext,
+    @Param("tenantId") tenantId: string,
+    @Param("enrollmentId") enrollmentId: string,
+    @Body() dto: AssignClassroomDto
+  ) {
+    return this.enrollmentsService.assignClassroom(
+      tenantId,
+      enrollmentId,
+      dto.classroomId,
+      context.actorUserId
+    );
+  }
+
+  @Post("enrollments/:enrollmentId/unassign-classroom")
+  @RequirePermissions("student.manage")
+  unassignClassroom(
+    @ReqTenantContext() context: TenantContext,
+    @Param("tenantId") tenantId: string,
+    @Param("enrollmentId") enrollmentId: string
+  ) {
+    return this.enrollmentsService.unassignClassroom(tenantId, enrollmentId, context.actorUserId);
   }
 
   @Patch("enrollments/:enrollmentId")

@@ -407,7 +407,7 @@ export function DiscountsWorkspace() {
       ) : null}
 
       {canView ? (
-        <div className="discount-view-filter" style={{ display: "flex", justifyContent: "flex-end" }}>
+        <div className="discount-view-filter">
           <ArchiveVisibilityFilter value={viewFilter} onChange={setViewFilter} />
         </div>
       ) : null}

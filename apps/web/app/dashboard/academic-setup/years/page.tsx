@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { PdsSelectField } from "../../../../components/pds";
 import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
 import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
 import { Toggle } from "../../../../components/shared/toggle";
@@ -34,6 +35,7 @@ type AcademicYearOverview = {
 };
 
 type YearValues = { name: string; startsOn: string; endsOn: string };
+type CreateYearBody = YearValues & { importStructureFromYearId?: string };
 type FormMode = { type: "create" } | { type: "edit"; year: AcademicYearOverview };
 type ToggleConfirm = {
   year: AcademicYearOverview;
@@ -57,11 +59,12 @@ export default function AcademicYearsPage() {
   const [formMode, setFormMode] = useState<FormMode | null>(null);
   const [toggleConfirm, setToggleConfirm] = useState<ToggleConfirm | null>(null);
   const [deletingYear, setDeletingYear] = useState<AcademicYearOverview | null>(null);
+  const [importFromYearId, setImportFromYearId] = useState("");
 
   const years = useReferenceApiQuery<AcademicYearOverview[]>(SETUP_PATH);
   const activeYear = years.data?.find((year) => year.status === "active");
 
-  const create = useApiMutation<YearValues>(
+  const create = useApiMutation<CreateYearBody>(
     (body, tenant) => ({
       path: `/tenants/${tenant}/academics/academic-years`,
       init: { method: "POST", body: JSON.stringify(body) }
@@ -109,6 +112,7 @@ export default function AcademicYearsPage() {
 
   const openCreate = () => {
     form.reset({ name: "", startsOn: "", endsOn: "" });
+    setImportFromYearId("");
     setFormMode({ type: "create" });
   };
 
@@ -271,7 +275,10 @@ export default function AcademicYearsPage() {
           if (formMode?.type === "edit") {
             await update.mutateAsync({ ...values, id: formMode.year.id });
           } else {
-            await create.mutateAsync(values);
+            await create.mutateAsync({
+              ...values,
+              importStructureFromYearId: importFromYearId || undefined
+            });
           }
           setFormMode(null);
           form.reset();
@@ -315,6 +322,22 @@ export default function AcademicYearsPage() {
             ariaLabel={t("ends")}
           />
         </Field>
+        {formMode?.type === "create" && years.data?.length ? (
+          <Field label={t("importStructureLabel")}>
+            <PdsSelectField
+              value={importFromYearId}
+              onValueChange={(value) =>
+                setImportFromYearId(typeof value === "string" ? value : "")
+              }
+              placeholder={t("importStructureNone")}
+              options={years.data.map((year) => ({
+                value: year.id,
+                label: year.name
+              }))}
+            />
+            <p className="pds-type-body-s-regular muted">{t("importStructureHelp")}</p>
+          </Field>
+        ) : null}
       </RecordFormSheet>
 
       <ConfirmDialog
