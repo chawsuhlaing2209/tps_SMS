@@ -18,7 +18,7 @@ import { hasAnyPermission } from "../../../../lib/permissions";
 import { RecordFormSheet } from "../../../../lib/record-sheet";
 import { getSession } from "../../../../lib/session";
 import { StudentCombobox } from "../../../../lib/student-combobox";
-import { PdsSelectField } from "../../../../../components/pds";
+import { CheckboxList, PdsSelectField } from "../../../../../components/pds";
 import { zodResolver } from "../../../../lib/zod-resolver";
 import { useCurrentAcademicYear } from "../../../../lib/use-current-academic-year";
 import { PageHeader } from "../../../page-header-context";
@@ -52,6 +52,8 @@ type HouseholdTree = {
 
 type GuardianOption = { id: string; fullName: string };
 
+const NEW_GUARDIAN = "__new__";
+
 function householdInitials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length >= 2) {
@@ -79,6 +81,15 @@ export default function HouseholdDetailPage({
   const [addStudentId, setAddStudentId] = useState("");
   const [removeStudent, setRemoveStudent] = useState<HouseholdStudent | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [addGuardianOpen, setAddGuardianOpen] = useState(false);
+  const [guardianSelection, setGuardianSelection] = useState("");
+  const [newGuardianFirstName, setNewGuardianFirstName] = useState("");
+  const [newGuardianLastName, setNewGuardianLastName] = useState("");
+  const [newGuardianPhone, setNewGuardianPhone] = useState("");
+  const [guardianRelationship, setGuardianRelationship] = useState<
+    "father" | "mother" | "guardian" | "other"
+  >("guardian");
+  const [guardianStudentIds, setGuardianStudentIds] = useState<string[]>([]);
 
   const household = useApiQuery<HouseholdTree>(
     (tenant) => `/tenants/${tenant}/family-groups/${familyGroupId}`
@@ -89,8 +100,30 @@ export default function HouseholdDetailPage({
   );
 
   const guardians = useApiQuery<GuardianOption[]>((tenant) =>
-    editOpen ? `/tenants/${tenant}/students/guardians?limit=200` : null
+    editOpen || addGuardianOpen ? `/tenants/${tenant}/students/guardians?limit=200` : null
   );
+
+  const createGuardian = useApiMutation<
+    {
+      firstName: string;
+      lastName: string;
+      relationship: "father" | "mother" | "guardian" | "other";
+      phone: string;
+    },
+    { id: string }
+  >((body, tenant) => ({
+    path: `/tenants/${tenant}/students/guardians`,
+    init: { method: "POST", body: JSON.stringify(body) }
+  }));
+
+  const linkGuardian = useApiMutation<{
+    studentId: string;
+    guardianId: string;
+    relationship: "father" | "mother" | "guardian" | "other";
+  }>(({ studentId, ...body }, tenant) => ({
+    path: `/tenants/${tenant}/students/${studentId}/guardians`,
+    init: { method: "POST", body: JSON.stringify(body) }
+  }));
 
   const updateHousehold = useApiMutation<
     { name?: string; primaryGuardianId?: string },
@@ -223,6 +256,21 @@ export default function HouseholdDetailPage({
                   label: t("editHousehold"),
                   icon: "edit",
                   onSelect: () => setEditOpen(true)
+                },
+                {
+                  id: "add-guardian",
+                  label: t("addGuardian"),
+                  icon: "person_add",
+                  onSelect: () => {
+                    setGuardianSelection("");
+                    setNewGuardianFirstName("");
+                    setNewGuardianLastName("");
+                    setNewGuardianPhone("");
+                    setGuardianRelationship("guardian");
+                    setGuardianStudentIds(data.students.map((student) => student.id));
+                    setFormError(null);
+                    setAddGuardianOpen(true);
+                  }
                 }
               ]}
             />
@@ -378,6 +426,161 @@ export default function HouseholdDetailPage({
             value={addStudentId}
             onChange={setAddStudentId}
             excludeIds={memberIds}
+          />
+        </Field>
+        {formError ? (
+          <p className="pds-type-body-m-medium error-text" role="alert">
+            {formError}
+          </p>
+        ) : null}
+      </RecordFormSheet>
+
+      <RecordFormSheet
+        open={addGuardianOpen}
+        onOpenChange={(open) => {
+          setAddGuardianOpen(open);
+          if (!open) {
+            setFormError(null);
+          }
+        }}
+        title={t("addGuardianTitle")}
+        help={t("addGuardianHelp")}
+        onSubmit={(event) => {
+          event.preventDefault();
+          setFormError(null);
+          const creatingNew = guardianSelection === NEW_GUARDIAN;
+          if (!guardianSelection) {
+            setFormError(t("selectGuardianRequired"));
+            return;
+          }
+          if (creatingNew && (!newGuardianFirstName.trim() || !newGuardianLastName.trim())) {
+            setFormError(c("required"));
+            return;
+          }
+          if (!guardianStudentIds.length) {
+            setFormError(t("selectStudentRequired"));
+            return;
+          }
+          void (async () => {
+            try {
+              const guardianId = creatingNew
+                ? (
+                    await createGuardian.mutateAsync({
+                      firstName: newGuardianFirstName.trim(),
+                      lastName: newGuardianLastName.trim(),
+                      relationship: guardianRelationship,
+                      phone: newGuardianPhone.trim()
+                    })
+                  ).id
+                : guardianSelection;
+
+              const alreadyLinked = new Set(
+                data.guardians
+                  .filter((guardian) => guardian.id === guardianId)
+                  .flatMap((guardian) => guardian.studentLinks.map((link) => link.studentId))
+              );
+              for (const studentId of guardianStudentIds) {
+                if (alreadyLinked.has(studentId)) continue;
+                await linkGuardian.mutateAsync({
+                  studentId,
+                  guardianId,
+                  relationship: guardianRelationship
+                });
+              }
+              setAddGuardianOpen(false);
+              void household.refetch();
+            } catch (error) {
+              setFormError(error instanceof ApiError ? error.message : c("somethingWrong"));
+            }
+          })();
+        }}
+        footer={
+          <>
+            <button
+              type="button"
+              className="pds-type-body-m-bold btn-ghost"
+              onClick={() => setAddGuardianOpen(false)}
+            >
+              {c("cancel")}
+            </button>
+            <button
+              type="submit"
+              className="pds-type-body-m-bold btn-primary"
+              disabled={createGuardian.isPending || linkGuardian.isPending}
+            >
+              <Icon name="person_add" />
+              {createGuardian.isPending || linkGuardian.isPending
+                ? c("loading")
+                : t("addGuardianConfirm")}
+            </button>
+          </>
+        }
+      >
+        <Field label={t("guardianField")}>
+          <PdsSelectField
+            value={guardianSelection}
+            onValueChange={(value) =>
+              setGuardianSelection(typeof value === "string" ? value : "")
+            }
+            placeholder={t("selectGuardianPlaceholder")}
+            options={[
+              { value: NEW_GUARDIAN, label: t("createNewGuardianOption") },
+              ...(guardians.data ?? [])
+                .filter((guardian) => !data.guardians.some((g) => g.id === guardian.id))
+                .map((guardian) => ({ value: guardian.id, label: guardian.fullName }))
+            ]}
+          />
+        </Field>
+        {guardianSelection === NEW_GUARDIAN ? (
+          <>
+            <Field label={t("guardianFirstName")}>
+              <FormInput
+                value={newGuardianFirstName}
+                onChange={(event) => setNewGuardianFirstName(event.target.value)}
+              />
+            </Field>
+            <Field label={t("guardianLastName")}>
+              <FormInput
+                value={newGuardianLastName}
+                onChange={(event) => setNewGuardianLastName(event.target.value)}
+              />
+            </Field>
+            <Field label={t("guardianPhone")}>
+              <FormInput
+                value={newGuardianPhone}
+                onChange={(event) => setNewGuardianPhone(event.target.value)}
+              />
+            </Field>
+          </>
+        ) : null}
+        <Field label={t("relationshipField")}>
+          <PdsSelectField
+            value={guardianRelationship}
+            onValueChange={(value) =>
+              setGuardianRelationship(
+                (typeof value === "string" ? value : "guardian") as
+                  | "father"
+                  | "mother"
+                  | "guardian"
+                  | "other"
+              )
+            }
+            options={[
+              { value: "father", label: t("relationship_father") },
+              { value: "mother", label: t("relationship_mother") },
+              { value: "guardian", label: t("relationship_guardian") },
+              { value: "other", label: t("relationship_other") }
+            ]}
+          />
+        </Field>
+        <Field label={t("linkToStudents")}>
+          <CheckboxList
+            options={data.students.map((student) => ({
+              id: student.id,
+              label: student.fullName
+            }))}
+            selectedIds={guardianStudentIds}
+            onChange={setGuardianStudentIds}
           />
         </Field>
         {formError ? (
