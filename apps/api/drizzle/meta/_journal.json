@@ -253,6 +253,13 @@
       "when": 1783900000009,
       "tag": "0035_white_king_cobra",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1783900000010,
+      "tag": "0036_school_profile_preferences",
+      "breakpoints": true
     }
   ]
 }
