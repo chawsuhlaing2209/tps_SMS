@@ -119,6 +119,13 @@ export const DASHBOARD_NAV_SUBMODULES: Partial<
       labelKey: "navSchool",
       items: [
         {
+          href: "/dashboard/settings/school-profile",
+          icon: "school",
+          labelNs: "settings",
+          labelKey: "schoolProfile.title",
+          anyOf: ["tenant.configure"]
+        },
+        {
           href: "/dashboard/settings/school-schedule",
           icon: "schedule",
           labelNs: "settings",
@@ -130,6 +137,13 @@ export const DASHBOARD_NAV_SUBMODULES: Partial<
       labelNs: "settings",
       labelKey: "navSystem",
       items: [
+        {
+          href: "/dashboard/settings/preferences",
+          icon: "tune",
+          labelNs: "settings",
+          labelKey: "preferences.title",
+          anyOf: ["tenant.configure"]
+        },
         {
           href: "/dashboard/settings/user-roles",
           icon: "admin_panel_settings",

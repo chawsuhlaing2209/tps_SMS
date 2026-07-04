@@ -573,7 +573,8 @@ export async function seedDemoAlpha(
   await db
     .update(tenantSettings)
     .set({
-      schoolName: "Yangon International Academy",
+      schoolName: "Aung Myint Myat Private School",
+      schoolType: "private",
       receiptPrefix: "PKR",
       address: "No. 12, Pyay Road, Yangon",
       contactPhone: "+95 9 771 000 000"

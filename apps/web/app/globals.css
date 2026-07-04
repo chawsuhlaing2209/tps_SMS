@@ -798,6 +798,11 @@ h3,
   border-radius: 50% 50% 50% var(--pds-gap-x-small);
   height: var(--pds-padding-small);
   width: var(--pds-padding-small);
+}.dash-brand-mark__img {
+  border-radius: inherit;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
 }.dash-brand-text {
   display: flex;
   flex-direction: column;
@@ -1891,6 +1896,17 @@ h3,
   white-space: nowrap;
 }.padauk-table__muted {
   color: var(--pds-muted);
+}.leaves-staff-sub {
+  display: block;
+  margin-top: var(--pds-gap-xx-small);
+}.leaves-override-dot {
+  background: var(--pds-primary);
+  border-radius: 50%;
+  display: inline-block;
+  height: var(--pds-gap-x-small);
+  margin-inline-start: var(--pds-gap-x-small);
+  vertical-align: middle;
+  width: var(--pds-gap-x-small);
 }.padauk-table__stack {
   display: grid;
   gap: var(--pds-gap-xx-small);
@@ -4428,6 +4444,42 @@ button.btn-hero-outline:hover {
 }
 
 .school-schedule-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pds-gap-small);
+}
+
+.school-profile-logo {
+  align-items: center;
+  display: flex;
+  gap: var(--pds-gap-large);
+}
+
+.school-profile-logo__preview {
+  align-items: center;
+  background: var(--pds-background-layout-secondary);
+  border: 1px solid var(--pds-border-color-primary);
+  border-radius: var(--pds-border-radius-8);
+  display: flex;
+  flex-shrink: 0;
+  height: var(--pds-width-92);
+  justify-content: center;
+  overflow: hidden;
+  width: var(--pds-width-92);
+}
+
+.school-profile-logo__preview img {
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+.school-profile-logo__actions {
+  display: grid;
+  gap: var(--pds-gap-x-small);
+}
+
+.school-profile-logo__buttons {
   display: flex;
   flex-wrap: wrap;
   gap: var(--pds-gap-small);
@@ -8298,6 +8350,11 @@ button.btn-hero-outline:hover {
   height: 36px;
   justify-content: center;
   width: 36px;
+}.receipt__logo-img {
+  border-radius: inherit;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
 }.receipt__school {
   color: var(--pds-text-primary);
   display: block;

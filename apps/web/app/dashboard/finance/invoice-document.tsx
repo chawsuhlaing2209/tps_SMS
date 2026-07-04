@@ -5,6 +5,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useTranslations } from "next-intl";
 import { Invoice, type InvoiceDetailsSection } from "../../../components/pds/composites/invoice";
 import { printDocument } from "../../lib/print-document";
+import { useSchoolBrand } from "../../lib/use-school-brand";
 import { formatReceiptAmount } from "./receipt-document";
 import {
   InvoiceVerifyPayments,
@@ -128,6 +129,7 @@ export function InvoiceDocumentBody({
   canVerifyPayments?: boolean;
 }) {
   const t = useTranslations("finance.invoiceDocument");
+  const { logoUrl } = useSchoolBrand();
   const dueLabel = data.dueDate ? t("dueOn", { date: formatInvoiceDate(data.dueDate) ?? data.dueDate }) : null;
   const contact = schoolContactLine(data.schoolAddress, data.schoolContactPhone);
 
@@ -166,6 +168,7 @@ export function InvoiceDocumentBody({
     <Invoice
       schoolName={data.schoolName}
       schoolContact={contact || null}
+      logoUrl={logoUrl}
       billedToLabel={t("billedTo")}
       studentName={data.studentFullName}
       studentMeta={billedToMeta(data) || null}

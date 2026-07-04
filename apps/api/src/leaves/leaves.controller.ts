@@ -79,6 +79,15 @@ export class LeavesController {
     return this.leavesService.deleteLeaveType(tenantId, leaveTypeId, actorUserId);
   }
 
+  @Get("overview")
+  getLeaveOverview(
+    @Param("tenantId") tenantId: string,
+    @Query() query: ListLeaveQueryDto
+  ) {
+    const year = query.year ?? new Date().getFullYear();
+    return this.leavesService.getLeaveOverview(tenantId, year);
+  }
+
   @Get("summary/:staffId")
   getStaffLeaveSummary(
     @Param("tenantId") tenantId: string,

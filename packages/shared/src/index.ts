@@ -10,5 +10,6 @@ export * from "./finance-display.js";
 export * from "./finance-balance.js";
 export * from "./invoice-numbers.js";
 export * from "./payment-numbers.js";
+export * from "./school-profile.js";
 export * from "./school-schedule.js";
 export * from "./validation.js";

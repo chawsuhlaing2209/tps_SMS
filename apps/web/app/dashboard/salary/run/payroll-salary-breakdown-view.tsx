@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { Invoice, type InvoiceAction } from "../../../../components/pds/composites/invoice";
+import { useSchoolBrand } from "../../../lib/use-school-brand";
 import type { PayrollComponentOption, PayrollIncentiveOption, PayrollPackageOption } from "./payroll-staff-config-modal";
 import {
   buildPayrollInvoiceDetails,
@@ -55,6 +56,7 @@ export function PayrollSalaryBreakdownView({
   children,
 }: Props) {
   const t = useTranslations("salary");
+  const { logoUrl } = useSchoolBrand();
   const salaryMonthLabel = formatSalaryMonth(salaryMonth);
   const staffSubtitleParts = [
     staffRole,
@@ -94,6 +96,7 @@ export function PayrollSalaryBreakdownView({
       className="payroll-salary-breakdown"
         schoolName={schoolName?.trim() || t("payslipSchoolFallback")}
         schoolContact={schoolContact}
+        logoUrl={logoUrl}
         billedToLabel={t("payslipBilledTo")}
         studentName={staffFullName ?? staffId}
         studentMeta={staffSubtitleParts.join(" · ")}

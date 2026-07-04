@@ -54,6 +54,8 @@ export type PayrollIncentiveOption = {
 
 export type PayrollRecordDetail = {
   id: string;
+  schoolName: string | null;
+  schoolContact: string | null;
   staffId: string;
   staffFullName: string | null;
   staffEmail: string | null;
@@ -412,6 +414,8 @@ export function PayrollStaffConfigModal({
           <p className="invoice-modal__state pds-type-body-m-medium error-text">{t("notFound")}</p>
         ) : (
           <PayrollSalaryBreakdownView
+            schoolName={data.schoolName}
+            schoolContact={data.schoolContact}
             staffId={data.staffId}
             staffFullName={data.staffFullName}
             staffRole={data.staffRole}

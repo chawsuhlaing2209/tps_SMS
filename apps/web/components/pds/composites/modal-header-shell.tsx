@@ -12,6 +12,8 @@ export type ModalHeaderShellProps = {
   variant?: ModalHeaderShellVariant;
   title: ReactNode;
   description?: ReactNode;
+  /** School logo image for the `invoice` variant; falls back to the brand mark. */
+  logoUrl?: string | null;
   /** Rendered below copy when `variant="withStepper"`. */
   stepper?: ReactNode;
   onClose?: () => void;
@@ -43,6 +45,7 @@ export function ModalHeaderShell({
   variant = "default",
   title,
   description,
+  logoUrl,
   stepper,
   onClose,
   closeLabel = "Close",
@@ -61,7 +64,12 @@ export function ModalHeaderShell({
         <div className="pds-modal-header-shell__brand">
           <div className="pds-modal-header-shell__brand-row">
             <span className="pds-modal-header-shell__logo" aria-hidden>
-              <span className="pds-modal-header-shell__logo-mark" />
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="pds-modal-header-shell__logo-img" src={logoUrl} alt="" />
+              ) : (
+                <span className="pds-modal-header-shell__logo-mark" />
+              )}
             </span>
             <TitleTag className="pds-type-title-m-extrabold pds-modal-header-shell__title">{title}</TitleTag>
           </div>
