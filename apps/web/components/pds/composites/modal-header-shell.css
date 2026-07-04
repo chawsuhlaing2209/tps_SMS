@@ -123,3 +123,10 @@
   height: 13px;
   width: 13px;
 }
+
+.pds-modal-header-shell__logo-img {
+  border-radius: inherit;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}

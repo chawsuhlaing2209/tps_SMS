@@ -8,7 +8,7 @@ import {
 import { and, asc, eq, gte, lte, sql } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
-import { leaveRecords, leaveTypes, staffLeaveBalances } from "../db/schema.js";
+import { leaveRecords, leaveTypes, staff, staffLeaveBalances } from "../db/schema.js";
 import type {
   CreateLeaveRecordDto,
   CreateLeaveTypeDto,
@@ -240,6 +240,107 @@ export class LeavesService {
         isOverride: balanceByType.has(type.id)
       };
     });
+  }
+
+  /**
+   * Roster view: every active staff member with their per-type allocation, used
+   * days, and remaining balance for a calendar year — plus totals. Powers the
+   * all-staff leave table so managers don't have to select one person at a time.
+   */
+  async getLeaveOverview(tenantId: string, year: number) {
+    const types = await this.db
+      .select({ id: leaveTypes.id, name: leaveTypes.name, yearlyQuota: leaveTypes.yearlyQuota })
+      .from(leaveTypes)
+      .where(and(eq(leaveTypes.tenantId, tenantId), eq(leaveTypes.status, "active")))
+      .orderBy(asc(leaveTypes.name));
+
+    const staffRows = await this.db
+      .select({
+        id: staff.id,
+        fullName: staff.fullName,
+        employmentRole: staff.employmentRole,
+        department: staff.department
+      })
+      .from(staff)
+      .where(and(eq(staff.tenantId, tenantId), eq(staff.status, "active")))
+      .orderBy(asc(staff.fullName));
+
+    const balances = await this.db
+      .select({
+        staffId: staffLeaveBalances.staffId,
+        leaveTypeId: staffLeaveBalances.leaveTypeId,
+        allocatedDays: staffLeaveBalances.allocatedDays
+      })
+      .from(staffLeaveBalances)
+      .where(
+        and(
+          eq(staffLeaveBalances.tenantId, tenantId),
+          eq(staffLeaveBalances.calendarYear, year)
+        )
+      );
+
+    const usedRows = await this.db
+      .select({
+        staffId: leaveRecords.staffId,
+        leaveTypeId: leaveRecords.leaveTypeId,
+        used: sql<number>`coalesce(sum(${leaveRecords.days}), 0)::float`
+      })
+      .from(leaveRecords)
+      .where(
+        and(
+          eq(leaveRecords.tenantId, tenantId),
+          gte(leaveRecords.startDate, `${year}-01-01`),
+          lte(leaveRecords.startDate, `${year}-12-31`)
+        )
+      )
+      .groupBy(leaveRecords.staffId, leaveRecords.leaveTypeId);
+
+    const key = (staffId: string, leaveTypeId: string) => `${staffId}:${leaveTypeId}`;
+    const overrideByKey = new Map(
+      balances.map((row) => [key(row.staffId, row.leaveTypeId), Number(row.allocatedDays)])
+    );
+    const usedByKey = new Map(usedRows.map((row) => [key(row.staffId, row.leaveTypeId), row.used]));
+
+    const rows = staffRows.map((member) => {
+      let allocatedTotal = 0;
+      let usedTotal = 0;
+      const byType = types.map((type) => {
+        const override = overrideByKey.get(key(member.id, type.id));
+        const allocated = override ?? Number(type.yearlyQuota);
+        const used = usedByKey.get(key(member.id, type.id)) ?? 0;
+        allocatedTotal += allocated;
+        usedTotal += used;
+        return {
+          leaveTypeId: type.id,
+          allocated,
+          used,
+          remaining: allocated - used,
+          isOverride: override != null
+        };
+      });
+      return {
+        staffId: member.id,
+        fullName: member.fullName,
+        employmentRole: member.employmentRole,
+        department: member.department,
+        byType,
+        totals: {
+          allocated: allocatedTotal,
+          used: usedTotal,
+          remaining: allocatedTotal - usedTotal
+        }
+      };
+    });
+
+    return {
+      year,
+      leaveTypes: types.map((type) => ({
+        id: type.id,
+        name: type.name,
+        yearlyQuota: Number(type.yearlyQuota)
+      })),
+      rows
+    };
   }
 
   async setLeaveBalances(tenantId: string, actorUserId: string | undefined, dto: SetLeaveBalancesDto) {

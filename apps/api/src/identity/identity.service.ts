@@ -3,7 +3,7 @@ import { isTenantConfigurablePermission, roleDisplayFor, rolePermissions, roles 
 import { and, asc, eq, sql } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
-import { roles, sessions, tenants, userRoles, users } from "../db/schema.js";
+import { roles, sessions, tenantSettings, tenants, userRoles, users } from "../db/schema.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
 import type { AssignRoleDto, CreateSessionDto, CreateTenantRoleDto, InviteUserDto, UpdateTenantRoleDto } from "./dto.js";
 import { AuthService } from "./auth.service.js";
@@ -491,15 +491,20 @@ export class IdentityService {
 
       if (dto.email && plainPassword) {
         const [tenant] = await this.db
-          .select({ name: tenants.name, slug: tenants.slug })
+          .select({
+            name: tenants.name,
+            slug: tenants.slug,
+            schoolName: tenantSettings.schoolName
+          })
           .from(tenants)
+          .leftJoin(tenantSettings, eq(tenantSettings.tenantId, tenants.id))
           .where(eq(tenants.id, tenantId));
 
         if (tenant) {
           await this.notifications.sendOwnerWelcomeEmail({
             tenantId,
             recipient: dto.email,
-            schoolName: tenant.name,
+            schoolName: tenant.schoolName ?? tenant.name,
             tenantSlug: tenant.slug,
             displayName: dto.displayName,
             password: plainPassword

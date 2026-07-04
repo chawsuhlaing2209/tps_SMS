@@ -24,6 +24,7 @@ import { LmsModule } from "./lms/lms.module.js";
 import { PayrollModule } from "./payroll/payroll.module.js";
 import { ReportCardsModule } from "./report-cards/report-cards.module.js";
 import { SalaryModule } from "./salary/salary.module.js";
+import { SchoolProfileModule } from "./school-profile/school-profile.module.js";
 import { SchoolScheduleModule } from "./school-schedule/school-schedule.module.js";
 import { StudentsModule } from "./students/students.module.js";
 import { TenancyModule } from "./tenancy/tenancy.module.js";
@@ -57,6 +58,7 @@ import { StorageModule } from "./storage/storage.module.js";
     FacilitiesModule,
     SalaryModule,
     PayrollModule,
+    SchoolProfileModule,
     SchoolScheduleModule,
     DiscountsModule,
     CalendarModule,

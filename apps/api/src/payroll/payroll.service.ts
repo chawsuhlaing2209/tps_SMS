@@ -21,6 +21,8 @@ import {
   staffCompensationComponents,
   staffCompensationProfiles,
   staffIncentiveEligibility,
+  tenantSettings,
+  tenants,
   terms
 } from "../db/schema.js";
 import { isPercentInRange, PERCENT_RANGE_MESSAGE } from "@sms/shared";
@@ -1772,8 +1774,25 @@ export class PayrollService {
 
     const uiStatus = syncedRecord.status === "pending" ? "approved" : syncedRecord.status;
 
+    const [settingsRow] = await this.db
+      .select({
+        schoolName: tenantSettings.schoolName,
+        address: tenantSettings.address,
+        contactPhone: tenantSettings.contactPhone
+      })
+      .from(tenantSettings)
+      .where(eq(tenantSettings.tenantId, tenantId));
+    const [tenantRow] = await this.db
+      .select({ name: tenants.name })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId));
+    const schoolContact =
+      [settingsRow?.address, settingsRow?.contactPhone].filter(Boolean).join(" · ") || null;
+
     return {
       id: syncedRecord.id,
+      schoolName: settingsRow?.schoolName ?? tenantRow?.name ?? null,
+      schoolContact,
       staffId: syncedRecord.staffId,
       staffFullName: staffRow?.fullName ?? null,
       staffEmail: staffRow?.email ?? null,

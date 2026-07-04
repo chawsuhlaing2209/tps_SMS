@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { formatMMK } from "../../lib/money";
 import { Icon } from "../../lib/material-icon";
 import { printDocument } from "../../lib/print-document";
+import { useSchoolBrand } from "../../lib/use-school-brand";
 
 export type PaymentReceiptPayload = {
   id: string;
@@ -97,6 +98,7 @@ export function PaymentReceiptDocument({
   footer?: React.ReactNode;
 }) {
   const t = useTranslations("finance.receipt");
+  const { logoUrl } = useSchoolBrand();
   const issuedDate = receipt.issuedAt ? receipt.issuedAt.slice(0, 10) : "";
   const lines = buildReceiptDetailLines(
     receipt,
@@ -137,7 +139,12 @@ export function PaymentReceiptDocument({
         <div className="receipt__paper-head">
           <div className="receipt__brand">
             <span className="receipt__logo">
-              <Icon name="school" size={20} filled />
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="receipt__logo-img" src={logoUrl} alt="" />
+              ) : (
+                <Icon name="school" size={20} filled />
+              )}
             </span>
             <div>
               <strong className="pds-type-title-xs-bold receipt__school">{receipt.schoolName}</strong>

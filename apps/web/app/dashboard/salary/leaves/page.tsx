@@ -20,6 +20,7 @@ import { moduleBreadcrumbs } from "../../../lib/page-header-utils";
 import { hasAnyPermission } from "../../../lib/permissions";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { getSession } from "../../../lib/session";
+import { TableSearchInput } from "../../../lib/table-search";
 import { DataTableSection, TablePanelBody } from "../../../lib/table-panel";
 import { zodResolver } from "../../../lib/zod-resolver";
 import { ModulePageHeader } from "../../module-page-header";
@@ -32,15 +33,6 @@ type LeaveType = {
   updatedAt?: string;
 };
 
-type LeaveSummaryEntry = {
-  leaveTypeId: string;
-  name: string;
-  allocated: number;
-  used: number;
-  remaining: number;
-  isOverride: boolean;
-};
-
 type LeaveRecord = {
   id: string;
   staffId: string;
@@ -51,7 +43,28 @@ type LeaveRecord = {
   note: string | null;
 };
 
-type StaffOption = { id: string; fullName: string };
+type LeaveOverviewType = { id: string; name: string; yearlyQuota: number };
+type LeaveOverviewRow = {
+  staffId: string;
+  fullName: string;
+  employmentRole: string;
+  department: string | null;
+  byType: Array<{
+    leaveTypeId: string;
+    allocated: number;
+    used: number;
+    remaining: number;
+    isOverride: boolean;
+  }>;
+  totals: { allocated: number; used: number; remaining: number };
+};
+type LeaveOverview = {
+  year: number;
+  leaveTypes: LeaveOverviewType[];
+  rows: LeaveOverviewRow[];
+};
+
+type SelectedStaff = { id: string; fullName: string };
 
 const LEAVES_PATH = (tenant: string) => `/tenants/${tenant}/leaves`;
 
@@ -63,29 +76,30 @@ export default function LeavesPage() {
   const canManage = hasAnyPermission(permissions, ["leave.manage"]);
 
   const currentYear = new Date().getFullYear();
-  const [tab, setTab] = useState<"types" | "staff">("types");
+  const [tab, setTab] = useState<"types" | "staff">("staff");
   const [visibility, setVisibility] = useState<ArchiveVisibility>("active");
   const [typeFormOpen, setTypeFormOpen] = useState(false);
   const [editingType, setEditingType] = useState<LeaveType | null>(null);
   const [deletingType, setDeletingType] = useState<LeaveType | null>(null);
-  const [staffId, setStaffId] = useState("");
   const [year, setYear] = useState(currentYear);
+  const [staffSearch, setStaffSearch] = useState("");
+  const [selectedStaff, setSelectedStaff] = useState<SelectedStaff | null>(null);
   const [recordOpen, setRecordOpen] = useState(false);
   const [balancesOpen, setBalancesOpen] = useState(false);
+  const [recordsOpen, setRecordsOpen] = useState(false);
   const [deletingRecord, setDeletingRecord] = useState<LeaveRecord | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
   const types = useApiQuery<LeaveType[]>((tenant) =>
     canManage ? `${LEAVES_PATH(tenant)}/types` : null
   );
-  const staffList = useApiQuery<{ data: StaffOption[] }>((tenant) =>
-    canManage ? `/tenants/${tenant}/hr/staff?limit=200` : null
-  );
-  const summary = useApiQuery<LeaveSummaryEntry[]>((tenant) =>
-    canManage && staffId ? `${LEAVES_PATH(tenant)}/summary/${staffId}?year=${year}` : null
+  const overview = useApiQuery<LeaveOverview>((tenant) =>
+    canManage ? `${LEAVES_PATH(tenant)}/overview?year=${year}` : null
   );
   const records = useApiQuery<LeaveRecord[]>((tenant) =>
-    canManage && staffId ? `${LEAVES_PATH(tenant)}/records?staffId=${staffId}&year=${year}` : null
+    canManage && recordsOpen && selectedStaff
+      ? `${LEAVES_PATH(tenant)}/records?staffId=${selectedStaff.id}&year=${year}`
+      : null
   );
 
   const visibleTypes = useMemo(
@@ -97,6 +111,13 @@ export default function LeavesPage() {
     [types.data]
   );
   const typeName = (id: string) => types.data?.find((type) => type.id === id)?.name ?? id;
+
+  const overviewTypes = overview.data?.leaveTypes ?? [];
+  const filteredRows = useMemo(() => {
+    const rows = overview.data?.rows ?? [];
+    const query = staffSearch.trim().toLowerCase();
+    return query ? rows.filter((row) => row.fullName.toLowerCase().includes(query)) : rows;
+  }, [overview.data, staffSearch]);
 
   // ── Leave type form ─────────────────────────────────────────────────────────
   const typeSchema = useMemo(
@@ -201,6 +222,34 @@ export default function LeavesPage() {
     { showErrorToast: false }
   );
 
+  // ── Row actions on the all-staff roster ─────────────────────────────────────
+  const openRecord = (row: LeaveOverviewRow) => {
+    setSelectedStaff({ id: row.staffId, fullName: row.fullName });
+    recordForm.reset({
+      leaveTypeId: activeTypes[0]?.id ?? "",
+      startDate: "",
+      endDate: "",
+      days: "1",
+      note: ""
+    });
+    setFormError(null);
+    setRecordOpen(true);
+  };
+  const openBalances = (row: LeaveOverviewRow) => {
+    setSelectedStaff({ id: row.staffId, fullName: row.fullName });
+    const draft: Record<string, string> = {};
+    for (const entry of row.byType) {
+      draft[entry.leaveTypeId] = String(entry.allocated);
+    }
+    setBalancesDraft(draft);
+    setFormError(null);
+    setBalancesOpen(true);
+  };
+  const openRecords = (row: LeaveOverviewRow) => {
+    setSelectedStaff({ id: row.staffId, fullName: row.fullName });
+    setRecordsOpen(true);
+  };
+
   const typeColumns: ColumnDef<LeaveType, unknown>[] = [
     { id: "name", header: c("name"), accessorKey: "name" },
     {
@@ -279,6 +328,7 @@ export default function LeavesPage() {
   }
 
   const yearOptions = [currentYear - 1, currentYear, currentYear + 1];
+  const noLeaveTypes = !overview.isLoading && overviewTypes.length === 0;
 
   return (
     <div className="directory-page">
@@ -305,41 +355,21 @@ export default function LeavesPage() {
                 {t("addType")}
               </button>
             </>
-          ) : (
-            <button
-              type="button"
-              className="pds-type-body-m-bold btn-primary"
-              disabled={!staffId}
-              onClick={() => {
-                recordForm.reset({
-                  leaveTypeId: activeTypes[0]?.id ?? "",
-                  startDate: "",
-                  endDate: "",
-                  days: "1",
-                  note: ""
-                });
-                setFormError(null);
-                setRecordOpen(true);
-              }}
-            >
-              <Icon name="add" />
-              {t("recordLeave")}
-            </button>
-          )
+          ) : null
         }
       />
 
       <div className="benefits-workspace-toolbar">
         <FilterTabGroup aria-label={t("tabsLabel")}>
           <FilterTab
-            label={t("tabTypes")}
-            active={tab === "types"}
-            onClick={() => setTab("types")}
-          />
-          <FilterTab
             label={t("tabStaff")}
             active={tab === "staff"}
             onClick={() => setTab("staff")}
+          />
+          <FilterTab
+            label={t("tabTypes")}
+            active={tab === "types"}
+            onClick={() => setTab("types")}
           />
         </FilterTabGroup>
       </div>
@@ -361,18 +391,12 @@ export default function LeavesPage() {
       ) : (
         <>
           <div className="pds-search-filters-row">
-            <div className="pds-search-filters-row__filter--160" style={{ minWidth: 240 }}>
-              <PdsSelectField
-                variant="filter"
-                value={staffId}
-                onValueChange={(value) => setStaffId(typeof value === "string" ? value : "")}
-                placeholder={t("selectStaff")}
-                options={(staffList.data?.data ?? []).map((member) => ({
-                  value: member.id,
-                  label: member.fullName
-                }))}
-              />
-            </div>
+            <TableSearchInput
+              value={staffSearch}
+              onChange={(event) => setStaffSearch(event.target.value)}
+              placeholder={t("searchStaff")}
+              aria-label={t("searchStaff")}
+            />
             <div className="pds-search-filters-row__filter--160">
               <PdsSelectField
                 variant="filter"
@@ -387,122 +411,97 @@ export default function LeavesPage() {
                 }))}
               />
             </div>
-            {staffId ? (
-              <button
-                type="button"
-                className="pds-type-body-m-bold btn-ghost"
-                onClick={() => {
-                  const draft: Record<string, string> = {};
-                  for (const entry of summary.data ?? []) {
-                    draft[entry.leaveTypeId] = String(entry.allocated);
-                  }
-                  setBalancesDraft(draft);
-                  setFormError(null);
-                  setBalancesOpen(true);
-                }}
-              >
-                <Icon name="tune" />
-                {t("editBalances")}
-              </button>
-            ) : null}
           </div>
 
-          {!staffId ? (
-            <TablePanelBody
-              empty
-              emptyTitle={t("selectStaffTitle")}
-              emptyDescription={t("selectStaffHelp")}
-              emptyIcon="person_search"
-            >
-              <span />
-            </TablePanelBody>
-          ) : (
-            <>
-              <TablePanelBody
-                loading={summary.isLoading}
-                error={summary.isError ? c("somethingWrong") : null}
-                empty={!summary.data?.length}
-                emptyTitle={t("emptyTypesTitle")}
-                emptyDescription={t("emptyTypesDescription")}
-                emptyIcon="event_busy"
-              >
-                <table className="pds-type-body-m-medium padauk-table">
-                  <thead>
-                    <tr>
-                      <th className="pds-type-caption-s">{t("leaveType")}</th>
-                      <th className="pds-type-caption-s padauk-table__num">{t("allocated")}</th>
-                      <th className="pds-type-caption-s padauk-table__num">{t("used")}</th>
-                      <th className="pds-type-caption-s padauk-table__num">{t("remaining")}</th>
+          <TablePanelBody
+            loading={overview.isLoading}
+            error={overview.isError ? c("somethingWrong") : null}
+            empty={noLeaveTypes || !filteredRows.length}
+            emptyTitle={noLeaveTypes ? t("emptyTypesTitle") : t("emptyStaffTitle")}
+            emptyDescription={
+              noLeaveTypes ? t("emptyTypesDescription") : t("emptyStaffDescription")
+            }
+            emptyIcon={noLeaveTypes ? "event_busy" : "groups"}
+          >
+            <table className="pds-type-body-m-medium padauk-table padauk-table--pinned-end">
+              <thead>
+                <tr>
+                  <th className="pds-type-caption-s">{t("staff")}</th>
+                  {overviewTypes.map((type) => (
+                    <th key={type.id} className="pds-type-caption-s padauk-table__num">
+                      {type.name}
+                    </th>
+                  ))}
+                  <th className="pds-type-caption-s padauk-table__num">{t("remainingTotal")}</th>
+                  <th className="pds-type-caption-s" aria-hidden />
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRows.map((row) => {
+                  const byTypeId = new Map(row.byType.map((entry) => [entry.leaveTypeId, entry]));
+                  return (
+                    <tr key={row.staffId}>
+                      <td>
+                        <span className="pds-type-body-m-semibold">{row.fullName}</span>
+                        {row.department ? (
+                          <span className="pds-type-body-s-regular padauk-table__muted leaves-staff-sub">
+                            {row.department}
+                          </span>
+                        ) : null}
+                      </td>
+                      {overviewTypes.map((type) => {
+                        const entry = byTypeId.get(type.id);
+                        const allocated = entry?.allocated ?? type.yearlyQuota;
+                        const remaining = entry?.remaining ?? allocated;
+                        const used = entry?.used ?? 0;
+                        return (
+                          <td
+                            key={type.id}
+                            className="padauk-table__num"
+                            title={t("usedOfAllocated", { used, allocated })}
+                          >
+                            <strong>{remaining}</strong>
+                            <span className="padauk-table__muted"> / {allocated}</span>
+                            {entry?.isOverride ? (
+                              <span className="leaves-override-dot" title={t("overrideHint")} />
+                            ) : null}
+                          </td>
+                        );
+                      })}
+                      <td className="padauk-table__num">
+                        <strong>{t("daysValue", { count: row.totals.remaining })}</strong>
+                      </td>
+                      <td className="padauk-table__actions">
+                        <RowMoreActionsMenu
+                          ariaLabel={c("moreActions")}
+                          items={[
+                            {
+                              id: "record",
+                              label: t("recordLeave"),
+                              icon: "event_available",
+                              onSelect: () => openRecord(row)
+                            },
+                            {
+                              id: "balances",
+                              label: t("editBalances"),
+                              icon: "tune",
+                              onSelect: () => openBalances(row)
+                            },
+                            {
+                              id: "records",
+                              label: t("viewRecords"),
+                              icon: "history",
+                              onSelect: () => openRecords(row)
+                            }
+                          ]}
+                        />
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {(summary.data ?? []).map((entry) => (
-                      <tr key={entry.leaveTypeId}>
-                        <td>{entry.name}</td>
-                        <td className="padauk-table__num">
-                          {t("daysValue", { count: entry.allocated })}
-                        </td>
-                        <td className="padauk-table__num">{t("daysValue", { count: entry.used })}</td>
-                        <td className="padauk-table__num">
-                          <strong>{t("daysValue", { count: entry.remaining })}</strong>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </TablePanelBody>
-
-              <TablePanelBody
-                loading={records.isLoading}
-                error={records.isError ? c("somethingWrong") : null}
-                empty={!records.data?.length}
-                emptyTitle={t("emptyRecordsTitle")}
-                emptyDescription={t("emptyRecordsDescription")}
-                emptyIcon="history"
-              >
-                <table className="pds-type-body-m-medium padauk-table padauk-table--pinned-end">
-                  <thead>
-                    <tr>
-                      <th className="pds-type-caption-s">{t("leaveType")}</th>
-                      <th className="pds-type-caption-s">{t("dates")}</th>
-                      <th className="pds-type-caption-s padauk-table__num">{t("days")}</th>
-                      <th className="pds-type-caption-s">{t("note")}</th>
-                      <th className="pds-type-caption-s" aria-hidden />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(records.data ?? []).map((record) => (
-                      <tr key={record.id}>
-                        <td>{typeName(record.leaveTypeId)}</td>
-                        <td>
-                          {record.startDate}
-                          {record.endDate !== record.startDate ? ` → ${record.endDate}` : ""}
-                        </td>
-                        <td className="padauk-table__num">
-                          {t("daysValue", { count: Number(record.days) })}
-                        </td>
-                        <td className="padauk-table__muted">{record.note ?? "—"}</td>
-                        <td className="padauk-table__actions">
-                          <RowMoreActionsMenu
-                            ariaLabel={c("moreActions")}
-                            items={[
-                              {
-                                id: "delete",
-                                label: c("delete"),
-                                icon: "delete",
-                                destructive: true,
-                                onSelect: () => setDeletingRecord(record)
-                              }
-                            ]}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </TablePanelBody>
-            </>
-          )}
+                  );
+                })}
+              </tbody>
+            </table>
+          </TablePanelBody>
         </>
       )}
 
@@ -535,6 +534,7 @@ export default function LeavesPage() {
             setTypeFormOpen(false);
             setEditingType(null);
             void types.refetch();
+            void overview.refetch();
           } catch (error) {
             setFormError(error instanceof ApiError ? error.message : c("somethingWrong"));
           }
@@ -578,12 +578,13 @@ export default function LeavesPage() {
           setRecordOpen(open);
         }}
         title={t("recordLeave")}
-        help={t("recordLeaveHelp")}
+        help={selectedStaff ? t("recordLeaveFor", { name: selectedStaff.fullName }) : t("recordLeaveHelp")}
         onSubmit={recordForm.handleSubmit(async (values) => {
+          if (!selectedStaff) return;
           setFormError(null);
           try {
             await createRecord.mutateAsync({
-              staffId,
+              staffId: selectedStaff.id,
               leaveTypeId: values.leaveTypeId,
               startDate: values.startDate,
               endDate: values.endDate || values.startDate,
@@ -591,7 +592,7 @@ export default function LeavesPage() {
               note: values.note.trim() || undefined
             });
             setRecordOpen(false);
-            void summary.refetch();
+            void overview.refetch();
             void records.refetch();
           } catch (error) {
             setFormError(error instanceof ApiError ? error.message : c("somethingWrong"));
@@ -652,13 +653,18 @@ export default function LeavesPage() {
           setBalancesOpen(open);
         }}
         title={t("editBalances")}
-        help={t("editBalancesHelp", { year })}
+        help={
+          selectedStaff
+            ? t("editBalancesForHelp", { name: selectedStaff.fullName, year })
+            : t("editBalancesHelp", { year })
+        }
         onSubmit={async (event) => {
           event.preventDefault();
+          if (!selectedStaff) return;
           setFormError(null);
           try {
             await setBalances.mutateAsync({
-              staffId,
+              staffId: selectedStaff.id,
               calendarYear: year,
               entries: Object.entries(balancesDraft)
                 .filter(([, value]) => /^\d+(\.\d+)?$/.test(value.trim()))
@@ -668,7 +674,7 @@ export default function LeavesPage() {
                 }))
             });
             setBalancesOpen(false);
-            void summary.refetch();
+            void overview.refetch();
           } catch (error) {
             setFormError(error instanceof ApiError ? error.message : c("somethingWrong"));
           }
@@ -692,21 +698,93 @@ export default function LeavesPage() {
           </>
         }
       >
-        {(summary.data ?? []).map((entry) => (
-          <FormField key={entry.leaveTypeId} label={entry.name}>
+        {overviewTypes.map((type) => (
+          <FormField key={type.id} label={type.name}>
             <FormInput
               inputMode="decimal"
-              value={balancesDraft[entry.leaveTypeId] ?? ""}
+              value={balancesDraft[type.id] ?? ""}
               onChange={(event) =>
                 setBalancesDraft((prev) => ({
                   ...prev,
-                  [entry.leaveTypeId]: event.target.value
+                  [type.id]: event.target.value
                 }))
               }
             />
           </FormField>
         ))}
         {formError ? <p className="pds-type-body-m-medium error-text">{formError}</p> : null}
+      </RecordFormSheet>
+
+      <RecordFormSheet
+        open={recordsOpen}
+        onOpenChange={(open) => {
+          if (!open) setFormError(null);
+          setRecordsOpen(open);
+        }}
+        title={selectedStaff ? t("recordsFor", { name: selectedStaff.fullName }) : t("viewRecords")}
+        help={t("recordsSheetHelp", { year })}
+        footer={
+          <button
+            type="button"
+            className="pds-type-body-m-bold btn-primary"
+            onClick={() => setRecordsOpen(false)}
+          >
+            {c("close")}
+          </button>
+        }
+      >
+        <TablePanelBody
+          loading={records.isLoading}
+          error={records.isError ? c("somethingWrong") : null}
+          empty={!records.data?.length}
+          emptyTitle={t("emptyRecordsTitle")}
+          emptyDescription={t("emptyRecordsDescription")}
+          emptyIcon="history"
+        >
+          <table className="pds-type-body-m-medium padauk-table padauk-table--pinned-end">
+            <thead>
+              <tr>
+                <th className="pds-type-caption-s">{t("leaveType")}</th>
+                <th className="pds-type-caption-s">{t("dates")}</th>
+                <th className="pds-type-caption-s padauk-table__num">{t("days")}</th>
+                <th className="pds-type-caption-s" aria-hidden />
+              </tr>
+            </thead>
+            <tbody>
+              {(records.data ?? []).map((record) => (
+                <tr key={record.id}>
+                  <td>{typeName(record.leaveTypeId)}</td>
+                  <td>
+                    {record.startDate}
+                    {record.endDate !== record.startDate ? ` → ${record.endDate}` : ""}
+                    {record.note ? (
+                      <span className="pds-type-body-s-regular padauk-table__muted leaves-staff-sub">
+                        {record.note}
+                      </span>
+                    ) : null}
+                  </td>
+                  <td className="padauk-table__num">
+                    {t("daysValue", { count: Number(record.days) })}
+                  </td>
+                  <td className="padauk-table__actions">
+                    <RowMoreActionsMenu
+                      ariaLabel={c("moreActions")}
+                      items={[
+                        {
+                          id: "delete",
+                          label: c("delete"),
+                          icon: "delete",
+                          destructive: true,
+                          onSelect: () => setDeletingRecord(record)
+                        }
+                      ]}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TablePanelBody>
       </RecordFormSheet>
 
       <ConfirmDialog
@@ -725,6 +803,7 @@ export default function LeavesPage() {
           await deleteType.mutateAsync({ id: deletingType.id });
           setDeletingType(null);
           void types.refetch();
+          void overview.refetch();
         }}
       />
 
@@ -743,7 +822,7 @@ export default function LeavesPage() {
           if (!deletingRecord) return;
           await deleteRecord.mutateAsync({ id: deletingRecord.id });
           setDeletingRecord(null);
-          void summary.refetch();
+          void overview.refetch();
           void records.refetch();
         }}
       />

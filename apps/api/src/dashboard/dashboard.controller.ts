@@ -35,6 +35,13 @@ export class DashboardController {
     return this.dashboardService.getCurrentAcademicYear(tenantId);
   }
 
+  @Get("school-brand")
+  // student.view + report.view together cover every tenant role (see rolePermissions).
+  @RequireAnyPermissions("student.view", "report.view")
+  schoolBrand(@Param("tenantId") tenantId: string) {
+    return this.dashboardService.getSchoolBrand(tenantId);
+  }
+
   @Get("home")
   @RequireAnyPermissions(
     "student.view",
