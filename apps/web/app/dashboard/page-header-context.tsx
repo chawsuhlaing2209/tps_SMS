@@ -174,7 +174,7 @@ function useRouteHeaderFallback(): PageHeaderValue {
 
     return {
       title: t(best.navKey as "overview"),
-      breadcrumbs: [{ label: t(`group_${best.groupKey}` as "group_school") }]
+      breadcrumbs: [{ label: t(`group_${best.groupKey}` as "group_home") }]
     };
   }, [pathname, t]);
 }

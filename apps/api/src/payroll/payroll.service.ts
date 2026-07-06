@@ -737,6 +737,7 @@ export class PayrollService {
             amountOverride: staffCompensationComponents.amountOverride,
             name: payComponents.name,
             kind: payComponents.kind,
+            calculation: payComponents.calculation,
             defaultAmount: payComponents.defaultAmount
           })
           .from(staffCompensationComponents)
@@ -793,7 +794,14 @@ export class PayrollService {
       payComponentAssignments: components.map((c) => ({
         payComponentId: c.componentId,
         name: c.name,
-        amount: c.amountOverride ? num(c.amountOverride) : num(c.defaultAmount)
+        // Mirrors calcComponentAmount: a flat override wins; otherwise
+        // percent_of_basic components resolve against the base salary. Run
+        // generation books these amounts, so they must match the record view.
+        amount: c.amountOverride
+          ? num(c.amountOverride)
+          : c.calculation === "percent_of_basic"
+            ? (baseSalary * num(c.defaultAmount)) / 100
+            : num(c.defaultAmount)
       })),
       benefitEnrollments: enrollments.map((e) => ({
         packageId: e.packageId,

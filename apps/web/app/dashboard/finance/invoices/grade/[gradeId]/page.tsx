@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { useApiQuery } from "../../../../../lib/api";
 import { useCurrentAcademicYear } from "../../../../../lib/use-current-academic-year";
 import { TablePanelHead } from "../../../../../lib/table-panel";
-import { financeBreadcrumbs } from "../../../../../lib/page-header-utils";
+import { moduleBreadcrumbs } from "../../../../../lib/page-header-utils";
 import { PageHeader } from "../../../../page-header-context";
 import { NavigationBackLink } from "../../../../../../components/shared/navigation-back-link";
 import {
@@ -47,10 +47,7 @@ export default function GradeInvoicesPage({
       <div className="page-stack">
         <PageHeader
           title={pageTitle}
-          breadcrumbs={financeBreadcrumbs(nav, [
-            { label: t("invoices"), href: "/dashboard/finance/invoices" },
-            { label: pageTitle },
-          ])}
+          breadcrumbs={moduleBreadcrumbs("invoices", nav, [{ label: pageTitle }])}
           actionsPortal
         />
         <NavigationBackLink

@@ -14,7 +14,7 @@ export default function InvoicesPage() {
   const t = useTranslations("finance.invoiceList");
 
   return (
-    <InvoicesBillingShell showHeaderActions title={t("title")}>
+    <InvoicesBillingShell navKey="invoices" showHeaderActions title={t("title")}>
       <InvoicesListPanel />
     </InvoicesBillingShell>
   );

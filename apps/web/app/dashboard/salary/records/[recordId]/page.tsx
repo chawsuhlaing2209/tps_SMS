@@ -81,7 +81,7 @@ export default function SalaryRecordDetailPage({
       <PageHeader
         title={data.staffId.slice(0, 8)}
         breadcrumbs={[
-          { label: nav("group_business") },
+          { label: nav("group_hr") },
           { label: t("records"), href: "/dashboard/salary/records" }
         ]}
       />

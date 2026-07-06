@@ -9,7 +9,6 @@ import { useMemo, useState } from "react";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { Icon } from "../../../lib/material-icon";
 import { hasAnyPermission } from "../../../lib/permissions";
-import { moduleBreadcrumbs } from "../../../lib/page-header-utils";
 import { getSession } from "../../../lib/session";
 import { DataTableSection, TablePanelBody } from "../../../lib/table-panel";
 import { ModulePageHeader } from "../../module-page-header";
@@ -52,7 +51,6 @@ function incentivePaidTotal(program: IncentiveProgramRecord) {
 
 export default function SalaryBenefitsPage() {
   const t = useTranslations("salary");
-  const nav = useTranslations("nav");
   const c = useTranslations("common");
   const permissions = getSession()?.permissions;
   const canManage = hasAnyPermission(permissions, ["salary.manage"]);
@@ -185,11 +183,6 @@ export default function SalaryBenefitsPage() {
     setIncentiveFormOpen(true);
   };
 
-  const refreshAll = () => {
-    void packages.refetch();
-    void incentives.refetch();
-  };
-
   if (!canManage) {
     return null;
   }
@@ -197,16 +190,9 @@ export default function SalaryBenefitsPage() {
   return (
     <div className="directory-page benefits-page">
       <ModulePageHeader
-        navKey="salary"
+        navKey="benefits"
         title={t("bonusesBenefits")}
         description={t("bonusesBenefitsDescription")}
-        breadcrumbs={moduleBreadcrumbs("salary", nav, [{ label: t("bonusesBenefits") }])}
-        actions={
-          <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={refreshAll}>
-            <Icon name="refresh" />
-            {c("refresh")}
-          </button>
-        }
       />
 
       <StatGrid className="benefits-page__stats">

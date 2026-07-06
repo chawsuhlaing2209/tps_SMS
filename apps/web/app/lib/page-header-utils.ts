@@ -12,7 +12,7 @@ export function navGroupForKey(navKey: DashboardNavKey): DashboardNavGroupKey {
       return group.key;
     }
   }
-  return "school";
+  return "home";
 }
 
 export function navHrefForKey(navKey: DashboardNavKey): string {
@@ -35,12 +35,4 @@ export function moduleBreadcrumbs(
     crumbs.push(...tail);
   }
   return crumbs;
-}
-
-/** Finance sub-route breadcrumbs under Fees & Billing. */
-export function financeBreadcrumbs(
-  navT: (key: string) => string,
-  tail?: PageBreadcrumb[]
-): PageBreadcrumb[] {
-  return moduleBreadcrumbs("finance", navT, tail);
 }

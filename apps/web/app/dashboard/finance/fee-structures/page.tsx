@@ -304,8 +304,7 @@ export default function FeeStructuresPage() {
         title={t("feeStructuresTitle")}
         description={t("feeStructuresHelp")}
         breadcrumbs={[
-          { label: nav("group_business") },
-          { label: nav("finance"), href: "/dashboard/finance/invoices" },
+          { label: nav("group_finance") },
           { label: t("feeStructuresTitle") }
         ]}
         actions={

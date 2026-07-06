@@ -107,7 +107,8 @@
   border-radius: var(--pds-border-radius-16);
   display: grid;
   gap: var(--pds-gap-medium);
-  min-height: calc(var(--pds-width-240) + var(--pds-gap-xx-large));
+  /* --pds-gap-xx-large does not exist; an invalid calc() collapses the height. */
+  min-height: calc(var(--pds-width-240) + var(--pds-padding-xx-large));
   padding: var(--pds-padding-large);
 }
 
@@ -173,7 +174,8 @@
   align-items: end;
   display: flex;
   gap: var(--pds-gap-xx-small);
-  height: calc(var(--pds-width-92) + var(--pds-gap-xx-large));
+  /* Definite height so the % bar heights resolve; fills the .barChart plot area. */
+  height: calc(var(--pds-width-240) + var(--pds-padding-xx-large));
   justify-content: center;
   width: 100%;
 }
@@ -209,9 +211,9 @@
   align-items: center;
   border-radius: 50%;
   display: grid;
-  height: calc(var(--pds-width-92) + var(--pds-gap-xx-large));
+  height: calc(var(--pds-width-92) + var(--pds-padding-xx-large));
   place-items: center;
-  width: calc(var(--pds-width-92) + var(--pds-gap-xx-large));
+  width: calc(var(--pds-width-92) + var(--pds-padding-xx-large));
 }
 
 .donutCenter {
@@ -392,6 +394,12 @@
 .gradeList {
   display: grid;
   gap: var(--pds-gap-xx-small);
+  /* Columns live on the list, rows subgrid into them — otherwise each row
+     sizes its own `auto` columns and the bar tracks (and therefore the bar
+     lengths) are not comparable across grades. */
+  grid-template-columns:
+    minmax(var(--pds-width-92), 0.9fr) minmax(0, 2fr) max-content max-content
+    max-content;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -402,8 +410,14 @@
   border-radius: var(--pds-border-radius-8);
   display: grid;
   gap: var(--pds-gap-small);
-  grid-template-columns: minmax(var(--pds-width-92), 0.9fr) minmax(0, 2fr) auto auto auto;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   padding: var(--pds-gap-x-small) var(--pds-gap-small);
+}
+
+.gradeAmount {
+  font-variant-numeric: tabular-nums;
+  justify-self: end;
 }
 
 .gradeBarTrack {
@@ -423,7 +437,8 @@
 
 .gradeRate {
   color: var(--pds-muted);
-  min-width: var(--pds-gap-xx-large);
+  justify-self: end;
+  min-width: var(--pds-padding-xx-large);
   text-align: right;
 }
 
@@ -431,6 +446,7 @@
   color: var(--pds-status-error);
   font-size: var(--pds-type-caption-s-font-size);
   font-weight: var(--pds-type-label-s-bold-font-weight);
+  justify-self: end;
   text-align: right;
   text-decoration: none;
   white-space: nowrap;
@@ -440,6 +456,7 @@
   color: var(--pds-color-green-700);
   font-size: var(--pds-type-caption-s-font-size);
   font-weight: var(--pds-type-label-s-bold-font-weight);
+  justify-self: end;
   text-align: right;
 }
 
@@ -521,6 +538,10 @@
   .kpiGrid,
   .statusGrid,
   .deptGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .gradeList {
     grid-template-columns: 1fr;
   }
 

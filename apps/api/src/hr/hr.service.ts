@@ -245,6 +245,47 @@ export class HrService {
     return { data, total, limit, offset };
   }
 
+  /**
+   * Generic staff profile (non-teaching roles included): the staff row plus
+   * login account and RBAC role — powers the Admin › People profile page the
+   * same way teacher-profile powers the teacher page.
+   */
+  async getStaffProfile(tenantId: string, staffId: string) {
+    const [member] = await this.db
+      .select()
+      .from(staff)
+      .where(and(eq(staff.tenantId, tenantId), eq(staff.id, staffId)));
+
+    if (!member) {
+      throw new NotFoundException("Staff member not found.");
+    }
+
+    let loginEmail: string | null = null;
+    let loginStatus: string | null = null;
+    let rbacRoleKey: string | null = null;
+
+    if (member.userId) {
+      const [user] = await this.db
+        .select({ email: users.email, status: users.status })
+        .from(users)
+        .where(and(eq(users.tenantId, tenantId), eq(users.id, member.userId)));
+
+      loginEmail = user?.email ?? null;
+      loginStatus = user?.status ?? null;
+
+      const [roleRow] = await this.db
+        .select({ key: roles.key })
+        .from(userRoles)
+        .innerJoin(roles, eq(userRoles.roleId, roles.id))
+        .where(and(eq(userRoles.tenantId, tenantId), eq(userRoles.userId, member.userId)))
+        .limit(1);
+
+      rbacRoleKey = roleRow?.key ?? null;
+    }
+
+    return { ...member, loginEmail, loginStatus, rbacRoleKey };
+  }
+
   async getStaff(tenantId: string, staffId: string) {
     const [member] = await this.db
       .select()

@@ -201,7 +201,7 @@ export default function GuardianDetailPage({
         title={data.fullName}
         segment={{ label: data.fullName, href: `/dashboard/people/guardians/${guardianId}` }}
         breadcrumbs={[
-          { label: nav("group_school") },
+          { label: nav("group_people") },
           { label: p("directoryTitle"), href: "/dashboard/people" },
           { label: t("directoryTitle"), href: "/dashboard/people?tab=guardians" }
         ]}

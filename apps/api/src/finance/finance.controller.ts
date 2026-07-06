@@ -408,6 +408,14 @@ export class FinanceController {
 
   // ── Reports ────────────────────────────────────────────────────────────────
 
+  /** Year options for the finance-module academic year filter — finance users
+   * usually lack academic_setup.manage, so the academics endpoint is off-limits. */
+  @Get('academic-years')
+  @RequirePermissions('finance.manage')
+  listAcademicYears(@Param('tenantId') tenantId: string) {
+    return this.financeService.listAcademicYearOptions(tenantId)
+  }
+
   @Get('reports/overview')
   @RequirePermissions('finance.manage')
   getFinanceOverview(

@@ -1,5 +1,5 @@
 "use client";
-import { FormDatePicker, FormInput } from "../../../../components/shared/form-input";
+import { FormDatePicker, FormInput, FormTextarea } from "../../../../components/shared/form-input";
 
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
@@ -169,7 +169,7 @@ export function RequestDiscountSheet({
             />
           </Field>
           <Field label={t("reason")}>
-            <textarea
+            <FormTextarea
               rows={3}
               value={reason}
               placeholder={t("requestReasonPlaceholder")}

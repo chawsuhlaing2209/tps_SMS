@@ -16,7 +16,6 @@ import { ApiError, useApiMutation, useApiQuery } from "../../../lib/api";
 import { filterByArchiveVisibility, type ArchiveVisibility } from "../../../lib/archive-filter";
 import { DataTable } from "../../../lib/data-table";
 import { Icon } from "../../../lib/material-icon";
-import { moduleBreadcrumbs } from "../../../lib/page-header-utils";
 import { hasAnyPermission } from "../../../lib/permissions";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { getSession } from "../../../lib/session";
@@ -71,7 +70,6 @@ const LEAVES_PATH = (tenant: string) => `/tenants/${tenant}/leaves`;
 export default function LeavesPage() {
   const t = useTranslations("leaves");
   const c = useTranslations("common");
-  const nav = useTranslations("nav");
   const permissions = getSession()?.permissions;
   const canManage = hasAnyPermission(permissions, ["leave.manage"]);
 
@@ -333,10 +331,9 @@ export default function LeavesPage() {
   return (
     <div className="directory-page">
       <ModulePageHeader
-        navKey="salary"
+        navKey="leaves"
         title={t("title")}
         description={t("description")}
-        breadcrumbs={moduleBreadcrumbs("salary", nav, [{ label: t("title") }])}
         actions={
           tab === "types" ? (
             <>
