@@ -107,7 +107,7 @@
   border-radius: var(--pds-border-radius-16);
   display: grid;
   gap: var(--pds-gap-medium);
-  min-height: calc(var(--pds-width-240) + var(--pds-gap-xx-large));
+  min-height: calc(var(--pds-width-240) + var(--pds-padding-xx-large));
   padding: var(--pds-padding-large);
 }
 
@@ -173,7 +173,7 @@
   align-items: end;
   display: flex;
   gap: var(--pds-gap-xx-small);
-  height: calc(var(--pds-width-92) + var(--pds-gap-xx-large));
+  height: calc(var(--pds-width-92) + var(--pds-padding-xx-large));
   justify-content: center;
   width: 100%;
 }
@@ -209,9 +209,9 @@
   align-items: center;
   border-radius: 50%;
   display: grid;
-  height: calc(var(--pds-width-92) + var(--pds-gap-xx-large));
+  height: calc(var(--pds-width-92) + var(--pds-padding-xx-large));
   place-items: center;
-  width: calc(var(--pds-width-92) + var(--pds-gap-xx-large));
+  width: calc(var(--pds-width-92) + var(--pds-padding-xx-large));
 }
 
 .donutCenter {
@@ -361,7 +361,7 @@
 
 .cashUnit {
   color: var(--pds-text-placeholder);
-  font-size: var(--pds-type-body-m-semibold-font-size);
+  font-size: var(--pds-type-body-m-medium-font-size);
 }
 
 .cashAccounts {
@@ -423,7 +423,7 @@
 
 .gradeRate {
   color: var(--pds-muted);
-  min-width: var(--pds-gap-xx-large);
+  min-width: var(--pds-padding-xx-large);
   text-align: right;
 }
 
