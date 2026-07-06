@@ -20,7 +20,6 @@ import { zodResolver } from "../../../lib/zod-resolver";
 import { useAcademicYearContext } from "../use-academic-year-context";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
 import { ModulePageHeader } from "../../module-page-header";
-import { moduleBreadcrumbs } from "../../../lib/page-header-utils";
 
 type Term = {
   id: string;
@@ -39,7 +38,6 @@ const TERMS_PATH = (tenant: string) => `/tenants/${tenant}/academics/terms`;
 export default function TermsPage() {
   const t = useTranslations("academics");
   const setup = useTranslations("academicSetup");
-  const nav = useTranslations("nav");
   const c = useTranslations("common");
   const permissions = getSession()?.permissions;
   const canManage = hasAnyPermission(permissions, ["academic_setup.manage"]);
@@ -150,10 +148,9 @@ export default function TermsPage() {
   return (
     <>
       <ModulePageHeader
-        navKey="academicSetup"
+        navKey="terms"
         title={setup("terms")}
         description={setup("description")}
-        breadcrumbs={moduleBreadcrumbs("academicSetup", nav, [{ label: setup("terms") }])}
         actions={
           <>
             {canManage && contextYearId ? (

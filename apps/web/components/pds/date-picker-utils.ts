@@ -76,6 +76,16 @@ export function toDayRangeValue(start: DateParts, end: DateParts) {
   return `${toDayValue(start.year, start.month, start.day)}/${toDayValue(end.year, end.month, end.day)}`;
 }
 
+/** First-to-last day of the current month — the default for filter range pickers. */
+export function currentMonthDayRangeValue(now = new Date()) {
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  return toDayRangeValue(
+    { year, month, day: 1 },
+    { year, month, day: daysInMonth(year, month) }
+  );
+}
+
 export function formatMonthLabel(value: string | undefined, style: "long" | "short" = "long") {
   const parsed = parseMonthValue(value);
   if (!parsed) return "";

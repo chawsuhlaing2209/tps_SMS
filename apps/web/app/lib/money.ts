@@ -4,3 +4,9 @@
 export function formatMMK(value: number): string {
   return `${Math.round(value).toLocaleString("en-US")} MMK`;
 }
+
+/** Grouped digits without the unit — for slots that render their own "MMK"
+ *  suffix (KPI cards, status cards) or i18n messages that include the unit. */
+export function formatMoneyDigits(value: number): string {
+  return Math.round(value).toLocaleString("en-US");
+}

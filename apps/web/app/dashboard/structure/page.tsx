@@ -282,7 +282,10 @@ export default function SchoolStructurePage() {
       <PageHeader
         title={t("structureTitle")}
         description={t("description")}
-        breadcrumbs={[{ label: nav("group_academics") }]}
+        breadcrumbs={[
+          { label: nav("group_academics") },
+          { label: nav("structure") }
+        ]}
         actionsPortal
       />
       <StructureExportPortal

@@ -205,6 +205,8 @@ export class FinanceOverviewQueryDto {
   @IsUUID() @IsOptional() academicYearId?: string
   @IsString() @IsOptional() month?: string
   @IsIn(['month', 'term']) @IsOptional() scope?: 'month' | 'term'
+  /** 'lifetime' aggregates across all academic years; academicYearId is ignored. */
+  @IsIn(['lifetime']) @IsOptional() yearMode?: 'lifetime'
 }
 
 export class PaymentPlanInstallmentDto {

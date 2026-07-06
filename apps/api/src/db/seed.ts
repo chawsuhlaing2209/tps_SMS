@@ -1081,10 +1081,40 @@ async function verifyIsolation(db: ReturnType<typeof drizzle>, tenantId: string)
   }
 }
 
+/**
+ * Safety guard: demo seeding overwrites tenant settings and creates demo
+ * accounts with known passwords. It must never run against a shared
+ * (staging/production) database by accident — only against localhost, or a
+ * remote DB when the operator explicitly opts in via ALLOW_REMOTE_DB_SEED=1
+ * (e.g. CI, or a freshly provisioned staging instance).
+ */
+function assertSeedTargetIsSafe(connectionString: string) {
+  if (process.env.ALLOW_REMOTE_DB_SEED === "1") {
+    return;
+  }
+  const host = (() => {
+    try {
+      return new URL(connectionString).hostname;
+    } catch {
+      return "";
+    }
+  })();
+  const localHosts = new Set(["localhost", "127.0.0.1", "::1", "postgres", "db"]);
+  if (!localHosts.has(host)) {
+    console.error(
+      `Refusing to seed non-local database host "${host}".\n` +
+        "Demo seeding creates accounts with published passwords and overwrites tenant settings.\n" +
+        "If this is intentional (fresh staging/CI database), re-run with ALLOW_REMOTE_DB_SEED=1."
+    );
+    process.exit(1);
+  }
+}
+
 async function main() {
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL ?? "postgres://sms:sms@localhost:5432/sms"
-  });
+  const connectionString =
+    process.env.DATABASE_URL ?? "postgres://sms:sms@localhost:5432/sms";
+  assertSeedTargetIsSafe(connectionString);
+  const pool = new Pool({ connectionString });
   const db = drizzle(pool);
 
   try {
