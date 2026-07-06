@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { formatMMK } from "../../../lib/money";
+import { useTenantFormats } from "../../../lib/use-tenant-formats";
 import "./payroll-net-summary.css";
 
 export type PayrollNetSummaryProps = {
@@ -12,10 +12,6 @@ export type PayrollNetSummaryProps = {
   netPay: number;
 };
 
-function formatMoney(value: number): string {
-  return formatMMK(value);
-}
-
 export function PayrollNetSummary({
   base,
   allowances,
@@ -24,6 +20,7 @@ export function PayrollNetSummary({
   netPay
 }: PayrollNetSummaryProps) {
   const t = useTranslations("salary");
+  const { formatMoney } = useTenantFormats();
 
   return (
     <div className="payroll-net-summary" data-node-id="96:28544">

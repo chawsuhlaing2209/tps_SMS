@@ -3,19 +3,12 @@
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { Invoice, type InvoiceAction } from "../../../../components/pds/composites/invoice";
+import { useTenantFormats } from "../../../lib/use-tenant-formats";
 import type { PayrollComponentOption, PayrollIncentiveOption, PayrollPackageOption } from "./payroll-staff-config-modal";
 import {
   buildPayrollInvoiceDetails,
   computePayrollBreakdownTotals,
-  formatPayrollAmount,
 } from "./payroll-invoice-details";
-
-function formatSalaryMonth(value: string) {
-  const match = /^(\d{4})-(\d{2})$/.exec(value.trim());
-  if (!match) return value;
-  const date = new Date(Number(match[1]), Number(match[2]) - 1, 1);
-  return date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-}
 
 type Props = {
   staffId: string;
@@ -55,7 +48,8 @@ export function PayrollSalaryBreakdownView({
   children,
 }: Props) {
   const t = useTranslations("salary");
-  const salaryMonthLabel = formatSalaryMonth(salaryMonth);
+  const { formatMonth, formatMoney } = useTenantFormats();
+  const salaryMonthLabel = formatMonth(salaryMonth);
   const staffSubtitleParts = [
     staffRole,
     department,
@@ -104,7 +98,7 @@ export function PayrollSalaryBreakdownView({
         }
         details={{
           ...invoiceDetails,
-          formatAmount: formatPayrollAmount,
+          formatAmount: formatMoney,
         }}
         actions={actions}
         onClose={onClose}

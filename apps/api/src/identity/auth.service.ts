@@ -13,6 +13,7 @@ import {
   accountActivationTokens,
   passwordResetTokens,
   sessions,
+  tenantSettings,
   tenants,
   users
 } from "../db/schema.js";
@@ -238,12 +239,35 @@ export class AuthService {
       throw new UnauthorizedException("Unknown actor user.");
     }
 
+    // Display preferences ride on the bootstrap response so every signed-in
+    // user (not only tenant.configure admins) can format dates and money.
+    const [prefs] = await this.db
+      .select({
+        defaultLanguage: tenants.defaultLanguage,
+        currency: tenants.currency,
+        timezone: tenants.timezone,
+        dateFormat: tenantSettings.dateFormat,
+        timeFormat: tenantSettings.timeFormat
+      })
+      .from(tenants)
+      .leftJoin(tenantSettings, eq(tenantSettings.tenantId, tenants.id))
+      .where(eq(tenants.id, tenantId));
+
     return {
       userId: user.id,
       tenantId,
       displayName: user.displayName,
       roles: access.roles,
-      permissions: access.permissions
+      permissions: access.permissions,
+      preferences: prefs
+        ? {
+            defaultLanguage: prefs.defaultLanguage,
+            currency: prefs.currency,
+            timezone: prefs.timezone,
+            dateFormat: prefs.dateFormat ?? "DD/MM/YYYY",
+            timeFormat: prefs.timeFormat ?? "12h"
+          }
+        : null
     };
   }
 

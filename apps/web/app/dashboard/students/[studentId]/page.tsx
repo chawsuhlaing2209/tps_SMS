@@ -30,7 +30,7 @@ import { RecordList, RecordListItem, RecordListPanel } from "../../../lib/record
 import { getSession } from "../../../lib/session";
 import { TablePanelBody, DataTableSection } from "../../../lib/table-panel";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
-import { formatMMK } from "../../../lib/money";
+import { useTenantFormats } from "../../../lib/use-tenant-formats";
 import { zodResolver } from "../../../lib/zod-resolver";
 import { navigateWithTrail } from "../../../lib/navigation-trail";
 import { EnrollmentWizard } from "../../enrollments/enrollment-wizard";
@@ -222,6 +222,7 @@ export default function StudentDetailPage({
   const canRequestDiscount = hasAnyPermission(permissions, ["discount.request"]);
   const f = useTranslations("finance");
   const d = useTranslations("discounts");
+  const { formatMoney } = useTenantFormats();
   const currentYear = useCurrentAcademicYear();
 
   const activeTab = parseProfileTab(searchParams.get("tab"), canViewFinance);
@@ -828,11 +829,11 @@ export default function StudentDetailPage({
                   {f("totalOutstanding")}
                 </span>
                 <strong className="student-profile-stat__value student-profile-stat__value--compact">
-                  {billing.data ? formatMMK(billing.data.totalOutstanding) : "—"}
+                  {billing.data ? formatMoney(billing.data.totalOutstanding) : "—"}
                 </strong>
                 <span className="pds-type-body-m-medium student-profile-stat__sub">
                   {billing.data
-                    ? t("paidStatSub", { amount: formatMMK(billing.data.totalPaid) })
+                    ? t("paidStatSub", { amount: formatMoney(billing.data.totalPaid) })
                     : f("totalPaid")}
                 </span>
               </article>

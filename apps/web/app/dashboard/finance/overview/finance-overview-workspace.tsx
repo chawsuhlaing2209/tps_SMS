@@ -1,7 +1,6 @@
 "use client";
 
 import { Button, SegmentedControl } from "../../../../components/pds";
-import { formatMMK } from "../../../lib/money";
 import { EmptyState } from "../../../../components/shared/empty-state";
 import { ExportCsvButton } from "../../../../components/shared/export-csv-button";
 import { useTranslations } from "next-intl";
@@ -12,6 +11,7 @@ import { useApiQuery } from "../../../lib/api";
 import { Icon } from "../../../lib/material-icon";
 import { financeBreadcrumbs } from "../../../lib/page-header-utils";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
+import { useTenantFormats } from "../../../lib/use-tenant-formats";
 import { PageHeader } from "../../page-header-context";
 import styles from "./finance-overview.module.css";
 
@@ -78,14 +78,6 @@ const EXPENSE_COLORS: Record<string, string> = {
   salaries: "var(--pds-primary)",
 };
 
-function formatAmount(value: number): string {
-  return formatMMK(value);
-}
-
-function formatCompactAmount(value: number): string {
-  return formatMMK(value);
-}
-
 function formatTrend(value: number) {
   const prefix = value > 0 ? "+" : "";
   return `${prefix}${value}%`;
@@ -103,6 +95,7 @@ export function FinanceOverviewWorkspace() {
   const tSalary = useTranslations("salary");
   const nav = useTranslations("nav");
   const c = useTranslations("common");
+  const { formatMoney } = useTenantFormats();
 
   const currentYear = useCurrentAcademicYear();
   const [scope, setScope] = useState<OverviewScope>("month");
@@ -237,7 +230,7 @@ export function FinanceOverviewWorkspace() {
                 <span className="pds-type-label-s-bold">{t("kpiRevenue")}</span>
               </div>
               <p className={styles.kpiValue}>
-                {formatCompactAmount(data.kpis.revenue.amount)}{" "}
+                {formatMoney(data.kpis.revenue.amount)}{" "}
                 <span className={styles.kpiUnit}>MMK</span>
               </p>
               <p className={`pds-type-label-s-bold ${trendClass(data.kpis.revenue.trendPercent)}`}>
@@ -254,7 +247,7 @@ export function FinanceOverviewWorkspace() {
                 <span className="pds-type-label-s-bold">{t("kpiExpenses")}</span>
               </div>
               <p className={styles.kpiValue}>
-                {formatCompactAmount(data.kpis.expenses.amount)}{" "}
+                {formatMoney(data.kpis.expenses.amount)}{" "}
                 <span className={styles.kpiUnit}>MMK</span>
               </p>
               <p className={`pds-type-label-s-bold ${trendClass(data.kpis.expenses.trendPercent, true)}`}>
@@ -271,7 +264,7 @@ export function FinanceOverviewWorkspace() {
                 <span className="pds-type-label-s-bold">{t("kpiNetSurplus")}</span>
               </div>
               <p className={styles.kpiValue}>
-                {formatCompactAmount(data.kpis.netSurplus.amount)}{" "}
+                {formatMoney(data.kpis.netSurplus.amount)}{" "}
                 <span className={styles.kpiUnit}>MMK</span>
               </p>
               <p className={`pds-type-label-s-bold ${styles.trendUp}`}>
@@ -290,7 +283,7 @@ export function FinanceOverviewWorkspace() {
               <p className={styles.kpiValue}>{data.kpis.collectionRate.percent}%</p>
               <p className={`pds-type-label-s-bold ${styles.trendCollection}`}>
                 {t("outstandingAmount", {
-                  amount: formatCompactAmount(data.kpis.collectionRate.outstandingAmount),
+                  amount: formatMoney(data.kpis.collectionRate.outstandingAmount),
                 })}
               </p>
               <p className={`pds-type-caption-s ${styles.kpiSubtitle}`}>
@@ -339,7 +332,7 @@ export function FinanceOverviewWorkspace() {
                     <div className={styles.donutCenter}>
                       <span className="pds-type-caption-s">{t("total")}</span>
                       <strong className="pds-type-title-xs-bold">
-                        {formatCompactAmount(expenseTotal)}
+                        {formatMoney(expenseTotal)}
                       </strong>
                     </div>
                   </div>
@@ -373,7 +366,7 @@ export function FinanceOverviewWorkspace() {
                 <span className="pds-type-label-s-bold">{t("collectableTitle")}</span>
               </div>
               <p className={styles.statusValue}>
-                {formatCompactAmount(data.statusCards.collectable.amount)}{" "}
+                {formatMoney(data.statusCards.collectable.amount)}{" "}
                 <span className={styles.kpiUnit}>MMK</span>
               </p>
               <p className="pds-type-body-s-regular muted">
@@ -390,7 +383,7 @@ export function FinanceOverviewWorkspace() {
                 <span className="pds-type-label-s-bold">{t("overdueTitle")}</span>
               </div>
               <p className={`${styles.statusValue} ${styles.statusValueDanger}`}>
-                {formatCompactAmount(data.statusCards.overdue.amount)}{" "}
+                {formatMoney(data.statusCards.overdue.amount)}{" "}
                 <span className={styles.kpiUnitDanger}>MMK</span>
               </p>
               <p className={`pds-type-body-s-semibold ${styles.statusHintDanger}`}>
@@ -410,7 +403,7 @@ export function FinanceOverviewWorkspace() {
                 <span className="pds-type-label-s-bold">{t("payableTitle")}</span>
               </div>
               <p className={styles.statusValue}>
-                {formatCompactAmount(data.statusCards.payable.amount)}{" "}
+                {formatMoney(data.statusCards.payable.amount)}{" "}
                 <span className={styles.kpiUnit}>MMK</span>
               </p>
               <p className="pds-type-body-s-regular muted">{t("payableHint")}</p>
@@ -427,7 +420,7 @@ export function FinanceOverviewWorkspace() {
                 <span className="pds-type-label-s-bold">{t("cashOnHand")}</span>
               </div>
               <p className={styles.cashValue}>
-                {formatCompactAmount(data.cashPosition.total)}{" "}
+                {formatMoney(data.cashPosition.total)}{" "}
                 <span className={styles.cashUnit}>MMK</span>
               </p>
               <ul className={styles.cashAccounts}>
@@ -436,7 +429,7 @@ export function FinanceOverviewWorkspace() {
                     <div>
                       <p className="pds-type-body-s-semibold">{t(`cashAccount.${account.key}`)}</p>
                     </div>
-                    <span className="pds-type-body-m-bold">{formatCompactAmount(account.amount)}</span>
+                    <span className="pds-type-body-m-bold">{formatMoney(account.amount)}</span>
                   </li>
                 ))}
               </ul>
@@ -461,7 +454,7 @@ export function FinanceOverviewWorkspace() {
                           />
                         </div>
                         <span className="pds-type-body-s-semibold">
-                          {formatCompactAmount(grade.collected)}
+                          {formatMoney(grade.collected)}
                         </span>
                         <span className={`pds-type-label-s-bold ${styles.gradeRate}`}>
                           {collectionRate}%
@@ -472,7 +465,7 @@ export function FinanceOverviewWorkspace() {
                             className={styles.gradeDueLink}
                             from={{ label: t("title"), href: "/dashboard/finance/overview" }}
                           >
-                            {formatCompactAmount(grade.outstanding)} {t("dueLink")}
+                            {formatMoney(grade.outstanding)} {t("dueLink")}
                           </TrailLink>
                         ) : (
                           <span className={styles.gradeCleared}>{t("cleared")}</span>
@@ -493,7 +486,7 @@ export function FinanceOverviewWorkspace() {
                 <h2 className="pds-type-title-xs-bold">{t("salaryByDepartment")}</h2>
                 <p className="pds-type-body-s-regular muted">
                   {t("salarySummary", {
-                    amount: formatCompactAmount(data.salarySummary.totalAmount),
+                    amount: formatMoney(data.salarySummary.totalAmount),
                     count: data.salarySummary.staffCount,
                     scope: scope === "month" ? t("scopeMonth") : t("scopeTerm"),
                   })}
@@ -521,7 +514,7 @@ export function FinanceOverviewWorkspace() {
                     </div>
                     <div className={styles.deptAmount}>
                       <strong className="pds-type-title-xs-bold">
-                        {formatCompactAmount(dept.amount)}
+                        {formatMoney(dept.amount)}
                       </strong>
                       <span className="pds-type-caption-s muted">
                         {t("deptPaidPending", {

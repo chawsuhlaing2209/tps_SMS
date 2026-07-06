@@ -7,7 +7,6 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useApiMutation, useLiveApiQuery } from "../../../lib/api";
 import { appendNavigationTrail } from "../../../lib/navigation-trail";
-import { formatMMK } from "../../../lib/money";
 import { useDashPageTitleActionsTarget } from "../../dashboard-page-title";
 import { fetchAllPaginated } from "../../../lib/export-csv";
 import { getSession } from "../../../lib/session";
@@ -18,9 +17,9 @@ import { PadaukTableWrap } from "../../../lib/padauk-table-wrap";
 import { PaginationControls } from "../../../lib/pagination-controls";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
+import { useTenantFormats } from "../../../lib/use-tenant-formats";
 import { PageHeader } from "../../page-header-context";
 import { FinanceTableShell } from "../finance-table-shell";
-import { formatBillingMonth, formatCreatedAt } from "../format-finance";
 import { PdsSearchBar, PdsSearchFiltersRow, SegmentedControl } from "../../../../components/pds";
 import { ExportCsvButton } from "../../../../components/shared/export-csv-button";
 import { RowMoreActionsMenu, type RowMoreActionItem } from "../../../../components/shared/row-more-actions";
@@ -73,18 +72,6 @@ const METHOD_ICONS: Record<string, string> = {
   bank_transfer: "account_balance",
   cash: "payments"
 };
-
-const compactMMK = formatMMK;
-const fullNumber = formatMMK;
-
-function formatDate(value: string | null) {
-  if (!value) return "—";
-  return new Date(value).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric"
-  });
-}
 
 function defaultPaidAtLocal() {
   const now = new Date();
@@ -172,6 +159,7 @@ export default function PaymentsPage() {
   const nav = useTranslations("nav");
   const c = useTranslations("common");
   const router = useRouter();
+  const { formatDate, formatDateTime, formatMonth, formatMoney } = useTenantFormats();
 
   const currentYear = useCurrentAcademicYear();
   const academicYearId = currentYear.data?.id ?? "";
@@ -309,7 +297,7 @@ export default function PaymentsPage() {
             {termName ? <span className="pds-type-caption-s fees-metric__chip">{termName}</span> : null}
           </span>
           <strong className="pds-type-title-m-extrabold fees-metric__value">
-            {compactMMK(metricData?.receivedTotal ?? 0)}
+            {formatMoney(metricData?.receivedTotal ?? 0)}
           </strong>
           <span className="pds-type-body-s-regular fees-metric__sub">
             {t("transactionCount", { count: metricData?.receivedCount ?? 0 })}
@@ -321,7 +309,7 @@ export default function PaymentsPage() {
             <Icon name="today" size={16} />
             {t("today")}
           </span>
-          <strong className="pds-type-title-m-extrabold fees-metric__value">{compactMMK(metricData?.todayTotal ?? 0)}</strong>
+          <strong className="pds-type-title-m-extrabold fees-metric__value">{formatMoney(metricData?.todayTotal ?? 0)}</strong>
           <span className="pds-type-body-s-regular fees-metric__sub">
             {t("receiptsToday", { count: metricData?.todayCount ?? 0 })}
           </span>
@@ -350,7 +338,7 @@ export default function PaymentsPage() {
             {t("avgReceipt")}
           </span>
           <strong className="pds-type-title-m-extrabold fees-metric__value">
-            {compactMMK(metricData?.averageReceipt ?? 0)}
+            {formatMoney(metricData?.averageReceipt ?? 0)}
           </strong>
           <span className="pds-type-body-s-regular fees-metric__sub">{t("perTransaction")}</span>
         </article>
@@ -413,8 +401,8 @@ export default function PaymentsPage() {
                     <td>
                       <strong>{row.paymentNumber ?? row.receiptNumber ?? row.referenceNumber ?? "—"}</strong>
                     </td>
-                    <td className="padauk-table__muted">{formatCreatedAt(row.createdAt)}</td>
-                    <td>{formatBillingMonth(row.billingMonth)}</td>
+                    <td className="padauk-table__muted">{formatDateTime(row.createdAt)}</td>
+                    <td>{formatMonth(row.billingMonth)}</td>
                     <td>{tFinance(`paymentPlanLabels.${row.paymentPlan}`)}</td>
                     <td className="padauk-table__muted">{formatDate(row.paidAt)}</td>
                     <td>
@@ -432,7 +420,7 @@ export default function PaymentsPage() {
                     <td className="padauk-table__num">
                       <div className="pds-type-body-s-regular padauk-table__stack">
                         <strong className="padauk-table__amount">
-                          +{fullNumber(Number(row.amount))}
+                          +{formatMoney(Number(row.amount))}
                         </strong>
                         <span>{row.recordedByName ?? "—"}</span>
                       </div>
@@ -532,7 +520,7 @@ export default function PaymentsPage() {
             <div className="verify-summary__row">
               <dt className="pds-type-body-s-regular muted">{tFinance("amount")}</dt>
               <dd className="pds-type-title-xxs-extrabold verify-summary__amount">
-                {fullNumber(Number(verifyTarget.amount))}
+                {formatMoney(Number(verifyTarget.amount))}
               </dd>
             </div>
             <div className="verify-summary__row">
@@ -549,7 +537,7 @@ export default function PaymentsPage() {
             <div className="verify-summary__row">
               <dt className="pds-type-body-s-regular muted">{tFinance("paidAt")}</dt>
               <dd className="pds-type-body-m-medium">
-                {formatCreatedAt(verifyTarget.paidAt)}
+                {formatDateTime(verifyTarget.paidAt)}
               </dd>
             </div>
           </dl>

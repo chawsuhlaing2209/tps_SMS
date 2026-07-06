@@ -1,7 +1,6 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { formatMMK } from "../../lib/money";
 import Link from "next/link";
 import { TrailLink } from "../../../components/shared/trail-link";
 import { useState } from "react";
@@ -13,6 +12,7 @@ import { DomainStatusPill } from "../../../components/pds/subcomponents/status-p
 import { useApiMutation } from "../../lib/api";
 import { Icon } from "../../lib/material-icon";
 import { toastSuccess } from "../../lib/toast";
+import { useTenantFormats } from "../../lib/use-tenant-formats";
 import { BillingInvoicePreviewModal } from "../finance/invoices/_components/invoice-preview-modal";
 import { RecordPaymentModal } from "../finance/invoices/_components/record-payment-modal";
 import { StudentAddServiceSheet } from "./student-add-service-sheet";
@@ -41,10 +41,6 @@ export type StudentRecurrentBillingData = {
   invoices: RecurrentBillingInvoice[];
   activeServices: RecurrentBillingService[];
 };
-
-function formatMoney(value: number): string {
-  return formatMMK(value);
-}
 
 function serviceIcon(name: string) {
   const lower = name.toLowerCase();
@@ -82,6 +78,7 @@ export function StudentRecurrentBillingPanel({
   const f = useTranslations("finance");
   const tServices = useTranslations("finance.studentServices");
   const c = useTranslations("common");
+  const { formatMoney } = useTenantFormats();
 
   const [addOpen, setAddOpen] = useState(false);
   const [removeId, setRemoveId] = useState<string | null>(null);

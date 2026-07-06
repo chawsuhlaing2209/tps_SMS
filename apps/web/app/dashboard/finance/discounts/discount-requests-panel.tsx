@@ -11,6 +11,7 @@ import { PadaukTableWrap } from "../../../lib/padauk-table-wrap";
 import { hasAnyPermission } from "../../../lib/permissions";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { getSession } from "../../../lib/session";
+import { useTenantFormats } from "../../../lib/use-tenant-formats";
 import { Badge, type BadgeTone } from "../../../../components/shared/badge";
 import { FinanceTableShell } from "../finance-table-shell";
 
@@ -46,18 +47,10 @@ const REQUESTS_PATH = (tenant: string, status: StatusFilter) => {
   return `/tenants/${tenant}/discounts/student-discounts${qs ? `?${qs}` : ""}`;
 };
 
-function formatDate(value: string | null) {
-  if (!value) return "—";
-  return new Date(value).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric"
-  });
-}
-
 export function DiscountRequestsPanel() {
   const t = useTranslations("discounts");
   const c = useTranslations("common");
+  const { formatDate } = useTenantFormats();
   const permissions = getSession()?.permissions;
   const canApprove = hasAnyPermission(permissions, ["discount.approve"]);
 

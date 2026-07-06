@@ -21,7 +21,7 @@ import {
   mapInvoiceDetailToDocument,
   printInvoiceDocument
 } from "../../invoice-document";
-import { formatReceiptAmount } from "../../receipt-document";
+import { useTenantFormats } from "../../../../lib/use-tenant-formats";
 import { formatCreatedAt } from "../../format-finance";
 import {
   RecordPaymentModal,
@@ -94,6 +94,7 @@ export function InvoiceDetailView({
   const nav = useTranslations("nav");
   const [payModalOpen, setPayModalOpen] = useState(false);
   const isModal = variant === "modal";
+  const { formatMoney, preferences } = useTenantFormats();
 
   const canVerifyPayments = hasAnyPermission(getSession()?.permissions, ["finance.manage"]);
 
@@ -239,7 +240,7 @@ export function InvoiceDetailView({
                 <div className="payment-row__main">
                   <span>
                     {payment.kind === "refund" ? "−" : ""}
-                    {formatReceiptAmount(Number(payment.amount))} (
+                    {formatMoney(Number(payment.amount))} (
                     {tPay(`paymentMethods.${payment.method}`)})
                   </span>
                   {payment.kind === "refund" ? (
@@ -251,7 +252,7 @@ export function InvoiceDetailView({
                   )}
                 </div>
                 <p className="pds-type-body-s-regular muted payment-row__meta">
-                  {t("paidAt")}: {formatCreatedAt(payment.paidAt)}
+                  {t("paidAt")}: {formatCreatedAt(payment.paidAt, preferences)}
                   {payment.referenceNumber ? (
                     <>
                       {" "}
@@ -272,8 +273,8 @@ export function InvoiceDetailView({
         {canRecordPayment && pendingVerification > 0 ? (
           <p className="pds-type-body-s-regular muted">
             {t("recordPaymentPartialPending", {
-              pending: formatReceiptAmount(pendingVerification),
-              recordable: formatReceiptAmount(recordableBalance)
+              pending: formatMoney(pendingVerification),
+              recordable: formatMoney(recordableBalance)
             })}
           </p>
         ) : null}

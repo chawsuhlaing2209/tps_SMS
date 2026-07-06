@@ -5,7 +5,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useTranslations } from "next-intl";
 import { Invoice, type InvoiceDetailsSection } from "../../../components/pds/composites/invoice";
 import { printDocument } from "../../lib/print-document";
-import { formatReceiptAmount } from "./receipt-document";
+import { useTenantFormats } from "../../lib/use-tenant-formats";
 import {
   InvoiceVerifyPayments,
   type InvoicePaymentRow
@@ -40,13 +40,6 @@ export type InvoiceDocumentData = {
   discountLines: Array<{ id: string; name: string; amount: number }>;
   payments: InvoicePaymentRow[];
 };
-
-function formatInvoiceDate(value: string | null) {
-  if (!value) return null;
-  const date = new Date(value.includes("T") ? value : `${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
 
 function schoolContactLine(address: string | null, phone: string | null) {
   return [address, phone].filter(Boolean).join(" · ");
@@ -128,7 +121,8 @@ export function InvoiceDocumentBody({
   canVerifyPayments?: boolean;
 }) {
   const t = useTranslations("finance.invoiceDocument");
-  const dueLabel = data.dueDate ? t("dueOn", { date: formatInvoiceDate(data.dueDate) ?? data.dueDate }) : null;
+  const { formatDate, formatMoney } = useTenantFormats();
+  const dueLabel = data.dueDate ? t("dueOn", { date: formatDate(data.dueDate) }) : null;
   const contact = schoolContactLine(data.schoolAddress, data.schoolContactPhone);
 
   const actions = showActions
@@ -181,7 +175,7 @@ export function InvoiceDocumentBody({
         }),
         totalDue: data.balanceDue,
         totalLabel: t("balanceDue"),
-        formatAmount: formatReceiptAmount,
+        formatAmount: formatMoney,
       }}
       actions={actions}
       onClose={onClose}

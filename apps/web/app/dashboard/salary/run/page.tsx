@@ -1,7 +1,6 @@
 "use client";
 
 import { FormDatePicker } from "../../../../components/shared/form-input";
-import { formatMMK } from "../../../lib/money";
 import { PdsSearchBar, PdsSearchFiltersRow, PdsSelectField } from "../../../../components/pds";
 import { StatCard, StatGrid } from "../../../../components/shared/stat-card";
 import { StatusBadge } from "../../../../components/shared/badge";
@@ -14,6 +13,7 @@ import { Icon } from "../../../lib/material-icon";
 import { hasAnyPermission } from "../../../lib/permissions";
 import { moduleBreadcrumbs } from "../../../lib/page-header-utils";
 import { getSession } from "../../../lib/session";
+import { useTenantFormats } from "../../../lib/use-tenant-formats";
 import { DataTableSection, TablePanelBody } from "../../../lib/table-panel";
 import { ModulePageHeader } from "../../module-page-header";
 import { PayrollStaffConfigModal } from "./payroll-staff-config-modal";
@@ -52,14 +52,11 @@ type DepartmentOption = { id: string; name: string };
 const runsPath = (tenant: string, month: string) =>
   `/tenants/${tenant}/payroll-runs?month=${encodeURIComponent(month)}`;
 
-function formatMoney(value: number): string {
-  return formatMMK(value);
-}
-
 export default function RunPayrollPage() {
   const t = useTranslations("salary");
   const nav = useTranslations("nav");
   const c = useTranslations("common");
+  const { formatMoney } = useTenantFormats();
   const permissions = getSession()?.permissions;
   const canManage = hasAnyPermission(permissions, ["salary.manage"]);
 

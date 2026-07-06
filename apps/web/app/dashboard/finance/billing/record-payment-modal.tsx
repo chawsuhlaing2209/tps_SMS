@@ -1,12 +1,12 @@
 "use client";
 
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { formatMMK } from "../../../lib/money";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 import { useApiMutation } from "../../../lib/api";
 import { Icon } from "../../../lib/material-icon";
 import { toastError } from "../../../lib/toast";
+import { useTenantFormats } from "../../../lib/use-tenant-formats";
 import {
   PaymentReceiptDocument,
   printPaymentReceipt,
@@ -39,10 +39,6 @@ const METHOD_ICONS: Record<(typeof PAYMENT_METHODS)[number], string> = {
   cash: "payments"
 };
 
-function fullNumber(value: number): string {
-  return formatMMK(value);
-}
-
 export function RecordPaymentModal({
   open,
   onOpenChange,
@@ -61,6 +57,7 @@ export function RecordPaymentModal({
   const t = useTranslations("finance.feesBilling");
   const tReceipt = useTranslations("finance.receipt");
   const tPay = useTranslations("enrollments.paymentMethods");
+  const { formatMoney } = useTenantFormats();
 
   const owing = useMemo(() => rows.filter((row) => row.balance > 0), [rows]);
 
@@ -216,7 +213,7 @@ export function RecordPaymentModal({
                             {t("studentOption", {
                               name: row.studentFullName,
                               room: row.classroomName ?? row.gradeName,
-                              due: fullNumber(row.balance)
+                              due: formatMoney(row.balance)
                             })}
                           </option>
                         ))}
@@ -228,15 +225,15 @@ export function RecordPaymentModal({
                   <div className="pay-tiles">
                     <div className="pay-tile">
                       <span className="pay-tile__label">{t("billed")}</span>
-                      <strong className="pay-tile__value">{fullNumber(selected.billed)}</strong>
+                      <strong className="pay-tile__value">{formatMoney(selected.billed)}</strong>
                     </div>
                     <div className="pay-tile">
                       <span className="pay-tile__label">{t("paid")}</span>
-                      <strong className="pay-tile__value">{fullNumber(selected.paid)}</strong>
+                      <strong className="pay-tile__value">{formatMoney(selected.paid)}</strong>
                     </div>
                     <div className="pay-tile pay-tile--balance">
                       <span className="pay-tile__label">{t("balance")}</span>
-                      <strong className="pay-tile__value">{fullNumber(selected.balance)}</strong>
+                      <strong className="pay-tile__value">{formatMoney(selected.balance)}</strong>
                     </div>
                   </div>
 
@@ -290,7 +287,7 @@ export function RecordPaymentModal({
                         {selected.studentFullName} · {selected.classroomName ?? selected.gradeName}
                       </span>
                     </div>
-                    <strong className="pay-balance-after__value">{fullNumber(balanceAfter)}</strong>
+                    <strong className="pay-balance-after__value">{formatMoney(balanceAfter)}</strong>
                   </div>
                 </div>
               )}

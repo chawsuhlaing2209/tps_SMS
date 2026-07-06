@@ -19,7 +19,7 @@ import {
 } from "../../../components/shared/payment-method-picker";
 import { useApiMutation, useApiQuery } from "../../lib/api";
 import { Field } from "../../lib/form";
-import { formatMMK } from "../../lib/money";
+import { useTenantFormats } from "../../lib/use-tenant-formats";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { toastSuccess } from "../../lib/toast";
 import {
@@ -64,6 +64,7 @@ export function StudentAddServiceSheet({ studentId, open, onOpenChange, onAdded 
   const t = useTranslations("finance.studentServices");
   const e = useTranslations("enrollments");
   const c = useTranslations("common");
+  const { formatMoney } = useTenantFormats();
 
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
@@ -283,7 +284,7 @@ export function StudentAddServiceSheet({ studentId, open, onOpenChange, onAdded 
               title={e("optionalAddOns")}
               summary={t("addonsSummary", {
                 count: selected.length,
-                amount: formatMMK(selectedTotal)
+                amount: formatMoney(selectedTotal)
               })}
             />
             <ToggleList aria-label={e("optionalAddOns")}>

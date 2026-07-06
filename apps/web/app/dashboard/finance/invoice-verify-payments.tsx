@@ -8,7 +8,7 @@ import { Field } from "../../lib/form";
 import { Icon } from "../../lib/material-icon";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { StatusBadge } from "../../../components/shared/badge";
-import { formatReceiptAmount } from "./receipt-document";
+import { useTenantFormats } from "../../lib/use-tenant-formats";
 import { formatCreatedAt } from "./format-finance";
 
 export type InvoicePaymentRow = {
@@ -42,6 +42,7 @@ export function InvoiceVerifyPayments({
   const t = useTranslations("finance");
   const tPay = useTranslations("enrollments");
   const c = useTranslations("common");
+  const { formatMoney, preferences } = useTenantFormats();
   const [verifyTargetId, setVerifyTargetId] = useState<string | null>(null);
   const [verifyReason, setVerifyReason] = useState("");
 
@@ -86,12 +87,12 @@ export function InvoiceVerifyPayments({
             <li key={payment.id} className="invoice-doc__verify-item">
               <div className="invoice-doc__verify-main">
                 <span>
-                  {formatReceiptAmount(Number(payment.amount))} ({tPay(`paymentMethods.${payment.method}`)})
+                  {formatMoney(Number(payment.amount))} ({tPay(`paymentMethods.${payment.method}`)})
                 </span>
                 <StatusBadge status="pending" label={t("pendingVerification")} />
               </div>
               <p className="pds-type-body-s-regular muted invoice-doc__verify-meta">
-                {t("paidAt")}: {formatCreatedAt(payment.paidAt)}
+                {t("paidAt")}: {formatCreatedAt(payment.paidAt, preferences)}
                 {payment.referenceNumber ? (
                   <>
                     {" "}
@@ -158,7 +159,7 @@ export function InvoiceVerifyPayments({
               <div className="verify-summary__row">
                 <dt className="pds-type-body-s-regular muted">{t("amount")}</dt>
                 <dd className="pds-type-title-xxs-extrabold verify-summary__amount">
-                  {formatReceiptAmount(Number(target.amount))}
+                  {formatMoney(Number(target.amount))}
                 </dd>
               </div>
               <div className="verify-summary__row">
@@ -174,7 +175,7 @@ export function InvoiceVerifyPayments({
               </div>
               <div className="verify-summary__row">
                 <dt className="pds-type-body-s-regular muted">{t("paidAt")}</dt>
-                <dd className="pds-type-body-m-medium">{formatCreatedAt(target.paidAt)}</dd>
+                <dd className="pds-type-body-m-medium">{formatCreatedAt(target.paidAt, preferences)}</dd>
               </div>
             </dl>
           ) : null}
