@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, SegmentedControl } from "../../../../components/pds";
-import { formatMMK } from "../../../lib/money";
+import { formatMMK, formatMoneyDigits } from "../../../lib/money";
 import { EmptyState } from "../../../../components/shared/empty-state";
 import { ExportCsvButton } from "../../../../components/shared/export-csv-button";
 import { useTranslations } from "next-intl";
@@ -10,7 +10,7 @@ import { TrailLink } from "../../../../components/shared/trail-link";
 import { useMemo, useState } from "react";
 import { useApiQuery } from "../../../lib/api";
 import { Icon } from "../../../lib/material-icon";
-import { financeBreadcrumbs } from "../../../lib/page-header-utils";
+import { moduleBreadcrumbs } from "../../../lib/page-header-utils";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
 import { PageHeader } from "../../page-header-context";
 import styles from "./finance-overview.module.css";
@@ -78,12 +78,14 @@ const EXPENSE_COLORS: Record<string, string> = {
   salaries: "var(--pds-primary)",
 };
 
-function formatAmount(value: number): string {
+/** Standalone amounts (grade rows, cash accounts, dept cards) — includes "MMK". */
+function formatCompactAmount(value: number): string {
   return formatMMK(value);
 }
 
-function formatCompactAmount(value: number): string {
-  return formatMMK(value);
+/** For values followed by their own MMK unit span or an i18n message with "MMK". */
+function formatDigits(value: number): string {
+  return formatMoneyDigits(value);
 }
 
 function formatTrend(value: number) {
@@ -197,7 +199,7 @@ export function FinanceOverviewWorkspace() {
     <div className={`page-stack ${styles.root}`}>
       <PageHeader
         title={t("title")}
-        breadcrumbs={financeBreadcrumbs(nav, [{ label: t("nav") }])}
+        breadcrumbs={moduleBreadcrumbs("financeOverview", nav)}
         actions={headerActions}
       />
 
@@ -237,7 +239,7 @@ export function FinanceOverviewWorkspace() {
                 <span className="pds-type-label-s-bold">{t("kpiRevenue")}</span>
               </div>
               <p className={styles.kpiValue}>
-                {formatCompactAmount(data.kpis.revenue.amount)}{" "}
+                {formatDigits(data.kpis.revenue.amount)}{" "}
                 <span className={styles.kpiUnit}>MMK</span>
               </p>
               <p className={`pds-type-label-s-bold ${trendClass(data.kpis.revenue.trendPercent)}`}>
@@ -254,7 +256,7 @@ export function FinanceOverviewWorkspace() {
                 <span className="pds-type-label-s-bold">{t("kpiExpenses")}</span>
               </div>
               <p className={styles.kpiValue}>
-                {formatCompactAmount(data.kpis.expenses.amount)}{" "}
+                {formatDigits(data.kpis.expenses.amount)}{" "}
                 <span className={styles.kpiUnit}>MMK</span>
               </p>
               <p className={`pds-type-label-s-bold ${trendClass(data.kpis.expenses.trendPercent, true)}`}>
@@ -271,7 +273,7 @@ export function FinanceOverviewWorkspace() {
                 <span className="pds-type-label-s-bold">{t("kpiNetSurplus")}</span>
               </div>
               <p className={styles.kpiValue}>
-                {formatCompactAmount(data.kpis.netSurplus.amount)}{" "}
+                {formatDigits(data.kpis.netSurplus.amount)}{" "}
                 <span className={styles.kpiUnit}>MMK</span>
               </p>
               <p className={`pds-type-label-s-bold ${styles.trendUp}`}>
@@ -290,7 +292,7 @@ export function FinanceOverviewWorkspace() {
               <p className={styles.kpiValue}>{data.kpis.collectionRate.percent}%</p>
               <p className={`pds-type-label-s-bold ${styles.trendCollection}`}>
                 {t("outstandingAmount", {
-                  amount: formatCompactAmount(data.kpis.collectionRate.outstandingAmount),
+                  amount: formatDigits(data.kpis.collectionRate.outstandingAmount),
                 })}
               </p>
               <p className={`pds-type-caption-s ${styles.kpiSubtitle}`}>
@@ -373,7 +375,7 @@ export function FinanceOverviewWorkspace() {
                 <span className="pds-type-label-s-bold">{t("collectableTitle")}</span>
               </div>
               <p className={styles.statusValue}>
-                {formatCompactAmount(data.statusCards.collectable.amount)}{" "}
+                {formatDigits(data.statusCards.collectable.amount)}{" "}
                 <span className={styles.kpiUnit}>MMK</span>
               </p>
               <p className="pds-type-body-s-regular muted">
@@ -390,7 +392,7 @@ export function FinanceOverviewWorkspace() {
                 <span className="pds-type-label-s-bold">{t("overdueTitle")}</span>
               </div>
               <p className={`${styles.statusValue} ${styles.statusValueDanger}`}>
-                {formatCompactAmount(data.statusCards.overdue.amount)}{" "}
+                {formatDigits(data.statusCards.overdue.amount)}{" "}
                 <span className={styles.kpiUnitDanger}>MMK</span>
               </p>
               <p className={`pds-type-body-s-semibold ${styles.statusHintDanger}`}>
@@ -410,7 +412,7 @@ export function FinanceOverviewWorkspace() {
                 <span className="pds-type-label-s-bold">{t("payableTitle")}</span>
               </div>
               <p className={styles.statusValue}>
-                {formatCompactAmount(data.statusCards.payable.amount)}{" "}
+                {formatDigits(data.statusCards.payable.amount)}{" "}
                 <span className={styles.kpiUnit}>MMK</span>
               </p>
               <p className="pds-type-body-s-regular muted">{t("payableHint")}</p>
@@ -427,7 +429,7 @@ export function FinanceOverviewWorkspace() {
                 <span className="pds-type-label-s-bold">{t("cashOnHand")}</span>
               </div>
               <p className={styles.cashValue}>
-                {formatCompactAmount(data.cashPosition.total)}{" "}
+                {formatDigits(data.cashPosition.total)}{" "}
                 <span className={styles.cashUnit}>MMK</span>
               </p>
               <ul className={styles.cashAccounts}>
@@ -460,7 +462,7 @@ export function FinanceOverviewWorkspace() {
                             }}
                           />
                         </div>
-                        <span className="pds-type-body-s-semibold">
+                        <span className={`pds-type-body-s-semibold ${styles.gradeAmount}`}>
                           {formatCompactAmount(grade.collected)}
                         </span>
                         <span className={`pds-type-label-s-bold ${styles.gradeRate}`}>
@@ -493,7 +495,7 @@ export function FinanceOverviewWorkspace() {
                 <h2 className="pds-type-title-xs-bold">{t("salaryByDepartment")}</h2>
                 <p className="pds-type-body-s-regular muted">
                   {t("salarySummary", {
-                    amount: formatCompactAmount(data.salarySummary.totalAmount),
+                    amount: formatDigits(data.salarySummary.totalAmount),
                     count: data.salarySummary.staffCount,
                     scope: scope === "month" ? t("scopeMonth") : t("scopeTerm"),
                   })}

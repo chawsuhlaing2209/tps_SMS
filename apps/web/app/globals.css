@@ -6563,15 +6563,24 @@ button.btn-hero-outline:hover {
   white-space: nowrap;
 }
 
-/* Text area input — Figma 124:8799 */
+/* Text area input — Figma 124:8799; surface/border match TextInput (.form-field input). */
 .text-area-input {
   align-items: stretch;
-  background: var(--pds-background-primary, #fff);
-  border: 0.5px solid var(--pds-border-color-primary);
+  background: var(--pds-input-background-default);
+  border: var(--pds-button-border) solid var(--pds-input-border-default);
   border-radius: var(--pds-border-radius-8);
   display: flex;
   overflow: hidden;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
   width: 100%;
+}
+
+.text-area-input:hover:not(.text-area-input--disabled) {
+  background: var(--pds-input-background-hover);
+  border-color: var(--pds-border-color-active);
 }
 
 .text-area-input:focus-within {
@@ -6610,7 +6619,7 @@ button.btn-hero-outline:hover {
 }
 
 .text-area-input__body {
-  background: var(--pds-background-layout-secondary);
+  background: transparent;
   min-width: 0;
   padding: var(--pds-padding-small) var(--pds-padding-medium);
   width: 100%;

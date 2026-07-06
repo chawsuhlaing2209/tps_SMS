@@ -17,7 +17,7 @@ export default function BillingCollectionPage() {
   const tFees = useTranslations("finance.feesBilling");
 
   return (
-    <InvoicesBillingShell title={tFees("collectionView")} actionsPortal>
+    <InvoicesBillingShell navKey="collection" title={tFees("collectionView")} actionsPortal>
       <CollectionRosterPanel />
     </InvoicesBillingShell>
   );

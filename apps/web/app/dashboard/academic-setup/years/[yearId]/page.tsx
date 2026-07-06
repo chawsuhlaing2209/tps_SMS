@@ -47,7 +47,7 @@ export default function AcademicYearDetailPage({
       <PageHeader
         title={year?.name ?? t("years")}
         breadcrumbs={[
-          { label: nav("academicSetup") },
+          { label: nav("group_academics") },
           { label: setup("years"), href: "/dashboard/academic-setup/years" }
         ]}
       />

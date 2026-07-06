@@ -578,7 +578,7 @@ export default function TeacherProfilePage({
         title={t("profileTitle")}
         segment={{ label: teacher.fullName, href: teacherHref }}
         breadcrumbs={[
-          { label: nav("group_school") },
+          { label: nav("group_people") },
           { label: nav("teachers"), href: "/dashboard/teachers" },
           { label: teacher.fullName }
         ]}

@@ -27,6 +27,22 @@ if [[ ! -f "$BACKUP_FILE" ]]; then
   exit 1
 fi
 
+# Safety guard: restoring OVERWRITES the target database. Non-local hosts
+# (staging/production) require an explicit opt-in so a stray .env can never
+# nuke customer data.
+DB_HOST="$(node -e "try { console.log(new URL(process.env.DATABASE_URL).hostname) } catch { console.log('') }" 2>/dev/null || echo "")"
+case "$DB_HOST" in
+  localhost|127.0.0.1|::1|postgres|db) ;;
+  *)
+    if [[ "${ALLOW_REMOTE_DB_RESTORE:-}" != "1" ]]; then
+      echo "Refusing to restore into non-local database host \"$DB_HOST\"." >&2
+      echo "This would overwrite all data on that server." >&2
+      echo "If intentional (e.g. refreshing staging), re-run with ALLOW_REMOTE_DB_RESTORE=1." >&2
+      exit 1
+    fi
+    ;;
+esac
+
 echo "Restoring $BACKUP_FILE into the database configured by DATABASE_URL"
 echo "This will overwrite existing data. Press Ctrl+C to abort."
 sleep 3

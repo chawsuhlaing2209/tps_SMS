@@ -248,11 +248,10 @@ export default function SubjectsPage() {
         title={setup("subjects")}
         description={setup("subjectsToolbarHelp")}
         breadcrumbs={[
-          { label: nav("settings"), href: "/dashboard/settings/user-roles" },
+          { label: nav("group_academics") },
           { label: setup("subjects") }
         ]}
         resetTrail={[
-          { label: nav("settings"), href: "/dashboard/settings/user-roles" },
           { label: setup("subjects"), href: "/dashboard/academic-setup/subjects" }
         ]}
         segment={{ label: setup("subjects"), href: "/dashboard/academic-setup/subjects" }}

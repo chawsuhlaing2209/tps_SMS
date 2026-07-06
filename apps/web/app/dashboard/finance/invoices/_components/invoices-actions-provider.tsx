@@ -9,6 +9,7 @@ import { useDashPageTitleActionsTarget } from "../../../dashboard-page-title";
 import { Button } from "../../../../../components/ui/button";
 import { FormInput, FormTextarea } from "../../../../../components/shared/form-input";
 import { PdsDatePickerField } from "../../../../../components/pds";
+import { currentMonthDayRangeValue } from "../../../../../components/pds/date-picker-utils";
 import { useApiMutation } from "../../../../lib/api";
 import { Field } from "../../../../lib/form";
 import { Icon } from "../../../../lib/material-icon";
@@ -84,7 +85,7 @@ export function InvoicesActionsProvider({
   const [sheetOpen, setSheetOpen] = useState(false);
   const [generateModalOpen, setGenerateModalOpen] = useState(false);
   const [generateMonth, setGenerateMonth] = useState(() => currentBillingMonth());
-  const [issueDateRange, setIssueDateRange] = useState("");
+  const [issueDateRange, setIssueDateRange] = useState(() => currentMonthDayRangeValue());
 
   const currentYear = useCurrentAcademicYear();
   const generateYearId = currentYear.data?.id ?? "";

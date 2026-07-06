@@ -171,7 +171,10 @@ export default function FacilitiesPage() {
       <PageHeader
         title={t("title")}
         description={t("description")}
-        breadcrumbs={[{ label: nav("group_academics") }, { label: nav("facilities") }]}
+        breadcrumbs={[
+          { label: nav("group_academics") },
+          { label: nav("facilities") }
+        ]}
         actions={
           <>
             <ArchiveVisibilityFilter value={visibility} onChange={setVisibility} />

@@ -2,6 +2,10 @@
 
 Staging and production deployment notes for the SMS monorepo.
 
+> New to environments, releases, or git management? Start with the
+> plain-language [Staging → Production Playbook](./staging-to-production-playbook.md)
+> — this document is its technical companion.
+
 ## Environment files
 
 | File | Purpose |
