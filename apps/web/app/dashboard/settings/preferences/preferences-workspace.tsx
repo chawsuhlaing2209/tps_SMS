@@ -42,7 +42,11 @@ export function PreferencesWorkspace() {
       path: PREFERENCES_PATH(tenant),
       init: { method: "PUT", body: JSON.stringify(body) }
     }),
-    { invalidatePaths: (_, tenant) => [PREFERENCES_PATH(tenant)] }
+    {
+      // auth/me carries the same preferences to every signed-in user, so the
+      // bound formatters (useTenantFormats) pick the change up immediately.
+      invalidatePaths: (_, tenant) => [PREFERENCES_PATH(tenant), `/tenants/${tenant}/auth/me`]
+    }
   );
 
   const form = useForm<TenantPreferences>({

@@ -1,7 +1,6 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { formatMMK } from "../../../../lib/money";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -14,9 +13,10 @@ import { Icon } from "../../../../lib/material-icon";
 import { PadaukTableWrap } from "../../../../lib/padauk-table-wrap";
 import { PaginationControls } from "../../../../lib/pagination-controls";
 import { useFinanceYear } from "../../finance-year-context";
+import { useTenantFormats } from "../../../../lib/use-tenant-formats";
 import { Badge, type BadgeTone } from "../../../../../components/shared/badge";
 import { FinanceTableShell } from "../../finance-table-shell";
-import { appendIssueDateRangeParams, formatBillingMonth, formatCreatedAt } from "../../format-finance";
+import { appendIssueDateRangeParams } from "../../format-finance";
 import { PadaukSortHeader, usePadaukSort } from "../../table-sort";
 import {
   PdsSearchBar,
@@ -59,19 +59,6 @@ const STATUS_TONES: Record<string, BadgeTone> = {
   unpaid: "info",
   overdue: "danger"
 };
-
-function fullNumber(value: number): string {
-  return formatMMK(value);
-}
-
-function formatDueDate(value: string | null) {
-  if (!value) return null;
-  return new Date(value).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric"
-  });
-}
 
 const INVOICES_PATH = (tenant: string) => `/tenants/${tenant}/finance/invoices`;
 
@@ -190,6 +177,7 @@ export function InvoicesListPanel() {
   const t = useTranslations("finance.invoiceList");
   const tFees = useTranslations("finance.feesBilling");
   const tFinance = useTranslations("finance");
+  const { formatDate, formatDateTime, formatMonth, formatMoney } = useTenantFormats();
 
   const { academicYearId, isLifetime, yearsLoading } = useFinanceYear();
 
@@ -350,7 +338,7 @@ export function InvoicesListPanel() {
             </thead>
             <tbody>
               {rows.map((row) => {
-                const dueLabel = formatDueDate(row.dueDate);
+                const dueLabel = row.dueDate ? formatDate(row.dueDate) : null;
                 const gradeRoom = [row.gradeName, row.classroomName].filter(Boolean).join(" · ");
                 return (
                   <tr key={row.id}>
@@ -362,8 +350,8 @@ export function InvoicesListPanel() {
                         {row.invoiceNumber}
                       </Link>
                     </td>
-                    <td className="padauk-table__muted">{formatCreatedAt(row.createdAt)}</td>
-                    <td>{formatBillingMonth(row.billingMonth)}</td>
+                    <td className="padauk-table__muted">{formatDateTime(row.createdAt)}</td>
+                    <td>{formatMonth(row.billingMonth)}</td>
                     <td>{sourceLabel(row.source)}</td>
                     <td>
                       <DirectoryMemberCell
@@ -371,10 +359,10 @@ export function InvoicesListPanel() {
                         subtitle={gradeRoom || "—"}
                       />
                     </td>
-                    <td className="padauk-table__num">{fullNumber(Number(row.total))}</td>
+                    <td className="padauk-table__num">{formatMoney(Number(row.total))}</td>
                     <td className="padauk-table__num">
                       <div className="pds-type-body-s-regular padauk-table__stack">
-                        <strong>{fullNumber(row.balanceDue)}</strong>
+                        <strong>{formatMoney(row.balanceDue)}</strong>
                         {dueLabel ? <span>{dueLabel}</span> : null}
                       </div>
                     </td>

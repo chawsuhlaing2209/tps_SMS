@@ -12,7 +12,7 @@ import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
 import { cn } from "../../../../lib/utils";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { Icon } from "../../../lib/material-icon";
-import { formatMMK } from "../../../lib/money";
+import { useTenantFormats } from "../../../lib/use-tenant-formats";
 import { RecordFormModal } from "../../../lib/record-modal";
 import {
   emptyDiscountForm,
@@ -58,6 +58,7 @@ function SectionIntro({ title, description }: { title: string; description: stri
 export function DiscountSetupModal({ open, onOpenChange, mode, ruleId, onSaved }: Props) {
   const t = useTranslations("discounts");
   const c = useTranslations("common");
+  const { formatMoney } = useTenantFormats();
 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<DiscountRuleFormValues>(emptyDiscountForm());
@@ -799,7 +800,7 @@ export function DiscountSetupModal({ open, onOpenChange, mode, ruleId, onSaved }
                     <dd>
                       {form.valueType === "percentage"
                         ? `${form.value}%`
-                        : formatMMK(Number(form.value || 0))}
+                        : formatMoney(Number(form.value || 0))}
                     </dd>
                   </div>
                   <div>

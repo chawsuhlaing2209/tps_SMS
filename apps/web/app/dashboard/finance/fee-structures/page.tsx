@@ -1,6 +1,5 @@
 "use client";
 import { InputWrapper, TextInput } from "../../../../components/shared/form-input";
-import { formatMMK } from "../../../lib/money";
 import { Toggle } from "../../../../components/shared/toggle";
 
 import { mandatoryEnrollmentFeeTypes } from "@sms/shared";
@@ -20,6 +19,7 @@ import { PageHeader } from "../../page-header-context";
 import { hasAnyPermission } from "../../../lib/permissions";
 import { getSession } from "../../../lib/session";
 import { useFinanceYear } from "../finance-year-context";
+import { useTenantFormats } from "../../../lib/use-tenant-formats";
 import { CheckBox } from "../../../../components/pds";
 import { Button } from "../../../../components/ui/button";
 import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
@@ -38,10 +38,6 @@ const PLANS_PATH = (tenant: string) => `/tenants/${tenant}/finance/enrollment-fe
 const FEE_ITEMS_PATH = (tenant: string) => `/tenants/${tenant}/finance/fee-items`;
 const SUMMARY_PATH = (tenant: string, yearId: string) =>
   `/tenants/${tenant}/finance/fee-structures/summary?academicYearId=${yearId}`;
-
-function formatMmk(value: number): string {
-  return formatMMK(value);
-}
 
 function annualizeAmount(amount: number, billingType: string): number {
   if (!Number.isFinite(amount)) return 0;
@@ -89,6 +85,7 @@ export default function FeeStructuresPage() {
   const t = useTranslations("finance");
   const nav = useTranslations("nav");
   const c = useTranslations("common");
+  const { formatMoney } = useTenantFormats();
   const permissions = getSession()?.permissions;
   const canManage = hasAnyPermission(permissions, ["finance.manage"]);
   // Fee structures are configured per year; Lifetime falls back to the active year.
@@ -384,7 +381,7 @@ export default function FeeStructuresPage() {
                     <p className={cn("pds-type-caption-m", styles.heroEyebrow)}>
                       {t(`billingTypes.${selectedComponent.billingType}`)} · {selectedComponent.name}
                     </p>
-                    <p className={cn("pds-type-display-m", styles.heroTotal)}>{formatMmk(editorAnnualTotal)}</p>
+                    <p className={cn("pds-type-display-m", styles.heroTotal)}>{formatMoney(editorAnnualTotal)}</p>
                     <p className={cn("pds-type-body-m-medium", styles.heroSub)}>{t("componentAnnualHint")}</p>
                   </div>
                   <div className={styles.heroStats}>

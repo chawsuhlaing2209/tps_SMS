@@ -1,7 +1,6 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { formatMMK } from "../../../../lib/money";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLiveApiQuery } from "../../../../lib/api";
@@ -13,6 +12,7 @@ import { Icon } from "../../../../lib/material-icon";
 import { PadaukTableWrap } from "../../../../lib/padauk-table-wrap";
 import { PaginationControls } from "../../../../lib/pagination-controls";
 import { useFinanceYear } from "../../finance-year-context";
+import { useTenantFormats } from "../../../../lib/use-tenant-formats";
 import { Badge, type BadgeTone } from "../../../../../components/shared/badge";
 import { PdsSearchBar, PdsSearchFiltersRow, PdsSelectField } from "../../../../../components/pds";
 import { FinanceTableShell } from "../../finance-table-shell";
@@ -54,14 +54,6 @@ const STATUS_TONES: Record<import("./record-payment-modal").RosterRow["status"],
   due: "info",
   overdue: "danger"
 };
-
-function compactMMK(value: number): string {
-  return formatMMK(value);
-}
-
-function fullNumber(value: number): string {
-  return formatMMK(value);
-}
 
 type CollectionSortKey = "student" | "status" | "balance";
 
@@ -149,6 +141,7 @@ function CollectionRosterExportPortal({
 
 export function CollectionRosterPanel() {
   const tFees = useTranslations("finance.feesBilling");
+  const { formatMoney } = useTenantFormats();
 
   // The collection roster is inherently per-year; Lifetime falls back to the active year.
   const financeYear = useFinanceYear();
@@ -224,11 +217,11 @@ export function CollectionRosterPanel() {
             {tFees("collected")}
             {termName ? <span className="pds-type-caption-s fees-metric__chip">{termName}</span> : null}
           </span>
-          <strong className="pds-type-title-m-extrabold fees-metric__value">{compactMMK(metrics?.collected ?? 0)}</strong>
+          <strong className="pds-type-title-m-extrabold fees-metric__value">{formatMoney(metrics?.collected ?? 0)}</strong>
           <span className="pds-type-body-s-regular fees-metric__sub">
             {tFees("billedOf", {
               rate: metrics?.collectionRate ?? 0,
-              billed: compactMMK(metrics?.billed ?? 0)
+              billed: formatMoney(metrics?.billed ?? 0)
             })}
           </span>
         </article>
@@ -238,7 +231,7 @@ export function CollectionRosterPanel() {
             <Icon name="hourglass_empty" size={16} />
             {tFees("outstanding")}
           </span>
-          <strong className="pds-type-title-m-extrabold fees-metric__value">{compactMMK(metrics?.outstanding ?? 0)}</strong>
+          <strong className="pds-type-title-m-extrabold fees-metric__value">{formatMoney(metrics?.outstanding ?? 0)}</strong>
           <span className="pds-type-body-s-regular fees-metric__sub">
             {tFees("studentsOwing", { count: metrics?.owingStudents ?? 0 })}
           </span>
@@ -250,7 +243,7 @@ export function CollectionRosterPanel() {
             {tFees("overdue")}
           </span>
           <strong className="pds-type-title-m-extrabold fees-metric__value fees-metric__value--danger">
-            {compactMMK(metrics?.overdue ?? 0)}
+            {formatMoney(metrics?.overdue ?? 0)}
           </strong>
           <span className="pds-type-body-s-regular fees-metric__sub">
             {tFees("studentsPastDue", { count: metrics?.overdueStudents ?? 0 })}
@@ -376,10 +369,10 @@ export function CollectionRosterPanel() {
                     </td>
                     <td>{gradeRoom || "—"}</td>
                     <td className="padauk-table__muted">{row.guardianName ?? "—"}</td>
-                    <td className="padauk-table__num">{fullNumber(row.billed)}</td>
-                    <td className="padauk-table__num">{fullNumber(row.paid)}</td>
+                    <td className="padauk-table__num">{formatMoney(row.billed)}</td>
+                    <td className="padauk-table__num">{formatMoney(row.paid)}</td>
                     <td className="padauk-table__num">
-                      <strong>{fullNumber(row.balance)}</strong>
+                      <strong>{formatMoney(row.balance)}</strong>
                     </td>
                     <td>
                       <Badge tone={STATUS_TONES[row.status]}>

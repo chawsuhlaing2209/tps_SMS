@@ -1,5 +1,4 @@
 "use client";
-import { formatMMK } from "../../../../lib/money";
 
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { paymentMethods, type PaymentMethod } from "@sms/shared";
@@ -8,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useApiMutation, useApiQuery } from "../../../../lib/api";
 import { Icon } from "../../../../lib/material-icon";
 import { toastError, toastSuccess } from "../../../../lib/toast";
+import { useTenantFormats } from "../../../../lib/use-tenant-formats";
 import { TextInput } from "../../../../../components/shared/form-input";
 import { PdsSelectField } from "../../../../../components/pds";
 import { EmptyState } from "../../../../../components/shared/empty-state";
@@ -60,10 +60,6 @@ const METHOD_ICONS: Partial<Record<PaymentMethod, string>> = {
 
 const EMPTY_ROSTER: RosterRow[] = [];
 
-function fullNumber(value: number): string {
-  return formatMMK(value);
-}
-
 type RecordPaymentModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -87,6 +83,7 @@ export function RecordPaymentModal(props: RecordPaymentModalProps) {
   const t = useTranslations("finance.feesBilling");
   const tFinance = useTranslations("finance");
   const tPay = useTranslations("enrollments.paymentMethods");
+  const { formatMoney } = useTenantFormats();
 
   const owingQuery = useMemo(() => {
     if (props.variant !== "roster" || !props.academicYearId) return null;
@@ -306,7 +303,7 @@ export function RecordPaymentModal(props: RecordPaymentModalProps) {
                       label: t("studentOption", {
                         name: row.studentFullName,
                         room: row.classroomName ?? row.gradeName,
-                        due: fullNumber(row.recordableBalance)
+                        due: formatMoney(row.recordableBalance)
                       })
                     }))}
                   />
@@ -316,23 +313,23 @@ export function RecordPaymentModal(props: RecordPaymentModalProps) {
               <div className="pay-tiles">
                 <div className="pay-tile">
                   <span className="pds-type-caption-s pay-tile__label">{t("billed")}</span>
-                  <strong className="pds-type-body-m-medium pay-tile__value">{fullNumber(billed)}</strong>
+                  <strong className="pds-type-body-m-medium pay-tile__value">{formatMoney(billed)}</strong>
                 </div>
                 <div className="pay-tile">
                   <span className="pds-type-caption-s pay-tile__label">{t("paid")}</span>
-                  <strong className="pds-type-body-m-medium pay-tile__value">{fullNumber(paid)}</strong>
+                  <strong className="pds-type-body-m-medium pay-tile__value">{formatMoney(paid)}</strong>
                 </div>
                 <div className="pay-tile pay-tile--balance">
                   <span className="pds-type-caption-s pay-tile__label">{t("balance")}</span>
-                  <strong className="pds-type-body-m-medium pay-tile__value">{fullNumber(balance)}</strong>
+                  <strong className="pds-type-body-m-medium pay-tile__value">{formatMoney(balance)}</strong>
                 </div>
               </div>
 
               {pendingVerification > 0 && maxAmount > 0 ? (
                 <p className="pds-type-body-s-regular muted">
                   {tFinance("recordPaymentPartialPending", {
-                    pending: fullNumber(pendingVerification),
-                    recordable: fullNumber(maxAmount)
+                    pending: formatMoney(pendingVerification),
+                    recordable: formatMoney(maxAmount)
                   })}
                 </p>
               ) : null}
@@ -395,7 +392,7 @@ export function RecordPaymentModal(props: RecordPaymentModalProps) {
                       : selectedRosterRow?.studentFullName}
                   </span>
                 </div>
-                <strong className="pay-balance-after__value">{fullNumber(balanceAfter)}</strong>
+                <strong className="pay-balance-after__value">{formatMoney(balanceAfter)}</strong>
               </div>
             </div>
           )}

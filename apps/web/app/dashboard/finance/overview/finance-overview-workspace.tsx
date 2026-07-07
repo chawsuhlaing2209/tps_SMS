@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, SegmentedControl } from "../../../../components/pds";
-import { formatMMK, formatMoneyDigits } from "../../../lib/money";
+import { formatMoneyDigits } from "../../../lib/money";
 import { EmptyState } from "../../../../components/shared/empty-state";
 import { ExportCsvButton } from "../../../../components/shared/export-csv-button";
 import { useTranslations } from "next-intl";
@@ -12,6 +12,7 @@ import { useApiQuery } from "../../../lib/api";
 import { Icon } from "../../../lib/material-icon";
 import { moduleBreadcrumbs } from "../../../lib/page-header-utils";
 import { useFinanceYear } from "../finance-year-context";
+import { useTenantFormats } from "../../../lib/use-tenant-formats";
 import { PageHeader } from "../../page-header-context";
 import styles from "./finance-overview.module.css";
 
@@ -78,11 +79,6 @@ const EXPENSE_COLORS: Record<string, string> = {
   salaries: "var(--pds-primary)",
 };
 
-/** Standalone amounts (grade rows, cash accounts, dept cards) — includes "MMK". */
-function formatCompactAmount(value: number): string {
-  return formatMMK(value);
-}
-
 /** For values followed by their own MMK unit span or an i18n message with "MMK". */
 function formatDigits(value: number): string {
   return formatMoneyDigits(value);
@@ -105,6 +101,7 @@ export function FinanceOverviewWorkspace() {
   const tSalary = useTranslations("salary");
   const nav = useTranslations("nav");
   const c = useTranslations("common");
+  const { formatMoney } = useTenantFormats();
 
   const { academicYearId, isLifetime, yearsLoading } = useFinanceYear();
   const [scope, setScope] = useState<OverviewScope>("month");
@@ -344,7 +341,7 @@ export function FinanceOverviewWorkspace() {
                     <div className={styles.donutCenter}>
                       <span className="pds-type-caption-s">{t("total")}</span>
                       <strong className="pds-type-title-xs-bold">
-                        {formatCompactAmount(expenseTotal)}
+                        {formatMoney(expenseTotal)}
                       </strong>
                     </div>
                   </div>
@@ -441,7 +438,7 @@ export function FinanceOverviewWorkspace() {
                     <div>
                       <p className="pds-type-body-s-semibold">{t(`cashAccount.${account.key}`)}</p>
                     </div>
-                    <span className="pds-type-body-m-bold">{formatCompactAmount(account.amount)}</span>
+                    <span className="pds-type-body-m-bold">{formatMoney(account.amount)}</span>
                   </li>
                 ))}
               </ul>
@@ -465,8 +462,8 @@ export function FinanceOverviewWorkspace() {
                             }}
                           />
                         </div>
-                        <span className={`pds-type-body-s-semibold ${styles.gradeAmount}`}>
-                          {formatCompactAmount(grade.collected)}
+                        <span className="pds-type-body-s-semibold">
+                          {formatMoney(grade.collected)}
                         </span>
                         <span className={`pds-type-label-s-bold ${styles.gradeRate}`}>
                           {collectionRate}%
@@ -477,7 +474,7 @@ export function FinanceOverviewWorkspace() {
                             className={styles.gradeDueLink}
                             from={{ label: t("title"), href: "/dashboard/finance/overview" }}
                           >
-                            {formatCompactAmount(grade.outstanding)} {t("dueLink")}
+                            {formatMoney(grade.outstanding)} {t("dueLink")}
                           </TrailLink>
                         ) : (
                           <span className={styles.gradeCleared}>{t("cleared")}</span>
@@ -526,7 +523,7 @@ export function FinanceOverviewWorkspace() {
                     </div>
                     <div className={styles.deptAmount}>
                       <strong className="pds-type-title-xs-bold">
-                        {formatCompactAmount(dept.amount)}
+                        {formatMoney(dept.amount)}
                       </strong>
                       <span className="pds-type-caption-s muted">
                         {t("deptPaidPending", {

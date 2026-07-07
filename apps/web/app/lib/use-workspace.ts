@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo } from "react";
+import type { TenantPreferences } from "@sms/shared";
 import { apiFetch, ApiError, tenantQueryKey } from "./api";
 import { clearSession, getSession, setSession, type Session } from "./session";
 
@@ -14,6 +15,7 @@ type MeResponse = {
   displayName?: string;
   roles: string[];
   permissions: string[];
+  preferences?: TenantPreferences | null;
 };
 
 export function useWorkspace() {
@@ -62,7 +64,8 @@ export function useWorkspace() {
         tenantId: meQuery.data.tenantId,
         displayName: meQuery.data.displayName ?? localSession.displayName,
         roles: meQuery.data.roles,
-        permissions: meQuery.data.permissions
+        permissions: meQuery.data.permissions,
+        preferences: meQuery.data.preferences ?? localSession.preferences ?? null
       };
     }
     return localSession;

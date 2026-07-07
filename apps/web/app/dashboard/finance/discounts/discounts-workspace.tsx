@@ -1,6 +1,5 @@
 "use client";
 
-import { formatMMK } from "../../../lib/money";
 import {
   defaultTriggerMode,
   normalizeDiscountType,
@@ -27,6 +26,7 @@ import { Icon } from "../../../lib/material-icon";
 import { hasAnyPermission } from "../../../lib/permissions";
 import { getSession } from "../../../lib/session";
 import { useFinanceYear } from "../finance-year-context";
+import { useTenantFormats } from "../../../lib/use-tenant-formats";
 import { PageHeader } from "../../page-header-context";
 import { DiscountSetupModal } from "./discount-setup-workspace";
 import { type DiscountRuleRecord } from "./discount-form";
@@ -63,21 +63,21 @@ const TYPE_ICON_TONES: Record<string, string> = {
   custom: "need"
 };
 
-function compactMMK(value: number): string {
-  return formatMMK(value);
-}
-
 function appliesToFor(rule: DiscountRuleRecord): DiscountAppliesTo | undefined {
   const criteria = rule.criteria as DiscountRuleCriteria;
   return criteria?.appliesTo;
 }
 
-function ruleValueLabel(rule: DiscountRuleRecord, t: (key: string, values?: Record<string, string | number>) => string) {
+function ruleValueLabel(
+  rule: DiscountRuleRecord,
+  t: (key: string, values?: Record<string, string | number>) => string,
+  formatMoney: (value: number) => string
+) {
   if (rule.discountType === "sibling") {
     return t("valueTiered");
   }
   if (rule.valueType === "fixed") {
-    return t("valueFixed", { amount: formatMMK(Number(rule.value)) });
+    return t("valueFixed", { amount: formatMoney(Number(rule.value)) });
   }
   return t("valuePercent", { percent: Math.round(Number(rule.value)) });
 }
@@ -116,6 +116,7 @@ export function DiscountsWorkspace() {
   const t = useTranslations("discounts");
   const nav = useTranslations("nav");
   const c = useTranslations("common");
+  const { formatMoney } = useTenantFormats();
   const permissions = getSession()?.permissions;
   const canView = hasAnyPermission(permissions, ["discount.request", "discount.approve"]);
   const canManage = hasAnyPermission(permissions, ["discount.approve"]);
@@ -267,7 +268,7 @@ export function DiscountsWorkspace() {
             </div>
           </div>
         </td>
-        <td className="discount-table__value">{ruleValueLabel(rule, t)}</td>
+        <td className="discount-table__value">{ruleValueLabel(rule, t, formatMoney)}</td>
         <td className="discount-table__scope">{ruleScopeLabel(rule, t)}</td>
         <td>
           <Badge tone={application.tone}>{application.label}</Badge>
@@ -395,7 +396,7 @@ export function DiscountsWorkspace() {
           <StatCard
             icon={<Icon name="savings" size={18} />}
             label={t("statAnnualValue")}
-            value={compactMMK(metricData?.annualDiscountValue ?? 0)}
+            value={formatMoney(metricData?.annualDiscountValue ?? 0)}
             hint={t("statAnnualValueHelp")}
           />
           <StatCard

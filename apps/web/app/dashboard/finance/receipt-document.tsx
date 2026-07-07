@@ -1,10 +1,11 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { formatMMK } from "../../lib/money";
+import { formatMMK, formatMoneyDigits } from "../../lib/money";
 import { Icon } from "../../lib/material-icon";
 import { printDocument } from "../../lib/print-document";
 import { useSchoolBrand } from "../../lib/use-school-brand";
+import { useTenantFormats } from "../../lib/use-tenant-formats";
 
 export type PaymentReceiptPayload = {
   id: string;
@@ -28,6 +29,7 @@ export type PaymentReceiptPayload = {
   invoiceNumber?: string | null;
 };
 
+/** Fallback money formatter for contexts without tenant preferences (e.g. stories). */
 export function formatReceiptAmount(value: number): string {
   return formatMMK(value);
 }
@@ -98,8 +100,10 @@ export function PaymentReceiptDocument({
   footer?: React.ReactNode;
 }) {
   const t = useTranslations("finance.receipt");
+  const { formatDate } = useTenantFormats();
   const { logoUrl } = useSchoolBrand();
-  const issuedDate = receipt.issuedAt ? receipt.issuedAt.slice(0, 10) : "";
+  // Date-only slice keeps the issued day stable across timezones before formatting.
+  const issuedDate = receipt.issuedAt ? formatDate(receipt.issuedAt.slice(0, 10)) : "";
   const lines = buildReceiptDetailLines(
     receipt,
     {
@@ -170,14 +174,14 @@ export function PaymentReceiptDocument({
           <div>
             <span className="pds-type-caption-s receipt__summary-label">{t("amountPaid")}</span>
             <strong className="receipt__amount">
-              {formatReceiptAmount(receipt.amountPaid)} {receipt.currency}
+              {formatMoneyDigits(receipt.amountPaid)} {receipt.currency}
             </strong>
             <span className="pds-type-body-s-regular receipt__summary-foot">{t("currencyName")}</span>
           </div>
           <div className="receipt__summary-right">
             <span className="pds-type-caption-s receipt__summary-label">{t("remainingBalance")}</span>
             <strong className="receipt__remaining">
-              {formatReceiptAmount(receipt.remainingBalance)}
+              {formatMoneyDigits(receipt.remainingBalance)}
             </strong>
             <span className="pds-type-body-s-regular receipt__summary-foot">{receipt.currency}</span>
           </div>

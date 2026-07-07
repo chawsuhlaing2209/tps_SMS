@@ -1,9 +1,9 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { formatMMK } from "../../../lib/money";
 import { useMemo } from "react";
 import { Icon } from "../../../lib/material-icon";
+import { useTenantFormats } from "../../../lib/use-tenant-formats";
 import { buildDiscountPreview, type DiscountPreviewSample } from "./discount-preview";
 import type { DiscountRuleFormValues } from "./discount-form";
 
@@ -13,12 +13,9 @@ type Props = {
   feeTypesByItemId: Record<string, string>;
 };
 
-function formatMoney(value: number): string {
-  return formatMMK(value);
-}
-
 export function DiscountLivePreview({ form, sample, feeTypesByItemId }: Props) {
   const t = useTranslations("discounts");
+  const { formatMoney } = useTenantFormats();
   const preview = useMemo(
     () => buildDiscountPreview(form, sample, feeTypesByItemId),
     [form, sample, feeTypesByItemId]

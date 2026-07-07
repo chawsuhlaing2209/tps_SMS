@@ -1,7 +1,6 @@
 "use client";
 
 import "./payroll-staff-config-modal.css";
-import { formatMMK } from "../../../lib/money";
 import "./payroll-config-row.css";
 import type { PaymentMethod } from "@sms/shared";
 import { useTranslations } from "next-intl";
@@ -23,6 +22,7 @@ import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { InvoicePreviewModal } from "../../finance/invoice-document";
 import { printDocument } from "../../../lib/print-document";
 import { getSession } from "../../../lib/session";
+import { useTenantFormats } from "../../../lib/use-tenant-formats";
 import { PayrollNetSummary } from "./payroll-net-summary";
 import { PayrollConfigRow, resolvePayrollRowIconTone } from "./payroll-config-row";
 import { PayrollSalaryBreakdownView } from "./payroll-salary-breakdown-view";
@@ -87,10 +87,6 @@ type Props = {
 const recordPath = (tenant: string, recordId: string) =>
   `/tenants/${tenant}/payroll-runs/records/${recordId}`;
 
-function formatMoney(value: number): string {
-  return formatMMK(value);
-}
-
 function personInitials(name: string | null | undefined) {
   if (!name?.trim()) return "—";
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -138,6 +134,7 @@ export function PayrollStaffConfigModal({
 }: Props) {
   const t = useTranslations("salary");
   const c = useTranslations("common");
+  const { formatMoney } = useTenantFormats();
   const [packages, setPackages] = useState<PayrollPackageOption[]>([]);
   const [components, setComponents] = useState<PayrollComponentOption[]>([]);
   const [incentives, setIncentives] = useState<PayrollIncentiveOption[]>([]);
