@@ -2,26 +2,35 @@
 
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useMemo, useState, use } from "react";
 import { ConfirmDialog } from "../../../../../components/shared/confirm-dialog";
-import { useApiMutation, useApiQuery } from "../../../../lib/api";
+import { NavigationBackLink } from "../../../../../components/shared/navigation-back-link";
+import { EmptyState } from "../../../../../components/shared/empty-state";
+import { StatusBadge } from "../../../../../components/shared/badge";
+import { useApiMutation, useApiQuery, useReferenceApiQuery } from "../../../../lib/api";
+import { isArchivedRecord } from "../../../../lib/archive-filter";
 import { DetailHero } from "../../../../lib/detail-hero";
-import { Icon } from "../../../../lib/icon";
-import { RecordList, RecordListItem, RecordListPanel } from "../../../../lib/record-list";
+import { HeroMoreActionsMenu } from "../../../../lib/hero-more-actions";
+import { Icon } from "../../../../lib/material-icon";
+import { Button, EntityList, EntityListItem, EntityListPanel } from "../../../../../components/pds";
 import { hasAnyPermission } from "../../../../lib/permissions";
 import { getSession } from "../../../../lib/session";
+import { toastSuccess } from "../../../../lib/toast";
 import { useCurrentAcademicYear } from "../../../../lib/use-current-academic-year";
-import { ClassroomFormSheet } from "../../classroom-form-sheet";
-import { roomAccentColor, roomLetter } from "../../subject-colors";
+import { ClassroomFormSheet, type FacilityRoomOption } from "../../classroom-form-sheet";
+import { roomAccentColor, roomLetter, subjectColor, subjectIcon } from "../../subject-colors";
 import { PageHeader } from "../../../page-header-context";
 import { ClassroomOpsTabs } from "../classroom-ops-tabs";
+import { SubjectTeacherAssignmentSheet } from "../subject-teacher-assignment-sheet";
+import { cn } from "../../../../../lib/utils";
 
 type RoomDetail = {
   id: string;
   name: string;
   room: string | null;
   capacity: number | null;
+  facilityRoomId: string | null;
   status: string;
   gradeId: string;
   gradeName: string | null;
@@ -40,6 +49,7 @@ type RoomDetail = {
     subjectId: string;
     subjectName: string;
     subjectCode: string | null;
+    subjectColorKey: string | null;
     teacherStaffId: string | null;
     teacherName: string | null;
     periodsPerWeek: number;
@@ -47,6 +57,8 @@ type RoomDetail = {
 };
 
 type StaffMember = { id: string; fullName: string };
+
+type SubjectRow = RoomDetail["subjects"][number];
 
 const CLASSROOMS_PATH = (tenant: string) => `/tenants/${tenant}/classrooms`;
 
@@ -59,9 +71,12 @@ function staffInitials(name: string) {
     .join("");
 }
 
-export default function StructureRoomPage() {
-  const params = useParams<{ classroomId: string }>();
-  const classroomId = params.classroomId;
+export default function StructureRoomPage({
+  params
+}: {
+  params: Promise<{ classroomId: string }>;
+}) {
+  const { classroomId } = use(params);
   const searchParams = useSearchParams();
   const router = useRouter();
   const t = useTranslations("academics");
@@ -72,15 +87,40 @@ export default function StructureRoomPage() {
   const currentYear = useCurrentAcademicYear();
 
   const [editOpen, setEditOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [assigningSubject, setAssigningSubject] = useState<SubjectRow | null>(null);
 
   const initialTab = searchParams.get("tab") === "attendance" ? "attendance" : "roster";
 
   const detail = useApiQuery<RoomDetail>(
     (tenant) => `/tenants/${tenant}/classrooms/${classroomId}/room-detail`
   );
-  const teachers = useApiQuery<StaffMember[]>(
-    (tenant) => `/tenants/${tenant}/hr/staff?employmentRole=teacher`
+  const homeroomTeachers = useApiQuery<{ data: StaffMember[] }>((tenant) => {
+    if (!canManage || !detail.data?.gradeId) {
+      return null;
+    }
+    const params = new URLSearchParams({
+      employmentRole: "teacher",
+      eligibleGradeId: detail.data.gradeId,
+      limit: "200"
+    });
+    if (detail.data.classTeacherStaffId) {
+      params.set("includeStaffId", detail.data.classTeacherStaffId);
+    }
+    return `/tenants/${tenant}/hr/staff?${params.toString()}`;
+  });
+  const eligibleSubjectTeachers = useApiQuery<{ data: StaffMember[] }>((tenant) => {
+    if (!assigningSubject) {
+      return null;
+    }
+    const include =
+      assigningSubject.teacherStaffId != null
+        ? `?includeStaffId=${assigningSubject.teacherStaffId}`
+        : "";
+    return `/tenants/${tenant}/classrooms/${classroomId}/subjects/${assigningSubject.subjectId}/eligible-teachers${include}`;
+  });
+  const facilityRooms = useReferenceApiQuery<FacilityRoomOption[]>((tenant) =>
+    canManage ? `/tenants/${tenant}/facility-rooms/active` : null
   );
 
   const invalidatePaths = useMemo(() => {
@@ -117,28 +157,42 @@ export default function StructureRoomPage() {
     { invalidatePaths }
   );
 
+  const reactivateRoom = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({
+      path: `${CLASSROOMS_PATH(tenant)}/${id}/reactivate`,
+      init: { method: "POST" }
+    }),
+    { invalidatePaths }
+  );
+
+  const assignSubjectTeacher = useApiMutation<
+    { subjectId: string; teacherStaffId: string | null },
+    unknown
+  >(
+    (body, tenant) => ({
+      path: `${CLASSROOMS_PATH(tenant)}/${classroomId}/subjects/${body.subjectId}/teacher`,
+      init: {
+        method: "PATCH",
+        body: JSON.stringify({ teacherStaffId: body.teacherStaffId })
+      }
+    }),
+    { invalidatePaths }
+  );
+
   if (detail.isLoading || currentYear.isLoading) {
-    return <p className="muted">{c("loading")}</p>;
+    return <p className="pds-type-body-s-regular muted">{c("loading")}</p>;
   }
 
   if (detail.isError || !detail.data) {
-    return (
-      <div className="structure-empty">
-        <p className="error-text">{t("classroomNotFound")}</p>
-        <Link href="/dashboard/structure">{t("backToStructure")}</Link>
-      </div>
-    );
+    return <EmptyState icon="error" title={t("classroomNotFound")} />;
   }
 
   const data = detail.data;
+  const isArchived = isArchivedRecord(data.status);
+  const canEdit = canManage && !isArchived;
 
   if (currentYear.data && data.academicYearId !== currentYear.data.id) {
-    return (
-      <div className="structure-empty">
-        <p className="muted">{t("classroomWrongYear")}</p>
-        <Link href="/dashboard/structure">{t("backToStructure")}</Link>
-      </div>
-    );
+    return <EmptyState icon="event_busy" title={t("classroomWrongYear")} />;
   }
 
   const accent = roomAccentColor(data.name);
@@ -147,109 +201,157 @@ export default function StructureRoomPage() {
     ? `/dashboard/structure?grade=${data.gradeId}`
     : "/dashboard/structure";
 
-  const heroSubtitle = t("roomHeroSubtitle", {
-    homeroom: homeroom?.fullName ?? t("homeroomUnassigned"),
+  const locationLabel = data.room ?? "—";
+  const heroMeta = t("roomDetailMeta", {
     students: data.studentCount,
-    room: data.room ?? "—"
+    room: locationLabel
   });
 
+  const heroMoreActions = canEdit
+    ? [
+        {
+          id: "edit",
+          label: t("editClassroom"),
+          icon: "edit",
+          onSelect: () => setEditOpen(true)
+        },
+        {
+          id: "archive",
+          label: t("archiveClassroom"),
+          icon: "inventory_2",
+          destructive: true,
+          onSelect: () => setArchiveOpen(true)
+        }
+      ]
+    : [];
+
   return (
-    <div className="structure-page">
+    <div className="structure-page structure-room-page">
       <PageHeader
         title={data.name}
+        segment={{ label: data.name, href: `/dashboard/structure/rooms/${classroomId}` }}
         breadcrumbs={[
-          { label: nav("group_academics") },
-          { label: t("structureTitle"), href: structureBackHref }
+          { label: t("structureTitle"), href: structureBackHref },
+          { label: data.gradeName ?? t("structureTitle"), href: structureBackHref },
+          { label: data.name }
         ]}
-        backHref={structureBackHref}
-        backLabel={t("backToGrade", { grade: data.gradeName ?? t("structureTitle") })}
+        actionsPortal
       />
 
+      <NavigationBackLink fallback={{ label: t("structureTitle"), href: structureBackHref }} />
+
+      {isArchived ? (
+        <div className="archived-record-banner">
+          <StatusBadge status="archived" label={c("archivedBadge")} />
+          <p className="pds-type-body-s-regular archived-record-banner__text">{c("archivedViewOnly")}</p>
+          {canManage ? (
+            <button
+              type="button"
+              className="pds-type-body-m-bold btn-primary"
+              disabled={reactivateRoom.isPending}
+              onClick={async () => {
+                await reactivateRoom.mutateAsync({ id: classroomId });
+                toastSuccess(t("classroomReactivated"));
+              }}
+            >
+              {reactivateRoom.isPending ? c("reactivating") : c("reactivate")}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       <DetailHero
+        variant="classroom"
+        eyebrow={t("roomStudentCount", { count: data.studentCount })}
         title={data.name}
-        meta={heroSubtitle}
+        meta={heroMeta}
         markText={roomLetter(data.name)}
         markColor={accent}
-        utility={
-          canManage ? (
-            <>
-              <button
-                type="button"
-                className="detail-hero__icon-btn"
-                aria-label={t("editClassroom")}
-                title={t("editClassroom")}
-                onClick={() => setEditOpen(true)}
-              >
-                <Icon name="edit" size={18} />
-              </button>
-              <button
-                type="button"
-                className="detail-hero__icon-btn detail-hero__icon-btn--danger"
-                aria-label={t("deleteClassroom")}
-                title={t("deleteClassroom")}
-                onClick={() => setDeleteOpen(true)}
-              >
-                <Icon name="delete" size={18} />
-              </button>
-            </>
-          ) : null
-        }
         actions={
           <>
-            <Link
-              href={`/dashboard/structure/rooms/${classroomId}?tab=attendance`}
-              className="detail-hero__pill"
-            >
-              <Icon name="fact_check" size={18} />
-              {t("takeAttendance")}
-            </Link>
-            <Link
-              href="/dashboard/communication"
-              className="detail-hero__pill detail-hero__pill--ghost"
-            >
-              <Icon name="send" size={18} />
-              {t("messageGuardians")}
-            </Link>
+            {heroMoreActions.length ? (
+              <HeroMoreActionsMenu label={c("moreActions")} items={heroMoreActions} />
+            ) : null}
+            <Button buttonType="filled" buttonColor="primary" prefixIcon="calendar_add_on" asChild>
+              <Link href={`/dashboard/structure/rooms/${classroomId}?tab=attendance`}>
+                {t("takeAttendance")}
+              </Link>
+            </Button>
           </>
         }
       />
 
       <div className="structure-room-layout structure-room-layout--padauk">
-        <RecordListPanel
-          title={t("subjectsAndTeachers")}
+        <EntityListPanel
+          title={t("subjectsAndAssignedTeachers")}
+          variant="panel"
+          className="structure-room-subjects-panel"
           empty={!data.subjects.length ? t("noSubjectsYet") : undefined}
         >
           {data.subjects.length ? (
-            <RecordList>
-              {data.subjects.map((row) => (
-                <RecordListItem
-                  key={row.subjectId}
-                  nameForColor={row.subjectName}
-                  title={row.subjectName}
-                  meta={
-                    row.teacherName
-                      ? t("subjectTeacherMeta", {
-                          teacher: row.teacherName,
-                          periods: row.periodsPerWeek
-                        })
-                      : t("teacherUnassigned")
-                  }
-                  href={`/dashboard/structure/rooms/${classroomId}/subjects/${row.subjectId}`}
-                  actionLabel={t("openSubjectShort")}
-                />
-              ))}
-            </RecordList>
+            <EntityList className="pds-entity-list--compact">
+              {data.subjects.map((row) => {
+                const tint = subjectColor(row.subjectName, row.subjectColorKey);
+                return (
+                  <EntityListItem
+                    key={row.subjectId}
+                    icon={subjectIcon(row.subjectName)}
+                    color={tint.bg}
+                    nameForColor={row.subjectName}
+                    title={row.subjectName}
+                    meta={
+                      row.teacherName
+                        ? t("subjectTeacherMeta", {
+                            teacher: row.teacherName,
+                            periods: row.periodsPerWeek
+                          })
+                        : t("teacherUnassigned")
+                    }
+                    trailing={
+                      canEdit ? (
+                        <button
+                          type="button"
+                          className={cn(
+                            "pds-entity-list-item__icon-btn",
+                            assigningSubject?.subjectId === row.subjectId &&
+                              "pds-entity-list-item__icon-btn--active"
+                          )}
+                          aria-label={t("assignSubjectTeacher")}
+                          title={t("assignSubjectTeacher")}
+                          onClick={() => setAssigningSubject(row)}
+                        >
+                          <Icon name="edit" size={18} />
+                        </button>
+                      ) : null
+                    }
+                  />
+                );
+              })}
+            </EntityList>
           ) : null}
-        </RecordListPanel>
+        </EntityListPanel>
 
         <aside className="structure-side-stack">
-          <RecordListPanel
+          <EntityListPanel
             title={t("homeroomTeacherLabel")}
+            titlePlacement="inside-eyebrow"
             empty={!homeroom ? t("homeroomUnassigned") : undefined}
+            emptyAction={
+              !homeroom && canEdit ? (
+                <button
+                  type="button"
+                  className="pds-type-body-s-semibold btn-ghost"
+                  onClick={() => setEditOpen(true)}
+                >
+                  <Icon name="edit" size={16} />
+                  {t("assignHomeroom")}
+                </button>
+              ) : undefined
+            }
           >
             {homeroom ? (
-              <RecordList>
-                <RecordListItem
+              <EntityList>
+                <EntityListItem
                   initials={staffInitials(homeroom.fullName)}
                   nameForColor={homeroom.fullName}
                   title={homeroom.fullName}
@@ -257,12 +359,25 @@ export default function StructureRoomPage() {
                     department: homeroom.department ?? t("staffDepartmentFallback"),
                     staffId: homeroom.employeeNumber ?? homeroom.id.slice(0, 8)
                   })}
+                  trailing={
+                    canEdit ? (
+                      <button
+                        type="button"
+                        className="pds-entity-list-item__icon-btn"
+                        aria-label={t("editHomeroom")}
+                        title={t("editHomeroom")}
+                        onClick={() => setEditOpen(true)}
+                      >
+                        <Icon name="edit" size={18} />
+                      </button>
+                    ) : undefined
+                  }
                 />
-              </RecordList>
+              </EntityList>
             ) : null}
-          </RecordListPanel>
+          </EntityListPanel>
 
-          <section className="structure-room-stats-card">
+          <section className="pds-type-body-m-medium structure-room-stats-card">
             <div>
               <strong>{data.studentCount}</strong>
               <span>{t("students")}</span>
@@ -275,31 +390,32 @@ export default function StructureRoomPage() {
         </aside>
       </div>
 
-      <ClassroomOpsTabs
-        classroomId={classroomId}
-        classroomName={data.name}
-        initialTab={initialTab}
-      />
+      <div className="structure-room-ops">
+        <ClassroomOpsTabs
+          classroomId={classroomId}
+          classroomName={data.name}
+          initialTab={initialTab}
+        />
+      </div>
 
-      {canManage ? (
+      {canEdit ? (
         <>
           <ClassroomFormSheet
             open={editOpen}
             onOpenChange={setEditOpen}
             mode="edit"
-            teachers={teachers.data ?? []}
+            teachers={homeroomTeachers.data?.data ?? []}
+            facilityRooms={facilityRooms.data ?? []}
             initialValues={{
               name: data.name,
-              room: data.room ?? "",
-              capacity: data.capacity ? String(data.capacity) : "",
+              facilityRoomId: data.facilityRoomId ?? "",
               classTeacherStaffId: data.classTeacherStaffId ?? ""
             }}
             onSubmit={async (values) => {
               await updateRoom.mutateAsync({
                 id: classroomId,
                 name: values.name,
-                room: values.room || null,
-                capacity: values.capacity ? Number(values.capacity) : null,
+                facilityRoomId: values.facilityRoomId || null,
                 classTeacherStaffId: values.classTeacherStaffId || null
               });
               setEditOpen(false);
@@ -307,15 +423,39 @@ export default function StructureRoomPage() {
           />
 
           <ConfirmDialog
-            open={deleteOpen}
-            onOpenChange={setDeleteOpen}
-            title={t("deleteClassroomTitle")}
-            description={t("deleteClassroomHelp")}
-            confirmLabel={t("deleteClassroom")}
+            open={archiveOpen}
+            onOpenChange={setArchiveOpen}
+            title={t("archiveClassroomTitle")}
+            description={t("archiveClassroomHelp")}
+            confirmLabel={t("archiveClassroom")}
             destructive
             onConfirm={async () => {
               await archiveRoom.mutateAsync({ id: classroomId });
               router.push(structureBackHref);
+            }}
+          />
+
+          <SubjectTeacherAssignmentSheet
+            open={Boolean(assigningSubject)}
+            onOpenChange={(open) => {
+              if (!open) {
+                setAssigningSubject(null);
+              }
+            }}
+            subjectName={assigningSubject?.subjectName ?? ""}
+            teachers={eligibleSubjectTeachers.data?.data ?? []}
+            initialTeacherStaffId={assigningSubject?.teacherStaffId}
+            submitting={assignSubjectTeacher.isPending}
+            onSubmit={async (values) => {
+              if (!assigningSubject) {
+                return;
+              }
+              await assignSubjectTeacher.mutateAsync({
+                subjectId: assigningSubject.subjectId,
+                teacherStaffId: values.teacherStaffId.trim() ? values.teacherStaffId : null
+              });
+              toastSuccess(t("subjectTeacherSaved"));
+              setAssigningSubject(null);
             }}
           />
         </>

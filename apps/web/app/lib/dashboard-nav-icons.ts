@@ -1,0 +1,33 @@
+import type { DashboardNavKey } from "./permissions";
+
+export const NAV_ICONS: Record<DashboardNavKey, string> = {
+  overview: "grid_view",
+  students: "school",
+  teachers: "co_present",
+  team: "groups",
+  admissions: "how_to_reg",
+  enrollments: "school",
+  timetable: "calendar_view_week",
+  financeOverview: "insights",
+  collection: "account_balance_wallet",
+  invoices: "description",
+  payments: "account_balance",
+  feeStructures: "sell",
+  discounts: "percent",
+  leaves: "event_busy",
+  runPayroll: "payments",
+  deductions: "account_balance_wallet",
+  benefits: "card_giftcard",
+  academicYears: "calendar_today",
+  terms: "date_range",
+  subjects: "menu_book",
+  gradesClassrooms: "meeting_room",
+  structure: "account_tree",
+  facilities: "meeting_room",
+  schoolProfile: "school",
+  schoolSchedule: "schedule",
+  preferences: "tune",
+  departments: "corporate_fare",
+  userRoles: "admin_panel_settings",
+  audit: "history"
+};

@@ -61,13 +61,23 @@ export class SalaryController {
     return this.salaryService.archiveComponent(tenantId, componentId, actorUserId);
   }
 
+  @Post("components/:componentId/restore")
+  restoreComponent(
+    @Param("tenantId") tenantId: string,
+    @Param("componentId") componentId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.salaryService.restoreComponent(tenantId, componentId, actorUserId);
+  }
+
+  /** @deprecated Use POST components/:componentId/restore. */
   @Post("components/:componentId/reactivate")
   reactivateComponent(
     @Param("tenantId") tenantId: string,
     @Param("componentId") componentId: string,
     @Headers("x-user-id") actorUserId?: string
   ) {
-    return this.salaryService.reactivateComponent(tenantId, componentId, actorUserId);
+    return this.salaryService.restoreComponent(tenantId, componentId, actorUserId);
   }
 
   @Get("records")

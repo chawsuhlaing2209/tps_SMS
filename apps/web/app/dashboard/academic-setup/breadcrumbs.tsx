@@ -9,7 +9,7 @@ export type BreadcrumbItem = {
 
 export function AcademicsBreadcrumbs({ items }: { items: BreadcrumbItem[] }) {
   return (
-    <nav className="breadcrumbs" aria-label="Breadcrumb">
+    <nav className="pds-type-body-m-medium breadcrumbs" aria-label="Breadcrumb">
       {items.map((item, index) => {
         const isLast = index === items.length - 1;
         return (

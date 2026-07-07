@@ -1,18 +1,31 @@
 "use client";
+import { FormInput, TextAreaInput } from "../../../../components/shared/form-input";
 
-import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
-import Link from "next/link";
-import { useState } from "react";
-import { useApiMutation, useApiQuery } from "../../../lib/api";
-import { DataTable } from "../../../lib/data-table";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { useApiMutation, useLiveApiQuery } from "../../../lib/api";
+import { appendNavigationTrail } from "../../../lib/navigation-trail";
+import { formatMMK } from "../../../lib/money";
+import { useDashPageTitleActionsTarget } from "../../dashboard-page-title";
+import { fetchAllPaginated } from "../../../lib/export-csv";
+import { getSession } from "../../../lib/session";
+import { DirectoryMemberCell } from "../../../lib/data-table";
 import { Field } from "../../../lib/form";
-import { Icon } from "../../../lib/icon";
+import { Icon } from "../../../lib/material-icon";
+import { PadaukTableWrap } from "../../../lib/padauk-table-wrap";
 import { PaginationControls } from "../../../lib/pagination-controls";
 import { RecordFormSheet } from "../../../lib/record-sheet";
-import { TablePanelBody, TablePanelHead } from "../../../lib/table-panel";
+import { useFinanceYear } from "../finance-year-context";
+import { PageHeader } from "../../page-header-context";
+import { FinanceTableShell } from "../finance-table-shell";
+import { formatBillingMonth, formatCreatedAt } from "../format-finance";
+import { PdsSearchBar, PdsSearchFiltersRow, SegmentedControl } from "../../../../components/pds";
+import { ExportCsvButton } from "../../../../components/shared/export-csv-button";
+import { RowMoreActionsMenu, type RowMoreActionItem } from "../../../../components/shared/row-more-actions";
 
-type Payment = {
+type PaymentRow = {
   id: string;
   invoiceId: string;
   invoiceNumber: string | null;
@@ -24,15 +37,53 @@ type Payment = {
   verifiedAt: string | null;
   notes: string | null;
   refundableAmount: number | null;
+  receiptNumber: string | null;
+  paymentNumber: string | null;
+  createdAt: string;
+  billingMonth: string | null;
+  paymentPlan: "enrollment" | "monthly" | "one_off";
+  studentFullName: string | null;
+  studentId?: string;
+  gradeName: string | null;
+  classroomName: string | null;
+  recordedByName: string | null;
 };
 
-type PaymentList = { data: Payment[]; total: number; limit: number; offset: number };
+type PaymentList = { data: PaymentRow[]; total: number; limit: number; offset: number };
 
+type PaymentMetrics = {
+  receivedTotal: number;
+  receivedCount: number;
+  todayTotal: number;
+  todayCount: number;
+  topMethod: string | null;
+  topMethodShare: number;
+  averageReceipt: number;
+  termName: string | null;
+};
+
+type MethodFilter = "" | "kbzpay" | "wavepay" | "bank_transfer" | "cash";
+
+const METHOD_FILTERS: MethodFilter[] = ["", "kbzpay", "wavepay", "bank_transfer", "cash"];
 const PAGE_SIZE = 50;
 
-function formatDateTime(value: string | null) {
+const METHOD_ICONS: Record<string, string> = {
+  kbzpay: "qr_code_2",
+  wavepay: "account_balance_wallet",
+  bank_transfer: "account_balance",
+  cash: "payments"
+};
+
+const compactMMK = formatMMK;
+const fullNumber = formatMMK;
+
+function formatDate(value: string | null) {
   if (!value) return "—";
-  return new Date(value).toLocaleString();
+  return new Date(value).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+  });
 }
 
 function defaultPaidAtLocal() {
@@ -41,21 +92,134 @@ function defaultPaidAtLocal() {
   return now.toISOString().slice(0, 16);
 }
 
-export default function PaymentsPage() {
-  const t = useTranslations("finance");
+function PaymentsExportPortal({
+  academicYearId,
+  isLifetime = false,
+  method,
+  searchDebounced,
+  loading,
+  methodLabel
+}: {
+  academicYearId: string;
+  isLifetime?: boolean;
+  method: MethodFilter;
+  searchDebounced: string;
+  loading: boolean;
+  methodLabel: (method: string) => string;
+}) {
+  const t = useTranslations("finance.paymentList");
+  const tFinance = useTranslations("finance");
   const tPay = useTranslations("enrollments");
+  const target = useDashPageTitleActionsTarget();
+
+  if (!target) {
+    return null;
+  }
+
+  return createPortal(
+    <ExportCsvButton
+      disabled={loading || (!academicYearId && !isLifetime)}
+      onExport={async () => {
+        const tenantId = getSession()?.tenantId;
+        if (!tenantId) {
+          throw new Error("Not signed in.");
+        }
+        const rows = await fetchAllPaginated<PaymentRow>(
+          (limit, offset) => {
+            const params = new URLSearchParams({
+              limit: String(limit),
+              offset: String(offset)
+            });
+            if (academicYearId) params.set("academicYearId", academicYearId);
+            if (method) params.set("method", method);
+            if (searchDebounced.trim()) params.set("search", searchDebounced.trim());
+            return `/tenants/${tenantId}/finance/payments?${params.toString()}`;
+          },
+          (json) => {
+            const payload = json as PaymentList;
+            return { rows: payload.data, total: payload.total };
+          }
+        );
+        return {
+          filename: "payments.csv",
+          columns: [
+            { key: "receipt", header: t("receipt") },
+            { key: "student", header: tFinance("student") },
+            { key: "invoice", header: tFinance("invoiceNumber") },
+            { key: "amount", header: tFinance("amount") },
+            { key: "method", header: tPay("paymentMethod") },
+            { key: "paidAt", header: t("date") },
+            { key: "billingMonth", header: tFinance("billingMonth") }
+          ],
+          rows: rows.map((row) => ({
+            receipt: row.receiptNumber ?? row.paymentNumber ?? row.id,
+            student: row.studentFullName ?? "",
+            invoice: row.invoiceNumber ?? "",
+            amount: row.amount,
+            method: methodLabel(row.method),
+            paidAt: row.paidAt ?? "",
+            billingMonth: row.billingMonth ?? ""
+          }))
+        };
+      }}
+    />,
+    target
+  );
+}
+
+export default function PaymentsPage() {
+  const t = useTranslations("finance.paymentList");
+  const tFinance = useTranslations("finance");
+  const tPay = useTranslations("enrollments");
+  const nav = useTranslations("nav");
   const c = useTranslations("common");
+  const router = useRouter();
+
+  const { academicYearId, isLifetime, yearsLoading } = useFinanceYear();
+
+  const [method, setMethod] = useState<MethodFilter>("");
+  const [search, setSearch] = useState("");
+  const [searchDebounced, setSearchDebounced] = useState("");
   const [page, setPage] = useState(0);
-  const [refundTarget, setRefundTarget] = useState<Payment | null>(null);
+  const [refundTarget, setRefundTarget] = useState<PaymentRow | null>(null);
   const [refundAmount, setRefundAmount] = useState("");
   const [refundReason, setRefundReason] = useState("");
   const [refundTxnId, setRefundTxnId] = useState("");
   const [refundPaidAt, setRefundPaidAt] = useState(defaultPaidAtLocal);
-  const [verifyTarget, setVerifyTarget] = useState<Payment | null>(null);
+  const [verifyTarget, setVerifyTarget] = useState<PaymentRow | null>(null);
   const [verifyReason, setVerifyReason] = useState("");
 
-  const payments = useApiQuery<PaymentList>((tenant) =>
-    `/tenants/${tenant}/finance/payments?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearchDebounced(search), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  const metricsQuery = useMemo(() => {
+    const params = new URLSearchParams();
+    if (academicYearId) params.set("academicYearId", academicYearId);
+    const qs = params.toString();
+    return qs ? `?${qs}` : "";
+  }, [academicYearId]);
+
+  const listQuery = useMemo(() => {
+    const params = new URLSearchParams({
+      limit: String(PAGE_SIZE),
+      offset: String(page * PAGE_SIZE)
+    });
+    if (academicYearId) params.set("academicYearId", academicYearId);
+    if (method) params.set("method", method);
+    if (searchDebounced.trim()) params.set("search", searchDebounced.trim());
+    return `?${params.toString()}`;
+  }, [academicYearId, method, page, searchDebounced]);
+
+  const metrics = useLiveApiQuery<PaymentMetrics>((tenant) =>
+    academicYearId || isLifetime
+      ? `/tenants/${tenant}/finance/payments/metrics${metricsQuery}`
+      : null
+  );
+
+  const payments = useLiveApiQuery<PaymentList>((tenant) =>
+    academicYearId || isLifetime ? `/tenants/${tenant}/finance/payments${listQuery}` : null
   );
 
   const refund = useApiMutation<
@@ -69,9 +233,10 @@ export default function PaymentsPage() {
     {
       invalidatePaths: (_v, tenant) => [
         `/tenants/${tenant}/finance/payments`,
+        `/tenants/${tenant}/finance/payments/metrics`,
         `/tenants/${tenant}/finance/invoices`
       ],
-      successMessage: t("refundRecorded")
+      successMessage: tFinance("refundRecorded")
     }
   );
 
@@ -86,23 +251,31 @@ export default function PaymentsPage() {
     {
       invalidatePaths: (_id, tenant) => [
         `/tenants/${tenant}/finance/payments`,
+        `/tenants/${tenant}/finance/payments/metrics`,
         `/tenants/${tenant}/finance/invoices`
       ],
-      successMessage: t("paymentVerified")
+      successMessage: tFinance("paymentVerified")
     }
   );
+
+  const rows = payments.data?.data ?? [];
+  const metricData = metrics.data;
+  const termName = metricData?.termName ?? null;
+  const topMethodLabel = metricData?.topMethod
+    ? tPay(`paymentMethods.${metricData.topMethod}`)
+    : "—";
 
   const closeVerify = () => {
     setVerifyTarget(null);
     setVerifyReason("");
   };
 
-  const openVerify = (payment: Payment) => {
+  const openVerify = (payment: PaymentRow) => {
     setVerifyTarget(payment);
     setVerifyReason("");
   };
 
-  const openRefund = (payment: Payment) => {
+  const openRefund = (payment: PaymentRow) => {
     setRefundTarget(payment);
     setRefundAmount(String(payment.refundableAmount ?? payment.amount));
     setRefundReason("");
@@ -117,96 +290,209 @@ export default function PaymentsPage() {
     setRefundTxnId("");
   };
 
-  const columns: ColumnDef<Payment, unknown>[] = [
-    {
-      id: "invoice",
-      header: t("invoiceNumber"),
-      cell: ({ row }) =>
-        row.original.invoiceNumber ? (
-          <Link href={`/dashboard/finance/invoices/${row.original.invoiceId}`}>
-            {row.original.invoiceNumber}
-          </Link>
-        ) : (
-          "—"
-        )
-    },
-    {
-      id: "kind",
-      header: t("paymentKind"),
-      cell: ({ row }) => (
-        <span className={`badge badge--${row.original.kind === "refund" ? "archived" : "active"}`}>
-          {row.original.kind === "refund" ? t("kindRefund") : t("kindPayment")}
-        </span>
-      )
-    },
-    {
-      id: "amount",
-      header: t("amount"),
-      cell: ({ row }) =>
-        row.original.kind === "refund" ? `−${row.original.amount}` : row.original.amount
-    },
-    {
-      id: "method",
-      header: t("method"),
-      cell: ({ row }) => tPay(`paymentMethods.${row.original.method}`)
-    },
-    {
-      id: "transactionId",
-      header: t("transactionId"),
-      accessorFn: (p) => p.referenceNumber ?? "—"
-    },
-    {
-      id: "paidAt",
-      header: t("paidAt"),
-      accessorFn: (p) => formatDateTime(p.paidAt)
-    },
-    {
-      id: "verified",
-      header: t("verified"),
-      accessorFn: (p) => (p.verifiedAt ? c("yes") : c("no"))
-    },
-    {
-      id: "actions",
-      header: t("actions"),
-      cell: ({ row }) => {
-        const payment = row.original;
-
-        return (
-          <div className="row-actions">
-            {!payment.verifiedAt ? (
-              <button
-                type="button"
-                className="btn-primary btn-sm"
-                disabled={verify.isPending}
-                onClick={() => openVerify(payment)}
-              >
-                {t("verifyPaymentNow")}
-              </button>
-            ) : null}
-            {payment.kind === "payment" && payment.verifiedAt && (payment.refundableAmount ?? 0) > 0 ? (
-              <button type="button" className="btn-ghost btn-sm" onClick={() => openRefund(payment)}>
-                {t("refundPayment")}
-              </button>
-            ) : null}
-          </div>
-        );
-      }
-    }
-  ];
-
   const needsTxnId = refundTarget ? refundTarget.method !== "cash" : false;
   const maxRefund = refundTarget?.refundableAmount ?? 0;
 
   return (
-    <section className="panel">
-      <TablePanelHead title={t("payments")} onRefresh={() => void payments.refetch()} />
-      <TablePanelBody
-        loading={payments.isLoading}
-        error={payments.isError ? c("somethingWrong") : null}
-        empty={!payments.data?.data.length}
+    <div className="fees-page">
+      <PageHeader title={t("title")} breadcrumbs={[{ label: nav("financeCrumb") }]} actionsPortal />
+      <PaymentsExportPortal
+        academicYearId={academicYearId}
+        isLifetime={isLifetime}
+        method={method}
+        searchDebounced={searchDebounced}
+        loading={payments.isLoading || yearsLoading}
+        methodLabel={(value) => tPay(`paymentMethods.${value}` as "paymentMethods.cash")}
+      />
+
+      <section className="fees-metrics" aria-label={t("title")}>
+        <article className="fees-metric fees-metric--accent">
+          <span className="pds-type-body-s-semibold fees-metric__label">
+            <Icon name="account_balance_wallet" size={16} />
+            {t("received")}
+            {termName ? <span className="pds-type-caption-s fees-metric__chip">{termName}</span> : null}
+          </span>
+          <strong className="pds-type-title-m-extrabold fees-metric__value">
+            {compactMMK(metricData?.receivedTotal ?? 0)}
+          </strong>
+          <span className="pds-type-body-s-regular fees-metric__sub">
+            {t("transactionCount", { count: metricData?.receivedCount ?? 0 })}
+          </span>
+        </article>
+
+        <article className="fees-metric">
+          <span className="pds-type-body-s-semibold fees-metric__label">
+            <Icon name="today" size={16} />
+            {t("today")}
+          </span>
+          <strong className="pds-type-title-m-extrabold fees-metric__value">{compactMMK(metricData?.todayTotal ?? 0)}</strong>
+          <span className="pds-type-body-s-regular fees-metric__sub">
+            {t("receiptsToday", { count: metricData?.todayCount ?? 0 })}
+          </span>
+        </article>
+
+        <article className="fees-metric">
+          <span className="pds-type-body-s-semibold fees-metric__label">
+            <Icon name="qr_code_2" size={16} />
+            {t("topMethod")}
+          </span>
+          <strong className="pds-type-title-m-extrabold fees-metric__value fees-metric__value--compact">
+            {topMethodLabel}
+          </strong>
+          <span className="pds-type-body-s-regular fees-metric__sub">
+            {metricData?.topMethod
+              ? t("methodShare", {
+                  share: metricData.topMethodShare ?? 0
+                })
+              : "—"}
+          </span>
+        </article>
+
+        <article className="fees-metric">
+          <span className="pds-type-body-s-semibold fees-metric__label">
+            <Icon name="trending_up" size={16} />
+            {t("avgReceipt")}
+          </span>
+          <strong className="pds-type-title-m-extrabold fees-metric__value">
+            {compactMMK(metricData?.averageReceipt ?? 0)}
+          </strong>
+          <span className="pds-type-body-s-regular fees-metric__sub">{t("perTransaction")}</span>
+        </article>
+      </section>
+
+      <PdsSearchFiltersRow
+        filters={
+          <PdsSearchBar
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(0);
+            }}
+            placeholder={t("searchPlaceholder")}
+            aria-label={t("searchPlaceholder")}
+          />
+        }
+        statusControl={
+          <SegmentedControl
+            ariaLabel={tFinance("method")}
+            value={method || "all"}
+            onChange={(id) => {
+              setMethod(id === "all" ? "" : (id as MethodFilter));
+              setPage(0);
+            }}
+            options={METHOD_FILTERS.map((value) => ({
+              id: value || "all",
+              label: value ? t(`methodFilters.${value}`) : t("methodFilters.all")
+            }))}
+          />
+        }
+      />
+
+      <FinanceTableShell
+        loading={payments.isLoading || yearsLoading}
+        error={payments.isError}
+        empty={!rows.length}
+        emptyMessage={t("empty")}
       >
-        <DataTable columns={columns} data={payments.data?.data ?? []} />
-      </TablePanelBody>
+        <PadaukTableWrap>
+          <table className="pds-type-body-m-medium padauk-table padauk-table--pinned-end">
+            <thead>
+              <tr>
+                <th className="pds-type-caption-s">{t("paymentId")}</th>
+                <th className="pds-type-caption-s">{t("created")}</th>
+                <th className="pds-type-caption-s">{tFinance("billingMonth")}</th>
+                <th className="pds-type-caption-s">{tFinance("paymentPlan")}</th>
+                <th className="pds-type-caption-s">{t("date")}</th>
+                <th className="pds-type-caption-s">{t("student")}</th>
+                <th className="pds-type-caption-s">{tFinance("method")}</th>
+                <th className="pds-type-caption-s padauk-table__num">{t("amountRecordedBy")}</th>
+                <th className="pds-type-caption-s padauk-table__actions">{tFinance("actions")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const gradeRoom = [row.gradeName, row.classroomName].filter(Boolean).join(" · ");
+                return (
+                  <tr key={row.id}>
+                    <td>
+                      <strong>{row.paymentNumber ?? row.receiptNumber ?? row.referenceNumber ?? "—"}</strong>
+                    </td>
+                    <td className="padauk-table__muted">{formatCreatedAt(row.createdAt)}</td>
+                    <td>{formatBillingMonth(row.billingMonth)}</td>
+                    <td>{tFinance(`paymentPlanLabels.${row.paymentPlan}`)}</td>
+                    <td className="padauk-table__muted">{formatDate(row.paidAt)}</td>
+                    <td>
+                      <DirectoryMemberCell
+                        name={row.studentFullName ?? "—"}
+                        subtitle={gradeRoom || "—"}
+                      />
+                    </td>
+                    <td>
+                      <span className={`pds-type-body-s-semibold fees-method fees-method--${row.method}`}>
+                        <Icon name={METHOD_ICONS[row.method] ?? "payments"} size={14} />
+                        {tPay(`paymentMethods.${row.method}`)}
+                      </span>
+                    </td>
+                    <td className="padauk-table__num">
+                      <div className="pds-type-body-s-regular padauk-table__stack">
+                        <strong className="padauk-table__amount">
+                          +{fullNumber(Number(row.amount))}
+                        </strong>
+                        <span>{row.recordedByName ?? "—"}</span>
+                      </div>
+                    </td>
+                    <td className="padauk-table__actions">
+                      {(() => {
+                        const items: RowMoreActionItem[] = [];
+                        if (!row.verifiedAt) {
+                          items.push({
+                            id: "verify",
+                            label: tFinance("verifyPaymentNow"),
+                            icon: "verified",
+                            disabled: verify.isPending,
+                            onSelect: () => openVerify(row)
+                          });
+                        }
+                        if (
+                          row.kind === "payment" &&
+                          row.verifiedAt &&
+                          (row.refundableAmount ?? 0) > 0
+                        ) {
+                          items.push({
+                            id: "refund",
+                            label: tFinance("refundPayment"),
+                            icon: "undo",
+                            onSelect: () => openRefund(row)
+                          });
+                        }
+                        if (row.invoiceId) {
+                          items.push({
+                            id: "invoice",
+                            label: t("viewInvoice"),
+                            icon: "visibility",
+                            onSelect: () => {
+                              appendNavigationTrail({
+                                label: t("title"),
+                                href: "/dashboard/finance/payments"
+                              });
+                              router.push(`/dashboard/finance/invoices/${row.invoiceId}`);
+                            }
+                          });
+                        }
+                        if (!items.length) {
+                          return <span className="muted">—</span>;
+                        }
+                        return <RowMoreActionsMenu ariaLabel={c("moreActions")} items={items} />;
+                      })()}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </PadaukTableWrap>
+      </FinanceTableShell>
+
       <PaginationControls
         page={page}
         pageSize={PAGE_SIZE}
@@ -220,16 +506,16 @@ export default function PaymentsPage() {
           onOpenChange={(open) => {
             if (!open) closeVerify();
           }}
-          title={t("verifyPaymentNow")}
+          title={tFinance("verifyPaymentNow")}
           help={verifyTarget.invoiceNumber ?? undefined}
           footer={
             <>
-              <button type="button" className="btn-ghost" onClick={closeVerify}>
+              <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={closeVerify}>
                 {c("cancel")}
               </button>
               <button
                 type="button"
-                className="btn-primary"
+                className="pds-type-body-m-bold btn-primary"
                 disabled={verify.isPending || !verifyReason.trim()}
                 onClick={async () => {
                   if (!verifyTarget) return;
@@ -241,16 +527,42 @@ export default function PaymentsPage() {
                 }}
               >
                 <Icon name="check_circle" />
-                {verify.isPending ? c("loading") : t("verifyPaymentNow")}
+                {verify.isPending ? c("loading") : tFinance("verifyPaymentNow")}
               </button>
             </>
           }
         >
-          <Field label={t("verifyReason")}>
-            <textarea
+          <dl className="verify-summary">
+            <div className="verify-summary__row">
+              <dt className="pds-type-body-s-regular muted">{tFinance("amount")}</dt>
+              <dd className="pds-type-title-xxs-extrabold verify-summary__amount">
+                {fullNumber(Number(verifyTarget.amount))}
+              </dd>
+            </div>
+            <div className="verify-summary__row">
+              <dt className="pds-type-body-s-regular muted">{tFinance("method")}</dt>
+              <dd className="pds-type-body-m-medium verify-summary__method">
+                <Icon name={METHOD_ICONS[verifyTarget.method] ?? "payments"} size={16} />
+                {tPay(`paymentMethods.${verifyTarget.method}`)}
+              </dd>
+            </div>
+            <div className="verify-summary__row">
+              <dt className="pds-type-body-s-regular muted">{tFinance("transactionId")}</dt>
+              <dd className="pds-type-body-m-medium">{verifyTarget.referenceNumber ?? "—"}</dd>
+            </div>
+            <div className="verify-summary__row">
+              <dt className="pds-type-body-s-regular muted">{tFinance("paidAt")}</dt>
+              <dd className="pds-type-body-m-medium">
+                {formatCreatedAt(verifyTarget.paidAt)}
+              </dd>
+            </div>
+          </dl>
+          <Field label={tFinance("verifyReason")}>
+            <TextAreaInput
               rows={3}
+              showCount={false}
               value={verifyReason}
-              placeholder={t("verifyReasonPlaceholder")}
+              placeholder={tFinance("verifyReasonPlaceholder")}
               onChange={(e) => setVerifyReason(e.target.value)}
             />
           </Field>
@@ -263,7 +575,7 @@ export default function PaymentsPage() {
           onOpenChange={(open) => {
             if (!open) closeRefund();
           }}
-          title={t("refundPayment")}
+          title={tFinance("refundPayment")}
           help={
             refundTarget
               ? `${refundTarget.invoiceNumber ?? "—"} · ${refundTarget.amount} (${tPay(`paymentMethods.${refundTarget.method}`)})`
@@ -271,12 +583,12 @@ export default function PaymentsPage() {
           }
           footer={
             <>
-              <button type="button" className="btn-ghost" onClick={closeRefund}>
+              <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={closeRefund}>
                 {c("cancel")}
               </button>
               <button
                 type="button"
-                className="btn-primary"
+                className="pds-type-body-m-bold btn-primary"
                 disabled={
                   refund.isPending ||
                   !refundReason.trim() ||
@@ -300,13 +612,13 @@ export default function PaymentsPage() {
                 }}
               >
                 <Icon name="payments" />
-                {refund.isPending ? c("loading") : t("recordRefund")}
+                {refund.isPending ? c("loading") : tFinance("recordRefund")}
               </button>
             </>
           }
         >
-          <Field label={t("refundAmount")}>
-            <input
+          <Field label={tFinance("refundAmount")}>
+            <FormInput
               type="number"
               step="0.01"
               min={0.01}
@@ -315,31 +627,31 @@ export default function PaymentsPage() {
               onChange={(e) => setRefundAmount(e.target.value)}
             />
           </Field>
-          <Field label={t("paidAt")}>
-            <input
+          <Field label={tFinance("paidAt")}>
+            <FormInput
               type="datetime-local"
               value={refundPaidAt}
               onChange={(e) => setRefundPaidAt(e.target.value)}
             />
           </Field>
           {needsTxnId ? (
-            <Field label={t("transactionId")}>
-              <input
+            <Field label={tFinance("transactionId")}>
+              <FormInput
                 value={refundTxnId}
                 onChange={(e) => setRefundTxnId(e.target.value)}
-                placeholder={t("transactionIdPlaceholder")}
+                placeholder={tFinance("transactionIdPlaceholder")}
               />
             </Field>
           ) : null}
-          <Field label={t("refundReason")}>
-            <input
+          <Field label={tFinance("refundReason")}>
+            <FormInput
               value={refundReason}
               onChange={(e) => setRefundReason(e.target.value)}
-              placeholder={t("refundReasonPlaceholder")}
+              placeholder={tFinance("refundReasonPlaceholder")}
             />
           </Field>
         </RecordFormSheet>
       ) : null}
-    </section>
+    </div>
   );
 }

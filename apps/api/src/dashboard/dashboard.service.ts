@@ -1,14 +1,23 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { DB, type Database } from "../db/db.module.js";
 import {
   academicYears,
+  assessmentResults,
   classrooms,
+  classroomStudents,
   enrollmentFeePlans,
+  examSchedules,
   feeItems,
   gradeSubjects,
+  grades,
   staff,
-  timetablePeriods
+  studentDiscounts,
+  subjects,
+  tenantSettings,
+  terms,
+  timetablePeriods,
+  timetableSlots
 } from "../db/schema.js";
 
 export type DashboardSummary = {
@@ -19,6 +28,26 @@ export type DashboardSummary = {
   timetablePeriods: number;
   feeItems: number;
   enrollmentPlans: number;
+};
+
+export type DashboardHome = {
+  academicYear: { id: string; name: string } | null;
+  schoolName: string;
+  currentTerm: { id: string; name: string; startsOn: string; endsOn: string } | null;
+  termProgressPercent: number;
+  weekLabel: string;
+  approvals: { total: number; leave: number; feeWaivers: number };
+  classrooms: Array<{
+    id: string;
+    name: string;
+    homeroomTeacherName: string | null;
+    studentCount: number;
+  }>;
+  todaySchedule: Array<{
+    timeLabel: string;
+    subjectName: string;
+    classroomName: string;
+  }>;
 };
 
 @Injectable()
@@ -109,6 +138,213 @@ export class DashboardService {
       timetablePeriods: periodCount[0]?.count ?? 0,
       feeItems: feeItemCount[0]?.count ?? 0,
       enrollmentPlans: planCount[0]?.count ?? 0
+    };
+  }
+
+  private todayIsoDate(): string {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  private jsDayToTimetableDay(): number {
+    const day = new Date().getDay();
+    return day === 0 ? 7 : day;
+  }
+
+  private computeTermProgress(term: { startsOn: string; endsOn: string }): {
+    termProgressPercent: number;
+    weekLabel: string;
+  } {
+    const start = new Date(`${term.startsOn}T00:00:00`);
+    const end = new Date(`${term.endsOn}T00:00:00`);
+    const today = new Date(`${this.todayIsoDate()}T00:00:00`);
+
+    const totalMs = end.getTime() - start.getTime();
+    const elapsedMs = today.getTime() - start.getTime();
+    const termProgressPercent =
+      totalMs > 0 ? Math.min(100, Math.max(0, Math.round((elapsedMs / totalMs) * 100))) : 0;
+
+    const weekNumber = Math.max(1, Math.ceil(elapsedMs / (7 * 24 * 60 * 60 * 1000)));
+    return { termProgressPercent, weekLabel: `Week ${weekNumber}` };
+  }
+
+  private async resolveCurrentTerm(tenantId: string, academicYearId: string) {
+    const today = this.todayIsoDate();
+
+    const [activeTerm] = await this.db
+      .select({
+        id: terms.id,
+        name: terms.name,
+        startsOn: terms.startsOn,
+        endsOn: terms.endsOn
+      })
+      .from(terms)
+      .where(
+        and(
+          eq(terms.tenantId, tenantId),
+          eq(terms.academicYearId, academicYearId),
+          sql`${terms.startsOn} <= ${today}`,
+          sql`${terms.endsOn} >= ${today}`
+        )
+      )
+      .orderBy(terms.startsOn)
+      .limit(1);
+
+    if (activeTerm) {
+      return activeTerm;
+    }
+
+    const [upcomingTerm] = await this.db
+      .select({
+        id: terms.id,
+        name: terms.name,
+        startsOn: terms.startsOn,
+        endsOn: terms.endsOn
+      })
+      .from(terms)
+      .where(and(eq(terms.tenantId, tenantId), eq(terms.academicYearId, academicYearId)))
+      .orderBy(terms.startsOn)
+      .limit(1);
+
+    return upcomingTerm ?? null;
+  }
+
+  /** Lightweight brand payload for the sidebar — readable by every tenant role. */
+  async getSchoolBrand(tenantId: string) {
+    const [settings] = await this.db
+      .select({
+        schoolName: tenantSettings.schoolName,
+        logoFileId: tenantSettings.logoFileId
+      })
+      .from(tenantSettings)
+      .where(eq(tenantSettings.tenantId, tenantId))
+      .limit(1);
+
+    return {
+      schoolName: settings?.schoolName ?? null,
+      logoFileId: settings?.logoFileId ?? null
+    };
+  }
+
+  async getHome(tenantId: string): Promise<DashboardHome> {
+    const today = this.todayIsoDate();
+    const dayOfWeek = this.jsDayToTimetableDay();
+
+    const [year, settings] = await Promise.all([
+      this.getCurrentAcademicYear(tenantId),
+      this.db
+        .select({ schoolName: tenantSettings.schoolName })
+        .from(tenantSettings)
+        .where(eq(tenantSettings.tenantId, tenantId))
+        .limit(1)
+    ]);
+
+    const schoolName = settings[0]?.schoolName ?? "School";
+    const academicYear = year ? { id: year.id, name: year.name } : null;
+
+    let currentTerm: DashboardHome["currentTerm"] = null;
+    let termProgressPercent = 0;
+    let weekLabel = "Week 1";
+
+    if (year) {
+      currentTerm = await this.resolveCurrentTerm(tenantId, year.id);
+      if (currentTerm) {
+        const progress = this.computeTermProgress(currentTerm);
+        termProgressPercent = progress.termProgressPercent;
+        weekLabel = progress.weekLabel;
+      }
+    }
+
+    const [feeWaiversRow] = await this.db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(studentDiscounts)
+      .where(and(eq(studentDiscounts.tenantId, tenantId), eq(studentDiscounts.status, "submitted")));
+
+    const feeWaivers = feeWaiversRow?.count ?? 0;
+    const leave = 0;
+    const approvals = { total: feeWaivers + leave, leave, feeWaivers };
+
+    let classroomRows: DashboardHome["classrooms"] = [];
+    if (year) {
+      const rows = await this.db
+        .select({
+          id: classrooms.id,
+          name: classrooms.name,
+          homeroomTeacherName: staff.fullName,
+          studentCount: sql<number>`count(distinct ${classroomStudents.studentId})::int`
+        })
+        .from(classrooms)
+        .leftJoin(staff, eq(classrooms.classTeacherStaffId, staff.id))
+        .leftJoin(
+          classroomStudents,
+          and(
+            eq(classroomStudents.classroomId, classrooms.id),
+            eq(classroomStudents.tenantId, tenantId),
+            isNull(classroomStudents.effectiveTo)
+          )
+        )
+        .where(
+          and(
+            eq(classrooms.tenantId, tenantId),
+            eq(classrooms.academicYearId, year.id),
+            eq(classrooms.status, "active")
+          )
+        )
+        .groupBy(classrooms.id, classrooms.name, staff.fullName, classrooms.updatedAt)
+        .orderBy(classrooms.name)
+        .limit(6);
+
+      classroomRows = rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        homeroomTeacherName: row.homeroomTeacherName,
+        studentCount: row.studentCount ?? 0
+      }));
+    }
+
+    let todaySchedule: DashboardHome["todaySchedule"] = [];
+    if (year) {
+      const slots = await this.db
+        .select({
+          startsAt: timetablePeriods.startsAt,
+          endsAt: timetablePeriods.endsAt,
+          subjectName: subjects.name,
+          classroomName: classrooms.name,
+          sortOrder: timetablePeriods.sortOrder
+        })
+        .from(timetableSlots)
+        .innerJoin(timetablePeriods, eq(timetableSlots.periodId, timetablePeriods.id))
+        .innerJoin(subjects, eq(timetableSlots.subjectId, subjects.id))
+        .innerJoin(classrooms, eq(timetableSlots.classroomId, classrooms.id))
+        .where(
+          and(
+            eq(timetableSlots.tenantId, tenantId),
+            eq(timetableSlots.dayOfWeek, dayOfWeek),
+            eq(timetablePeriods.academicYearId, year.id),
+            isNotNull(timetableSlots.publishedAt),
+            eq(timetablePeriods.isBreak, false),
+            sql`${timetableSlots.effectiveFrom} <= ${today}`,
+            or(isNull(timetableSlots.effectiveTo), sql`${timetableSlots.effectiveTo} >= ${today}`)
+          )
+        )
+        .orderBy(timetablePeriods.sortOrder)
+        .limit(12);
+
+      todaySchedule = slots.map((slot) => ({
+        timeLabel: `${slot.startsAt} – ${slot.endsAt}`,
+        subjectName: slot.subjectName,
+        classroomName: slot.classroomName
+      }));
+    }
+
+    return {
+      academicYear,
+      schoolName,
+      currentTerm,
+      termProgressPercent,
+      weekLabel,
+      approvals,
+      classrooms: classroomRows,
+      todaySchedule
     };
   }
 }

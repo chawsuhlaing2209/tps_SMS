@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   Param,
@@ -47,8 +48,14 @@ export class HrController {
 
   @Get("staff")
   @RequireAnyPermissions("hr.manage", "classroom.manage")
-  listStaff(@Param("tenantId") tenantId: string, @Query() query: ListStaffQueryDto) {
-    return this.hrService.listStaff(tenantId, query);
+  async listStaff(@Param("tenantId") tenantId: string, @Query() query: ListStaffQueryDto) {
+    const [data, total] = await Promise.all([
+      this.hrService.listStaff(tenantId, query),
+      this.hrService.countStaff(tenantId, query)
+    ]);
+    const limit = Math.min(query.limit ?? 50, 200);
+    const offset = query.offset ?? 0;
+    return { data, total, limit, offset };
   }
 
   @Get("staff/overview")
@@ -83,6 +90,12 @@ export class HrController {
     return this.hrService.getTeacherProfile(tenantId, staffId);
   }
 
+  @Get("staff/:staffId/profile")
+  @RequireAnyPermissions("hr.manage", "identity.manage")
+  getStaffProfile(@Param("tenantId") tenantId: string, @Param("staffId") staffId: string) {
+    return this.hrService.getStaffProfile(tenantId, staffId);
+  }
+
   @Get("staff/:staffId")
   @RequireAnyPermissions("hr.manage", "classroom.manage")
   getStaff(@Param("tenantId") tenantId: string, @Param("staffId") staffId: string) {
@@ -98,6 +111,36 @@ export class HrController {
     @Headers("x-user-id") actorUserId?: string
   ) {
     return this.hrService.updateStaff(tenantId, staffId, actorUserId, dto);
+  }
+
+  @Post("staff/:staffId/archive")
+  @RequirePermissions("hr.manage")
+  archiveStaff(
+    @Param("tenantId") tenantId: string,
+    @Param("staffId") staffId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.hrService.archiveStaff(tenantId, staffId, actorUserId);
+  }
+
+  @Post("staff/:staffId/restore")
+  @RequirePermissions("hr.manage")
+  restoreStaff(
+    @Param("tenantId") tenantId: string,
+    @Param("staffId") staffId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.hrService.restoreStaff(tenantId, staffId, actorUserId);
+  }
+
+  @Delete("staff/:staffId")
+  @RequirePermissions("hr.manage")
+  deleteStaff(
+    @Param("tenantId") tenantId: string,
+    @Param("staffId") staffId: string,
+    @Headers("x-user-id") actorUserId?: string
+  ) {
+    return this.hrService.permanentlyDeleteStaff(tenantId, staffId, actorUserId);
   }
 
   @Patch("staff/:staffId/provision")

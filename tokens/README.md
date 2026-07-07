@@ -1,65 +1,73 @@
-# Design tokens
+# Design tokens (PDS)
 
-Two-layer token system aligned with the Figma **SMS** file export.
+Single source of truth:
 
-## Layers
+- **`tokens.json`** — Figma Variables export (primitives + semantic collections)
+- **`composite_tokens.json`** — typography presets and composite styles
 
-| Layer | File | Who edits | Purpose |
-|-------|------|-----------|---------|
-| **Figma export** | `tokens.json` (repo root) | Design (re-export from Figma) | Full primitive scales — e.g. `spring green.10…66`, `grey.53…96` |
-| **App extensions** | `tokens/extensions.json` | Engineering | Values not yet in Figma (extra spacing steps, radius, category colors) |
-| **Generated primitives** | `tokens/primitives.json` | **Auto** — do not edit | Merged Figma + extensions, nested by category |
-| **Semantic** | `tokens/semantic.json` | Engineering + design | UI roles → primitive refs (`background` → `{color.grey.96}`) |
-| **Generated CSS** | `apps/web/app/design-tokens.css` | **Auto** — do not edit | `:root` custom properties consumed by the app |
+## Build
 
-## Workflow
-
-After updating `tokens.json` from Figma:
+After updating exports from Figma:
 
 ```bash
 npm run tokens:build
 ```
 
-This will:
+This writes:
 
-1. Regenerate `tokens/primitives.json` from `tokens.json` + `extensions.json`
-2. Resolve `tokens/semantic.json` references
-3. Write `apps/web/app/design-tokens.css`
+- `apps/web/app/design-tokens.css` — `:root` custom properties (`--pds-*` only)
+- `apps/web/app/design-tokens.dtcg.json` — grouped DTCG export for tooling
 
-To migrate hardcoded values in `globals.css` to token vars (after adding new semantic tokens):
+Restart the web dev server after building so Tailwind picks up config changes.
 
-```bash
-npm run tokens:migrate-css
-```
+## Scripts
 
-Restart the web dev server so Tailwind picks up any config changes.
-
-### Adding a new semantic color
-
-1. Pick the primitive scale step in `tokens/primitives.json` (after build) or reference path directly, e.g. `{color.spring-green.49}`
-2. Add to `tokens/semantic.json` under `color`
-3. Run `npm run tokens:build`
-
-### Adding a value not in Figma yet
-
-Add it to `tokens/extensions.json`, reference from `semantic.json`, then build.
-
-Promote to `tokens.json` when design publishes the token in Figma.
+| Command | Purpose |
+|---------|---------|
+| `npm run tokens:build` | Regenerate CSS + DTCG from Figma exports |
+| `npm run tokens:check` | Fail if any `var(--pds-*)` in app CSS is undefined |
+| `npm run tokens:export-dtcg` | Regenerate DTCG JSON only |
+| `npm run tokens:migrate-pds` | Codemod legacy `--*` vars → `--pds-*` in the web app |
 
 ## CSS variable naming
 
-| Layer | Example path | CSS variable |
-|-------|--------------|--------------|
-| Primitive | `color.spring-green.10` | `--color-spring-green-10` |
-| Semantic color | `background` | `--background` |
-| Semantic spacing | `spacing.4` | `--space-4` |
-| Layout | `layout.content-max` | `--layout-content-max` |
-| Structure component | `component.structure.banner-radius` | `--structure-banner-radius` |
+Figma slash paths are flattened to hyphenated names with the **`--pds-`** prefix. Redundant layer segments are collapsed:
 
-## Tailwind
+| Figma path | CSS variable |
+|------------|--------------|
+| `color/spring-green/1000` | `--pds-color-spring-green-1000` |
+| `padding/large` | `--pds-padding-large` |
+| `pds-background/canvas` | `--pds-background-canvas` |
+| `pds-text/primary` | `--pds-text-primary` |
 
-`apps/web/tailwind.config.ts` maps semantic CSS variables to utility classes (`bg-background`, `p-4` → `var(--space-4)`, etc.). After adding new semantic tokens, extend the Tailwind config if you need utility classes.
+Semantic tokens resolve to primitive `var(--pds-…)` references where possible.
 
-## Typography presets
+## Composite typography
 
-Composite typography from `semantic.json` → `typography.*` emits `--type-{style}-{property}` vars (e.g. `--type-eyebrow-font-size`).
+Typography presets from `composite_tokens.json` expose property vars and preset classes:
+
+| Style | Example vars |
+|-------|----------------|
+| Title L extrabold | `--pds-type-title-l-extrabold-font-size`, `-font-weight`, `-line-height`, … |
+| Body M medium | `--pds-type-body-m-medium-*` |
+| Caption M | `--pds-type-caption-m-*` |
+
+Use composite typography in app CSS — not primitive `--pds-font-size-*` / `--pds-font-weight-*` (those are excluded from the build).
+
+## Usage in the app
+
+- Import `design-tokens.css` once (via `globals.css`).
+- Reference tokens as `var(--pds-…)` in CSS/modules — do not add legacy `--background`, `--space-4`, etc.
+- Tailwind theme in `apps/web/tailwind.config.ts` maps utilities to PDS vars.
+
+## Source files
+
+| File | Role |
+|------|------|
+| `build.ts` | Build entry — CSS, DTCG, token check |
+| `studio.ts` | Assembles `design-tokens.css` from Figma + composite maps |
+| `figma-export.ts` | Parses `tokens.json` |
+| `composite.ts` | Parses `composite_tokens.json` |
+| `export-dtcg.ts` | CSS → DTCG JSON |
+| `check-tokens.ts` | Validates `var(--pds-*)` references |
+| `migrate-to-pds.ts` | Legacy var codemod (run once while migrating) |

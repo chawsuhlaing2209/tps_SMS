@@ -1,13 +1,14 @@
 "use client";
+import { FormInput } from "../../../../../components/shared/form-input";
 
 import { paymentMethods } from "@sms/shared";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useState } from "react";
+import { use, useState } from "react";
 import { useApiMutation, useApiQuery } from "../../../../lib/api";
 import { Field } from "../../../../lib/form";
-import { Icon } from "../../../../lib/icon";
+import { Icon } from "../../../../lib/material-icon";
+import { PdsSelectField } from "../../../../../components/pds";
 import { PageHeader } from "../../../page-header-context";
 
 type SalaryRecordDetail = {
@@ -20,9 +21,12 @@ type SalaryRecordDetail = {
   status: string;
 };
 
-export default function SalaryRecordDetailPage() {
-  const params = useParams<{ recordId: string }>();
-  const recordId = params.recordId;
+export default function SalaryRecordDetailPage({
+  params
+}: {
+  params: Promise<{ recordId: string }>;
+}) {
+  const { recordId } = use(params);
   const t = useTranslations("salary");
   const c = useTranslations("common");
   const nav = useTranslations("nav");
@@ -59,14 +63,13 @@ export default function SalaryRecordDetailPage() {
   );
 
   if (record.isLoading) {
-    return <p className="muted">{c("loading")}</p>;
+    return <p className="pds-type-body-s-regular muted">{c("loading")}</p>;
   }
 
   if (record.isError || !record.data) {
     return (
       <div className="page-stack">
-        <p className="error-text">{t("notFound")}</p>
-        <Link href="/dashboard/salary/records">{t("backToRecords")}</Link>
+        <p className="pds-type-body-m-medium error-text">{t("notFound")}</p>
       </div>
     );
   }
@@ -78,15 +81,13 @@ export default function SalaryRecordDetailPage() {
       <PageHeader
         title={data.staffId.slice(0, 8)}
         breadcrumbs={[
-          { label: nav("group_business") },
+          { label: nav("group_hr") },
           { label: t("records"), href: "/dashboard/salary/records" }
         ]}
-        backHref="/dashboard/salary/records"
-        backLabel={t("backToRecords")}
       />
       <section className="panel">
       <div className="panel-head">
-        <h2>{data.staffId.slice(0, 8)}</h2>
+        <h2 className="pds-type-title-xs-bold">{data.staffId.slice(0, 8)}</h2>
       </div>
       <p>
         {t("month")}: {data.salaryMonth} · {c("status")}: {data.status}
@@ -96,17 +97,17 @@ export default function SalaryRecordDetailPage() {
       </p>
 
       <div className="entity-form">
-        <h3>{t("adjustRecord")}</h3>
+        <h3 className="pds-type-title-xxs-extrabold">{t("adjustRecord")}</h3>
         <Field label={t("adjustmentAmount")}>
-          <input type="number" value={adjustment} onChange={(e) => setAdjustment(e.target.value)} />
+          <FormInput type="number" value={adjustment} onChange={(e) => setAdjustment(e.target.value)} />
         </Field>
         <Field label={t("reason")}>
-          <input value={reason} onChange={(e) => setReason(e.target.value)} />
+          <FormInput value={reason} onChange={(e) => setReason(e.target.value)} />
         </Field>
         <div className="form-actions">
           <button
             type="button"
-            className="btn-ghost"
+            className="pds-type-body-m-bold btn-ghost"
             disabled={!reason || adjust.isPending}
             onClick={() =>
               void adjust.mutateAsync({
@@ -120,7 +121,7 @@ export default function SalaryRecordDetailPage() {
           </button>
           <button
             type="button"
-            className="btn-primary"
+            className="pds-type-body-m-bold btn-primary"
             disabled={approve.isPending}
             onClick={() => void approve.mutateAsync({})}
           >
@@ -131,20 +132,19 @@ export default function SalaryRecordDetailPage() {
       </div>
 
       <div className="entity-form">
-        <h3>{t("markPaid")}</h3>
+        <h3 className="pds-type-title-xxs-extrabold">{t("markPaid")}</h3>
         <Field label={t("paymentMethod")}>
-          <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
-            {paymentMethods.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+          <PdsSelectField
+            variant="form"
+            value={paymentMethod}
+            onValueChange={(value) => setPaymentMethod(typeof value === "string" ? value : paymentMethods[0])}
+            options={paymentMethods.map((option) => ({ value: option, label: option }))}
+          />
         </Field>
         <div className="form-actions">
           <button
             type="button"
-            className="btn-primary"
+            className="pds-type-body-m-bold btn-primary"
             disabled={pay.isPending}
             onClick={() => void pay.mutateAsync({ paymentMethod })}
           >

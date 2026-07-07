@@ -1,4 +1,5 @@
 "use client";
+import { FormInput } from "../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
@@ -10,6 +11,9 @@ import { usePlatformMutation, usePlatformQuery } from "../../lib/api";
 import { DataTable } from "../../lib/data-table";
 import { Field } from "../../lib/form";
 import { zodResolver } from "../../lib/zod-resolver";
+import { PdsSelectField } from "../../../components/pds";
+import { StatusBadge } from "../../../components/shared/badge";
+import { EmptyState } from "../../../components/shared/empty-state";
 
 type Tenant = {
   id: string;
@@ -155,7 +159,7 @@ export default function PlatformTenantsPage() {
       id: "status",
       header: c("status"),
       cell: ({ row }) => (
-        <span className={`badge badge--${row.original.status}`}>{row.original.status}</span>
+        <StatusBadge status={row.original.status} />
       )
     },
     { id: "language", header: t("language"), accessorKey: "defaultLanguage" },
@@ -165,48 +169,59 @@ export default function PlatformTenantsPage() {
   return (
     <div className="page-stack">
       <div className="page-head">
-        <h1>{t("title")}</h1>
+        <h1 className="pds-type-title-m-extrabold">{t("title")}</h1>
         <p>{t("description")}</p>
       </div>
 
       <section className="panel">
         <div className="panel-head">
-          <h2>{t("createTitle")}</h2>
+          <h2 className="pds-type-title-xs-bold">{t("createTitle")}</h2>
           <button
             type="button"
-            className="btn-primary"
+            className="pds-type-body-m-bold btn-primary"
             disabled={createTenant.isPending}
             onClick={() => void submit()}
           >
             {createTenant.isPending ? c("adding") : t("createButton")}
           </button>
         </div>
-        <p className="muted">{t("createHelp")}</p>
+        <p className="pds-type-body-s-regular muted">{t("createHelp")}</p>
         <form className="entity-form" onSubmit={(event) => void submit(event)}>
           <Field label={c("name")} error={form.formState.errors.name?.message}>
-            <input {...form.register("name")} placeholder={t("namePlaceholder")} />
+            <FormInput {...form.register("name")} placeholder={t("namePlaceholder")} />
           </Field>
           <Field label={t("slug")} error={form.formState.errors.slug?.message}>
-            <input {...form.register("slug")} placeholder={t("slugPlaceholder")} />
+            <FormInput {...form.register("slug")} placeholder={t("slugPlaceholder")} />
           </Field>
           <Field label={t("timezone")} error={form.formState.errors.timezone?.message}>
-            <input {...form.register("timezone")} />
+            <FormInput {...form.register("timezone")} />
           </Field>
           <Field label={t("language")}>
-            <select {...form.register("defaultLanguage")}>
-              <option value="en">English</option>
-              <option value="my">မြန်မာ</option>
-            </select>
+            <PdsSelectField
+              variant="form"
+              value={form.watch("defaultLanguage")}
+              onValueChange={(value) =>
+                form.setValue(
+                  "defaultLanguage",
+                  typeof value === "string" ? (value as "en" | "my") : "en",
+                  { shouldValidate: true }
+                )
+              }
+              options={[
+                { value: "en", label: "English" },
+                { value: "my", label: "မြန်မာ" }
+              ]}
+            />
           </Field>
           <Field label={t("currency")} error={form.formState.errors.currency?.message}>
-            <input {...form.register("currency")} />
+            <FormInput {...form.register("currency")} />
           </Field>
 
           <Field label={t("ownerName")} error={form.formState.errors.ownerName?.message}>
-            <input {...form.register("ownerName")} placeholder={t("ownerNamePlaceholder")} />
+            <FormInput {...form.register("ownerName")} placeholder={t("ownerNamePlaceholder")} />
           </Field>
           <Field label={t("ownerEmail")} error={form.formState.errors.ownerEmail?.message}>
-            <input
+            <FormInput
               type="email"
               {...form.register("ownerEmail")}
               placeholder={t("ownerEmailPlaceholder")}
@@ -216,7 +231,7 @@ export default function PlatformTenantsPage() {
             label={t("ownerPassword")}
             error={form.formState.errors.ownerPassword?.message}
           >
-            <input
+            <FormInput
               type="password"
               autoComplete="new-password"
               {...form.register("ownerPassword")}
@@ -225,28 +240,25 @@ export default function PlatformTenantsPage() {
           </Field>
         </form>
         {successMessage ? (
-          <p className="form-feedback form-feedback--ok" role="status">
+          <p className="pds-type-body-m-medium form-feedback form-feedback--ok" role="status">
             {successMessage}
           </p>
         ) : null}
         {createTenant.isError ? (
-          <p className="error-text">{createTenant.error.message}</p>
+          <p className="pds-type-body-m-medium error-text">{createTenant.error.message}</p>
         ) : null}
       </section>
 
       <section className="panel">
         <div className="panel-head">
-          <h2>{t("listTitle")}</h2>
-          <button type="button" className="btn-ghost" onClick={() => void tenants.refetch()}>
-            {c("refresh")}
-          </button>
+          <h2 className="pds-type-title-xs-bold">{t("listTitle")}</h2>
         </div>
         {tenants.isLoading ? (
-          <p className="muted">{c("loading")}</p>
+          <p className="pds-type-body-s-regular muted">{c("loading")}</p>
         ) : tenants.isError ? (
-          <p className="error-text">{c("somethingWrong")}</p>
+          <p className="pds-type-body-m-medium error-text">{c("somethingWrong")}</p>
         ) : !tenants.data?.length ? (
-          <p className="muted">{c("empty")}</p>
+          <EmptyState compact embedded icon="domain" title={c("empty")} />
         ) : (
           <DataTable
             columns={columns}

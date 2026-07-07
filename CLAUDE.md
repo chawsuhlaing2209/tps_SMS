@@ -64,13 +64,13 @@ const mutation = useApiMutation<CreateStudentDto, Student>(
 **Component structure:**
 ```
 apps/web/app/lib/              Padauk UI wrappers (Panel, DataTable, DetailHero, RecordList, …)
-apps/web/app/dashboard/        Shell layout, PageHeader context, top bar, sidebar
+apps/web/app/dashboard/        Shell layout, PageHeader context, in-body chrome, sidebar
 apps/web/components/ui/        shadcn/ui primitives (Dialog, Sheet, Button, Table shell)
 apps/web/components/shared/    ConfirmDialog, AppToast, CheckboxList
 apps/web/app/globals.css       Padauk component classes (.panel, .padauk-table, .btn-primary, …)
 ```
 
-**Page layout:** Publish title/breadcrumbs with `PageHeader` from `app/dashboard/page-header-context.tsx`; the sticky `DashboardTopbar` renders them. Page body uses `.page-stack` → optional `DetailHero` → `.panel` sections.
+**Page layout:** Publish title/breadcrumbs/actions with `PageHeader` from `app/dashboard/page-header-context.tsx`; the layout renders `DashboardPageChrome` (breadcrumb + utilities) and `DashboardPageTitle`. Page body uses `.page-stack` → optional `DetailCard` → `.panel` sections.
 
 **Form pattern:** `react-hook-form` + Zod via `zodResolver` from `app/lib/zod-resolver.ts`. Validate with shared Zod schemas from `@sms/shared`. Create/edit flows use `RecordFormSheet` (shadcn Sheet, 480px).
 
@@ -122,9 +122,10 @@ Copy `.env.example` to `.env`. Required vars:
 
 See `DESIGN.md` for the full visual language (**Padauk School OS** — ink-green shell + spring-lime CTAs).
 
-**Token pipeline:** edit `tokens/semantic.json` (or `tokens/extensions.json`) → `npm run tokens:build` → `apps/web/app/design-tokens.css` (generated). Component classes live in `apps/web/app/globals.css`. `apps/web/tailwind.config.ts` mirrors the same CSS variables for utilities. Never hardcode hex in components.
+**Token pipeline:** edit `tokens.json` (Figma export) and/or `composite_tokens.json` → `npm run tokens:build` → `apps/web/app/design-tokens.css` (generated). Component classes live in `apps/web/app/globals.css`. `apps/web/tailwind.config.ts` mirrors the same CSS variables for utilities. Never hardcode hex in components.
 
 **UI conventions:**
+- **Selection controls (tabs / chips / segmented / filters): consult `docs/COMPONENTS.md` BEFORE building.** It maps each job-to-be-done to its one canonical component. Never add a page-local chip/tab variant.
 - Wise-inspired: 1px borders, restrained color, trustworthy finance UX
 - Adaline-inspired: dense `.padauk-table`, compact sidebar, keyboard-navigable rows
 - Reuse Padauk patterns: `.panel` + `PanelHead`, `TablePanelHead`/`TablePanelBody`, `TableSearchInput`, `.badge badge--*`, `.btn-primary` / `.btn-ghost`

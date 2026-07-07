@@ -119,6 +119,7 @@ export class TenantManagementService {
       contactPhone: dto.contactPhone,
       receiptPrefix: dto.receiptPrefix ?? "RCPT",
       invoicePrefix: dto.invoicePrefix ?? "INV",
+      archiveRetentionDays: dto.archiveRetentionDays ?? null,
       updatedBy: actorUserId
     };
 

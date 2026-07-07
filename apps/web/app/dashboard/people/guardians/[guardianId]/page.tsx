@@ -1,29 +1,39 @@
 "use client";
+import { FormInput } from "../../../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useState, use } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ApiError, useApiMutation, useApiQuery } from "../../../../lib/api";
 import { DataTable, DirectoryNameCell } from "../../../../lib/data-table";
 import { Field } from "../../../../lib/form";
 import { HeroMoreActionsMenu, HeroOutlineAction, HeroPrimaryAction } from "../../../../lib/hero-more-actions";
-import { Icon } from "../../../../lib/icon";
+import { Icon } from "../../../../lib/material-icon";
 import { hasAnyPermission } from "../../../../lib/permissions";
+import { RecordFormModal } from "../../../../lib/record-modal";
 import { RecordFormSheet } from "../../../../lib/record-sheet";
+import { ConfirmDialog } from "../../../../../components/shared/confirm-dialog";
 import { getSession } from "../../../../lib/session";
 import { TablePanelBody, TablePanelHead } from "../../../../lib/table-panel";
+import { PdsSelectField } from "../../../../../components/pds";
+import { StatusBadge } from "../../../../../components/shared/badge";
+import { NavigationBackLink } from "../../../../../components/shared/navigation-back-link";
+import { TrailLink } from "../../../../../components/shared/trail-link";
 import { zodResolver } from "../../../../lib/zod-resolver";
+import { useCurrentAcademicYear } from "../../../../lib/use-current-academic-year";
 import { PageHeader } from "../../../page-header-context";
+import { PeopleBillingPanel, type BillingMember } from "../../people-billing-panel";
 
 type GuardianDetail = {
   id: string;
   fullName: string;
   phone: string | null;
   email: string | null;
+  staffId: string | null;
+  staff: { id: string; fullName: string; status: string } | null;
   household: { id: string; name: string } | null;
   students: Array<{
     id: string;
@@ -42,9 +52,12 @@ function guardianInitials(fullName: string) {
   return fullName.slice(0, 2).toUpperCase();
 }
 
-export default function GuardianDetailPage() {
-  const params = useParams<{ guardianId: string }>();
-  const guardianId = params.guardianId;
+export default function GuardianDetailPage({
+  params
+}: {
+  params: Promise<{ guardianId: string }>;
+}) {
+  const { guardianId } = use(params);
   const t = useTranslations("guardians");
   const s = useTranslations("students");
   const c = useTranslations("common");
@@ -52,15 +65,37 @@ export default function GuardianDetailPage() {
   const p = useTranslations("people");
   const permissions = getSession()?.permissions;
   const canManage = hasAnyPermission(permissions, ["student.manage"]);
+  const canCollect = hasAnyPermission(permissions, ["finance.manage"]);
+  const currentYear = useCurrentAcademicYear();
   const [editOpen, setEditOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [staffModalOpen, setStaffModalOpen] = useState(false);
+  const [staffSelection, setStaffSelection] = useState("");
+  const [staffModalError, setStaffModalError] = useState<string | null>(null);
+  const [unmarkStaffOpen, setUnmarkStaffOpen] = useState(false);
 
   const guardian = useApiQuery<GuardianDetail>(
     (tenant) => `/tenants/${tenant}/students/guardians/${guardianId}`
   );
 
+  const staffOptions = useApiQuery<{ data: Array<{ id: string; fullName: string }> }>((tenant) =>
+    canManage && staffModalOpen ? `/tenants/${tenant}/hr/staff?limit=200` : null
+  );
+
+  const billing = useApiQuery<{ students: BillingMember[] }>((tenant) =>
+    canCollect && guardian.data?.household?.id
+      ? `/tenants/${tenant}/finance/family-groups/${guardian.data.household.id}/billing`
+      : null
+  );
+
   const update = useApiMutation<
-    { firstName: string; lastName: string; phone?: string; email?: string },
+    {
+      firstName?: string;
+      lastName?: string;
+      phone?: string;
+      email?: string;
+      staffId?: string | null;
+    },
     unknown
   >(
     (body, tenant) => ({
@@ -104,14 +139,13 @@ export default function GuardianDetailPage() {
   };
 
   if (guardian.isLoading) {
-    return <p className="muted">{c("loading")}</p>;
+    return <p className="pds-type-body-s-regular muted">{c("loading")}</p>;
   }
 
   if (guardian.isError || !guardian.data) {
     return (
       <div className="page-stack">
-        <p className="error-text">{t("notFound")}</p>
-        <Link href="/dashboard/people?tab=guardians">{t("backToList")}</Link>
+        <p className="pds-type-body-m-medium error-text">{t("notFound")}</p>
       </div>
     );
   }
@@ -127,7 +161,7 @@ export default function GuardianDetailPage() {
         <DirectoryNameCell
           name={row.original.fullName}
           avatar={
-            <span className="directory-avatar">
+            <span className="pds-type-title-xs-bold directory-avatar">
               {guardianInitials(row.original.fullName)}
             </span>
           }
@@ -145,9 +179,10 @@ export default function GuardianDetailPage() {
       header: c("status"),
       accessorKey: "status",
       cell: ({ row }) => (
-        <span className={`badge badge--${row.original.status}`}>
-          {s(`status_${row.original.status}` as "status_draft")}
-        </span>
+        <StatusBadge
+          status={row.original.status}
+          label={s(`status_${row.original.status}` as "status_draft")}
+        />
       )
     }
   ];
@@ -164,13 +199,16 @@ export default function GuardianDetailPage() {
     <div className="student-profile-page">
       <PageHeader
         title={data.fullName}
+        segment={{ label: data.fullName, href: `/dashboard/people/guardians/${guardianId}` }}
         breadcrumbs={[
-          { label: nav("group_school") },
+          { label: nav("group_people") },
           { label: p("directoryTitle"), href: "/dashboard/people" },
           { label: t("directoryTitle"), href: "/dashboard/people?tab=guardians" }
         ]}
-        backHref="/dashboard/people?tab=guardians"
-        backLabel={t("backToList")}
+      />
+
+      <NavigationBackLink
+        fallback={{ label: t("directoryTitle"), href: "/dashboard/people?tab=guardians" }}
       />
 
       <section className="structure-room-banner student-profile-banner">
@@ -178,34 +216,58 @@ export default function GuardianDetailPage() {
           <span className="student-profile-avatar">{guardianInitials(data.fullName)}</span>
           <div>
             <h2 className="structure-room-banner__title">{data.fullName}</h2>
-            <p className="structure-room-banner__meta">{heroMeta || t("profileHelp")}</p>
+            <p className="pds-type-body-s-regular structure-room-banner__meta">{heroMeta || t("profileHelp")}</p>
           </div>
         </div>
         <div className="structure-room-banner__actions student-profile-banner__actions">
-          {canManage ? (
+          {canManage || data.phone ? (
             <HeroMoreActionsMenu
-              label={t("editGuardian")}
+              label={c("moreActions")}
               items={[
-                {
-                  id: "edit",
-                  label: t("editGuardian"),
-                  icon: "edit",
-                  onSelect: () => setEditOpen(true)
-                }
+                ...(data.phone
+                  ? [
+                      {
+                        id: "call",
+                        label: t("messageGuardian"),
+                        icon: "call",
+                        onSelect: () => {
+                          window.location.href = `tel:${data.phone!.replace(/\s+/g, "")}`;
+                        }
+                      }
+                    ]
+                  : []),
+                ...(canManage
+                  ? data.staffId
+                    ? [
+                        {
+                          id: "unmark-staff",
+                          label: t("unmarkAsStaff"),
+                          icon: "person_remove",
+                          onSelect: () => setUnmarkStaffOpen(true)
+                        }
+                      ]
+                    : [
+                        {
+                          id: "mark-staff",
+                          label: t("markAsStaff"),
+                          icon: "badge",
+                          onSelect: () => {
+                            setStaffSelection("");
+                            setStaffModalError(null);
+                            setStaffModalOpen(true);
+                          }
+                        }
+                      ]
+                  : [])
               ]}
             />
           ) : null}
-          {data.phone ? (
-            <HeroPrimaryAction href={`tel:${data.phone.replace(/\s+/g, "")}`}>
-              <Icon name="call" />
-              {t("messageGuardian")}
+          {canManage ? (
+            <HeroPrimaryAction onClick={() => setEditOpen(true)}>
+              <Icon name="edit" />
+              {t("editGuardian")}
             </HeroPrimaryAction>
-          ) : (
-            <HeroPrimaryAction href="/dashboard/communication">
-              <Icon name="send" />
-              {t("messageGuardian")}
-            </HeroPrimaryAction>
-          )}
+          ) : null}
           {data.household ? (
             <HeroOutlineAction href={`/dashboard/people/households/${data.household.id}`}>
               <Icon name="family_restroom" />
@@ -217,42 +279,70 @@ export default function GuardianDetailPage() {
 
       <div className="student-profile-stats">
         <article className="student-profile-stat">
-          <span className="student-profile-stat__label">{t("phoneStat")}</span>
+          <span className="pds-type-body-s-regular student-profile-stat__label">{t("phoneStat")}</span>
           <strong className="student-profile-stat__value">{data.phone ?? "—"}</strong>
         </article>
         <article className="student-profile-stat">
-          <span className="student-profile-stat__label">{t("emailStat")}</span>
+          <span className="pds-type-body-s-regular student-profile-stat__label">{t("emailStat")}</span>
           <strong className="student-profile-stat__value">{data.email ?? "—"}</strong>
         </article>
         <article className="student-profile-stat">
-          <span className="student-profile-stat__label">{t("householdStat")}</span>
+          <span className="pds-type-body-s-regular student-profile-stat__label">{t("householdStat")}</span>
           <strong className="student-profile-stat__value">
             {data.household ? (
-              <Link href={`/dashboard/people/households/${data.household.id}`}>
+              <TrailLink
+                href={`/dashboard/people/households/${data.household.id}`}
+                from={{ label: data.fullName, href: `/dashboard/people/guardians/${guardianId}` }}
+              >
                 {data.household.name}
-              </Link>
+              </TrailLink>
             ) : (
               "—"
             )}
           </strong>
         </article>
         <article className="student-profile-stat">
-          <span className="student-profile-stat__label">{t("linkedStudentsStat")}</span>
+          <span className="pds-type-body-s-regular student-profile-stat__label">{t("linkedStudentsStat")}</span>
           <strong className="student-profile-stat__value">{data.students.length}</strong>
         </article>
+        {data.staff ? (
+          <article className="student-profile-stat">
+            <span className="pds-type-body-s-regular student-profile-stat__label">{t("staffStat")}</span>
+            <strong className="student-profile-stat__value">
+              <TrailLink
+                href={`/dashboard/teachers/${data.staff.id}`}
+                from={{ label: data.fullName, href: `/dashboard/people/guardians/${guardianId}` }}
+              >
+                {data.staff.fullName}
+              </TrailLink>
+            </strong>
+          </article>
+        ) : null}
       </div>
 
-      <section className="panel">
-        <TablePanelHead title={t("linkedStudents")} help={t("profileHelp")} />
-        <TablePanelBody loading={false} error={null} empty={!data.students.length}>
-          <DataTable
-            columns={studentColumns}
-            data={data.students}
-            showUpdatedAt={false}
-            getRowHref={(student) => `/dashboard/students/${student.id}`}
-          />
-        </TablePanelBody>
-      </section>
+      <TablePanelBody variant="card-plain" loading={false} error={null} empty={!data.students.length}>
+        <DataTable
+          columns={studentColumns}
+          data={data.students}
+          showUpdatedAt={false}
+          getRowHref={(student) => `/dashboard/students/${student.id}`}
+          navigationFrom={{ label: data.fullName, href: `/dashboard/people/guardians/${guardianId}` }}
+        />
+      </TablePanelBody>
+
+      {canCollect && data.household ? (
+        <PeopleBillingPanel
+          title={t("householdBalanceTitle")}
+          members={billing.data?.students ?? []}
+          academicYearId={currentYear.data?.id ?? null}
+          loading={billing.isLoading}
+          error={billing.isError}
+          canCollect={canCollect}
+          fromLabel={data.fullName}
+          fromHref={`/dashboard/people/guardians/${guardianId}`}
+          onRefresh={() => void billing.refetch()}
+        />
+      ) : null}
 
       <RecordFormSheet
         open={editOpen}
@@ -281,10 +371,10 @@ export default function GuardianDetailPage() {
         })}
         footer={
           <>
-            <button type="button" className="btn-ghost" onClick={() => setEditOpen(false)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setEditOpen(false)}>
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={update.isPending}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={update.isPending}>
               <Icon name="save" />
               {update.isPending ? c("loading") : c("save")}
             </button>
@@ -292,23 +382,101 @@ export default function GuardianDetailPage() {
         }
       >
         <Field label={t("firstName")} error={form.formState.errors.firstName?.message}>
-          <input {...form.register("firstName")} />
+          <FormInput {...form.register("firstName")} />
         </Field>
         <Field label={t("lastName")} error={form.formState.errors.lastName?.message}>
-          <input {...form.register("lastName")} />
+          <FormInput {...form.register("lastName")} />
         </Field>
         <Field label={t("phone")} error={form.formState.errors.phone?.message}>
-          <input {...form.register("phone")} />
-        </Field>
-        <Field label={t("email")} error={form.formState.errors.email?.message}>
-          <input type="email" {...form.register("email")} />
+          <FormInput {...form.register("phone")} />
         </Field>
         {formError ? (
-          <p className="error-text" role="alert">
+          <p className="pds-type-body-m-medium error-text" role="alert">
             {formError}
           </p>
         ) : null}
       </RecordFormSheet>
+
+      <RecordFormModal
+        open={staffModalOpen}
+        onOpenChange={(open) => {
+          setStaffModalOpen(open);
+          if (!open) {
+            setStaffModalError(null);
+          }
+        }}
+        title={t("markAsStaff")}
+        help={t("staffLinkHelp")}
+        headerIcon="badge"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (!staffSelection) {
+            setStaffModalError(c("required"));
+            return;
+          }
+          setStaffModalError(null);
+          try {
+            await update.mutateAsync({ staffId: staffSelection });
+            setStaffModalOpen(false);
+            void guardian.refetch();
+          } catch (error) {
+            setStaffModalError(error instanceof ApiError ? error.message : c("somethingWrong"));
+          }
+        }}
+        footer={
+          <>
+            <button
+              type="button"
+              className="pds-type-body-m-bold btn-ghost"
+              onClick={() => setStaffModalOpen(false)}
+            >
+              {c("cancel")}
+            </button>
+            <button
+              type="submit"
+              className="pds-type-body-m-bold btn-primary"
+              disabled={update.isPending || !staffSelection}
+            >
+              <Icon name="link" />
+              {update.isPending ? c("loading") : t("linkStaffConfirm")}
+            </button>
+          </>
+        }
+      >
+        <Field label={t("staffLinkLabel")}>
+          <PdsSelectField
+            value={staffSelection}
+            onValueChange={(value) =>
+              setStaffSelection(typeof value === "string" ? value : "")
+            }
+            placeholder={t("staffLinkPlaceholder")}
+            options={(staffOptions.data?.data ?? []).map((member) => ({
+              value: member.id,
+              label: member.fullName
+            }))}
+          />
+        </Field>
+        {staffModalError ? (
+          <p className="pds-type-body-m-medium error-text" role="alert">
+            {staffModalError}
+          </p>
+        ) : null}
+      </RecordFormModal>
+
+      <ConfirmDialog
+        open={unmarkStaffOpen}
+        onOpenChange={setUnmarkStaffOpen}
+        title={t("unmarkAsStaff")}
+        description={t("unmarkAsStaffConfirm", { name: data.staff?.fullName ?? "" })}
+        confirmLabel={t("unmarkAsStaff")}
+        cancelLabel={c("cancel")}
+        loading={update.isPending}
+        onConfirm={async () => {
+          await update.mutateAsync({ staffId: null });
+          setUnmarkStaffOpen(false);
+          void guardian.refetch();
+        }}
+      />
     </div>
   );
 }

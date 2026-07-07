@@ -21,6 +21,7 @@ import {
   teachingSectorGrades,
   teachingSectors
 } from "../db/schema.js";
+import { isTeacherEligibleForClassroomSubject } from "./teacher-eligibility.js";
 
 @Injectable()
 export class TeacherAssignmentsService {
@@ -181,6 +182,7 @@ export class TeacherAssignmentsService {
     actorUserId: string | undefined
   ) {
     await this.assertStaff(tenantId, staffId);
+    await this.assertAssignmentsMatchCapability(tenantId, dto.capability, dto.assignments);
 
     await this.db
       .update(staff)
@@ -432,6 +434,54 @@ export class TeacherAssignmentsService {
     }
   }
 
+  private async assertAssignmentsMatchCapability(
+    tenantId: string,
+    capability: TeacherProfileCapabilityInput,
+    assignments: UpdateTeacherAssignmentsInput
+  ) {
+    const eligibleGrades = new Set(capability.eligibleGradeIds);
+
+    for (const item of assignments.gradeChief) {
+      if (!eligibleGrades.has(item.gradeId)) {
+        throw new BadRequestException(
+          "Grade chief assignment must be within the teacher's eligible grades."
+        );
+      }
+    }
+
+    for (const item of assignments.homeroom) {
+      const [classroom] = await this.db
+        .select({ gradeId: classrooms.gradeId })
+        .from(classrooms)
+        .where(and(eq(classrooms.tenantId, tenantId), eq(classrooms.id, item.classroomId)));
+
+      if (!classroom || !eligibleGrades.has(classroom.gradeId)) {
+        throw new BadRequestException(
+          "Homeroom assignment must be within the teacher's eligible grades."
+        );
+      }
+    }
+
+    for (const item of assignments.subjectTeaching) {
+      const [classroom] = await this.db
+        .select({ gradeId: classrooms.gradeId })
+        .from(classrooms)
+        .where(and(eq(classrooms.tenantId, tenantId), eq(classrooms.id, item.classroomId)));
+
+      if (!classroom) {
+        throw new BadRequestException("Classroom not found.");
+      }
+
+      if (
+        !isTeacherEligibleForClassroomSubject(capability, classroom.gradeId, item.subjectId)
+      ) {
+        throw new BadRequestException(
+          "Subject teaching assignment must match the teacher's subject competencies and eligible grades."
+        );
+      }
+    }
+  }
+
   private async assertStaff(tenantId: string, staffId: string) {
     const [member] = await this.db
       .select({ id: staff.id })
@@ -444,6 +494,16 @@ export class TeacherAssignmentsService {
   }
 
   private assertUniqueItems(dto: UpdateTeacherAssignmentsInput) {
+    if (dto.homeroom.length > 1) {
+      throw new BadRequestException(
+        "A teacher can only be homeroom teacher for one classroom."
+      );
+    }
+
+    if (dto.gradeChief.length > 1) {
+      throw new BadRequestException("A teacher can only be grade chief for one grade.");
+    }
+
     const gradeChiefKeys = new Set<string>();
     for (const item of dto.gradeChief) {
       const key = `${item.academicYearId}:${item.gradeId}`;

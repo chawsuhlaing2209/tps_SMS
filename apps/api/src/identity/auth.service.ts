@@ -1,6 +1,7 @@
 import {
   Inject,
   Injectable,
+  BadRequestException,
   NotFoundException,
   UnauthorizedException
 } from "@nestjs/common";
@@ -8,7 +9,13 @@ import { and, eq, isNull, or } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
-import { passwordResetTokens, sessions, tenants, users } from "../db/schema.js";
+import {
+  accountActivationTokens,
+  passwordResetTokens,
+  sessions,
+  tenants,
+  users
+} from "../db/schema.js";
 import type {
   ActivateAccountDto,
   ConfirmPasswordResetDto,
@@ -21,6 +28,7 @@ import { RequestContextService } from "./request-context.service.js";
 import { SESSION_ABSOLUTE_TTL_MS, SESSION_IDLE_TTL_MS } from "./session-cookie.js";
 
 const RESET_TTL_MS = 1000 * 60 * 30;
+const ACTIVATION_TTL_MS = 1000 * 60 * 60 * 72;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -34,11 +42,50 @@ export class AuthService {
     private readonly requestContextService: RequestContextService
   ) {}
 
+  async issueActivationToken(tenantId: string, userId: string) {
+    const token = this.passwordService.generateToken();
+    const tokenHash = this.passwordService.hashToken(token);
+    const expiresAt = new Date(Date.now() + ACTIVATION_TTL_MS);
+
+    await this.db.insert(accountActivationTokens).values({
+      tenantId,
+      userId,
+      tokenHash,
+      expiresAt
+    });
+
+    return { token, expiresAt };
+  }
+
   async activateAccount(tenantId: string, dto: ActivateAccountDto) {
-    const [user] = await this.db.select().from(users).where(eq(users.id, dto.userId));
+    const tokenHash = this.passwordService.hashToken(dto.token);
+
+    const [activationToken] = await this.db
+      .select()
+      .from(accountActivationTokens)
+      .where(
+        and(
+          eq(accountActivationTokens.tenantId, tenantId),
+          eq(accountActivationTokens.tokenHash, tokenHash),
+          isNull(accountActivationTokens.usedAt)
+        )
+      );
+
+    if (!activationToken || activationToken.expiresAt.getTime() < Date.now()) {
+      throw new UnauthorizedException("Activation token is invalid or expired.");
+    }
+
+    const [user] = await this.db
+      .select()
+      .from(users)
+      .where(eq(users.id, activationToken.userId));
 
     if (!user || user.tenantId !== tenantId) {
       throw new NotFoundException("Tenant user not found.");
+    }
+
+    if (user.status !== "invited") {
+      throw new BadRequestException("This account is not eligible for activation.");
     }
 
     const passwordHash = await this.passwordService.hash(dto.password);
@@ -46,15 +93,20 @@ export class AuthService {
     const [updated] = await this.db
       .update(users)
       .set({ passwordHash, status: "active", updatedAt: new Date() })
-      .where(eq(users.id, dto.userId))
+      .where(eq(users.id, activationToken.userId))
       .returning({ id: users.id, status: users.status });
+
+    await this.db
+      .update(accountActivationTokens)
+      .set({ usedAt: new Date() })
+      .where(eq(accountActivationTokens.id, activationToken.id));
 
     await this.auditService.recordEvent({
       tenantId,
-      actorUserId: dto.userId,
+      actorUserId: activationToken.userId,
       action: "user.activate",
       recordType: "User",
-      recordId: dto.userId,
+      recordId: activationToken.userId,
       before: { status: user.status },
       after: { status: "active" }
     });
@@ -64,8 +116,11 @@ export class AuthService {
 
   /**
    * Accepts either a tenant UUID or a tenant slug (e.g. "demo-alpha") and
-   * returns the canonical tenant UUID. Uses the generic credentials error to
-   * avoid leaking which tenants exist.
+   * returns the canonical tenant UUID.
+   *
+   * Login failures carry a machine-readable `code` so the web login form can
+   * point at the exact field. Product decision: field-specific errors
+   * (tenant/identifier/password) are worth the account-enumeration tradeoff.
    */
   private async resolveTenantId(tenantIdOrSlug: string): Promise<string> {
     const [tenant] = await this.db
@@ -78,7 +133,10 @@ export class AuthService {
       );
 
     if (!tenant) {
-      throw new UnauthorizedException("Invalid credentials.");
+      throw new UnauthorizedException({
+        code: "auth.unknownTenant",
+        message: "No school found with that name."
+      });
     }
 
     return tenant.id;
@@ -97,13 +155,26 @@ export class AuthService {
         )
       );
 
-    if (!user || !user.passwordHash || user.status !== "active") {
-      throw new UnauthorizedException("Invalid credentials.");
+    if (!user) {
+      throw new UnauthorizedException({
+        code: "auth.unknownIdentifier",
+        message: "No account with that email or phone in this school."
+      });
+    }
+
+    if (!user.passwordHash || user.status !== "active") {
+      throw new UnauthorizedException({
+        code: "auth.accountInactive",
+        message: "This account is not active yet."
+      });
     }
 
     const valid = await this.passwordService.verify(user.passwordHash, dto.password);
     if (!valid) {
-      throw new UnauthorizedException("Invalid credentials.");
+      throw new UnauthorizedException({
+        code: "auth.wrongPassword",
+        message: "Incorrect password."
+      });
     }
 
     const token = this.passwordService.generateToken();
@@ -187,13 +258,26 @@ export class AuthService {
         )
       );
 
-    if (!user || !user.passwordHash || user.status !== "active") {
-      throw new UnauthorizedException("Invalid credentials.");
+    if (!user) {
+      throw new UnauthorizedException({
+        code: "auth.unknownIdentifier",
+        message: "No platform account with that email or phone."
+      });
+    }
+
+    if (!user.passwordHash || user.status !== "active") {
+      throw new UnauthorizedException({
+        code: "auth.accountInactive",
+        message: "This account is not active yet."
+      });
     }
 
     const valid = await this.passwordService.verify(user.passwordHash, dto.password);
     if (!valid) {
-      throw new UnauthorizedException("Invalid credentials.");
+      throw new UnauthorizedException({
+        code: "auth.wrongPassword",
+        message: "Incorrect password."
+      });
     }
 
     const token = this.passwordService.generateToken();

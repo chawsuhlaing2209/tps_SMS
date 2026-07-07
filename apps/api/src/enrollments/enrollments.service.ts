@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import type { EnrollmentConfirmInput } from "@sms/shared";
-import { and, eq, inArray, isNull, ne } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
 import {
@@ -10,10 +10,13 @@ import {
   students
 } from "../db/schema.js";
 import type {
+  CancelEnrollmentDto,
   CreateEnrollmentDto,
   CreateStudentServiceDto,
+  ListAvailableStudentServicesQueryDto,
   ListEnrollmentsQueryDto,
   ListStudentServicesQueryDto,
+  PreviewAddStudentServiceDto,
   PreviewEnrollmentDto,
   UpdateEnrollmentDto,
   ConfirmEnrollmentDto
@@ -47,7 +50,10 @@ export class EnrollmentsService {
       eq(enrollments.tenantId, tenantId),
       eq(enrollments.studentId, studentId),
       eq(enrollments.academicYearId, academicYearId),
-      inArray(enrollments.status, [...EnrollmentsService.ACTIVE_ENROLLMENT_STATUSES])
+      inArray(enrollments.status, [...EnrollmentsService.ACTIVE_ENROLLMENT_STATUSES]),
+      // Cancellation stamps cancelledAt without changing status — cancelled
+      // enrollments must not block re-enrolling for the same year.
+      isNull(enrollments.cancelledAt)
     ];
 
     if (classroomId) {
@@ -79,7 +85,11 @@ export class EnrollmentsService {
       academicYearId: dto.academicYearId,
       gradeId: dto.gradeId,
       classroomId: dto.classroomId,
-      optionalFeeItemIds: dto.optionalFeeItemIds ?? []
+      optionalFeeItemIds: dto.optionalFeeItemIds ?? [],
+      collectPayment: dto.collectPayment,
+      paymentMethod: dto.paymentMethod,
+      excludedDiscountRuleIds: dto.excludedDiscountRuleIds,
+      forcedDiscountRuleIds: dto.forcedDiscountRuleIds
     });
   }
 
@@ -112,6 +122,39 @@ export class EnrollmentsService {
     return row;
   }
 
+  /** Counts by status, grade, and month for the enrollments dashboard. */
+  async getEnrollmentStats(tenantId: string, academicYearId?: string) {
+    const filters = [eq(enrollments.tenantId, tenantId)];
+    if (academicYearId) {
+      filters.push(eq(enrollments.academicYearId, academicYearId));
+    }
+
+    const [byStatus, byGrade, byMonth] = await Promise.all([
+      this.db
+        .select({ status: enrollments.status, count: sql<number>`count(*)::int` })
+        .from(enrollments)
+        .where(and(...filters))
+        .groupBy(enrollments.status),
+      this.db
+        .select({ gradeId: enrollments.gradeId, count: sql<number>`count(*)::int` })
+        .from(enrollments)
+        .where(and(...filters))
+        .groupBy(enrollments.gradeId),
+      this.db
+        .select({
+          month: sql<string>`to_char(${enrollments.createdAt}, 'YYYY-MM')`,
+          count: sql<number>`count(*)::int`
+        })
+        .from(enrollments)
+        .where(and(...filters))
+        .groupBy(sql`to_char(${enrollments.createdAt}, 'YYYY-MM')`)
+        .orderBy(sql`to_char(${enrollments.createdAt}, 'YYYY-MM')`)
+    ]);
+
+    const total = byStatus.reduce((sum, row) => sum + row.count, 0);
+    return { total, byStatus, byGrade, byMonth };
+  }
+
   listEnrollments(tenantId: string, query: ListEnrollmentsQueryDto) {
     const filters = [eq(enrollments.tenantId, tenantId)];
     if (query.academicYearId) {
@@ -133,6 +176,7 @@ export class EnrollmentsService {
         gradeId: enrollments.gradeId,
         invoiceId: enrollments.invoiceId,
         status: enrollments.status,
+        cancelledAt: enrollments.cancelledAt,
         billingSnapshot: enrollments.billingSnapshot,
         createdAt: enrollments.createdAt,
         updatedAt: enrollments.updatedAt,
@@ -197,14 +241,10 @@ export class EnrollmentsService {
   confirmEnrollment(
     tenantId: string,
     enrollmentId: string,
-    actorUserId: string | undefined,
+    actorUserId: string,
     dto: ConfirmEnrollmentDto,
     actorPermissions: string[]
   ) {
-    if (!actorUserId) {
-      throw new UnauthorizedException("Missing actor user id.");
-    }
-
     return this.enrollmentBillingService.confirm(
       tenantId,
       enrollmentId,
@@ -212,6 +252,24 @@ export class EnrollmentsService {
       dto as EnrollmentConfirmInput,
       actorPermissions
     );
+  }
+
+  assignClassroom(
+    tenantId: string,
+    enrollmentId: string,
+    classroomId: string,
+    actorUserId: string
+  ) {
+    return this.enrollmentBillingService.assignClassroom(
+      tenantId,
+      enrollmentId,
+      classroomId,
+      actorUserId
+    );
+  }
+
+  unassignClassroom(tenantId: string, enrollmentId: string, actorUserId: string) {
+    return this.enrollmentBillingService.unassignClassroom(tenantId, enrollmentId, actorUserId);
   }
 
   async updateEnrollment(
@@ -235,7 +293,7 @@ export class EnrollmentsService {
       );
     }
 
-    if (existing[0].confirmedAt) {
+    if (existing[0].invoiceId) {
       throw new BadRequestException("Confirmed enrollments cannot be edited.");
     }
 
@@ -318,6 +376,60 @@ export class EnrollmentsService {
     return row;
   }
 
+  async deleteEnrollment(
+    tenantId: string,
+    enrollmentId: string,
+    actorUserId: string | undefined
+  ) {
+    const [existing] = await this.db
+      .select()
+      .from(enrollments)
+      .where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.id, enrollmentId)));
+
+    if (!existing) {
+      throw new NotFoundException("Enrollment not found.");
+    }
+
+    if (existing.status !== "draft") {
+      throw new BadRequestException("Only draft enrollments can be deleted.");
+    }
+
+    if (existing.invoiceId || existing.confirmedAt) {
+      throw new BadRequestException("This enrollment cannot be deleted.");
+    }
+
+    await this.db
+      .delete(enrollments)
+      .where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.id, enrollmentId)));
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "enrollment.delete",
+      recordType: "Enrollment",
+      recordId: enrollmentId,
+      before: existing as Record<string, unknown>
+    });
+
+    return { id: enrollmentId };
+  }
+
+  /** Cancel (withdraw) an enrollment with refund / forfeit / void handling. */
+  async cancelEnrollment(
+    tenantId: string,
+    enrollmentId: string,
+    actorUserId: string,
+    dto: CancelEnrollmentDto
+  ) {
+    return this.enrollmentBillingService.cancelEnrollment(tenantId, enrollmentId, actorUserId, {
+      refundMode: dto.refundMode,
+      refundAmount: dto.refundAmount,
+      method: dto.method,
+      referenceNumber: dto.referenceNumber,
+      reason: dto.reason
+    });
+  }
+
   /** Places the student in the classroom when an enrollment is approved. */
   private async syncClassroomPlacement(
     tenantId: string,
@@ -384,32 +496,41 @@ export class EnrollmentsService {
   async createStudentService(
     tenantId: string,
     actorUserId: string | undefined,
-    dto: CreateStudentServiceDto
+    dto: CreateStudentServiceDto,
+    actorPermissions: string[] = []
   ) {
-    const rows = await this.db
-      .insert(studentServices)
-      .values({
-        tenantId,
-        studentId: dto.studentId,
-        feeItemId: dto.feeItemId,
-        effectiveFrom: dto.startDate,
-        effectiveTo: dto.endDate,
-        createdBy: actorUserId,
-        updatedBy: actorUserId
-      })
-      .returning();
-    const row = rows[0]!;
+    if (!actorUserId) {
+      throw new UnauthorizedException("Actor user id is required.");
+    }
 
-    await this.auditService.recordEvent({
+    return this.enrollmentBillingService.confirmAddStudentService(
       tenantId,
-      actorUserId: actorUserId ?? null,
-      action: "student_service.create",
-      recordType: "StudentService",
-      recordId: row.id,
-      after: row as Record<string, unknown>
-    });
+      actorUserId,
+      {
+        studentId: dto.studentId,
+        feeItemIds: dto.feeItemIds,
+        startDate: dto.startDate,
+        dueDate: dto.dueDate,
+        collectPayment: dto.collectPayment,
+        paymentMethod: dto.paymentMethod,
+        paymentAmount: dto.paymentAmount,
+        paymentReference: dto.paymentReference,
+        paymentNotes: dto.paymentNotes
+      },
+      actorPermissions
+    );
+  }
 
-    return row;
+  listAvailableOptionalServices(tenantId: string, studentId: string) {
+    return this.enrollmentBillingService.listAvailableOptionalServices(tenantId, studentId);
+  }
+
+  previewAddStudentService(tenantId: string, dto: PreviewAddStudentServiceDto) {
+    return this.enrollmentBillingService.previewAddStudentService(tenantId, {
+      studentId: dto.studentId,
+      feeItemIds: dto.feeItemIds,
+      effectiveFrom: dto.effectiveFrom
+    });
   }
 
   async removeStudentService(

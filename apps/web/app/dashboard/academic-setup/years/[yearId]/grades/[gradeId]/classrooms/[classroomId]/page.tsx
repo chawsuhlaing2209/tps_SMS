@@ -3,17 +3,17 @@
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useState, use } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useApiQuery } from "../../../../../../../../lib/api";
 import { StudentCombobox } from "../../../../../../../../lib/student-combobox";
 import { DataTable } from "../../../../../../../../lib/data-table";
 import { Field } from "../../../../../../../../lib/form";
-import { Icon } from "../../../../../../../../lib/icon";
+import { Icon } from "../../../../../../../../lib/material-icon";
 import { RecordFormSheet } from "../../../../../../../../lib/record-sheet";
-import { TablePanelBody, TablePanelHead } from "../../../../../../../../lib/table-panel";
+import { TablePanelBody } from "../../../../../../../../lib/table-panel";
 import { zodResolver } from "../../../../../../../../lib/zod-resolver";
 import { PageHeader } from "../../../../../../../page-header-context";
 
@@ -31,10 +31,13 @@ type StudentOption = { id: string; fullName: string; admissionNumber: string };
 const studentsPath = (tenant: string, classroomId: string) =>
   `/tenants/${tenant}/classrooms/${classroomId}/students`;
 
-export default function ClassroomStudentsPage() {
-  const params = useParams<{ yearId: string; gradeId: string; classroomId: string }>();
+export default function ClassroomStudentsPage({
+  params
+}: {
+  params: Promise<{ yearId: string; gradeId: string; classroomId: string }>;
+}) {
+  const { yearId, gradeId, classroomId } = use(params);
   const router = useRouter();
-  const { yearId, gradeId, classroomId } = params;
   const t = useTranslations("academics");
   const c = useTranslations("common");
   const [assignOpen, setAssignOpen] = useState(false);
@@ -70,7 +73,7 @@ export default function ClassroomStudentsPage() {
       enableSorting: false,
       cell: ({ row }) => (
         <div style={{ display: "flex", gap: "8px" }}>
-          <Link href={`/dashboard/students/${row.original.id}`} className="row-action">
+          <Link href={`/dashboard/students/${row.original.id}`} className="pds-type-body-s-regular row-action">
             {t("viewProfile")}
           </Link>
         </div>
@@ -87,28 +90,31 @@ export default function ClassroomStudentsPage() {
           {
             label: gradeRecord?.name ?? t("grade"),
             href: `/dashboard/academic-setup/grades-classrooms?grade=${gradeId}`
-          }
+          },
+          { label: classroom.data?.name ?? t("classroom") }
         ]}
-        backHref={`/dashboard/academic-setup/grades-classrooms?grade=${gradeId}`}
-        backLabel={gradeRecord?.name ?? t("grade")}
+        actions={
+          <>
+            <Link href={`/dashboard/structure/rooms/${classroomId}`} className="pds-type-body-m-bold btn-ghost">
+              {t("openClassroom")}
+            </Link>
+            <button
+              type="button"
+              className="pds-type-body-m-bold btn-primary"
+              onClick={() => {
+                form.reset({ studentId: "" });
+                setAssignOpen(true);
+              }}
+            >
+              <Icon name="add" />
+              {t("assignStudent")}
+            </button>
+          </>
+        }
       />
 
       <section className="panel">
-        <TablePanelHead
-          title={t("students")}
-          onRefresh={() => void students.refetch()}
-          onAdd={() => {
-            form.reset({ studentId: "" });
-            setAssignOpen(true);
-          }}
-          addLabel={t("assignStudent")}
-          extra={
-            <Link href={`/dashboard/structure/rooms/${classroomId}`} className="btn-ghost">
-              {t("openClassroom")}
-            </Link>
-          }
-        />
-        <p className="muted panel-help">{t("classroomRosterSetupHelp")}</p>
+        <p className="pds-type-body-s-regular muted panel-help">{t("classroomRosterSetupHelp")}</p>
         <TablePanelBody
           loading={students.isLoading || classroom.isLoading}
           error={students.isError ? c("somethingWrong") : null}
@@ -134,15 +140,15 @@ export default function ClassroomStudentsPage() {
             setAssignOpen(false);
             form.reset({ studentId: "" });
             router.push(
-              `/dashboard/finance/billing?studentId=${values.studentId}&classroomId=${classroomId}`
+              `/dashboard/enrollments?studentId=${values.studentId}&classroomId=${classroomId}`
             );
           })}
           footer={
             <>
-              <button type="button" className="btn-ghost" onClick={() => setAssignOpen(false)}>
+              <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setAssignOpen(false)}>
                 {c("cancel")}
               </button>
-              <button type="submit" className="btn-primary" disabled={form.formState.isSubmitting}>
+              <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={form.formState.isSubmitting}>
                 <Icon name="person_add" />
                 {form.formState.isSubmitting ? t("creating") : t("assignStudent")}
               </button>

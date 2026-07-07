@@ -1,0 +1,65 @@
+/* Payroll net summary — Figma node 96:28544 */
+.payroll-net-summary {
+  background: var(--pds-text-primary);
+  border-radius: var(--pds-border-radius-16);
+  display: flex;
+  flex-direction: column;
+  padding: var(--pds-padding-medium) var(--pds-padding-large);
+}
+
+.payroll-net-summary__metrics {
+  display: grid;
+  gap: var(--pds-gap-medium);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.payroll-net-summary__metric {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pds-gap-xx-small);
+  min-width: 0;
+}
+
+.payroll-net-summary__label {
+  color: var(--pds-color-neutral-600);
+}
+
+.payroll-net-summary__value {
+  color: var(--pds-text-invert-primary);
+  font-family: var(--pds-type-title-xxs-extrabold-font-family);
+  font-size: var(--pds-type-title-xxs-extrabold-font-size);
+  font-weight: var(--pds-type-title-xxs-extrabold-font-weight);
+  line-height: var(--pds-type-title-xxs-extrabold-line-height);
+  white-space: nowrap;
+}
+
+.payroll-net-summary__value--accent {
+  color: var(--pds-compliment-brand-ink);
+}
+
+.payroll-net-summary__footer {
+  align-items: center;
+  border-top: 1px solid var(--pds-shell-line-soft);
+  display: flex;
+  justify-content: space-between;
+  gap: var(--pds-gap-medium);
+  margin-top: var(--pds-padding-small);
+  padding-top: var(--pds-padding-medium);
+}
+
+.payroll-net-summary__net-label {
+  color: var(--pds-muted-on-dark);
+  font-family: var(--pds-type-body-s-semibold-font-family);
+  font-size: var(--pds-type-body-s-semibold-font-size);
+  font-weight: var(--pds-type-body-s-semibold-font-weight);
+  line-height: var(--pds-type-body-s-semibold-line-height);
+}
+
+.payroll-net-summary__net-value {
+  color: var(--pds-compliment-brand-ink);
+  font-family: var(--pds-font-family-display-stack);
+  font-size: var(--pds-size-medium);
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}

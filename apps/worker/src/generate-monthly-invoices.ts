@@ -6,11 +6,12 @@ import type { SmsJob } from '@sms/shared'
 type GenerateMonthlyInvoicesJob = Extract<SmsJob, { name: 'generate-monthly-invoices' }>['data']
 
 const repoRoot = path.resolve(fileURLToPath(new URL('.', import.meta.url)), '../../..')
+const tsxBin = path.join(repoRoot, 'node_modules/.bin/tsx')
 const cliScript = path.join(repoRoot, 'apps/api/src/finance/monthly-invoice-cli.ts')
 
 export async function handleGenerateMonthlyInvoices(data: GenerateMonthlyInvoicesJob) {
   return new Promise<unknown>((resolve, reject) => {
-    const child = spawn('npx', ['tsx', cliScript, JSON.stringify(data)], {
+    const child = spawn(tsxBin, [cliScript, JSON.stringify(data)], {
       cwd: repoRoot,
       env: process.env,
       stdio: ['ignore', 'pipe', 'inherit'],

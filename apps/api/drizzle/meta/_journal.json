@@ -106,6 +106,160 @@
       "when": 1782700000000,
       "tag": "0014_payment_plans",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1782800000000,
+      "tag": "0015_discount_rule_config",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1782900000000,
+      "tag": "0016_invoice_discount_lines",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1783000000000,
+      "tag": "0017_subject_appearance",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1783100000000,
+      "tag": "0018_school_schedule",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1783200000000,
+      "tag": "0019_timetable_slot_optional_teacher",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1783300000000,
+      "tag": "0020_sessions_token_hash_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1783400000000,
+      "tag": "0021_account_activation_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1783500000000,
+      "tag": "0022_facility_rooms",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1783600000000,
+      "tag": "0023_classroom_facility_room",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1783700000000,
+      "tag": "0024_payroll_module",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1783800000000,
+      "tag": "0025_student_document_metadata",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1783900000000,
+      "tag": "0026_departments_actor_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1783900000001,
+      "tag": "0027_slim_rafael_vega",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1783900000002,
+      "tag": "0028_hesitant_mojo",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1783900000003,
+      "tag": "0029_sharp_maverick",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1783900000004,
+      "tag": "0030_wealthy_shadow_king",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1783900000005,
+      "tag": "0031_archive_earning_pay_components",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1783900000006,
+      "tag": "0032_icy_ironclad",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1783900000007,
+      "tag": "0033_backfill_leave_manage_permission",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1783900000008,
+      "tag": "0034_fluffy_raider",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1783900000009,
+      "tag": "0035_white_king_cobra",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1783900000010,
+      "tag": "0036_school_profile_preferences",
+      "breakpoints": true
     }
   ]
 }

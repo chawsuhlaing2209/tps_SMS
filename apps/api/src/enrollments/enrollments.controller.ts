@@ -1,20 +1,22 @@
-import { Body, Controller, Delete, Get, Headers, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
-import type { Request } from "express";
-import type { TenantContext } from "../tenancy/tenant-context.js";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { RequirePermissions } from "../identity/permissions.decorator.js";
 import { PermissionsGuard } from "../identity/permissions.guard.js";
+import { ReqTenantContext } from "../identity/tenant-context.decorator.js";
+import type { TenantContext } from "../tenancy/tenant-context.js";
 import {
+  CancelEnrollmentDto,
+  AssignClassroomDto,
   ConfirmEnrollmentDto,
   CreateEnrollmentDto,
   CreateStudentServiceDto,
+  ListAvailableStudentServicesQueryDto,
   ListEnrollmentsQueryDto,
   ListStudentServicesQueryDto,
+  PreviewAddStudentServiceDto,
   PreviewEnrollmentDto,
   UpdateEnrollmentDto
 } from "./dto.js";
 import { EnrollmentsService } from "./enrollments.service.js";
-
-type GuardedRequest = Request & { tenantContext?: TenantContext };
 
 @Controller("tenants/:tenantId")
 @UseGuards(PermissionsGuard)
@@ -36,6 +38,16 @@ export class EnrollmentsController {
     return this.enrollmentsService.listEnrollments(tenantId, query);
   }
 
+  /** Breakdown counts (by status / grade / month) for the enrollments dashboard. */
+  @Get("enrollments/stats")
+  @RequirePermissions("student.manage")
+  getEnrollmentStats(
+    @Param("tenantId") tenantId: string,
+    @Query("academicYearId") academicYearId?: string
+  ) {
+    return this.enrollmentsService.getEnrollmentStats(tenantId, academicYearId);
+  }
+
   @Get("enrollments/:enrollmentId")
   @RequirePermissions("student.manage")
   getEnrollment(
@@ -48,41 +60,114 @@ export class EnrollmentsController {
   @Post("enrollments")
   @RequirePermissions("student.manage")
   createEnrollment(
+    @ReqTenantContext() context: TenantContext,
     @Param("tenantId") tenantId: string,
-    @Body() dto: CreateEnrollmentDto,
-    @Headers("x-user-id") actorUserId?: string
+    @Body() dto: CreateEnrollmentDto
   ) {
-    return this.enrollmentsService.createEnrollment(tenantId, actorUserId, dto);
+    return this.enrollmentsService.createEnrollment(tenantId, context.actorUserId, dto);
   }
 
   @Post("enrollments/:enrollmentId/confirm")
   @RequirePermissions("student.manage")
   confirmEnrollment(
+    @ReqTenantContext() context: TenantContext,
     @Param("tenantId") tenantId: string,
     @Param("enrollmentId") enrollmentId: string,
-    @Body() dto: ConfirmEnrollmentDto,
-    @Req() req: GuardedRequest
+    @Body() dto: ConfirmEnrollmentDto
   ) {
-    const actorUserId = req.tenantContext?.actorUserId;
-    const permissions = req.tenantContext?.permissions ?? [];
     return this.enrollmentsService.confirmEnrollment(
       tenantId,
       enrollmentId,
-      actorUserId,
+      context.actorUserId,
       dto,
-      permissions
+      context.permissions
     );
+  }
+
+  @Post("enrollments/:enrollmentId/assign-classroom")
+  @RequirePermissions("student.manage")
+  assignClassroom(
+    @ReqTenantContext() context: TenantContext,
+    @Param("tenantId") tenantId: string,
+    @Param("enrollmentId") enrollmentId: string,
+    @Body() dto: AssignClassroomDto
+  ) {
+    return this.enrollmentsService.assignClassroom(
+      tenantId,
+      enrollmentId,
+      dto.classroomId,
+      context.actorUserId
+    );
+  }
+
+  @Post("enrollments/:enrollmentId/unassign-classroom")
+  @RequirePermissions("student.manage")
+  unassignClassroom(
+    @ReqTenantContext() context: TenantContext,
+    @Param("tenantId") tenantId: string,
+    @Param("enrollmentId") enrollmentId: string
+  ) {
+    return this.enrollmentsService.unassignClassroom(tenantId, enrollmentId, context.actorUserId);
   }
 
   @Patch("enrollments/:enrollmentId")
   @RequirePermissions("student.manage")
   updateEnrollment(
+    @ReqTenantContext() context: TenantContext,
     @Param("tenantId") tenantId: string,
     @Param("enrollmentId") enrollmentId: string,
-    @Body() dto: UpdateEnrollmentDto,
-    @Headers("x-user-id") actorUserId?: string
+    @Body() dto: UpdateEnrollmentDto
   ) {
-    return this.enrollmentsService.updateEnrollment(tenantId, enrollmentId, actorUserId, dto);
+    return this.enrollmentsService.updateEnrollment(
+      tenantId,
+      enrollmentId,
+      context.actorUserId,
+      dto
+    );
+  }
+
+  @Delete("enrollments/:enrollmentId")
+  @RequirePermissions("student.manage")
+  deleteEnrollment(
+    @ReqTenantContext() context: TenantContext,
+    @Param("tenantId") tenantId: string,
+    @Param("enrollmentId") enrollmentId: string
+  ) {
+    return this.enrollmentsService.deleteEnrollment(tenantId, enrollmentId, context.actorUserId);
+  }
+
+  @Post("enrollments/:enrollmentId/cancel")
+  @RequirePermissions("finance.manage")
+  cancelEnrollment(
+    @ReqTenantContext() context: TenantContext,
+    @Param("tenantId") tenantId: string,
+    @Param("enrollmentId") enrollmentId: string,
+    @Body() dto: CancelEnrollmentDto
+  ) {
+    return this.enrollmentsService.cancelEnrollment(
+      tenantId,
+      enrollmentId,
+      context.actorUserId,
+      dto
+    );
+  }
+
+  @Get("student-services/available")
+  @RequirePermissions("student.manage")
+  listAvailableOptionalServices(
+    @Param("tenantId") tenantId: string,
+    @Query() query: ListAvailableStudentServicesQueryDto
+  ) {
+    return this.enrollmentsService.listAvailableOptionalServices(tenantId, query.studentId);
+  }
+
+  @Post("student-services/preview")
+  @RequirePermissions("student.manage")
+  previewAddStudentService(
+    @Param("tenantId") tenantId: string,
+    @Body() dto: PreviewAddStudentServiceDto
+  ) {
+    return this.enrollmentsService.previewAddStudentService(tenantId, dto);
   }
 
   @Get("student-services")
@@ -97,20 +182,25 @@ export class EnrollmentsController {
   @Post("student-services")
   @RequirePermissions("student.manage")
   createStudentService(
+    @ReqTenantContext() context: TenantContext,
     @Param("tenantId") tenantId: string,
-    @Body() dto: CreateStudentServiceDto,
-    @Headers("x-user-id") actorUserId?: string
+    @Body() dto: CreateStudentServiceDto
   ) {
-    return this.enrollmentsService.createStudentService(tenantId, actorUserId, dto);
+    return this.enrollmentsService.createStudentService(
+      tenantId,
+      context.actorUserId,
+      dto,
+      context.permissions
+    );
   }
 
   @Delete("student-services/:serviceId")
   @RequirePermissions("student.manage")
   removeStudentService(
+    @ReqTenantContext() context: TenantContext,
     @Param("tenantId") tenantId: string,
-    @Param("serviceId") serviceId: string,
-    @Headers("x-user-id") actorUserId?: string
+    @Param("serviceId") serviceId: string
   ) {
-    return this.enrollmentsService.removeStudentService(tenantId, serviceId, actorUserId);
+    return this.enrollmentsService.removeStudentService(tenantId, serviceId, context.actorUserId);
   }
 }

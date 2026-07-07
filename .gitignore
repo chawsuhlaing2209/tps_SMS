@@ -1,8 +1,10 @@
 node_modules
 .next
 dist
+storybook-static
 coverage
 .turbo
+*.tsbuildinfo
 .env
 .env.local
 .env.*.local
@@ -10,3 +12,9 @@ coverage
 uploads
 backups/
 .claude/worktrees/
+
+# run-sms driver screenshots (test artifacts)
+/dash.png
+/fin.png
+/out.png
+*.shot.png

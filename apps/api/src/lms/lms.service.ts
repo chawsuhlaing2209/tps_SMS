@@ -54,7 +54,8 @@ export class LmsService {
           eq(learningMaterials.tenantId, tenantId),
           eq(learningMaterials.classroomId, classroomId)
         )
-      );
+      )
+      .limit(100);
   }
 
   async createMaterial(
@@ -106,7 +107,8 @@ export class LmsService {
           eq(assignments.tenantId, tenantId),
           eq(assignments.classroomId, classroomId)
         )
-      );
+      )
+      .limit(100);
   }
 
   async createAssignment(

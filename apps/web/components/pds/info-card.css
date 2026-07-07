@@ -1,0 +1,62 @@
+/* PDS InfoCard — dark feature / rule callout card (Figma 67:13145). */
+
+.pds-info-card {
+  background: var(--pds-primary);
+  border-radius: var(--pds-border-radius-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--pds-gap-small);
+  overflow: hidden;
+  padding: var(--pds-padding-large) var(--pds-padding-large) var(--pds-padding-xx-large);
+  position: relative;
+  width: 100%;
+}
+
+.pds-info-card__glow {
+  background: radial-gradient(
+    circle at center,
+    color-mix(in srgb, var(--pds-color-spring-green-800) 100%, transparent) 0%,
+    transparent 70%
+  );
+  border-radius: var(--pds-radius-pill);
+  height: 10.625rem;
+  pointer-events: none;
+  position: absolute;
+  right: -2.5rem;
+  top: -2.5rem;
+  width: 10.625rem;
+}
+
+.pds-info-card__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pds-gap-x-small);
+  padding-top: var(--pds-gap-xx-small);
+  position: relative;
+  z-index: 1;
+}
+
+.pds-info-card__title {
+  color: var(--pds-text-invert-primary);
+  margin: 0;
+}
+
+.pds-info-card__description {
+  color: var(--pds-text-placeholder);
+  margin: 0;
+}
+
+.pds-info-card-badge {
+  align-items: center;
+  background: var(--pds-compliment-brand);
+  border-radius: var(--pds-radius-pill);
+  color: var(--pds-text-primary);
+  display: inline-flex;
+  font-size: var(--pds-type-caption-s-font-size);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  padding: var(--pds-gap-xx-small) var(--pds-gap-x-small);
+  text-transform: uppercase;
+  width: fit-content;
+}

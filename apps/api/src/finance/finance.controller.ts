@@ -6,16 +6,22 @@ import { PermissionsGuard } from '../identity/permissions.guard.js'
 import { RequirePermissions } from '../identity/permissions.decorator.js'
 import { FinanceService } from './finance.service.js'
 import {
+  BillingRosterQueryDto,
+  CollectPaymentDto,
   CreateEnrollmentFeePlanDto,
   CreateFeeItemDto,
   CreateInvoiceDto,
   CreatePaymentPlanDto,
   GenerateMonthlyInvoicesDto,
+  InvoiceMetricsQueryDto,
   ListInvoicesQueryDto,
   ListPaymentsQueryDto,
+  FinanceOverviewQueryDto,
   MonthlyReportQueryDto,
+  PaymentMetricsQueryDto,
   ReceivablesQueryDto,
   RecordPaymentDto,
+  ReconcileFeeItemGradeAmountsDto,
   RefundPaymentDto,
   UpdateEnrollmentFeePlanDto,
   UpdateFeeItemDto,
@@ -59,6 +65,27 @@ export class FinanceController {
     return this.financeService.updateFeeItem(tenantId, feeItemId, actorUserId, dto)
   }
 
+  @Put('fee-items/:feeItemId/grade-amounts')
+  @RequirePermissions('finance.manage')
+  reconcileFeeItemGradeAmounts(
+    @Param('tenantId') tenantId: string,
+    @Param('feeItemId') feeItemId: string,
+    @Body() dto: ReconcileFeeItemGradeAmountsDto,
+    @Headers('x-user-id') actorUserId: string,
+  ) {
+    return this.financeService.reconcileFeeItemGradeAmounts(tenantId, feeItemId, actorUserId, dto)
+  }
+
+  @Delete('fee-items/:feeItemId')
+  @RequirePermissions('finance.manage')
+  deleteFeeItem(
+    @Param('tenantId') tenantId: string,
+    @Param('feeItemId') feeItemId: string,
+    @Headers('x-user-id') actorUserId: string,
+  ) {
+    return this.financeService.deleteFeeItem(tenantId, feeItemId, actorUserId)
+  }
+
   @Post('fee-items/:feeItemId/archive')
   @RequirePermissions('finance.manage')
   archiveFeeItem(
@@ -69,6 +96,17 @@ export class FinanceController {
     return this.financeService.archiveFeeItem(tenantId, feeItemId, actorUserId)
   }
 
+  @Post('fee-items/:feeItemId/restore')
+  @RequirePermissions('finance.manage')
+  restoreFeeItem(
+    @Param('tenantId') tenantId: string,
+    @Param('feeItemId') feeItemId: string,
+    @Headers('x-user-id') actorUserId: string,
+  ) {
+    return this.financeService.restoreFeeItem(tenantId, feeItemId, actorUserId)
+  }
+
+  /** @deprecated Use POST fee-items/:feeItemId/restore. */
   @Post('fee-items/:feeItemId/reactivate')
   @RequirePermissions('finance.manage')
   reactivateFeeItem(
@@ -76,7 +114,7 @@ export class FinanceController {
     @Param('feeItemId') feeItemId: string,
     @Headers('x-user-id') actorUserId: string,
   ) {
-    return this.financeService.reactivateFeeItem(tenantId, feeItemId, actorUserId)
+    return this.financeService.restoreFeeItem(tenantId, feeItemId, actorUserId)
   }
 
   // ── Enrollment Fee Plans ───────────────────────────────────────────────────
@@ -198,6 +236,34 @@ export class FinanceController {
     return this.financeService.getStudentBillingSummary(tenantId, studentId)
   }
 
+  @Get('family-groups/:familyGroupId/billing')
+  @RequirePermissions('finance.manage')
+  getFamilyGroupBilling(
+    @Param('tenantId') tenantId: string,
+    @Param('familyGroupId') familyGroupId: string,
+  ) {
+    return this.financeService.getFamilyGroupBilling(tenantId, familyGroupId)
+  }
+
+  @Post('students/:studentId/bill-recurring')
+  @RequirePermissions('finance.manage')
+  billRecurring(
+    @Param('tenantId') tenantId: string,
+    @Param('studentId') studentId: string,
+    @Headers('x-user-id') actorUserId: string,
+  ) {
+    return this.financeService.ensureRecurringInvoice(tenantId, studentId, actorUserId)
+  }
+
+  @Get('invoices/metrics')
+  @RequirePermissions('finance.manage')
+  getInvoiceMetrics(
+    @Param('tenantId') tenantId: string,
+    @Query() query: InvoiceMetricsQueryDto,
+  ) {
+    return this.financeService.getInvoiceMetrics(tenantId, query)
+  }
+
   @Get('invoices')
   @RequirePermissions('finance.manage')
   listInvoices(
@@ -226,6 +292,25 @@ export class FinanceController {
     return this.financeService.getInvoice(tenantId, invoiceId)
   }
 
+  @Get('invoices/:invoiceId/activity')
+  @RequirePermissions('finance.manage')
+  getInvoiceActivity(
+    @Param('tenantId') tenantId: string,
+    @Param('invoiceId') invoiceId: string,
+  ) {
+    return this.financeService.getInvoiceActivity(tenantId, invoiceId)
+  }
+
+  @Post('invoices/:invoiceId/send-guardian')
+  @RequirePermissions('finance.manage')
+  sendInvoiceToGuardian(
+    @Param('tenantId') tenantId: string,
+    @Param('invoiceId') invoiceId: string,
+    @Headers('x-user-id') actorUserId: string,
+  ) {
+    return this.financeService.sendInvoiceToGuardian(tenantId, invoiceId, actorUserId)
+  }
+
   @Post('invoices/generate-monthly')
   @RequirePermissions('finance.manage')
   generateMonthlyInvoices(
@@ -236,7 +321,37 @@ export class FinanceController {
     return this.financeService.generateMonthlyInvoices(tenantId, actorUserId, dto)
   }
 
+  // ── Billing roster & cashiering ──────────────────────────────────────────────
+
+  @Get('billing/roster')
+  @RequirePermissions('finance.manage')
+  getBillingRoster(
+    @Param('tenantId') tenantId: string,
+    @Query() query: BillingRosterQueryDto,
+  ) {
+    return this.financeService.getBillingRoster(tenantId, query)
+  }
+
+  @Post('billing/collect')
+  @RequirePermissions('finance.manage')
+  collectPayment(
+    @Param('tenantId') tenantId: string,
+    @Headers('x-user-id') actorUserId: string,
+    @Body() dto: CollectPaymentDto,
+  ) {
+    return this.financeService.collectPayment(tenantId, actorUserId, dto)
+  }
+
   // ── Payments ───────────────────────────────────────────────────────────────
+
+  @Get('payments/metrics')
+  @RequirePermissions('finance.manage')
+  getPaymentMetrics(
+    @Param('tenantId') tenantId: string,
+    @Query() query: PaymentMetricsQueryDto,
+  ) {
+    return this.financeService.getPaymentMetrics(tenantId, query)
+  }
 
   @Get('payments')
   @RequirePermissions('finance.manage')
@@ -292,6 +407,23 @@ export class FinanceController {
   }
 
   // ── Reports ────────────────────────────────────────────────────────────────
+
+  /** Year options for the finance-module academic year filter — finance users
+   * usually lack academic_setup.manage, so the academics endpoint is off-limits. */
+  @Get('academic-years')
+  @RequirePermissions('finance.manage')
+  listAcademicYears(@Param('tenantId') tenantId: string) {
+    return this.financeService.listAcademicYearOptions(tenantId)
+  }
+
+  @Get('reports/overview')
+  @RequirePermissions('finance.manage')
+  getFinanceOverview(
+    @Param('tenantId') tenantId: string,
+    @Query() query: FinanceOverviewQueryDto,
+  ) {
+    return this.financeService.getFinanceOverview(tenantId, query)
+  }
 
   @Get('reports/monthly')
   @RequirePermissions('finance.manage')

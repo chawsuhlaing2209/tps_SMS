@@ -1,0 +1,555 @@
+.root {
+  gap: var(--pds-gap-large);
+}
+
+.toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pds-gap-medium);
+  justify-content: space-between;
+}
+
+.toolbarActions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pds-gap-small);
+}
+
+.kpiGrid {
+  display: grid;
+  gap: var(--pds-gap-medium);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.kpiCard {
+  background: var(--pds-background-card);
+  border: 1px solid var(--pds-border-color-primary);
+  border-radius: var(--pds-border-radius-16);
+  display: grid;
+  gap: var(--pds-gap-x-small);
+  padding: var(--pds-padding-medium) var(--pds-padding-large);
+}
+
+.kpiHead {
+  align-items: center;
+  display: flex;
+  gap: var(--pds-gap-x-small);
+}
+
+.kpiIconRevenue {
+  color: var(--pds-color-green-500);
+}
+
+.kpiIconExpense {
+  color: var(--pds-status-error);
+}
+
+.kpiIconSurplus {
+  color: var(--pds-color-blue-600);
+}
+
+.kpiIconCollection {
+  color: var(--pds-color-blue-700);
+}
+
+.kpiValue {
+  color: var(--pds-text-primary);
+  font-family: var(--pds-type-title-l-extrabold-font-family);
+  font-size: var(--pds-type-title-l-extrabold-font-size);
+  font-weight: var(--pds-type-title-l-extrabold-font-weight);
+  line-height: var(--pds-type-title-l-extrabold-line-height);
+  margin: var(--pds-gap-x-small) 0 0;
+}
+
+.kpiUnit,
+.kpiUnitDanger {
+  color: var(--pds-text-placeholder);
+  font-family: var(--pds-type-body-s-semibold-font-family);
+  font-size: var(--pds-type-body-s-semibold-font-size);
+  font-weight: var(--pds-type-body-s-semibold-font-weight);
+}
+
+.kpiUnitDanger {
+  color: color-mix(in srgb, var(--pds-status-error) 72%, transparent);
+}
+
+.kpiSubtitle {
+  color: var(--pds-text-placeholder);
+}
+
+.trendUp {
+  color: var(--pds-color-green-700);
+}
+
+.trendDown {
+  color: var(--pds-status-warning);
+}
+
+.trendNeutral {
+  color: var(--pds-muted);
+}
+
+.trendCollection {
+  color: var(--pds-color-blue-700);
+}
+
+.chartsRow {
+  display: grid;
+  gap: var(--pds-gap-medium);
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+}
+
+.chartPanel {
+  background: var(--pds-background-card);
+  border: 1px solid var(--pds-border-color-primary);
+  border-radius: var(--pds-border-radius-16);
+  display: grid;
+  gap: var(--pds-gap-medium);
+  /* --pds-gap-xx-large does not exist; an invalid calc() collapses the height. */
+  min-height: calc(var(--pds-width-240) + var(--pds-padding-xx-large));
+  padding: var(--pds-padding-large);
+}
+
+.chartPanelHead {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pds-gap-small);
+  justify-content: space-between;
+}
+
+.chartLegend {
+  align-items: center;
+  color: var(--pds-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pds-gap-medium);
+}
+
+.chartLegend span {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--pds-gap-x-small);
+}
+
+.legendSwatchRevenue,
+.legendSwatchExpense,
+.breakdownSwatch {
+  border-radius: var(--pds-border-radius-4);
+  display: inline-block;
+  flex-shrink: 0;
+  height: var(--pds-gap-medium);
+  width: var(--pds-gap-medium);
+}
+
+.legendSwatchRevenue {
+  background: var(--pds-color-green-500);
+}
+
+.legendSwatchExpense {
+  background: var(--pds-status-error);
+}
+
+.barChart {
+  align-items: end;
+  display: flex;
+  gap: var(--pds-gap-small);
+  justify-content: space-between;
+  min-height: calc(var(--pds-width-92) + var(--pds-width-240));
+  padding-top: var(--pds-gap-medium);
+}
+
+.barGroup {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--pds-gap-x-small);
+  min-width: 0;
+}
+
+.barPair {
+  align-items: end;
+  display: flex;
+  gap: var(--pds-gap-xx-small);
+  /* Definite height so the % bar heights resolve; fills the .barChart plot area. */
+  height: calc(var(--pds-width-240) + var(--pds-padding-xx-large));
+  justify-content: center;
+  width: 100%;
+}
+
+.barRevenue,
+.barExpense {
+  border-radius: var(--pds-border-radius-4) var(--pds-border-radius-4) 0 0;
+  max-width: var(--pds-gap-medium);
+  min-height: var(--pds-gap-xx-small);
+  width: var(--pds-gap-medium);
+}
+
+.barRevenue {
+  background: var(--pds-color-green-500);
+}
+
+.barExpense {
+  background: var(--pds-status-error);
+}
+
+.donutRow {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pds-gap-large);
+}
+
+.donutWrap {
+  flex-shrink: 0;
+}
+
+.donut {
+  align-items: center;
+  border-radius: 50%;
+  display: grid;
+  height: calc(var(--pds-width-92) + var(--pds-padding-xx-large));
+  place-items: center;
+  width: calc(var(--pds-width-92) + var(--pds-padding-xx-large));
+}
+
+.donutCenter {
+  align-items: center;
+  background: var(--pds-background-card);
+  border-radius: 50%;
+  display: grid;
+  gap: var(--pds-gap-xx-small);
+  height: var(--pds-width-92);
+  justify-items: center;
+  text-align: center;
+  width: var(--pds-width-92);
+}
+
+.breakdownList {
+  display: grid;
+  flex: 1;
+  gap: var(--pds-gap-x-small);
+  list-style: none;
+  margin: 0;
+  min-width: var(--pds-width-240);
+  padding: 0;
+}
+
+.breakdownList li {
+  align-items: center;
+  display: grid;
+  gap: var(--pds-gap-x-small);
+  grid-template-columns: auto 1fr auto;
+}
+
+.breakdownPercent {
+  color: var(--pds-muted);
+}
+
+.statusGrid {
+  display: grid;
+  gap: var(--pds-gap-medium);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.statusCard {
+  background: var(--pds-background-card);
+  border: 1px solid var(--pds-border-color-primary);
+  border-radius: var(--pds-border-radius-16);
+  display: grid;
+  gap: var(--pds-gap-x-small);
+  padding: var(--pds-padding-medium) var(--pds-padding-large);
+}
+
+.statusCardDanger {
+  border-color: color-mix(in srgb, var(--pds-status-error) 24%, var(--pds-border-color-primary));
+}
+
+.statusHead {
+  align-items: center;
+  display: flex;
+  gap: var(--pds-gap-x-small);
+  padding-bottom: var(--pds-gap-x-small);
+}
+
+.statusIconCollectable {
+  color: var(--pds-color-blue-600);
+}
+
+.statusIconOverdue {
+  color: var(--pds-status-error);
+}
+
+.statusIconPayable {
+  color: var(--pds-status-warning);
+}
+
+.statusValue {
+  color: var(--pds-text-primary);
+  font-family: var(--pds-type-title-m-extrabold-font-family);
+  font-size: var(--pds-type-title-m-extrabold-font-size);
+  font-weight: var(--pds-type-title-m-extrabold-font-weight);
+  line-height: var(--pds-type-title-m-extrabold-line-height);
+}
+
+.statusValueDanger {
+  color: var(--pds-status-error);
+}
+
+.statusHintDanger {
+  color: var(--pds-status-error);
+}
+
+.statusLink,
+.statusLinkPayable {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--pds-gap-xx-small);
+  margin-top: var(--pds-gap-small);
+  text-decoration: none;
+}
+
+.statusLink {
+  color: var(--pds-color-blue-600);
+}
+
+.statusLinkPayable {
+  color: var(--pds-status-warning);
+}
+
+.collectNowBtn {
+  border-radius: var(--pds-border-radius-pill);
+  margin-top: var(--pds-gap-small);
+  width: fit-content;
+}
+
+.lowerRow {
+  display: grid;
+  gap: var(--pds-gap-medium);
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr);
+}
+
+.cashCard {
+  background: var(--pds-primary);
+  border-radius: var(--pds-border-radius-16);
+  color: var(--pds-text-invert-primary);
+  display: grid;
+  gap: var(--pds-gap-medium);
+  overflow: hidden;
+  padding: var(--pds-padding-large);
+  position: relative;
+}
+
+.cashHead {
+  align-items: center;
+  display: flex;
+  gap: var(--pds-gap-x-small);
+}
+
+.cashIcon {
+  color: var(--pds-brand-accent);
+}
+
+.cashValue {
+  color: var(--pds-brand-accent);
+  font-family: var(--pds-type-title-xl-extrabold-font-family);
+  font-size: var(--pds-type-title-xl-extrabold-font-size);
+  font-weight: var(--pds-type-title-xl-extrabold-font-weight);
+  line-height: var(--pds-type-title-xl-extrabold-line-height);
+}
+
+.cashUnit {
+  color: var(--pds-text-placeholder);
+  font-size: var(--pds-type-body-m-medium-font-size);
+}
+
+.cashAccounts {
+  border-top: 1px solid color-mix(in srgb, var(--pds-text-invert-primary) 12%, transparent);
+  display: grid;
+  gap: var(--pds-gap-small);
+  list-style: none;
+  margin: 0;
+  padding: var(--pds-gap-medium) 0 0;
+}
+
+.cashAccounts li {
+  align-items: center;
+  display: flex;
+  gap: var(--pds-gap-medium);
+  justify-content: space-between;
+}
+
+.gradePanel {
+  background: var(--pds-background-card);
+  border: 1px solid var(--pds-border-color-primary);
+  border-radius: var(--pds-border-radius-16);
+  display: grid;
+  gap: var(--pds-gap-medium);
+  padding: var(--pds-padding-large);
+}
+
+.gradeList {
+  display: grid;
+  gap: var(--pds-gap-xx-small);
+  /* Columns live on the list, rows subgrid into them — otherwise each row
+     sizes its own `auto` columns and the bar tracks (and therefore the bar
+     lengths) are not comparable across grades. */
+  grid-template-columns:
+    minmax(var(--pds-width-92), 0.9fr) minmax(0, 2fr) max-content max-content
+    max-content;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.gradeList li {
+  align-items: center;
+  border-radius: var(--pds-border-radius-8);
+  display: grid;
+  gap: var(--pds-gap-small);
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  padding: var(--pds-gap-x-small) var(--pds-gap-small);
+}
+
+.gradeAmount {
+  font-variant-numeric: tabular-nums;
+  justify-self: end;
+}
+
+.gradeBarTrack {
+  background: var(--pds-background-frame);
+  border-radius: var(--pds-border-radius-pill);
+  height: var(--pds-gap-x-small);
+  overflow: hidden;
+}
+
+.gradeBarFill {
+  background: var(--pds-primary);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  min-width: var(--pds-gap-xx-small);
+}
+
+.gradeRate {
+  color: var(--pds-muted);
+  justify-self: end;
+  min-width: var(--pds-padding-xx-large);
+  text-align: right;
+}
+
+.gradeDueLink {
+  color: var(--pds-status-error);
+  font-size: var(--pds-type-caption-s-font-size);
+  font-weight: var(--pds-type-label-s-bold-font-weight);
+  justify-self: end;
+  text-align: right;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.gradeCleared {
+  color: var(--pds-color-green-700);
+  font-size: var(--pds-type-caption-s-font-size);
+  font-weight: var(--pds-type-label-s-bold-font-weight);
+  justify-self: end;
+  text-align: right;
+}
+
+.payrollSection {
+  background: var(--pds-background-card);
+  border: 1px solid var(--pds-border-color-primary);
+  border-radius: var(--pds-border-radius-16);
+  display: grid;
+  gap: var(--pds-gap-large);
+  padding: var(--pds-padding-large);
+}
+
+.payrollHead {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pds-gap-medium);
+  justify-content: space-between;
+}
+
+.runPayrollBtn {
+  border-radius: var(--pds-border-radius-pill);
+}
+
+.deptGrid {
+  display: grid;
+  gap: var(--pds-gap-medium);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.deptCard {
+  align-items: center;
+  border: 1px solid var(--pds-border-color-secondary);
+  border-radius: var(--pds-border-radius-16);
+  display: grid;
+  gap: var(--pds-gap-medium);
+  grid-template-columns: auto 1fr auto;
+  padding: var(--pds-padding-medium);
+}
+
+.deptIconWrap {
+  align-items: center;
+  background: var(--pds-background-frame);
+  border-radius: var(--pds-border-radius-8);
+  color: var(--pds-primary);
+  display: grid;
+  height: var(--pds-size-x-large);
+  place-items: center;
+  width: var(--pds-size-x-large);
+}
+
+.deptBody {
+  display: grid;
+  gap: var(--pds-gap-xx-small);
+  min-width: 0;
+}
+
+.deptAmount {
+  display: grid;
+  gap: var(--pds-gap-xx-small);
+  justify-items: end;
+  text-align: right;
+}
+
+@media (max-width: 1024px) {
+  .kpiGrid,
+  .statusGrid,
+  .deptGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .chartsRow,
+  .lowerRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .kpiGrid,
+  .statusGrid,
+  .deptGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .gradeList {
+    grid-template-columns: 1fr;
+  }
+
+  .gradeList li {
+    grid-template-columns: 1fr;
+  }
+
+  .toolbarActions {
+    width: 100%;
+  }
+}

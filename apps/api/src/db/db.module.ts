@@ -15,7 +15,10 @@ export type Database = ReturnType<typeof drizzle<typeof schema>>;
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
         const pool = new Pool({
-          connectionString: configService.getOrThrow<string>("DATABASE_URL")
+          connectionString: configService.getOrThrow<string>("DATABASE_URL"),
+          max: Number(process.env.DATABASE_POOL_MAX ?? 20),
+          idleTimeoutMillis: Number(process.env.DATABASE_POOL_IDLE_MS ?? 30_000),
+          connectionTimeoutMillis: Number(process.env.DATABASE_POOL_CONNECT_MS ?? 5_000)
         });
 
         return drizzle(pool, { schema });

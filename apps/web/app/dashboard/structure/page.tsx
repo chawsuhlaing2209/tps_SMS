@@ -4,14 +4,29 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { SubjectChip, SubjectChipGroup } from "../../../components/pds";
+import { FilterTab } from "../../../components/pds/composites/filter-tabs";
 import { ConfirmDialog } from "../../../components/shared/confirm-dialog";
-import { useApiMutation, useApiQuery } from "../../lib/api";
-import { Icon } from "../../lib/icon";
+import { ExportCsvButton } from "../../../components/shared/export-csv-button";
+import { EmptyState } from "../../../components/shared/empty-state";
+import { StatusBadge } from "../../../components/shared/badge";
+import { ArchiveVisibilityFilter } from "../../../components/shared/archive-visibility-filter";
+import { Button } from "../../../components/ui/button";
+import { useApiMutation, useReferenceApiQuery } from "../../lib/api";
+import {
+  filterByArchiveVisibility,
+  isArchivedRecord,
+  type ArchiveVisibility
+} from "../../lib/archive-filter";
+import { cn } from "../../../lib/utils";
+import { isPadaukRowInteractiveTarget } from "../../lib/table-row-interaction";
+import { useDashPageTitleActionsTarget } from "../dashboard-page-title";
 import { hasAnyPermission } from "../../lib/permissions";
 import { getSession } from "../../lib/session";
 import { useCurrentAcademicYear } from "../../lib/use-current-academic-year";
-import { ClassroomFormSheet, type ClassroomFormValues } from "./classroom-form-sheet";
-import { roomAccentColor, roomLetter, subjectColor } from "./subject-colors";
+import { ClassroomFormSheet, type ClassroomFormValues, type FacilityRoomOption } from "./classroom-form-sheet";
+import { roomAccentColor, roomLetter, resolveSubjectChipColorKey } from "./subject-colors";
 import { PageHeader } from "../page-header-context";
 
 type YearOverview = {
@@ -31,7 +46,7 @@ type GradeOverview = {
   status: string;
   classroomCount: number;
   studentCount: number;
-  subjects: { id: string; name: string; code: string | null }[];
+  subjects: { id: string; name: string; code: string | null; colorKey: string | null }[];
 };
 
 type ClassroomOverview = {
@@ -39,18 +54,17 @@ type ClassroomOverview = {
   name: string;
   room: string | null;
   capacity: number | null;
+  facilityRoomId: string | null;
   studentCount: number;
   classTeacherName: string | null;
   classTeacherStaffId: string | null;
   status: string;
-  subjects: { id: string; name: string; code: string | null }[];
+  subjects: { id: string; name: string; code: string | null; colorKey: string | null }[];
 };
 
 type StaffMember = { id: string; fullName: string };
 
 type Term = { id: string; academicYearId: string; name: string };
-
-type GradeTab = "classrooms" | "gradebook" | "leaderboard";
 
 const CLASSROOMS_PATH = (tenant: string) => `/tenants/${tenant}/classrooms`;
 
@@ -72,70 +86,92 @@ export default function SchoolStructurePage() {
   const currentYear = useCurrentAcademicYear();
   const yearId = currentYear.data?.id ?? "";
   const [selectedGradeId, setSelectedGradeId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<GradeTab>("classrooms");
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
   const [editingRoom, setEditingRoom] = useState<ClassroomOverview | null>(null);
   const [deletingRoom, setDeletingRoom] = useState<ClassroomOverview | null>(null);
+  const [archiveVisibility, setArchiveVisibility] = useState<ArchiveVisibility>("active");
 
-  const years = useApiQuery<YearOverview[]>((tenant) =>
+  const years = useReferenceApiQuery<YearOverview[]>((tenant) =>
     `/tenants/${tenant}/academics/setup/academic-years`
   );
-  const grades = useApiQuery<GradeOverview[]>(
+  const grades = useReferenceApiQuery<GradeOverview[]>(
     (tenant) =>
       yearId ? `/tenants/${tenant}/academics/setup/academic-years/${yearId}/grades` : null
   );
-  const terms = useApiQuery<Term[]>((tenant) => `/tenants/${tenant}/academics/terms`);
-  const subjectsOverview = useApiQuery<{ id: string }[]>(
+  const terms = useReferenceApiQuery<Term[]>((tenant) => `/tenants/${tenant}/academics/terms`);
+  const subjectsOverview = useReferenceApiQuery<{ id: string }[]>(
     (tenant) =>
       yearId ? `/tenants/${tenant}/academics/setup/academic-years/${yearId}/subjects` : null
   );
 
-  const activeGrades = useMemo(
-    () => (grades.data ?? []).filter((grade) => grade.status !== "archived"),
-    [grades.data]
+  const visibleGrades = useMemo(
+    () => filterByArchiveVisibility(grades.data ?? [], archiveVisibility),
+    [grades.data, archiveVisibility]
   );
 
   const gradesInYearCount = useMemo(
     () =>
-      activeGrades.filter((grade) => grade.classroomCount > 0 || grade.subjects.length > 0).length,
-    [activeGrades]
+      visibleGrades.filter((grade) => grade.classroomCount > 0 || grade.subjects.length > 0).length,
+    [visibleGrades]
   );
 
   useEffect(() => {
-    if (!activeGrades.length) {
+    if (!visibleGrades.length) {
       setSelectedGradeId(null);
       return;
     }
-    const gradeFromUrl = searchParams.get("grade");
-    if (gradeFromUrl && activeGrades.some((grade) => grade.id === gradeFromUrl)) {
+    const gradeFromUrl = searchParams.get("grade") ?? searchParams.get("gradeId");
+    if (gradeFromUrl && visibleGrades.some((grade) => grade.id === gradeFromUrl)) {
       setSelectedGradeId(gradeFromUrl);
       return;
     }
-    if (!selectedGradeId || !activeGrades.some((grade) => grade.id === selectedGradeId)) {
-      setSelectedGradeId(activeGrades[0]!.id);
+    if (!selectedGradeId || !visibleGrades.some((grade) => grade.id === selectedGradeId)) {
+      setSelectedGradeId(visibleGrades[0]!.id);
     }
-  }, [activeGrades, searchParams, selectedGradeId]);
-
-  useEffect(() => {
-    setActiveTab("classrooms");
-  }, [selectedGradeId]);
+  }, [visibleGrades, searchParams, selectedGradeId]);
 
   const selectGrade = (gradeId: string) => {
     setSelectedGradeId(gradeId);
-    router.replace(`/dashboard/structure?grade=${gradeId}`);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("grade", gradeId);
+    params.delete("gradeId");
+    router.replace(`/dashboard/structure?${params.toString()}`, { scroll: false });
   };
 
-  const selectedGrade = activeGrades.find((grade) => grade.id === selectedGradeId) ?? null;
+  const selectedGrade = visibleGrades.find((grade) => grade.id === selectedGradeId) ?? null;
+  const selectedGradeArchived = selectedGrade ? isArchivedRecord(selectedGrade.status) : false;
 
-  const classrooms = useApiQuery<ClassroomOverview[]>(
+  const classrooms = useReferenceApiQuery<ClassroomOverview[]>(
     (tenant) =>
       yearId && selectedGradeId
         ? `/tenants/${tenant}/academics/setup/academic-years/${yearId}/grades/${selectedGradeId}/classrooms`
         : null
   );
 
-  const teachers = useApiQuery<StaffMember[]>(
-    (tenant) => `/tenants/${tenant}/hr/staff?employmentRole=teacher`
+  const visibleRooms = useMemo(
+    () => filterByArchiveVisibility(classrooms.data ?? [], archiveVisibility),
+    [classrooms.data, archiveVisibility]
+  );
+
+  const homeroomIncludeStaffId =
+    formMode === "edit" ? editingRoom?.classTeacherStaffId ?? undefined : undefined;
+
+  const teachers = useReferenceApiQuery<{ data: StaffMember[] }>((tenant) => {
+    if (!selectedGradeId) {
+      return null;
+    }
+    const params = new URLSearchParams({
+      employmentRole: "teacher",
+      eligibleGradeId: selectedGradeId,
+      limit: "200"
+    });
+    if (homeroomIncludeStaffId) {
+      params.set("includeStaffId", homeroomIncludeStaffId);
+    }
+    return `/tenants/${tenant}/hr/staff?${params.toString()}`;
+  });
+  const facilityRooms = useReferenceApiQuery<FacilityRoomOption[]>((tenant) =>
+    canManage ? `/tenants/${tenant}/facility-rooms/active` : null
   );
 
   const yearOverview = years.data?.find((row) => row.id === yearId);
@@ -206,8 +242,7 @@ export default function SchoolStructurePage() {
       await updateRoom.mutateAsync({
         id: editingRoom.id,
         name: values.name,
-        room: values.room || null,
-        capacity: values.capacity ? Number(values.capacity) : null,
+        facilityRoomId: values.facilityRoomId || null,
         classTeacherStaffId: values.classTeacherStaffId || null
       });
     } else {
@@ -215,8 +250,7 @@ export default function SchoolStructurePage() {
         name: values.name,
         academicYearId: yearId,
         gradeId: selectedGradeId,
-        room: values.room || undefined,
-        capacity: values.capacity ? Number(values.capacity) : undefined,
+        facilityRoomId: values.facilityRoomId || undefined,
         classTeacherStaffId: values.classTeacherStaffId || undefined
       });
     }
@@ -225,41 +259,48 @@ export default function SchoolStructurePage() {
   };
 
   if (currentYear.isLoading || years.isLoading) {
-    return <p className="muted">{c("loading")}</p>;
+    return <p className="pds-type-body-s-regular muted">{c("loading")}</p>;
   }
 
   if (!currentYear.data) {
     return (
-      <div className="structure-empty">
-        <h2>{t("structureEmptyTitle")}</h2>
-        <p className="muted">{t("structureEmptyHelp")}</p>
-        <Link href="/dashboard/academic-setup/years" className="btn-primary">
-          <Icon name="settings" />
-          {t("manageYears")}
-        </Link>
-      </div>
+      <EmptyState
+        icon="account_tree"
+        title={t("structureEmptyTitle")}
+        description={t("structureEmptyHelp")}
+        action={
+          <Button buttonType="filled" buttonColor="secondary" prefixIcon="settings" asChild>
+            <Link href="/dashboard/academic-setup/years">{t("manageYears")}</Link>
+          </Button>
+        }
+      />
     );
   }
-
-  const gradeTabs: { id: GradeTab; label: string; icon: string }[] = [
-    { id: "classrooms", label: t("classroomsTab"), icon: "meeting_room" },
-    { id: "gradebook", label: t("gradebookTab"), icon: "bar_chart_4_bars" },
-    { id: "leaderboard", label: t("leaderboardTab"), icon: "trophy" }
-  ];
 
   return (
     <div className="structure-page">
       <PageHeader
         title={t("structureTitle")}
         description={t("description")}
-        breadcrumbs={[{ label: nav("group_academics") }]}
+        breadcrumbs={[
+          { label: nav("group_academics") },
+          { label: nav("structure") }
+        ]}
+        actionsPortal
+      />
+      <StructureExportPortal
+        yearName={yearOverview?.name ?? currentYear.data?.name ?? ""}
+        grades={visibleGrades}
+        classrooms={visibleRooms}
+        selectedGradeId={selectedGradeId}
+        loading={grades.isLoading || classrooms.isLoading}
       />
 
       <section className="structure-year-banner">
         <div className="structure-year-banner__main">
-          <p className="structure-year-banner__label">{t("academicYearLabel")}</p>
-          <h3>{yearOverview?.name ?? currentYear.data.name}</h3>
-          <p className="structure-year-banner__meta">
+          <p className="pds-type-caption-m structure-year-banner__label">{t("academicYearLabel")}</p>
+          <h2 className="pds-type-title-xl-extrabold">{yearOverview?.name ?? currentYear.data.name}</h2>
+          <p className="pds-type-body-m-medium structure-year-banner__meta">
             {yearOverview
               ? formatDateRange(yearOverview.startsOn, yearOverview.endsOn)
               : formatDateRange(currentYear.data.startsOn, currentYear.data.endsOn)}
@@ -268,135 +309,138 @@ export default function SchoolStructurePage() {
           </p>
         </div>
         <div className="structure-year-stats">
-          <div className="structure-stat">
+          <div className="pds-type-title-m-extrabold structure-stat">
             <strong>{yearOverview?.gradeCount ?? gradesInYearCount}</strong>
             <span>{t("statGrades")}</span>
           </div>
-          <div className="structure-stat">
+          <div className="pds-type-title-m-extrabold structure-stat">
             <strong>{yearOverview?.classroomCount ?? 0}</strong>
             <span>{t("statRooms")}</span>
           </div>
-          <div className="structure-stat">
+          <div className="pds-type-title-m-extrabold structure-stat">
             <strong>{subjectsOverview.data?.length ?? 0}</strong>
             <span>{t("statSubjects")}</span>
           </div>
         </div>
       </section>
 
-      <p className="structure-select-grade">{t("selectGrade")}</p>
+      <div className="structure-select-grade-row">
+        <p className="structure-select-grade">{t("selectGrade")}</p>
+        <ArchiveVisibilityFilter value={archiveVisibility} onChange={setArchiveVisibility} />
+      </div>
 
       <div className="structure-grade-scroll">
-        <section className="structure-grade-rail" aria-label={t("selectGrade")}>
-          {activeGrades.map((grade) => {
+        <section className="structure-grade-rail" role="tablist" aria-label={t("selectGrade")}>
+          {visibleGrades.map((grade) => {
             const active = grade.id === selectedGradeId;
+            const archived = isArchivedRecord(grade.status);
             return (
-              <button
+              <FilterTab
                 key={grade.id}
-                type="button"
-                className={active ? "structure-grade-chip structure-grade-chip--active" : "structure-grade-chip"}
+                label={grade.name}
+                meta={t("roomsCount", { count: grade.classroomCount })}
+                active={active}
+                className={archived ? "pds-filter-tab--archived" : undefined}
                 onClick={() => selectGrade(grade.id)}
-              >
-                <span className="structure-grade-chip__name">{grade.name}</span>
-                <span className="structure-grade-chip__meta">
-                  {t("roomsCount", { count: grade.classroomCount })}
-                </span>
-              </button>
+              />
             );
           })}
-          {!activeGrades.length ? (
-            <p className="muted">{t("structureNoGrades")}</p>
+          {!visibleGrades.length ? (
+            <EmptyState
+              compact
+              embedded
+              icon="school"
+              title={
+                archiveVisibility === "archived" ? t("archivedGradesEmpty") : t("structureNoGrades")
+              }
+            />
           ) : null}
         </section>
       </div>
 
       {selectedGrade ? (
-        <section className="structure-rooms">
-          <div className="structure-grade-head">
-            <div className="structure-grade-head__title">
-              <h3>{t("gradeTitleWithStudents", { grade: selectedGrade.name, count: selectedGrade.studentCount })}</h3>
+        <section className="structure-grade-section">
+          <header className="structure-grade-head">
+            <div className="structure-grade-head__intro">
+              <h3 className="pds-type-title-l-extrabold structure-grade-head__title">
+                {t("gradeSectionTitle", {
+                  grade: selectedGrade.name,
+                  students: selectedGrade.studentCount
+                })}
+              </h3>
             </div>
-            <div className="structure-segment-tabs" role="tablist" aria-label={t("gradeViewsLabel")}>
-              {gradeTabs.map((tab) => {
-                const active = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    className={
-                      active
-                        ? "structure-segment-tab structure-segment-tab--active"
-                        : "structure-segment-tab"
-                    }
-                    onClick={() => setActiveTab(tab.id)}
-                  >
-                    <Icon name={tab.icon} />
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          </header>
 
-          {activeTab === "classrooms" ? (
-            <div className="structure-tab-panel" role="tabpanel">
-              {canManage && !classrooms.data?.length && !classrooms.isLoading ? (
-                <div className="structure-empty structure-empty--compact">
-                  <p className="muted">{t("structureNoRooms")}</p>
-                  <button type="button" className="btn-primary" onClick={openCreate}>
-                    <Icon name="add" />
-                    {t("addClassroom")}
-                  </button>
-                </div>
+          <div className="structure-grade-body">
+              {selectedGradeArchived ? (
+                <p className="pds-type-body-s-regular muted structure-grade-body__archived-note">
+                  {c("archivedViewOnly")}
+                </p>
               ) : null}
-
               {classrooms.isLoading ? (
-                <p className="muted">{c("loading")}</p>
-              ) : classrooms.data?.length ? (
+                <p className="pds-type-body-s-regular muted structure-grade-body__status">{c("loading")}</p>
+              ) : visibleRooms.length ? (
                 <div className="structure-room-grid">
-                  {(classrooms.data ?? [])
-                    .filter((room) => room.status !== "archived")
-                    .map((room) => {
+                  {visibleRooms.map((room) => {
+                      const roomArchived = isArchivedRecord(room.status);
                       const accent = roomAccentColor(room.name);
                       return (
-                        <article key={room.id} className="structure-room-card">
+                        <article
+                          key={room.id}
+                          className={cn("structure-room-card", "structure-room-card--clickable", roomArchived && "structure-room-card--archived")}
+                          role="link"
+                          tabIndex={0}
+                          aria-label={room.name}
+                          onClick={(event) => {
+                            if (isPadaukRowInteractiveTarget(event.target)) return;
+                            router.push(`/dashboard/structure/rooms/${room.id}`);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key !== "Enter" && event.key !== " ") return;
+                            event.preventDefault();
+                            router.push(`/dashboard/structure/rooms/${room.id}`);
+                          }}
+                        >
                           <div className="structure-room-card__head">
-                            <span className="structure-room-card__mark" style={{ background: accent }}>
+                            <span className="pds-type-title-s-extrabold structure-room-card__mark" style={{ background: accent }}>
                               {roomLetter(room.name)}
                             </span>
                             <div>
-                              <h4>{room.name}</h4>
-                              <p className="structure-room-card__count">
+                              <div className="structure-room-card__title-row">
+                                <h4>{room.name}</h4>
+                                {roomArchived ? (
+                                  <StatusBadge status="archived" label={c("archivedBadge")} />
+                                ) : null}
+                              </div>
+                              <p className="pds-type-body-s-regular structure-room-card__count">
                                 {t("roomStudentCount", { count: room.studentCount })}
                               </p>
                             </div>
                           </div>
-                          <p className="structure-room-card__teacher-label">{t("homeroomTeacher")}</p>
-                          <p className="structure-room-card__teacher-name">
+                          <p className="pds-type-body-s-regular structure-room-card__teacher-label">{t("homeroomTeacher")}</p>
+                          <p className="pds-type-body-m-medium structure-room-card__teacher-name">
                             {room.classTeacherName ?? "—"}
                           </p>
-                          <div className="structure-room-card__subjects">
-                            {(room.subjects ?? []).slice(0, 4).map((subject) => {
-                              const colors = subjectColor(subject.name);
-                              return (
-                                <span
+                          {room.subjects?.length ? (
+                            <SubjectChipGroup className="structure-room-card__subjects">
+                              {room.subjects.slice(0, 4).map((subject) => (
+                                <SubjectChip
                                   key={subject.id}
-                                  className="structure-subject-tag"
-                                  style={{ background: colors.bg, color: colors.text }}
+                                  colorKey={resolveSubjectChipColorKey(subject.name, subject.colorKey)}
                                 >
                                   {subject.name}
-                                </span>
-                              );
-                            })}
-                            {!room.subjects?.length ? (
-                              <span className="muted">{t("noSubjectsYet")}</span>
-                            ) : null}
-                          </div>
+                                </SubjectChip>
+                              ))}
+                            </SubjectChipGroup>
+                          ) : (
+                            <p className="pds-type-body-s-regular muted structure-room-card__subjects structure-room-card__subjects--empty">
+                              {t("noSubjectsYet")}
+                            </p>
+                          )}
                           <div className="structure-room-card__footer">
                             <Link
                               href={`/dashboard/structure/rooms/${room.id}`}
-                              className="structure-room-card__link"
+                              className="pds-type-body-s-regular structure-room-card__link"
                             >
                               {t("openClassroom")}
                             </Link>
@@ -405,19 +449,27 @@ export default function SchoolStructurePage() {
                       );
                     })}
                 </div>
-              ) : canManage ? null : (
-                <div className="structure-empty structure-empty--compact">
-                  <p className="muted">{t("structureNoRooms")}</p>
-                </div>
+              ) : archiveVisibility === "archived" ? (
+                <EmptyState compact embedded icon="meeting_room" title={t("archivedClassroomsEmpty")} />
+              ) : canManage && !selectedGradeArchived ? (
+                <EmptyState
+                  icon="meeting_room"
+                  title={t("structureNoRooms")}
+                  action={
+                    <Button
+                      buttonType="filled"
+                      buttonColor="secondary"
+                      prefixIcon="add"
+                      onClick={openCreate}
+                    >
+                      {t("addClassroom")}
+                    </Button>
+                  }
+                />
+              ) : (
+                <EmptyState icon="meeting_room" title={t("structureNoRooms")} />
               )}
-            </div>
-          ) : (
-            <div className="structure-tab-panel" role="tabpanel">
-              <div className="structure-tab-placeholder">
-                {activeTab === "gradebook" ? t("gradebookComingSoon") : t("leaderboardComingSoon")}
-              </div>
-            </div>
-          )}
+          </div>
         </section>
       ) : null}
 
@@ -430,13 +482,13 @@ export default function SchoolStructurePage() {
           }
         }}
         mode={formMode === "edit" ? "edit" : "create"}
-        teachers={teachers.data ?? []}
+        teachers={teachers.data?.data ?? []}
+        facilityRooms={facilityRooms.data ?? []}
         initialValues={
           formMode === "edit" && editingRoom
             ? {
                 name: editingRoom.name,
-                room: editingRoom.room ?? "",
-                capacity: editingRoom.capacity ? String(editingRoom.capacity) : "",
+                facilityRoomId: editingRoom.facilityRoomId ?? "",
                 classTeacherStaffId: editingRoom.classTeacherStaffId ?? ""
               }
             : undefined
@@ -449,9 +501,9 @@ export default function SchoolStructurePage() {
         onOpenChange={(open) => {
           if (!open) setDeletingRoom(null);
         }}
-        title={t("deleteClassroomTitle")}
-        description={t("deleteClassroomHelp")}
-        confirmLabel={t("deleteClassroom")}
+        title={t("archiveClassroomTitle")}
+        description={t("archiveClassroomHelp")}
+        confirmLabel={t("archiveClassroom")}
         destructive
         onConfirm={async () => {
           if (!deletingRoom) return;
@@ -460,5 +512,77 @@ export default function SchoolStructurePage() {
         }}
       />
     </div>
+  );
+}
+
+function StructureExportPortal({
+  yearName,
+  grades,
+  classrooms,
+  selectedGradeId,
+  loading
+}: {
+  yearName: string;
+  grades: GradeOverview[];
+  classrooms: ClassroomOverview[];
+  selectedGradeId: string | null;
+  loading: boolean;
+}) {
+  const t = useTranslations("academics");
+  const target = useDashPageTitleActionsTarget();
+
+  if (!target) {
+    return null;
+  }
+
+  const yearSlug = yearName.replace(/\s+/g, "-").toLowerCase() || "structure";
+
+  return createPortal(
+    <ExportCsvButton
+      disabled={loading || !grades.length}
+      onExport={async () => {
+        const gradeRows = grades.map((grade) => ({
+          grade: grade.name,
+          classrooms: grade.classroomCount,
+          students: grade.studentCount
+        }));
+        const classroomRows = classrooms.map((room) => ({
+            grade: grades.find((g) => g.id === selectedGradeId)?.name ?? "",
+            classroom: room.name,
+            homeroom: room.classTeacherName ?? "",
+            students: room.studentCount
+          }));
+
+        return {
+          filename: `school-structure-${yearSlug}.csv`,
+          sections: [
+            {
+              title: t("statGrades"),
+              columns: [
+                { key: "grade", header: t("statGrades") },
+                { key: "classrooms", header: t("statRooms") },
+                { key: "students", header: t("students") }
+              ],
+              rows: gradeRows
+            },
+            ...(classroomRows.length
+              ? [
+                  {
+                    title: t("classroomsTab"),
+                    columns: [
+                      { key: "grade", header: t("statGrades") },
+                      { key: "classroom", header: t("classroomsTab") },
+                      { key: "homeroom", header: t("homeroomTeacher") },
+                      { key: "students", header: t("students") }
+                    ],
+                    rows: classroomRows
+                  }
+                ]
+              : [])
+          ]
+        };
+      }}
+    />,
+    target
   );
 }

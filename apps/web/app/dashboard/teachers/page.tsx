@@ -2,6 +2,10 @@
 
 import { useTranslations } from "next-intl";
 import { PageHeader } from "../page-header-context";
+import {
+  TeachersActionsProvider,
+  TeachersHeaderActionsPortal
+} from "./teachers-actions-provider";
 import { TeachersDirectory } from "./teachers-directory";
 
 export default function TeachersPage() {
@@ -9,13 +13,19 @@ export default function TeachersPage() {
   const nav = useTranslations("nav");
 
   return (
-    <div className="directory-page">
-      <PageHeader
-        title={t("title")}
-        description={t("description")}
-        breadcrumbs={[{ label: nav("group_school") }, { label: nav("teachers") }]}
-      />
-      <TeachersDirectory />
-    </div>
+    <TeachersActionsProvider>
+      <div className="directory-page">
+        <PageHeader
+          title={t("title")}
+          description={t("description")}
+          actionsPortal
+          resetTrail={[{ label: nav("teachers"), href: "/dashboard/teachers" }]}
+          segment={{ label: nav("teachers"), href: "/dashboard/teachers" }}
+        />
+
+        <TeachersHeaderActionsPortal />
+        <TeachersDirectory />
+      </div>
+    </TeachersActionsProvider>
   );
 }

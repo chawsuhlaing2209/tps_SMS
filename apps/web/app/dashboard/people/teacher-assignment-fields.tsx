@@ -2,9 +2,10 @@
 
 import { useTranslations } from "next-intl";
 import type { UpdateTeacherAssignmentsInput } from "@sms/shared";
-import { CheckboxList } from "../../../components/shared/checkbox-list";
-import { Switch } from "../../../components/ui/switch";
-import { Icon } from "../../lib/icon";
+import { CheckboxList } from "../../../components/pds";
+import { EmptyState } from "../../../components/shared/empty-state";
+import { Toggle } from "../../../components/shared/toggle";
+import { Icon } from "../../lib/material-icon";
 
 export type AssignmentOptions = {
   academicYears: { id: string; name: string; status: string }[];
@@ -166,6 +167,32 @@ export function chiefConflicts(
     .filter((row): row is { gradeId: string; gradeName: string; staffName: string } => row !== null);
 }
 
+export function homeroomConflicts(
+  draft: AssignmentDraft,
+  options: AssignmentOptions | undefined,
+  currentStaffId: string | undefined
+): { classroomId: string; classroomName: string }[] {
+  const homeroomId = draft.homeroomClassroomIds[0];
+  if (!homeroomId || !options) {
+    return [];
+  }
+
+  const classroom = options.classrooms.find((row) => row.id === homeroomId);
+  if (
+    !classroom?.classTeacherStaffId ||
+    classroom.classTeacherStaffId === currentStaffId
+  ) {
+    return [];
+  }
+
+  return [
+    {
+      classroomId: classroom.id,
+      classroomName: classroom.name
+    }
+  ];
+}
+
 type Props = {
   draft: AssignmentDraft;
   onChange: (next: AssignmentDraft) => void;
@@ -187,7 +214,7 @@ export function TeacherAssignmentFields({
   const t = useTranslations("people");
 
   if (loading) {
-    return <p className="muted">{t("loadingAssignments")}</p>;
+    return <p className="pds-type-body-s-regular muted">{t("loadingAssignments")}</p>;
   }
 
   const grades = options?.grades ?? [];
@@ -237,6 +264,8 @@ export function TeacherAssignmentFields({
   };
 
   const conflicts = chiefConflicts(draft, options, currentStaffId);
+  const homeroomConflictRows = homeroomConflicts(draft, options, currentStaffId);
+  const selectSingleId = (ids: string[]) => (ids.length <= 1 ? ids : [ids[ids.length - 1]!]);
 
   const showGrades = section === "all" || section === "grade";
   const showHomeroom = section === "all" || section === "homeroom";
@@ -248,19 +277,19 @@ export function TeacherAssignmentFields({
     <div className="assign-step">
       {needsGradePicker ? (
         <section className="assign-block">
-          <p className="field-label">{t("gradeMembershipLabel")}</p>
-          <p className="muted assign-help">{t("gradeMembershipHelp")}</p>
           <CheckboxList
+            title={t("gradeMembershipLabel")}
+            description={t("gradeMembershipHelp")}
             options={grades.map((grade) => ({ id: grade.id, label: grade.name }))}
             selectedIds={draft.gradeIds}
             onChange={setGradeIds}
-            emptyMessage={<p className="muted">{t("noGradesAvailable")}</p>}
+            emptyTitle={t("noGradesAvailable")}
           />
         </section>
       ) : null}
 
       {draft.gradeIds.length === 0 && needsGradePicker ? (
-        <p className="muted assign-empty">{t("selectGradeFirst")}</p>
+        <EmptyState compact embedded icon="school" title={t("selectGradeFirst")} />
       ) : null}
 
       {draft.gradeIds.length > 0 || !needsGradePicker ? (
@@ -268,9 +297,9 @@ export function TeacherAssignmentFields({
           {showGrades ? (
             <section className="assign-block">
               <div className="assign-toggle">
-                <Switch
+                <Toggle
                   checked={draft.isGradeChief}
-                  onCheckedChange={(checked) =>
+                  onCheckedChange={(checked: boolean) =>
                     onChange({
                       ...draft,
                       isGradeChief: checked,
@@ -281,7 +310,7 @@ export function TeacherAssignmentFields({
                 />
                 <div>
                   <strong>{t("gradeChiefToggle")}</strong>
-                  <p className="muted assign-help">{t("gradeChiefHelp")}</p>
+                  <p className="pds-type-body-s-regular muted assign-help">{t("gradeChiefHelp")}</p>
                 </div>
               </div>
               {draft.isGradeChief ? (
@@ -289,10 +318,10 @@ export function TeacherAssignmentFields({
                   <CheckboxList
                     options={selectedGrades.map((grade) => ({ id: grade.id, label: grade.name }))}
                     selectedIds={draft.chiefGradeIds}
-                    onChange={(ids) => onChange({ ...draft, chiefGradeIds: ids })}
+                    onChange={(ids) => onChange({ ...draft, chiefGradeIds: selectSingleId(ids) })}
                   />
                   {conflicts.map((conflict) => (
-                    <p key={conflict.gradeId} className="assign-warning" role="alert">
+                    <p key={conflict.gradeId} className="pds-type-body-s-regular assign-warning" role="alert">
                       <Icon name="warning" size={16} />
                       {t("chiefConflictWarning", {
                         grade: conflict.gradeName,
@@ -308,9 +337,9 @@ export function TeacherAssignmentFields({
           {showHomeroom ? (
             <section className="assign-block">
               <div className="assign-toggle">
-                <Switch
+                <Toggle
                   checked={draft.isHomeroom}
-                  onCheckedChange={(checked) =>
+                  onCheckedChange={(checked: boolean) =>
                     onChange({
                       ...draft,
                       isHomeroom: checked,
@@ -321,29 +350,39 @@ export function TeacherAssignmentFields({
                 />
                 <div>
                   <strong>{t("homeroomToggle")}</strong>
-                  <p className="muted assign-help">{t("homeroomHelp")}</p>
+                  <p className="pds-type-body-s-regular muted assign-help">{t("homeroomHelp")}</p>
                 </div>
               </div>
               {draft.isHomeroom ? (
-                <CheckboxList
-                  options={classroomOptions}
-                  selectedIds={draft.homeroomClassroomIds}
-                  onChange={(ids) => onChange({ ...draft, homeroomClassroomIds: ids })}
-                  emptyMessage={<p className="muted">{t("noClassroomsForGrades")}</p>}
-                />
+                <>
+                  <CheckboxList
+                    options={classroomOptions}
+                    selectedIds={draft.homeroomClassroomIds}
+                    onChange={(ids) =>
+                      onChange({ ...draft, homeroomClassroomIds: selectSingleId(ids) })
+                    }
+                    emptyTitle={t("noClassroomsForGrades")}
+                  />
+                  {homeroomConflictRows.map((conflict) => (
+                    <p key={conflict.classroomId} className="pds-type-body-s-regular assign-warning" role="alert">
+                      <Icon name="warning" size={16} />
+                      {t("homeroomConflictWarning", { classroom: conflict.classroomName })}
+                    </p>
+                  ))}
+                </>
               ) : null}
             </section>
           ) : null}
 
           {showSubjects ? (
             <section className="assign-block">
-              <p className="field-label">{t("subjectsTaughtLabel")}</p>
-              <p className="muted assign-help">{t("subjectsTaughtHelp")}</p>
               <CheckboxList
+                title={t("subjectsTaughtLabel")}
+                description={t("subjectsTaughtHelp")}
                 options={subjectOptions}
                 selectedIds={draft.subjectKeys}
                 onChange={(ids) => onChange({ ...draft, subjectKeys: ids })}
-                emptyMessage={<p className="muted">{t("noSubjectsForGrades")}</p>}
+                emptyTitle={t("noSubjectsForGrades")}
               />
             </section>
           ) : null}

@@ -1,23 +1,38 @@
 import {
+  BadRequestException,
   ConflictException,
   Inject,
   Injectable,
   NotFoundException
 } from "@nestjs/common";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
 import {
   academicYears,
+  calendarEvents,
   classroomStudents,
   classrooms,
+  discountRules,
+  enrollmentFeePlanGrades,
+  enrollmentFeePlans,
+  enrollments,
+  gradeChiefAssignments,
   gradeSubjects,
   grades,
   reportCards,
   sections,
+  staff,
   subjects,
-  terms
+  terms,
+  timetablePeriods,
+  timetableSlots
 } from "../db/schema.js";
+/** Postgres foreign-key violation — a delete blocked by a referencing row. */
+function isForeignKeyViolation(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { code?: string }).code === "23503";
+}
+
 import type {
   AssignGradeSubjectDto,
   CreateAcademicYearDto,
@@ -124,6 +139,85 @@ export class AcademicsService {
     }
   }
 
+  private async syncGradeChief(
+    tenantId: string,
+    academicYearId: string,
+    gradeId: string,
+    staffId: string | null,
+    actorUserId?: string
+  ) {
+    await this.assertAcademicYearMutable(tenantId, academicYearId);
+    await this.getGradeOrThrow(tenantId, gradeId);
+
+    await this.db
+      .delete(gradeChiefAssignments)
+      .where(
+        and(
+          eq(gradeChiefAssignments.tenantId, tenantId),
+          eq(gradeChiefAssignments.academicYearId, academicYearId),
+          eq(gradeChiefAssignments.gradeId, gradeId)
+        )
+      );
+
+    if (!staffId) {
+      return;
+    }
+
+    const [teacher] = await this.db
+      .select({ id: staff.id })
+      .from(staff)
+      .where(and(eq(staff.tenantId, tenantId), eq(staff.id, staffId)))
+      .limit(1);
+
+    if (!teacher) {
+      throw new NotFoundException("Teacher not found.");
+    }
+
+    await this.db.insert(gradeChiefAssignments).values({
+      tenantId,
+      academicYearId,
+      gradeId,
+      staffId,
+      createdBy: actorUserId,
+      updatedBy: actorUserId
+    });
+
+    // A grade chief must be able to teach that grade. Auto-grant grade
+    // eligibility so the assignment is reflected on the teacher profile and the
+    // "chief ⟹ eligible" invariant holds. (Additive only — never revokes here.)
+    await this.grantGradeEligibility(tenantId, staffId, gradeId, actorUserId);
+  }
+
+  /** Ensure the teacher's profile lists this grade as eligible (idempotent). */
+  private async grantGradeEligibility(
+    tenantId: string,
+    staffId: string,
+    gradeId: string,
+    actorUserId?: string
+  ) {
+    const [row] = await this.db
+      .select({ profile: staff.teacherProfile })
+      .from(staff)
+      .where(and(eq(staff.tenantId, tenantId), eq(staff.id, staffId)))
+      .limit(1);
+    if (!row) {
+      return;
+    }
+    const profile = row.profile ?? {};
+    const current = profile.eligibleGradeIds ?? [];
+    if (current.includes(gradeId)) {
+      return;
+    }
+    await this.db
+      .update(staff)
+      .set({
+        teacherProfile: { ...profile, eligibleGradeIds: [...current, gradeId] },
+        updatedBy: actorUserId,
+        updatedAt: new Date()
+      })
+      .where(and(eq(staff.tenantId, tenantId), eq(staff.id, staffId)));
+  }
+
   private async syncSubjectGrades(
     tenantId: string,
     academicYearId: string,
@@ -202,20 +296,193 @@ export class AcademicsService {
     const current = await this.getCurrentAcademicYearRecord(tenantId);
     const initialStatus = current ? ("draft" as const) : ("active" as const);
 
-    const [academicYear] = await this.db
-      .insert(academicYears)
-      .values({
+    if (dto.importStructureFromYearId) {
+      await this.getAcademicYearOrThrow(tenantId, dto.importStructureFromYearId);
+    }
+
+    const academicYear = await this.db.transaction(async (tx) => {
+      const [year] = await tx
+        .insert(academicYears)
+        .values({
+          tenantId,
+          name: dto.name,
+          startsOn: dto.startsOn,
+          endsOn: dto.endsOn,
+          status: initialStatus,
+          createdBy: actorUserId,
+          updatedBy: actorUserId
+        })
+        .returning();
+
+      if (dto.importStructureFromYearId) {
+        await this.importStructureIntoYearTx(
+          tx,
+          tenantId,
+          dto.importStructureFromYearId,
+          year!.id,
+          actorUserId
+        );
+      }
+
+      return year!;
+    });
+
+    if (dto.importStructureFromYearId) {
+      await this.auditService.recordEvent({
         tenantId,
-        name: dto.name,
-        startsOn: dto.startsOn,
-        endsOn: dto.endsOn,
-        status: initialStatus,
-        createdBy: actorUserId,
-        updatedBy: actorUserId
-      })
-      .returning();
+        actorUserId: actorUserId ?? null,
+        action: "academic_year.import_structure",
+        recordType: "academic_year",
+        recordId: academicYear.id,
+        after: { importedFromYearId: dto.importStructureFromYearId }
+      });
+    }
 
     return academicYear;
+  }
+
+  /**
+   * Clones the year-scoped setup from a source year into a freshly created
+   * one: active classrooms (name, section, capacity, room, homeroom teacher),
+   * grade↔subject assignments, enrollment fee plans with their amounts and
+   * grade scoping, and extends year-scoped discount rules to cover the new
+   * year. Enrollments, placements, invoices, and payments are never copied.
+   */
+  private async importStructureIntoYearTx(
+    tx: Pick<Database, "select" | "insert" | "update">,
+    tenantId: string,
+    sourceYearId: string,
+    targetYearId: string,
+    actorUserId?: string
+  ) {
+    const sourceClassrooms = await tx
+      .select()
+      .from(classrooms)
+      .where(
+        and(
+          eq(classrooms.tenantId, tenantId),
+          eq(classrooms.academicYearId, sourceYearId),
+          eq(classrooms.status, "active")
+        )
+      );
+
+    if (sourceClassrooms.length) {
+      await tx.insert(classrooms).values(
+        sourceClassrooms.map((room) => ({
+          tenantId,
+          academicYearId: targetYearId,
+          gradeId: room.gradeId,
+          sectionId: room.sectionId,
+          branchId: room.branchId,
+          name: room.name,
+          capacity: room.capacity,
+          room: room.room,
+          facilityRoomId: room.facilityRoomId,
+          classTeacherStaffId: room.classTeacherStaffId,
+          createdBy: actorUserId,
+          updatedBy: actorUserId
+        }))
+      );
+    }
+
+    const sourceGradeSubjects = await tx
+      .select()
+      .from(gradeSubjects)
+      .where(
+        and(
+          eq(gradeSubjects.tenantId, tenantId),
+          eq(gradeSubjects.academicYearId, sourceYearId)
+        )
+      );
+
+    if (sourceGradeSubjects.length) {
+      await tx.insert(gradeSubjects).values(
+        sourceGradeSubjects.map((row) => ({
+          tenantId,
+          academicYearId: targetYearId,
+          gradeId: row.gradeId,
+          subjectId: row.subjectId,
+          weight: row.weight,
+          isRequired: row.isRequired,
+          createdBy: actorUserId,
+          updatedBy: actorUserId
+        }))
+      );
+    }
+
+    // Fee structure: clone the source year's enrollment fee plans (amounts)
+    // and each plan's grade scoping.
+    const sourcePlans = await tx
+      .select()
+      .from(enrollmentFeePlans)
+      .where(
+        and(
+          eq(enrollmentFeePlans.tenantId, tenantId),
+          eq(enrollmentFeePlans.academicYearId, sourceYearId)
+        )
+      );
+
+    for (const plan of sourcePlans) {
+      const [newPlan] = await tx
+        .insert(enrollmentFeePlans)
+        .values({
+          tenantId,
+          academicYearId: targetYearId,
+          feeItemId: plan.feeItemId,
+          amount: plan.amount,
+          createdBy: actorUserId,
+          updatedBy: actorUserId
+        })
+        .returning();
+
+      const planGrades = await tx
+        .select()
+        .from(enrollmentFeePlanGrades)
+        .where(
+          and(
+            eq(enrollmentFeePlanGrades.tenantId, tenantId),
+            eq(enrollmentFeePlanGrades.planId, plan.id)
+          )
+        );
+
+      if (planGrades.length) {
+        await tx.insert(enrollmentFeePlanGrades).values(
+          planGrades.map((row) => ({
+            tenantId,
+            planId: newPlan!.id,
+            gradeId: row.gradeId,
+            createdBy: actorUserId,
+            updatedBy: actorUserId
+          }))
+        );
+      }
+    }
+
+    // Discounts: rules without year scoping already apply to every year.
+    // Rules explicitly scoped to the source year get the new year appended
+    // so the same setup keeps working.
+    const rules = await tx
+      .select()
+      .from(discountRules)
+      .where(and(eq(discountRules.tenantId, tenantId), eq(discountRules.status, "active")));
+
+    for (const rule of rules) {
+      const criteria = rule.criteria as Record<string, unknown>;
+      const appliesTo = criteria.appliesTo as Record<string, unknown> | undefined;
+      const container = appliesTo ?? criteria;
+      const yearIds = container.academicYearIds;
+      if (!Array.isArray(yearIds) || !yearIds.includes(sourceYearId) || yearIds.includes(targetYearId)) {
+        continue;
+      }
+      const nextCriteria = appliesTo
+        ? { ...criteria, appliesTo: { ...appliesTo, academicYearIds: [...yearIds, targetYearId] } }
+        : { ...criteria, academicYearIds: [...yearIds, targetYearId] };
+
+      await tx
+        .update(discountRules)
+        .set({ criteria: nextCriteria, updatedBy: actorUserId, updatedAt: new Date() })
+        .where(and(eq(discountRules.tenantId, tenantId), eq(discountRules.id, rule.id)));
+    }
   }
 
   async updateAcademicYear(
@@ -312,8 +579,158 @@ export class AcademicsService {
     return this.setAcademicYearActive(tenantId, academicYearId, false, actorUserId);
   }
 
-  async reactivateAcademicYear(tenantId: string, academicYearId: string, actorUserId?: string) {
+  async restoreAcademicYear(tenantId: string, academicYearId: string, actorUserId?: string) {
     return this.setAcademicYearActive(tenantId, academicYearId, true, actorUserId);
+  }
+
+  /** @deprecated Use {@link restoreAcademicYear}. Kept for the legacy /reactivate route. */
+  async reactivateAcademicYear(tenantId: string, academicYearId: string, actorUserId?: string) {
+    return this.restoreAcademicYear(tenantId, academicYearId, actorUserId);
+  }
+
+  async deleteAcademicYear(tenantId: string, academicYearId: string, actorUserId?: string) {
+    const year = await this.getAcademicYearOrThrow(tenantId, academicYearId);
+
+    // Two-step safety: only an archived (closed) year can be permanently deleted.
+    if (year.status !== "archived") {
+      throw new BadRequestException("Close the academic year before deleting it.");
+    }
+
+    // Structure (terms, classrooms, subject assignments, fee plans) is
+    // recreatable and cascades with the year. Only student and financial
+    // records block deletion: enrollments and classroom placements.
+    const n = sql<number>`count(*)::int`;
+    const [enrollmentsN, placementsN] = await Promise.all([
+      this.db
+        .select({ n })
+        .from(enrollments)
+        .where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.academicYearId, academicYearId))),
+      this.db
+        .select({ n })
+        .from(classroomStudents)
+        .innerJoin(classrooms, eq(classroomStudents.classroomId, classrooms.id))
+        .where(
+          and(
+            eq(classroomStudents.tenantId, tenantId),
+            eq(classrooms.academicYearId, academicYearId)
+          )
+        )
+    ]);
+    const dependencies = {
+      enrollments: enrollmentsN[0]?.n ?? 0,
+      classroomPlacements: placementsN[0]?.n ?? 0
+    };
+    if (Object.values(dependencies).some((c) => c > 0)) {
+      throw new ConflictException({
+        message:
+          "This academic year has enrollments or student placements and cannot be deleted. Keep it closed instead.",
+        dependencies
+      });
+    }
+
+    try {
+      await this.db.transaction(async (tx) => {
+        const yearClassroomIds = (
+          await tx
+            .select({ id: classrooms.id })
+            .from(classrooms)
+            .where(and(eq(classrooms.tenantId, tenantId), eq(classrooms.academicYearId, academicYearId)))
+        ).map((row) => row.id);
+
+        const yearPeriodIds = (
+          await tx
+            .select({ id: timetablePeriods.id })
+            .from(timetablePeriods)
+            .where(
+              and(
+                eq(timetablePeriods.tenantId, tenantId),
+                eq(timetablePeriods.academicYearId, academicYearId)
+              )
+            )
+        ).map((row) => row.id);
+
+        if (yearPeriodIds.length) {
+          await tx.delete(timetableSlots).where(inArray(timetableSlots.periodId, yearPeriodIds));
+        }
+        if (yearClassroomIds.length) {
+          await tx.delete(timetableSlots).where(inArray(timetableSlots.classroomId, yearClassroomIds));
+        }
+        await tx
+          .delete(timetablePeriods)
+          .where(
+            and(
+              eq(timetablePeriods.tenantId, tenantId),
+              eq(timetablePeriods.academicYearId, academicYearId)
+            )
+          );
+        await tx
+          .delete(calendarEvents)
+          .where(
+            and(eq(calendarEvents.tenantId, tenantId), eq(calendarEvents.academicYearId, academicYearId))
+          );
+        await tx
+          .delete(gradeChiefAssignments)
+          .where(
+            and(
+              eq(gradeChiefAssignments.tenantId, tenantId),
+              eq(gradeChiefAssignments.academicYearId, academicYearId)
+            )
+          );
+
+        const yearPlanIds = (
+          await tx
+            .select({ id: enrollmentFeePlans.id })
+            .from(enrollmentFeePlans)
+            .where(
+              and(
+                eq(enrollmentFeePlans.tenantId, tenantId),
+                eq(enrollmentFeePlans.academicYearId, academicYearId)
+              )
+            )
+        ).map((row) => row.id);
+        if (yearPlanIds.length) {
+          await tx
+            .delete(enrollmentFeePlanGrades)
+            .where(inArray(enrollmentFeePlanGrades.planId, yearPlanIds));
+          await tx.delete(enrollmentFeePlans).where(inArray(enrollmentFeePlans.id, yearPlanIds));
+        }
+
+        await tx
+          .delete(gradeSubjects)
+          .where(
+            and(eq(gradeSubjects.tenantId, tenantId), eq(gradeSubjects.academicYearId, academicYearId))
+          );
+        if (yearClassroomIds.length) {
+          await tx.delete(classrooms).where(inArray(classrooms.id, yearClassroomIds));
+        }
+        await tx
+          .delete(terms)
+          .where(and(eq(terms.tenantId, tenantId), eq(terms.academicYearId, academicYearId)));
+        await tx
+          .delete(academicYears)
+          .where(and(eq(academicYears.tenantId, tenantId), eq(academicYears.id, academicYearId)));
+      });
+    } catch (err) {
+      if (isForeignKeyViolation(err)) {
+        throw new ConflictException({
+          message:
+            "This academic year is still referenced by other records and cannot be deleted. Keep it closed instead."
+        });
+      }
+      throw err;
+    }
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "academic_year.delete",
+      recordType: "AcademicYear",
+      recordId: academicYearId,
+      before: { name: year.name, status: year.status },
+      after: { deleted: true }
+    });
+
+    return { id: academicYearId, deleted: true };
   }
 
   listTerms(tenantId: string) {
@@ -395,7 +812,15 @@ export class AcademicsService {
     return this.db.select().from(grades).where(eq(grades.tenantId, tenantId));
   }
 
+  private assertValidAgeRange(minAge: number | null, maxAge: number | null) {
+    if (minAge !== null && maxAge !== null && minAge > maxAge) {
+      throw new BadRequestException("Grade minimum age cannot be greater than maximum age.");
+    }
+  }
+
   async createGrade(tenantId: string, dto: CreateGradeDto, actorUserId?: string) {
+    this.assertValidAgeRange(dto.minAge ?? null, dto.maxAge ?? null);
+
     const [grade] = await this.db
       .insert(grades)
       .values({
@@ -418,6 +843,16 @@ export class AcademicsService {
         dto.academicYearId,
         grade.id,
         dto.subjectIds,
+        actorUserId
+      );
+    }
+
+    if (dto.academicYearId && dto.gradeChiefStaffId !== undefined) {
+      await this.syncGradeChief(
+        tenantId,
+        dto.academicYearId,
+        grade.id,
+        dto.gradeChiefStaffId,
         actorUserId
       );
     }
@@ -455,12 +890,16 @@ export class AcademicsService {
   ) {
     const previous = await this.getGradeOrThrow(tenantId, gradeId);
 
+    const nextMinAge = dto.minAge === undefined ? previous.minAge : dto.minAge;
+    const nextMaxAge = dto.maxAge === undefined ? previous.maxAge : dto.maxAge;
+    this.assertValidAgeRange(nextMinAge, nextMaxAge);
+
     const [grade] = await this.db
       .update(grades)
       .set({
         name: dto.name ?? previous.name,
-        minAge: dto.minAge === undefined ? previous.minAge : dto.minAge,
-        maxAge: dto.maxAge === undefined ? previous.maxAge : dto.maxAge,
+        minAge: nextMinAge,
+        maxAge: nextMaxAge,
         updatedBy: actorUserId,
         updatedAt: new Date()
       })
@@ -477,6 +916,16 @@ export class AcademicsService {
         dto.academicYearId,
         gradeId,
         dto.subjectIds,
+        actorUserId
+      );
+    }
+
+    if (dto.academicYearId && dto.gradeChiefStaffId !== undefined) {
+      await this.syncGradeChief(
+        tenantId,
+        dto.academicYearId,
+        gradeId,
+        dto.gradeChiefStaffId,
         actorUserId
       );
     }
@@ -520,7 +969,7 @@ export class AcademicsService {
     return grade;
   }
 
-  async reactivateGrade(tenantId: string, gradeId: string, actorUserId?: string) {
+  async restoreGrade(tenantId: string, gradeId: string, actorUserId?: string) {
     const previous = await this.getGradeOrThrow(tenantId, gradeId);
 
     if (previous.status === "active") {
@@ -536,7 +985,7 @@ export class AcademicsService {
     await this.auditService.recordEvent({
       tenantId,
       actorUserId: actorUserId ?? null,
-      action: "grade.reactivate",
+      action: "grade.restore",
       recordType: "Grade",
       recordId: gradeId,
       before: { status: previous.status },
@@ -544,6 +993,63 @@ export class AcademicsService {
     });
 
     return grade;
+  }
+
+  /** @deprecated Use {@link restoreGrade}. Kept for the legacy /reactivate route. */
+  async reactivateGrade(tenantId: string, gradeId: string, actorUserId?: string) {
+    return this.restoreGrade(tenantId, gradeId, actorUserId);
+  }
+
+  async deleteGrade(tenantId: string, gradeId: string, actorUserId?: string) {
+    const grade = await this.getGradeOrThrow(tenantId, gradeId);
+
+    // Two-step safety: only an archived grade can be permanently deleted.
+    if (grade.status !== "archived") {
+      throw new BadRequestException("Archive the grade before deleting permanently.");
+    }
+
+    const n = sql<number>`count(*)::int`;
+    const [classroomsN, subjectsN, enrollmentsN] = await Promise.all([
+      this.db.select({ n }).from(classrooms).where(and(eq(classrooms.tenantId, tenantId), eq(classrooms.gradeId, gradeId))),
+      this.db.select({ n }).from(gradeSubjects).where(and(eq(gradeSubjects.tenantId, tenantId), eq(gradeSubjects.gradeId, gradeId))),
+      this.db.select({ n }).from(enrollments).where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.gradeId, gradeId)))
+    ]);
+    const dependencies = {
+      classrooms: classroomsN[0]?.n ?? 0,
+      subjects: subjectsN[0]?.n ?? 0,
+      enrollments: enrollmentsN[0]?.n ?? 0
+    };
+    if (Object.values(dependencies).some((c) => c > 0)) {
+      throw new ConflictException({
+        message:
+          "This grade has classrooms, subject assignments, or enrolments and cannot be deleted. Keep it archived instead.",
+        dependencies
+      });
+    }
+
+    try {
+      await this.db.delete(grades).where(and(eq(grades.tenantId, tenantId), eq(grades.id, gradeId)));
+    } catch (err) {
+      if (isForeignKeyViolation(err)) {
+        throw new ConflictException({
+          message:
+            "This grade is still referenced by other records and cannot be deleted. Keep it archived instead."
+        });
+      }
+      throw err;
+    }
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "grade.delete",
+      recordType: "Grade",
+      recordId: gradeId,
+      before: { name: grade.name, status: grade.status },
+      after: { deleted: true }
+    });
+
+    return { id: gradeId, deleted: true };
   }
 
   listSections(tenantId: string) {
@@ -614,7 +1120,7 @@ export class AcademicsService {
     return section;
   }
 
-  async reactivateSection(tenantId: string, sectionId: string, actorUserId?: string) {
+  async restoreSection(tenantId: string, sectionId: string, actorUserId?: string) {
     const previous = await this.getSectionOrThrow(tenantId, sectionId);
 
     if (previous.status === "active") {
@@ -627,7 +1133,68 @@ export class AcademicsService {
       .where(and(eq(sections.tenantId, tenantId), eq(sections.id, sectionId)))
       .returning();
 
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "section.restore",
+      recordType: "Section",
+      recordId: sectionId,
+      before: { status: previous.status },
+      after: { status: "active" }
+    });
+
     return section;
+  }
+
+  /** @deprecated Use {@link restoreSection}. Kept for the legacy /reactivate route. */
+  async reactivateSection(tenantId: string, sectionId: string, actorUserId?: string) {
+    return this.restoreSection(tenantId, sectionId, actorUserId);
+  }
+
+  async deleteSection(tenantId: string, sectionId: string, actorUserId?: string) {
+    const section = await this.getSectionOrThrow(tenantId, sectionId);
+
+    if (section.status !== "archived") {
+      throw new BadRequestException("Archive the section before deleting permanently.");
+    }
+
+    const n = sql<number>`count(*)::int`;
+    const [classroomsN] = await this.db
+      .select({ n })
+      .from(classrooms)
+      .where(and(eq(classrooms.tenantId, tenantId), eq(classrooms.sectionId, sectionId)));
+    const dependencies = { classrooms: classroomsN?.n ?? 0 };
+    if (dependencies.classrooms > 0) {
+      throw new ConflictException({
+        message:
+          "This section is used by classrooms and cannot be deleted. Keep it archived instead.",
+        dependencies
+      });
+    }
+
+    try {
+      await this.db.delete(sections).where(and(eq(sections.tenantId, tenantId), eq(sections.id, sectionId)));
+    } catch (err) {
+      if (isForeignKeyViolation(err)) {
+        throw new ConflictException({
+          message:
+            "This section is still referenced by other records and cannot be deleted. Keep it archived instead."
+        });
+      }
+      throw err;
+    }
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "section.delete",
+      recordType: "Section",
+      recordId: sectionId,
+      before: { name: section.name, status: section.status },
+      after: { deleted: true }
+    });
+
+    return { id: sectionId, deleted: true };
   }
 
   listSubjects(tenantId: string) {
@@ -641,6 +1208,8 @@ export class AcademicsService {
         tenantId,
         name: dto.name,
         code: dto.code,
+        colorKey: dto.colorKey ?? null,
+        iconKey: dto.iconKey ?? null,
         subjectType: dto.subjectType ?? "required",
         createdBy: actorUserId,
         updatedBy: actorUserId
@@ -686,6 +1255,8 @@ export class AcademicsService {
       .set({
         name: dto.name ?? previous.name,
         code: dto.code === undefined ? previous.code : dto.code || null,
+        colorKey: dto.colorKey === undefined ? previous.colorKey : dto.colorKey || null,
+        iconKey: dto.iconKey === undefined ? previous.iconKey : dto.iconKey || null,
         subjectType: dto.subjectType ?? previous.subjectType,
         updatedBy: actorUserId,
         updatedAt: new Date()
@@ -722,7 +1293,7 @@ export class AcademicsService {
     return subject;
   }
 
-  async reactivateSubject(tenantId: string, subjectId: string, actorUserId?: string) {
+  async restoreSubject(tenantId: string, subjectId: string, actorUserId?: string) {
     const previous = await this.getSubjectOrThrow(tenantId, subjectId);
 
     if (previous.status === "active") {
@@ -735,7 +1306,68 @@ export class AcademicsService {
       .where(and(eq(subjects.tenantId, tenantId), eq(subjects.id, subjectId)))
       .returning();
 
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "subject.restore",
+      recordType: "Subject",
+      recordId: subjectId,
+      before: { status: previous.status },
+      after: { status: "active" }
+    });
+
     return subject;
+  }
+
+  /** @deprecated Use {@link restoreSubject}. Kept for the legacy /reactivate route. */
+  async reactivateSubject(tenantId: string, subjectId: string, actorUserId?: string) {
+    return this.restoreSubject(tenantId, subjectId, actorUserId);
+  }
+
+  async deleteSubject(tenantId: string, subjectId: string, actorUserId?: string) {
+    const subject = await this.getSubjectOrThrow(tenantId, subjectId);
+
+    if (subject.status !== "archived") {
+      throw new BadRequestException("Archive the subject before deleting permanently.");
+    }
+
+    const n = sql<number>`count(*)::int`;
+    const [assignmentsN] = await this.db
+      .select({ n })
+      .from(gradeSubjects)
+      .where(and(eq(gradeSubjects.tenantId, tenantId), eq(gradeSubjects.subjectId, subjectId)));
+    const dependencies = { gradeSubjects: assignmentsN?.n ?? 0 };
+    if (dependencies.gradeSubjects > 0) {
+      throw new ConflictException({
+        message:
+          "This subject is assigned to grades and cannot be deleted. Keep it archived instead.",
+        dependencies
+      });
+    }
+
+    try {
+      await this.db.delete(subjects).where(and(eq(subjects.tenantId, tenantId), eq(subjects.id, subjectId)));
+    } catch (err) {
+      if (isForeignKeyViolation(err)) {
+        throw new ConflictException({
+          message:
+            "This subject is still referenced by other records and cannot be deleted. Keep it archived instead."
+        });
+      }
+      throw err;
+    }
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "subject.delete",
+      recordType: "Subject",
+      recordId: subjectId,
+      before: { name: subject.name, status: subject.status },
+      after: { deleted: true }
+    });
+
+    return { id: subjectId, deleted: true };
   }
 
   listGradeSubjects(tenantId: string) {
@@ -877,61 +1509,70 @@ export class AcademicsService {
       .where(eq(academicYears.tenantId, tenantId))
       .orderBy(academicYears.startsOn);
 
-    const results = [];
+    if (!years.length) {
+      return [];
+    }
 
-    for (const year of years) {
-      const [gradeCountRow] = await this.db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(grades)
-        .where(
-          and(
-            eq(grades.tenantId, tenantId),
-            eq(grades.status, "active"),
-            sql`(
-              exists (
-                select 1 from ${classrooms} c
-                where c.grade_id = ${grades.id}
-                  and c.tenant_id = ${tenantId}
-                  and c.academic_year_id = ${year.id}
-              )
-              or exists (
-                select 1 from ${gradeSubjects} gs
-                where gs.grade_id = ${grades.id}
-                  and gs.tenant_id = ${tenantId}
-                  and gs.academic_year_id = ${year.id}
-              )
-            )`
-          )
-        );
-
-      const [classroomCountRow] = await this.db
-        .select({ count: sql<number>`count(*)::int` })
+    const [classroomCountRows, studentCountRows, gradeCountRows] = await Promise.all([
+      this.db
+        .select({
+          academicYearId: classrooms.academicYearId,
+          count: sql<number>`count(*)::int`
+        })
         .from(classrooms)
-        .where(
-          and(eq(classrooms.tenantId, tenantId), eq(classrooms.academicYearId, year.id))
-        );
-
-      const [studentCountRow] = await this.db
-        .select({ count: sql<number>`count(distinct ${classroomStudents.studentId})::int` })
+        .where(eq(classrooms.tenantId, tenantId))
+        .groupBy(classrooms.academicYearId),
+      this.db
+        .select({
+          academicYearId: classrooms.academicYearId,
+          count: sql<number>`count(distinct ${classroomStudents.studentId})::int`
+        })
         .from(classroomStudents)
         .innerJoin(classrooms, eq(classroomStudents.classroomId, classrooms.id))
         .where(
           and(
             eq(classroomStudents.tenantId, tenantId),
-            eq(classrooms.academicYearId, year.id),
             isNull(classroomStudents.effectiveTo)
           )
-        );
+        )
+        .groupBy(classrooms.academicYearId),
+      this.db.execute<{ year_id: string; count: number }>(sql`
+        SELECT year_id, COUNT(DISTINCT grade_id)::int AS count
+        FROM (
+          SELECT c.academic_year_id AS year_id, c.grade_id AS grade_id
+          FROM ${classrooms} c
+          INNER JOIN ${grades} g ON g.id = c.grade_id
+          WHERE c.tenant_id = ${tenantId}
+            AND g.tenant_id = ${tenantId}
+            AND g.status = 'active'
+          UNION
+          SELECT gs.academic_year_id AS year_id, gs.grade_id AS grade_id
+          FROM ${gradeSubjects} gs
+          INNER JOIN ${grades} g ON g.id = gs.grade_id
+          WHERE gs.tenant_id = ${tenantId}
+            AND g.tenant_id = ${tenantId}
+            AND g.status = 'active'
+        ) active_grades
+        GROUP BY year_id
+      `)
+    ]);
 
-      results.push({
-        ...year,
-        gradeCount: gradeCountRow?.count ?? 0,
-        classroomCount: classroomCountRow?.count ?? 0,
-        studentCount: studentCountRow?.count ?? 0
-      });
-    }
+    const classroomCounts = new Map(
+      classroomCountRows.map((row) => [row.academicYearId, row.count])
+    );
+    const studentCounts = new Map(
+      studentCountRows.map((row) => [row.academicYearId, row.count])
+    );
+    const gradeCounts = new Map(
+      gradeCountRows.rows.map((row) => [row.year_id, row.count])
+    );
 
-    return results;
+    return years.map((year) => ({
+      ...year,
+      gradeCount: gradeCounts.get(year.id) ?? 0,
+      classroomCount: classroomCounts.get(year.id) ?? 0,
+      studentCount: studentCounts.get(year.id) ?? 0
+    }));
   }
 
   async listGradesOverview(tenantId: string, academicYearId: string) {
@@ -943,62 +1584,107 @@ export class AcademicsService {
       .where(eq(grades.tenantId, tenantId))
       .orderBy(grades.sortOrder, grades.name);
 
-    const results = [];
+    if (!gradeRows.length) {
+      return [];
+    }
 
-    for (const grade of gradeRows) {
-      const subjectRows = await this.db
-        .select({
-          id: subjects.id,
-          name: subjects.name,
-          code: subjects.code
-        })
-        .from(gradeSubjects)
-        .innerJoin(subjects, eq(gradeSubjects.subjectId, subjects.id))
-        .where(
-          and(
-            eq(gradeSubjects.tenantId, tenantId),
-            eq(gradeSubjects.academicYearId, academicYearId),
-            eq(gradeSubjects.gradeId, grade.id)
+    const gradeIds = gradeRows.map((grade) => grade.id);
+
+    const [subjectRows, classroomCountRows, studentCountRows, gradeChiefRows] =
+      await Promise.all([
+        this.db
+          .select({
+            gradeId: gradeSubjects.gradeId,
+            id: subjects.id,
+            name: subjects.name,
+            code: subjects.code,
+            colorKey: subjects.colorKey
+          })
+          .from(gradeSubjects)
+          .innerJoin(subjects, eq(gradeSubjects.subjectId, subjects.id))
+          .where(
+            and(
+              eq(gradeSubjects.tenantId, tenantId),
+              eq(gradeSubjects.academicYearId, academicYearId),
+              inArray(gradeSubjects.gradeId, gradeIds)
+            )
           )
-        )
-        .orderBy(subjects.name);
-
-      const uniqueSubjects = this.dedupeSubjectsByCode(subjectRows);
-
-      const [classroomCountRow] = await this.db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(classrooms)
-        .where(
-          and(
-            eq(classrooms.tenantId, tenantId),
-            eq(classrooms.academicYearId, academicYearId),
-            eq(classrooms.gradeId, grade.id)
+          .orderBy(subjects.name),
+        this.db
+          .select({
+            gradeId: classrooms.gradeId,
+            count: sql<number>`count(*)::int`
+          })
+          .from(classrooms)
+          .where(
+            and(
+              eq(classrooms.tenantId, tenantId),
+              eq(classrooms.academicYearId, academicYearId),
+              inArray(classrooms.gradeId, gradeIds)
+            )
           )
-        );
-
-      const [studentCountRow] = await this.db
-        .select({ count: sql<number>`count(distinct ${classroomStudents.studentId})::int` })
-        .from(classroomStudents)
-        .innerJoin(classrooms, eq(classroomStudents.classroomId, classrooms.id))
-        .where(
-          and(
-            eq(classroomStudents.tenantId, tenantId),
-            eq(classrooms.academicYearId, academicYearId),
-            eq(classrooms.gradeId, grade.id),
-            isNull(classroomStudents.effectiveTo)
+          .groupBy(classrooms.gradeId),
+        this.db
+          .select({
+            gradeId: classrooms.gradeId,
+            count: sql<number>`count(distinct ${classroomStudents.studentId})::int`
+          })
+          .from(classroomStudents)
+          .innerJoin(classrooms, eq(classroomStudents.classroomId, classrooms.id))
+          .where(
+            and(
+              eq(classroomStudents.tenantId, tenantId),
+              eq(classrooms.academicYearId, academicYearId),
+              inArray(classrooms.gradeId, gradeIds),
+              isNull(classroomStudents.effectiveTo)
+            )
           )
-        );
+          .groupBy(classrooms.gradeId),
+        this.db
+          .select({
+            gradeId: gradeChiefAssignments.gradeId,
+            name: staff.fullName,
+            staffId: staff.id
+          })
+          .from(gradeChiefAssignments)
+          .innerJoin(staff, eq(gradeChiefAssignments.staffId, staff.id))
+          .where(
+            and(
+              eq(gradeChiefAssignments.tenantId, tenantId),
+              eq(gradeChiefAssignments.academicYearId, academicYearId),
+              inArray(gradeChiefAssignments.gradeId, gradeIds)
+            )
+          )
+      ]);
 
-      results.push({
+    const subjectsByGrade = new Map<string, typeof subjectRows>();
+    for (const row of subjectRows) {
+      const bucket = subjectsByGrade.get(row.gradeId) ?? [];
+      bucket.push(row);
+      subjectsByGrade.set(row.gradeId, bucket);
+    }
+
+    const classroomCounts = new Map(
+      classroomCountRows.map((row) => [row.gradeId, row.count])
+    );
+    const studentCounts = new Map(studentCountRows.map((row) => [row.gradeId, row.count]));
+    const gradeChiefs = new Map(
+      gradeChiefRows.map((row) => [row.gradeId, { name: row.name, staffId: row.staffId }])
+    );
+
+    return gradeRows.map((grade) => {
+      const uniqueSubjects = this.dedupeSubjectsByCode(subjectsByGrade.get(grade.id) ?? []);
+      const chief = gradeChiefs.get(grade.id);
+      return {
         ...grade,
         subjectCount: uniqueSubjects.length,
         subjects: uniqueSubjects,
-        classroomCount: classroomCountRow?.count ?? 0,
-        studentCount: studentCountRow?.count ?? 0
-      });
-    }
-
-    return results;
+        classroomCount: classroomCounts.get(grade.id) ?? 0,
+        studentCount: studentCounts.get(grade.id) ?? 0,
+        gradeChiefName: chief?.name ?? null,
+        gradeChiefStaffId: chief?.staffId ?? null
+      };
+    });
   }
 
   async listSubjectsOverview(tenantId: string, academicYearId: string) {
@@ -1010,32 +1696,42 @@ export class AcademicsService {
       .where(eq(subjects.tenantId, tenantId))
       .orderBy(subjects.name);
 
-    const results = [];
-
-    for (const subject of subjectRows) {
-      const gradeRows = await this.db
-        .select({
-          id: grades.id,
-          name: grades.name
-        })
-        .from(gradeSubjects)
-        .innerJoin(grades, eq(gradeSubjects.gradeId, grades.id))
-        .where(
-          and(
-            eq(gradeSubjects.tenantId, tenantId),
-            eq(gradeSubjects.academicYearId, academicYearId),
-            eq(gradeSubjects.subjectId, subject.id)
-          )
-        )
-        .orderBy(grades.name);
-
-      results.push({
-        ...subject,
-        gradeCount: gradeRows.length,
-        grades: gradeRows
-      });
+    if (!subjectRows.length) {
+      return [];
     }
 
-    return results;
+    const subjectIds = subjectRows.map((subject) => subject.id);
+    const gradeRows = await this.db
+      .select({
+        subjectId: gradeSubjects.subjectId,
+        id: grades.id,
+        name: grades.name
+      })
+      .from(gradeSubjects)
+      .innerJoin(grades, eq(gradeSubjects.gradeId, grades.id))
+      .where(
+        and(
+          eq(gradeSubjects.tenantId, tenantId),
+          eq(gradeSubjects.academicYearId, academicYearId),
+          inArray(gradeSubjects.subjectId, subjectIds)
+        )
+      )
+      .orderBy(grades.name);
+
+    const gradesBySubject = new Map<string, Array<{ id: string; name: string }>>();
+    for (const row of gradeRows) {
+      const bucket = gradesBySubject.get(row.subjectId) ?? [];
+      bucket.push({ id: row.id, name: row.name });
+      gradesBySubject.set(row.subjectId, bucket);
+    }
+
+    return subjectRows.map((subject) => {
+      const gradesForSubject = gradesBySubject.get(subject.id) ?? [];
+      return {
+        ...subject,
+        gradeCount: gradesForSubject.length,
+        grades: gradesForSubject
+      };
+    });
   }
 }

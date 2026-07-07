@@ -11,16 +11,25 @@ import {
   personTypeToRoleKey,
   type PersonType
 } from "@sms/shared";
-import { and, desc, eq, ilike, ne, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
 import { DepartmentsService } from "../departments/departments.service.js";
 import {
+  assignments,
   classroomStudents,
   classroomSubjectTeachers,
   classrooms,
+  gradeChiefAssignments,
+  learningMaterials,
+  payrollRecords,
   roles,
+  salaryRecords,
   staff,
+  staffBenefitEnrollments,
+  staffCompensationProfiles,
+  staffIncentiveEligibility,
+  timetableSlots,
   userRoles,
   users
 } from "../db/schema.js";
@@ -35,6 +44,11 @@ import type {
 } from "./dto.js";
 import { TeacherAssignmentsService } from "./teacher-assignments.service.js";
 
+/** Postgres foreign-key violation — a delete blocked by a referencing row. */
+function isForeignKeyViolation(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { code?: string }).code === "23503";
+}
+
 @Injectable()
 export class HrService {
   constructor(
@@ -45,8 +59,16 @@ export class HrService {
     private readonly departmentsService: DepartmentsService
   ) {}
 
-  listStaff(tenantId: string, query: ListStaffQueryDto) {
+  private buildStaffFilters(tenantId: string, query: ListStaffQueryDto) {
     const filters = [eq(staff.tenantId, tenantId)];
+
+    // Archive lifecycle: default view hides archived staff; "archived" shows
+    // only them; "all" shows both.
+    if (query.view === "archived") {
+      filters.push(isNotNull(staff.archivedAt));
+    } else if (query.view !== "all") {
+      filters.push(isNull(staff.archivedAt));
+    }
 
     if (query.status) {
       filters.push(eq(staff.status, query.status as typeof staff.status._.data));
@@ -63,80 +85,205 @@ export class HrService {
     if (query.search) {
       filters.push(ilike(staff.fullName, `%${query.search}%`));
     }
+    if (query.eligibleGradeId) {
+      const gradeFilter = sql`${staff.teacherProfile}->'eligibleGradeIds' @> ${JSON.stringify([query.eligibleGradeId])}::jsonb`;
+      if (query.includeStaffId) {
+        const eligibleOrCurrent = or(gradeFilter, eq(staff.id, query.includeStaffId));
+        if (eligibleOrCurrent) {
+          filters.push(eligibleOrCurrent);
+        }
+      } else {
+        filters.push(gradeFilter);
+      }
+    }
 
-    const q = this.db
+    return filters;
+  }
+
+  async listStaff(tenantId: string, query: ListStaffQueryDto) {
+    const filters = this.buildStaffFilters(tenantId, query);
+    const limit = Math.min(query.limit ?? 50, 200);
+    const offset = query.offset ?? 0;
+
+    return this.db
       .select()
       .from(staff)
       .where(and(...filters))
-      .orderBy(desc(staff.updatedAt));
+      .orderBy(desc(staff.updatedAt))
+      .limit(limit)
+      .offset(offset);
+  }
 
-    if (query.limit !== undefined) {
-      q.limit(query.limit);
-    }
-    if (query.offset !== undefined) {
-      q.offset(query.offset);
-    }
+  async countStaff(tenantId: string, query: ListStaffQueryDto) {
+    const filters = this.buildStaffFilters(tenantId, query);
+    const [row] = await this.db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(staff)
+      .where(and(...filters));
 
-    return q;
+    return row?.count ?? 0;
   }
 
   async listStaffOverview(tenantId: string, query: ListStaffQueryDto) {
-    const rows = await this.listStaff(tenantId, query);
+    const limit = Math.min(query.limit ?? 50, 200);
+    const offset = query.offset ?? 0;
+    const [rows, total] = await Promise.all([
+      this.listStaff(tenantId, { ...query, limit, offset }),
+      this.countStaff(tenantId, query)
+    ]);
 
-    const enriched = await Promise.all(
-      rows.map(async (member) => {
-        let loginEmail: string | null = null;
-        let loginStatus: string | null = null;
-        let rbacRoleKey: string | null = null;
+    const staffIds = rows.map((member) => member.id);
+    const userIds = rows.map((member) => member.userId).filter((id): id is string => Boolean(id));
 
-        if (member.userId) {
-          const [user] = await this.db
-            .select({ email: users.email, status: users.status })
-            .from(users)
-            .where(and(eq(users.tenantId, tenantId), eq(users.id, member.userId)));
+    const usersById = new Map<string, { email: string | null; status: string }>();
+    const rolesByUserId = new Map<string, string>();
+    const homeroomByStaffId = new Map<string, number>();
+    const classroomsByStaffId = new Map<string, Set<string>>();
+    const subjectsByStaffId = new Map<string, Set<string>>();
 
-          loginEmail = user?.email ?? null;
-          loginStatus = user?.status ?? null;
+    if (userIds.length > 0) {
+      const userRows = await this.db
+        .select({ id: users.id, email: users.email, status: users.status })
+        .from(users)
+        .where(and(eq(users.tenantId, tenantId), inArray(users.id, userIds)));
 
-          const [roleRow] = await this.db
-            .select({ key: roles.key })
-            .from(userRoles)
-            .innerJoin(roles, eq(userRoles.roleId, roles.id))
-            .where(and(eq(userRoles.tenantId, tenantId), eq(userRoles.userId, member.userId)))
-            .limit(1);
+      for (const user of userRows) {
+        usersById.set(user.id, { email: user.email, status: user.status });
+      }
 
-          rbacRoleKey = roleRow?.key ?? null;
+      const roleRows = await this.db
+        .select({ userId: userRoles.userId, key: roles.key })
+        .from(userRoles)
+        .innerJoin(roles, eq(userRoles.roleId, roles.id))
+        .where(and(eq(userRoles.tenantId, tenantId), inArray(userRoles.userId, userIds)));
+
+      for (const roleRow of roleRows) {
+        if (!rolesByUserId.has(roleRow.userId)) {
+          rolesByUserId.set(roleRow.userId, roleRow.key);
         }
+      }
+    }
 
-        const [homeroomCount] = await this.db
-          .select({ count: sql<number>`count(*)::int` })
-          .from(classrooms)
-          .where(
-            and(eq(classrooms.tenantId, tenantId), eq(classrooms.classTeacherStaffId, member.id))
-          );
+    if (staffIds.length > 0) {
+      const homeroomRows = await this.db
+        .select({
+          staffId: classrooms.classTeacherStaffId,
+          count: sql<number>`count(*)::int`
+        })
+        .from(classrooms)
+        .where(
+          and(
+            eq(classrooms.tenantId, tenantId),
+            inArray(classrooms.classTeacherStaffId, staffIds)
+          )
+        )
+        .groupBy(classrooms.classTeacherStaffId);
 
-        const [subjectCount] = await this.db
-          .select({ count: sql<number>`count(*)::int` })
-          .from(classroomSubjectTeachers)
-          .where(
-            and(
-              eq(classroomSubjectTeachers.tenantId, tenantId),
-              eq(classroomSubjectTeachers.teacherStaffId, member.id)
-            )
-          );
+      for (const row of homeroomRows) {
+        if (row.staffId) homeroomByStaffId.set(row.staffId, row.count);
+      }
 
-        return {
-          ...member,
-          loginEmail,
-          loginStatus,
-          rbacRoleKey,
-          homeroomCount: homeroomCount?.count ?? 0,
-          subjectCount: subjectCount?.count ?? 0
-        };
-      })
-    );
+      const homeroomClassroomRows = await this.db
+        .select({
+          staffId: classrooms.classTeacherStaffId,
+          classroomId: classrooms.id
+        })
+        .from(classrooms)
+        .where(
+          and(
+            eq(classrooms.tenantId, tenantId),
+            inArray(classrooms.classTeacherStaffId, staffIds)
+          )
+        );
 
-    return enriched;
+      for (const row of homeroomClassroomRows) {
+        if (!row.staffId) continue;
+        const classrooms = classroomsByStaffId.get(row.staffId) ?? new Set<string>();
+        classrooms.add(row.classroomId);
+        classroomsByStaffId.set(row.staffId, classrooms);
+      }
+
+      const assignmentRows = await this.db
+        .select({
+          staffId: classroomSubjectTeachers.teacherStaffId,
+          classroomId: classroomSubjectTeachers.classroomId,
+          subjectId: classroomSubjectTeachers.subjectId
+        })
+        .from(classroomSubjectTeachers)
+        .where(
+          and(
+            eq(classroomSubjectTeachers.tenantId, tenantId),
+            inArray(classroomSubjectTeachers.teacherStaffId, staffIds)
+          )
+        );
+
+      for (const row of assignmentRows) {
+        if (!row.staffId) continue;
+        const classrooms = classroomsByStaffId.get(row.staffId) ?? new Set<string>();
+        classrooms.add(row.classroomId);
+        classroomsByStaffId.set(row.staffId, classrooms);
+
+        const subjects = subjectsByStaffId.get(row.staffId) ?? new Set<string>();
+        subjects.add(row.subjectId);
+        subjectsByStaffId.set(row.staffId, subjects);
+      }
+    }
+
+    const data = rows.map((member) => {
+      const user = member.userId ? usersById.get(member.userId) : undefined;
+      return {
+        ...member,
+        loginEmail: user?.email ?? null,
+        loginStatus: user?.status ?? null,
+        rbacRoleKey: member.userId ? (rolesByUserId.get(member.userId) ?? null) : null,
+        homeroomCount: homeroomByStaffId.get(member.id) ?? 0,
+        classroomCount: classroomsByStaffId.get(member.id)?.size ?? 0,
+        subjectCount: subjectsByStaffId.get(member.id)?.size ?? 0
+      };
+    });
+
+    return { data, total, limit, offset };
+  }
+
+  /**
+   * Generic staff profile (non-teaching roles included): the staff row plus
+   * login account and RBAC role — powers the Admin › People profile page the
+   * same way teacher-profile powers the teacher page.
+   */
+  async getStaffProfile(tenantId: string, staffId: string) {
+    const [member] = await this.db
+      .select()
+      .from(staff)
+      .where(and(eq(staff.tenantId, tenantId), eq(staff.id, staffId)));
+
+    if (!member) {
+      throw new NotFoundException("Staff member not found.");
+    }
+
+    let loginEmail: string | null = null;
+    let loginStatus: string | null = null;
+    let rbacRoleKey: string | null = null;
+
+    if (member.userId) {
+      const [user] = await this.db
+        .select({ email: users.email, status: users.status })
+        .from(users)
+        .where(and(eq(users.tenantId, tenantId), eq(users.id, member.userId)));
+
+      loginEmail = user?.email ?? null;
+      loginStatus = user?.status ?? null;
+
+      const [roleRow] = await this.db
+        .select({ key: roles.key })
+        .from(userRoles)
+        .innerJoin(roles, eq(userRoles.roleId, roles.id))
+        .where(and(eq(userRoles.tenantId, tenantId), eq(userRoles.userId, member.userId)))
+        .limit(1);
+
+      rbacRoleKey = roleRow?.key ?? null;
+    }
+
+    return { ...member, loginEmail, loginStatus, rbacRoleKey };
   }
 
   async getStaff(tenantId: string, staffId: string) {
@@ -160,6 +307,156 @@ export class HrService {
       );
 
     return { ...member, teachingAssignments };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Archive lifecycle: Active → Archived (reviewable) → Restore | Permanent delete.
+  // `archivedAt` is orthogonal to `status`, so the employment state
+  // (active/probation/resigned/…) is preserved and restore returns to it.
+  // ---------------------------------------------------------------------------
+
+  private async getStaffOrThrow(tenantId: string, staffId: string) {
+    const [member] = await this.db
+      .select()
+      .from(staff)
+      .where(and(eq(staff.tenantId, tenantId), eq(staff.id, staffId)));
+    if (!member) {
+      throw new NotFoundException("Staff member not found.");
+    }
+    return member;
+  }
+
+  async archiveStaff(tenantId: string, staffId: string, actorUserId?: string) {
+    const before = await this.getStaffOrThrow(tenantId, staffId);
+    if (before.archivedAt) {
+      return before;
+    }
+
+    const [updated] = await this.db
+      .update(staff)
+      .set({
+        archivedAt: new Date(),
+        archivedBy: actorUserId,
+        updatedBy: actorUserId,
+        updatedAt: new Date()
+      })
+      .where(and(eq(staff.tenantId, tenantId), eq(staff.id, staffId)))
+      .returning();
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "staff.archive",
+      recordType: "staff",
+      recordId: staffId,
+      before: { archivedAt: null },
+      after: { archivedAt: updated!.archivedAt }
+    });
+
+    return updated!;
+  }
+
+  async restoreStaff(tenantId: string, staffId: string, actorUserId?: string) {
+    const before = await this.getStaffOrThrow(tenantId, staffId);
+    if (!before.archivedAt) {
+      return before;
+    }
+
+    const [updated] = await this.db
+      .update(staff)
+      .set({
+        archivedAt: null,
+        archivedBy: null,
+        updatedBy: actorUserId,
+        updatedAt: new Date()
+      })
+      .where(and(eq(staff.tenantId, tenantId), eq(staff.id, staffId)))
+      .returning();
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "staff.restore",
+      recordType: "staff",
+      recordId: staffId,
+      before: { archivedAt: before.archivedAt },
+      after: { archivedAt: null }
+    });
+
+    return updated!;
+  }
+
+  /** Counts of teaching/operational/payroll records that block permanent deletion. */
+  private async getStaffBlockingDependencies(tenantId: string, staffId: string) {
+    const n = sql<number>`count(*)::int`;
+    const [subjectTeaching, gradeChief, homerooms, timetable, salary, payroll] = await Promise.all([
+      this.db.select({ n }).from(classroomSubjectTeachers).where(and(eq(classroomSubjectTeachers.tenantId, tenantId), eq(classroomSubjectTeachers.teacherStaffId, staffId))),
+      this.db.select({ n }).from(gradeChiefAssignments).where(and(eq(gradeChiefAssignments.tenantId, tenantId), eq(gradeChiefAssignments.staffId, staffId))),
+      this.db.select({ n }).from(classrooms).where(and(eq(classrooms.tenantId, tenantId), eq(classrooms.classTeacherStaffId, staffId))),
+      this.db.select({ n }).from(timetableSlots).where(and(eq(timetableSlots.tenantId, tenantId), eq(timetableSlots.teacherStaffId, staffId))),
+      this.db.select({ n }).from(salaryRecords).where(and(eq(salaryRecords.tenantId, tenantId), eq(salaryRecords.staffId, staffId))),
+      this.db.select({ n }).from(payrollRecords).where(and(eq(payrollRecords.tenantId, tenantId), eq(payrollRecords.staffId, staffId)))
+    ]);
+    return {
+      subjectTeaching: subjectTeaching[0]?.n ?? 0,
+      gradeChief: gradeChief[0]?.n ?? 0,
+      homerooms: homerooms[0]?.n ?? 0,
+      timetable: timetable[0]?.n ?? 0,
+      salary: salary[0]?.n ?? 0,
+      payroll: payroll[0]?.n ?? 0
+    };
+  }
+
+  async permanentlyDeleteStaff(tenantId: string, staffId: string, actorUserId?: string) {
+    const member = await this.getStaffOrThrow(tenantId, staffId);
+
+    // Two-step safety: only an archived staff member can be permanently deleted.
+    if (!member.archivedAt) {
+      throw new BadRequestException("Archive the staff member before deleting permanently.");
+    }
+
+    const dependencies = await this.getStaffBlockingDependencies(tenantId, staffId);
+    if (Object.values(dependencies).some((c) => c > 0)) {
+      throw new ConflictException({
+        message:
+          "This staff member has teaching, timetable, or payroll records and cannot be permanently deleted. Keep them archived instead.",
+        dependencies
+      });
+    }
+
+    try {
+      await this.db.transaction(async (tx) => {
+        // Cascade the owned compensation config — not teaching/payroll history.
+        await tx.delete(staffCompensationProfiles).where(and(eq(staffCompensationProfiles.tenantId, tenantId), eq(staffCompensationProfiles.staffId, staffId)));
+        await tx.delete(staffIncentiveEligibility).where(and(eq(staffIncentiveEligibility.tenantId, tenantId), eq(staffIncentiveEligibility.staffId, staffId)));
+        await tx.delete(staffBenefitEnrollments).where(and(eq(staffBenefitEnrollments.tenantId, tenantId), eq(staffBenefitEnrollments.staffId, staffId)));
+        await tx.delete(staff).where(and(eq(staff.tenantId, tenantId), eq(staff.id, staffId)));
+      });
+    } catch (err) {
+      if (isForeignKeyViolation(err)) {
+        throw new ConflictException({
+          message:
+            "This staff member is still referenced by other records and cannot be deleted. Keep them archived instead."
+        });
+      }
+      throw err;
+    }
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "staff.delete",
+      recordType: "staff",
+      recordId: staffId,
+      before: {
+        fullName: member.fullName,
+        employeeNumber: member.employeeNumber,
+        status: member.status
+      },
+      after: { deleted: true }
+    });
+
+    return { id: staffId, deleted: true };
   }
 
   async createStaff(tenantId: string, actorUserId: string | undefined, dto: CreateStaffDto) {

@@ -1,12 +1,15 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { and, desc, eq, ilike, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
 import {
+  assessmentResults,
+  assignmentSubmissions,
   attendanceRecords,
   auditLogs,
   classroomStudents,
   classrooms,
+  enrollments,
   familyGroups,
   gradeSubjects,
   grades,
@@ -14,9 +17,14 @@ import {
   invoices,
   reportCards,
   sections,
+  staff,
+  studentDiscounts,
+  studentDocuments,
   studentGuardians,
+  studentServices,
   students,
-  subjects
+  subjects,
+  tenantSettings
 } from "../db/schema.js";
 import type {
   CreateGuardianDto,
@@ -46,6 +54,14 @@ export class StudentsService {
   async list(tenantId: string, query: ListStudentsQueryDto) {
     const filters: ReturnType<typeof eq>[] = [eq(students.tenantId, tenantId)];
 
+    // Archive lifecycle: default view hides archived students; "archived" shows
+    // only them; "all" shows both.
+    if (query.view === "archived") {
+      filters.push(isNotNull(students.archivedAt));
+    } else if (query.view !== "all") {
+      filters.push(isNull(students.archivedAt));
+    }
+
     if (query.status) {
       filters.push(eq(students.status, query.status));
     }
@@ -68,6 +84,7 @@ export class StudentsService {
         gender: students.gender,
         familyGroupId: students.familyGroupId,
         householdName: familyGroups.name,
+        archivedAt: students.archivedAt,
         updatedAt: students.updatedAt
       })
       .from(students)
@@ -86,6 +103,29 @@ export class StudentsService {
       .where(and(...filters));
 
     return { data: rows, total: countRow?.count ?? 0 };
+  }
+
+  async getPeopleDirectoryCounts(tenantId: string) {
+    const [[studentRow], [guardianRow], [householdRow]] = await Promise.all([
+      this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(students)
+        .where(eq(students.tenantId, tenantId)),
+      this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(guardians)
+        .where(eq(guardians.tenantId, tenantId)),
+      this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(familyGroups)
+        .where(eq(familyGroups.tenantId, tenantId))
+    ]);
+
+    return {
+      students: studentRow?.count ?? 0,
+      guardians: guardianRow?.count ?? 0,
+      households: householdRow?.count ?? 0
+    };
   }
 
   async getById(tenantId: string, studentId: string) {
@@ -257,29 +297,128 @@ export class StudentsService {
     return student;
   }
 
+  /**
+   * Resolves the school prefix for generated admission numbers: the prefix of
+   * the tenant's most recent formatted number (e.g. "YIA-26-012" → "YIA"),
+   * else the school-name initials from tenant settings, else "STU".
+   */
+  private async resolveAdmissionPrefix(
+    tx: Pick<Database, "select">,
+    tenantId: string
+  ): Promise<string> {
+    const [latest] = await tx
+      .select({ admissionNumber: students.admissionNumber })
+      .from(students)
+      .where(
+        and(
+          eq(students.tenantId, tenantId),
+          sql`${students.admissionNumber} ~ '^[A-Z]{2,6}-[0-9]{2}-[0-9]+$'`
+        )
+      )
+      .orderBy(desc(students.createdAt))
+      .limit(1);
+
+    if (latest) {
+      return latest.admissionNumber.split("-")[0]!;
+    }
+
+    const [settings] = await tx
+      .select({ schoolName: tenantSettings.schoolName })
+      .from(tenantSettings)
+      .where(eq(tenantSettings.tenantId, tenantId));
+
+    const initials = (settings?.schoolName ?? "")
+      .split(/\s+/)
+      .map((word) => word.replace(/[^A-Za-z]/g, ""))
+      .filter(Boolean)
+      .map((word) => word[0]!.toUpperCase())
+      .join("")
+      .slice(0, 6);
+
+    return initials.length >= 2 ? initials : "STU";
+  }
+
+  /**
+   * Generates the next sequential admission number, e.g. "YIA-26-013"
+   * (school prefix, 2-digit year, zero-padded sequence). Must run inside the
+   * same transaction as the student insert: the per-tenant advisory lock is
+   * held until commit, so concurrent enrollments cannot pick the same number.
+   */
+  private async nextAdmissionNumber(
+    tx: Pick<Database, "select" | "execute">,
+    tenantId: string
+  ): Promise<string> {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${`${tenantId}:admission_number`}, 0))`
+    );
+
+    const prefix = await this.resolveAdmissionPrefix(tx, tenantId);
+    const year = String(new Date().getFullYear() % 100).padStart(2, "0");
+    const stem = `${prefix}-${year}-`;
+
+    const [row] = await tx
+      .select({
+        maxSequence: sql<number>`coalesce(max((substring(${students.admissionNumber} from '[0-9]+$'))::int), 0)`
+      })
+      .from(students)
+      .where(
+        and(
+          eq(students.tenantId, tenantId),
+          sql`${students.admissionNumber} ~ ${`^${stem}[0-9]+$`}`
+        )
+      );
+
+    const next = Number(row?.maxSequence ?? 0) + 1;
+    return `${stem}${String(next).padStart(3, "0")}`;
+  }
+
+  private isAdmissionNumberConflict(error: unknown): boolean {
+    const cause = error instanceof Error && error.cause !== undefined ? error.cause : error;
+    return (
+      typeof cause === "object" &&
+      cause !== null &&
+      (cause as { code?: string }).code === "23505" &&
+      (cause as { constraint?: string }).constraint === "students_tenant_admission_unique"
+    );
+  }
+
   async create(tenantId: string, actorUserId: string | undefined, dto: CreateStudentDto) {
     if (dto.guardian || dto.household) {
       return this.registerStudent(tenantId, actorUserId, dto);
     }
 
-    const admissionNumber = dto.admissionNumber ?? `A-${Date.now()}`;
     const fullName = `${dto.firstName} ${dto.lastName}`;
 
-    const [student] = await this.db
-      .insert(students)
-      .values({
-        tenantId,
-        fullName,
-        dateOfBirth: dto.dateOfBirth,
-        gender: dto.gender,
-        admissionNumber,
-        photoFileId: dto.photoFileId,
-        address: dto.address,
-        medicalNotes: dto.medicalNotes,
-        createdBy: actorUserId,
-        updatedBy: actorUserId
-      })
-      .returning();
+    let student;
+    try {
+      student = await this.db.transaction(async (tx) => {
+        const admissionNumber =
+          dto.admissionNumber ?? (await this.nextAdmissionNumber(tx, tenantId));
+
+        const [created] = await tx
+          .insert(students)
+          .values({
+            tenantId,
+            fullName,
+            dateOfBirth: dto.dateOfBirth,
+            gender: dto.gender,
+            admissionNumber,
+            photoFileId: dto.photoFileId,
+            address: dto.address,
+            medicalNotes: dto.medicalNotes,
+            createdBy: actorUserId,
+            updatedBy: actorUserId
+          })
+          .returning();
+
+        return created!;
+      });
+    } catch (error) {
+      if (this.isAdmissionNumberConflict(error)) {
+        throw new ConflictException("Admission number is already in use.");
+      }
+      throw error;
+    }
 
     await this.auditService.recordEvent({
       tenantId,
@@ -317,10 +456,12 @@ export class StudentsService {
       throw new BadRequestException("Link a guardian before assigning a household.");
     }
 
-    const admissionNumber = dto.admissionNumber ?? `A-${Date.now()}`;
     const fullName = `${dto.firstName} ${dto.lastName}`;
 
     return this.db.transaction(async (tx) => {
+      const admissionNumber =
+        dto.admissionNumber ?? (await this.nextAdmissionNumber(tx, tenantId));
+
       const [student] = await tx
         .insert(students)
         .values({
@@ -461,6 +602,11 @@ export class StudentsService {
         guardianId,
         familyGroupId
       };
+    }).catch((error) => {
+      if (this.isAdmissionNumberConflict(error)) {
+        throw new ConflictException("Admission number is already in use.");
+      }
+      throw error;
     });
   }
 
@@ -546,7 +692,13 @@ export class StudentsService {
         updatedAt: new Date()
       })
       .where(and(eq(students.tenantId, tenantId), eq(students.id, studentId)))
-      .returning();
+      .returning()
+      .catch((error) => {
+        if (this.isAdmissionNumberConflict(error)) {
+          throw new ConflictException("Admission number is already in use.");
+        }
+        throw error;
+      });
 
     await this.auditService.recordEvent({
       tenantId,
@@ -686,6 +838,143 @@ export class StudentsService {
     return updated!;
   }
 
+  // ---------------------------------------------------------------------------
+  // Archive lifecycle: Active → Archived (reviewable) → Restore | Permanent delete.
+  // `archivedAt` is orthogonal to `status`, so the lifecycle state
+  // (enrolled/graduated/…) is preserved and restore returns to it.
+  // ---------------------------------------------------------------------------
+
+  async archive(tenantId: string, studentId: string, actorUserId?: string) {
+    const before = await this.getStudentOrThrow(tenantId, studentId);
+    if (before.archivedAt) {
+      return before;
+    }
+
+    const [updated] = await this.db
+      .update(students)
+      .set({
+        archivedAt: new Date(),
+        archivedBy: actorUserId,
+        updatedBy: actorUserId,
+        updatedAt: new Date()
+      })
+      .where(and(eq(students.tenantId, tenantId), eq(students.id, studentId)))
+      .returning();
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "student.archive",
+      recordType: "student",
+      recordId: studentId,
+      before: { archivedAt: null },
+      after: { archivedAt: updated!.archivedAt }
+    });
+
+    return updated!;
+  }
+
+  async restore(tenantId: string, studentId: string, actorUserId?: string) {
+    const before = await this.getStudentOrThrow(tenantId, studentId);
+    if (!before.archivedAt) {
+      return before;
+    }
+
+    const [updated] = await this.db
+      .update(students)
+      .set({
+        archivedAt: null,
+        archivedBy: null,
+        updatedBy: actorUserId,
+        updatedAt: new Date()
+      })
+      .where(and(eq(students.tenantId, tenantId), eq(students.id, studentId)))
+      .returning();
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "student.restore",
+      recordType: "student",
+      recordId: studentId,
+      before: { archivedAt: before.archivedAt },
+      after: { archivedAt: null }
+    });
+
+    return updated!;
+  }
+
+  /** Counts of financial/academic records that block permanent deletion. */
+  private async getBlockingDependencies(tenantId: string, studentId: string) {
+    const n = sql<number>`count(*)::int`;
+    const [invoicesN, reportCardsN, enrollmentsN, classroomsN, attendanceN, assessmentsN] =
+      await Promise.all([
+        this.db.select({ n }).from(invoices).where(and(eq(invoices.tenantId, tenantId), eq(invoices.studentId, studentId))),
+        this.db.select({ n }).from(reportCards).where(and(eq(reportCards.tenantId, tenantId), eq(reportCards.studentId, studentId))),
+        this.db.select({ n }).from(enrollments).where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.studentId, studentId))),
+        this.db.select({ n }).from(classroomStudents).where(and(eq(classroomStudents.tenantId, tenantId), eq(classroomStudents.studentId, studentId))),
+        this.db.select({ n }).from(attendanceRecords).where(and(eq(attendanceRecords.tenantId, tenantId), eq(attendanceRecords.studentId, studentId))),
+        this.db.select({ n }).from(assessmentResults).where(and(eq(assessmentResults.tenantId, tenantId), eq(assessmentResults.studentId, studentId)))
+      ]);
+
+    return {
+      invoices: invoicesN[0]?.n ?? 0,
+      reportCards: reportCardsN[0]?.n ?? 0,
+      enrollments: enrollmentsN[0]?.n ?? 0,
+      classrooms: classroomsN[0]?.n ?? 0,
+      attendance: attendanceN[0]?.n ?? 0,
+      assessments: assessmentsN[0]?.n ?? 0
+    };
+  }
+
+  async permanentlyDelete(tenantId: string, studentId: string, actorUserId?: string) {
+    const student = await this.getStudentOrThrow(tenantId, studentId);
+
+    // Two-step safety: only an already-archived student can be permanently deleted.
+    if (!student.archivedAt) {
+      throw new BadRequestException("Archive the student before deleting permanently.");
+    }
+
+    const dependencies = await this.getBlockingDependencies(tenantId, studentId);
+    const blocking = Object.entries(dependencies).filter(([, n]) => n > 0);
+    if (blocking.length > 0) {
+      throw new ConflictException({
+        message:
+          "This student has financial or academic records and cannot be permanently deleted. Keep it archived instead.",
+        dependencies
+      });
+    }
+
+    await this.db.transaction(async (tx) => {
+      // Cascade the trivial owned rows (links, uploads, ad-hoc services/discounts,
+      // draft submissions) — none are financial/academic history.
+      await tx.delete(studentGuardians).where(and(eq(studentGuardians.tenantId, tenantId), eq(studentGuardians.studentId, studentId)));
+      await tx.delete(studentDocuments).where(and(eq(studentDocuments.tenantId, tenantId), eq(studentDocuments.studentId, studentId)));
+      await tx.delete(studentServices).where(and(eq(studentServices.tenantId, tenantId), eq(studentServices.studentId, studentId)));
+      await tx.delete(studentDiscounts).where(and(eq(studentDiscounts.tenantId, tenantId), eq(studentDiscounts.studentId, studentId)));
+      await tx.delete(assignmentSubmissions).where(and(eq(assignmentSubmissions.tenantId, tenantId), eq(assignmentSubmissions.studentId, studentId)));
+
+      await tx.delete(students).where(and(eq(students.tenantId, tenantId), eq(students.id, studentId)));
+    });
+
+    // Tombstone: the row is gone, so record enough to trace the deletion.
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "student.delete",
+      recordType: "student",
+      recordId: studentId,
+      before: {
+        fullName: student.fullName,
+        admissionNumber: student.admissionNumber,
+        status: student.status
+      },
+      after: { deleted: true }
+    });
+
+    return { id: studentId, deleted: true };
+  }
+
   listGuardians(tenantId: string, query: ListGuardiansQueryDto = {}) {
     const filters = [eq(guardians.tenantId, tenantId)];
 
@@ -758,6 +1047,15 @@ export class StudentsService {
       household = family ?? null;
     }
 
+    let linkedStaff: { id: string; fullName: string; status: string } | null = null;
+    if (guardian.staffId) {
+      const [staffMember] = await this.db
+        .select({ id: staff.id, fullName: staff.fullName, status: staff.status })
+        .from(staff)
+        .where(and(eq(staff.tenantId, tenantId), eq(staff.id, guardian.staffId)));
+      linkedStaff = staffMember ?? null;
+    }
+
     return {
       id: guardian.id,
       fullName: guardian.fullName,
@@ -765,6 +1063,8 @@ export class StudentsService {
       email: guardian.email,
       relationshipLabel: guardian.relationshipLabel,
       preferredChannel: guardian.preferredChannel,
+      staffId: guardian.staffId,
+      staff: linkedStaff,
       household,
       students: linkedStudents.map((row) => ({
         id: row.id,
@@ -797,12 +1097,23 @@ export class StudentsService {
         ? `${dto.firstName ?? before.fullName.split(" ")[0]} ${dto.lastName ?? before.fullName.split(" ").slice(1).join(" ")}`.trim()
         : undefined;
 
+    if (dto.staffId) {
+      const [staffMember] = await this.db
+        .select({ id: staff.id })
+        .from(staff)
+        .where(and(eq(staff.tenantId, tenantId), eq(staff.id, dto.staffId)));
+      if (!staffMember) {
+        throw new NotFoundException("Staff member not found.");
+      }
+    }
+
     const [updated] = await this.db
       .update(guardians)
       .set({
         ...(fullName ? { fullName } : {}),
         ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
         ...(dto.email !== undefined ? { email: dto.email } : {}),
+        ...(dto.staffId !== undefined ? { staffId: dto.staffId } : {}),
         updatedBy: actorUserId,
         updatedAt: new Date()
       })
@@ -877,6 +1188,65 @@ export class StudentsService {
     });
 
     return link!;
+  }
+
+  private async guardianNamesById(tenantId: string, guardianIds: string[]) {
+    const names = new Map<string, string>();
+    if (!guardianIds.length) {
+      return names;
+    }
+
+    const rows = await this.db
+      .select({ id: guardians.id, fullName: guardians.fullName })
+      .from(guardians)
+      .where(and(eq(guardians.tenantId, tenantId), inArray(guardians.id, guardianIds)));
+
+    for (const row of rows) {
+      names.set(row.id, row.fullName);
+    }
+
+    return names;
+  }
+
+  private async membersByFamilyGroupId(tenantId: string, familyGroupIds: string[]) {
+    const members = new Map<
+      string,
+      Array<{ id: string; fullName: string; admissionNumber: string; status: string }>
+    >();
+    if (!familyGroupIds.length) {
+      return members;
+    }
+
+    const rows = await this.db
+      .select({
+        familyGroupId: students.familyGroupId,
+        id: students.id,
+        fullName: students.fullName,
+        admissionNumber: students.admissionNumber,
+        status: students.status
+      })
+      .from(students)
+      .where(
+        and(
+          eq(students.tenantId, tenantId),
+          inArray(students.familyGroupId, familyGroupIds)
+        )
+      )
+      .orderBy(students.fullName);
+
+    for (const row of rows) {
+      if (!row.familyGroupId) continue;
+      const bucket = members.get(row.familyGroupId) ?? [];
+      bucket.push({
+        id: row.id,
+        fullName: row.fullName,
+        admissionNumber: row.admissionNumber,
+        status: row.status
+      });
+      members.set(row.familyGroupId, bucket);
+    }
+
+    return members;
   }
 
   async searchFamilyGroups(tenantId: string, query: SearchFamilyGroupsQueryDto) {
@@ -967,49 +1337,27 @@ export class StudentsService {
       .from(familyGroups)
       .where(and(eq(familyGroups.tenantId, tenantId), inArray(familyGroups.id, ids)));
 
-    const summaries = await Promise.all(
-      rows.map(async (group) => {
-        const members = await this.db
-          .select({
-            id: students.id,
-            fullName: students.fullName,
-            admissionNumber: students.admissionNumber,
-            status: students.status
-          })
-          .from(students)
-          .where(
-            and(eq(students.tenantId, tenantId), eq(students.familyGroupId, group.id))
-          )
-          .orderBy(students.fullName);
+    const groupIds = rows.map((group) => group.id);
+    const guardianIds = rows
+      .map((group) => group.primaryGuardianId)
+      .filter((id): id is string => Boolean(id));
+    const [guardianNames, membersByGroup] = await Promise.all([
+      this.guardianNamesById(tenantId, guardianIds),
+      this.membersByFamilyGroupId(tenantId, groupIds)
+    ]);
 
-        let primaryGuardianName: string | null = null;
-        if (group.primaryGuardianId) {
-          const [guardian] = await this.db
-            .select({ fullName: guardians.fullName })
-            .from(guardians)
-            .where(
-              and(
-                eq(guardians.tenantId, tenantId),
-                eq(guardians.id, group.primaryGuardianId)
-              )
-            );
-          primaryGuardianName = guardian?.fullName ?? null;
-        }
-
-        return {
-          id: group.id,
-          name: group.name,
-          primaryGuardianName,
-          memberCount: members.length,
-          members: members.map((member) => ({
-            id: member.id,
-            fullName: member.fullName,
-            admissionNumber: member.admissionNumber,
-            status: member.status
-          }))
-        };
-      })
-    );
+    const summaries = rows.map((group) => {
+      const members = membersByGroup.get(group.id) ?? [];
+      return {
+        id: group.id,
+        name: group.name,
+        primaryGuardianName: group.primaryGuardianId
+          ? (guardianNames.get(group.primaryGuardianId) ?? null)
+          : null,
+        memberCount: members.length,
+        members
+      };
+    });
 
     return summaries.sort((a, b) => a.name.localeCompare(b.name));
   }
@@ -1046,30 +1394,19 @@ export class StudentsService {
       .from(familyGroups)
       .where(eq(familyGroups.tenantId, tenantId));
 
-    const data = await Promise.all(
-      rows.map(async (group) => {
-        let primaryGuardianName: string | null = null;
-        if (group.primaryGuardianId) {
-          const [guardian] = await this.db
-            .select({ fullName: guardians.fullName })
-            .from(guardians)
-            .where(
-              and(
-                eq(guardians.tenantId, tenantId),
-                eq(guardians.id, group.primaryGuardianId)
-              )
-            );
-          primaryGuardianName = guardian?.fullName ?? null;
-        }
+    const guardianIds = rows
+      .map((group) => group.primaryGuardianId)
+      .filter((id): id is string => Boolean(id));
+    const guardianNames = await this.guardianNamesById(tenantId, guardianIds);
 
-        return {
-          id: group.id,
-          name: group.name,
-          primaryGuardianName,
-          memberCount: group.memberCount
-        };
-      })
-    );
+    const data = rows.map((group) => ({
+      id: group.id,
+      name: group.name,
+      primaryGuardianName: group.primaryGuardianId
+        ? (guardianNames.get(group.primaryGuardianId) ?? null)
+        : null,
+      memberCount: group.memberCount
+    }));
 
     return { data, total: countRow?.total ?? 0 };
   }

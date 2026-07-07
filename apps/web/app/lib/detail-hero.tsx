@@ -1,9 +1,16 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
-import { Icon } from "./icon";
+import { cn } from "../../lib/utils";
+import { Icon } from "./material-icon";
+
+export type DetailHeroVariant = "default" | "classroom";
 
 export type DetailHeroProps = {
+  /** Visual profile — classroom adds eyebrow label, 72px mark, and dashboard-style meta. */
+  variant?: DetailHeroVariant;
+  /** Lime eyebrow above the title (classroom variant). */
+  eyebrow?: ReactNode;
   /** Title shown large in white on the ink-green banner. */
   title: string;
   /** Secondary meta line rendered under the title. */
@@ -26,6 +33,8 @@ export type DetailHeroProps = {
  * student / subject / salary / invoice detail pages can adopt it.
  */
 export function DetailHero({
+  variant = "default",
+  eyebrow,
   title,
   meta,
   markText,
@@ -34,18 +43,32 @@ export function DetailHero({
   actions,
   utility
 }: DetailHeroProps) {
+  const isClassroom = variant === "classroom";
   const markStyle: CSSProperties | undefined = markColor ? { background: markColor } : undefined;
+
   return (
-    <section className="detail-hero">
+    <section className={cn("detail-hero", isClassroom && "detail-hero--classroom")}>
       <div className="detail-hero__main">
         {markText || markIcon ? (
-          <span className="detail-hero__mark" style={markStyle}>
+          <span className="pds-type-display-m detail-hero__mark" style={markStyle}>
             {markIcon ? <Icon name={markIcon} filled size={28} /> : markText}
           </span>
         ) : null}
         <div className="detail-hero__text">
-          <h1 className="detail-hero__title">{title}</h1>
-          {meta ? <p className="detail-hero__meta">{meta}</p> : null}
+          {isClassroom && eyebrow ? (
+            <p className="pds-type-body-s-bold detail-hero__eyebrow">{eyebrow}</p>
+          ) : null}
+          <h1 className="pds-type-title-xl-extrabold detail-hero__title">{title}</h1>
+          {meta ? (
+            <p
+              className={cn(
+                "detail-hero__meta",
+                isClassroom ? "pds-type-body-s-regular" : "pds-type-body-m-medium",
+              )}
+            >
+              {meta}
+            </p>
+          ) : null}
         </div>
       </div>
       {utility || actions ? (

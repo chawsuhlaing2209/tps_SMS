@@ -1,0 +1,144 @@
+/* PDS Search bar — Figma 76:9646 (filter/table search, icon trailing). */
+
+.pds-search-bar {
+  align-items: center;
+  background: var(--pds-input-background-default);
+  border: var(--pds-button-border) solid var(--pds-border-color-primary);
+  border-radius: var(--pds-border-radius-8);
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: var(--pds-gap-small);
+  justify-content: space-between;
+  max-width: 100%;
+  min-height: 50px;
+  min-width: 20rem;
+  padding: var(--pds-input-padding-y) var(--pds-input-padding-x);
+  width: 20rem;
+}
+
+.pds-search-bar--fluid {
+  flex: 1 1 20rem;
+  width: auto;
+}
+
+.pds-search-bar__input {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--pds-text-primary);
+  flex: 1 1 auto;
+  font: inherit;
+  line-height: var(--pds-type-body-m-medium-line-height, 1.375);
+  min-width: 0;
+  outline: none;
+  width: 100%;
+}
+
+.pds-search-bar__input::placeholder {
+  color: var(--pds-text-placeholder);
+}
+
+.pds-search-bar__input::-webkit-search-decoration,
+.pds-search-bar__input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.pds-search-bar__icon {
+  color: var(--pds-text-placeholder);
+  flex-shrink: 0;
+}
+
+.pds-search-bar:focus-within {
+  background: var(--pds-input-background-hover);
+  border-color: var(--pds-border-color-active);
+}
+
+/* Search + filters row — Figma 76:9645 */
+.pds-search-filters-row {
+  align-items: center;
+  display: flex;
+  gap: var(--pds-gap-small);
+  justify-content: space-between;
+  width: 100%;
+}
+
+.pds-search-filters-row__filters {
+  align-items: center;
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: var(--pds-gap-small);
+  min-width: 0;
+}
+
+.pds-search-filters-row__status {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.pds-search-filters-row__filter--160 {
+  flex-shrink: 0;
+  width: 10rem;
+}
+
+/* Filter selects in toolbar — full-width trigger, balanced padding, icon aligned right. */
+.pds-search-filters-row__filter--160 .pds-select,
+.pds-search-filters-row__filter--160.pds-select {
+  display: block;
+  width: 100%;
+}
+
+.pds-search-filters-row__filter--160 .pds-select__trigger,
+.pds-search-filters-row__filter--160.pds-select > .pds-select__trigger,
+.pds-search-filters-row__filter--160 .pds-date-picker__trigger {
+  align-items: center;
+  justify-content: space-between;
+  min-height: 50px;
+  padding: var(--pds-input-padding-y) var(--pds-input-padding-x);
+  width: 100%;
+}
+
+.pds-search-filters-row__filter--160 .pds-select__trigger--filter .pds-select__value,
+.pds-search-filters-row__filter--160.pds-select > .pds-select__trigger--filter .pds-select__value {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pds-search-filters-row__filter--range {
+  flex-shrink: 0;
+  width: auto;
+}
+
+.pds-search-filters-row__filter--range .pds-date-picker {
+  display: block;
+}
+
+.pds-search-filters-row__filter--range .pds-date-picker__trigger {
+  align-items: center;
+  justify-content: space-between;
+  min-height: 50px;
+  padding: var(--pds-input-padding-y) var(--pds-input-padding-x);
+}
+
+@media (max-width: 720px) { /* = --pds-breakpoint-md; CSS vars don't work in @media conditions */
+  .pds-search-filters-row {
+    flex-wrap: wrap;
+  }
+
+  /* Search takes its own full row; filter selects pair up two per row. */
+  .pds-search-bar,
+  .pds-search-bar--fluid {
+    flex: 1 1 100%;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .pds-search-filters-row__filter--160 {
+    flex: 1 1 calc(50% - var(--pds-gap-small));
+    width: auto;
+  }
+
+  .pds-search-filters-row__status {
+    margin-left: 0;
+  }
+}

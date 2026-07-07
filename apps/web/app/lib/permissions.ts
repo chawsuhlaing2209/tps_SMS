@@ -14,22 +14,43 @@ export type DashboardNavKey =
   | "overview"
   | "students"
   | "teachers"
-  | "structure"
-  | "academicSetup"
+  | "team"
   | "admissions"
   | "enrollments"
-  | "calendar"
   | "timetable"
-  | "exams"
-  | "finance"
-  | "salary"
-  | "communication"
-  | "audit"
-  | "settings"
-  | "team"
-  | "departments";
+  | "financeOverview"
+  | "collection"
+  | "invoices"
+  | "payments"
+  | "feeStructures"
+  | "discounts"
+  | "leaves"
+  | "runPayroll"
+  | "deductions"
+  | "benefits"
+  | "academicYears"
+  | "terms"
+  | "subjects"
+  | "gradesClassrooms"
+  | "structure"
+  | "facilities"
+  | "schoolProfile"
+  | "schoolSchedule"
+  | "preferences"
+  | "departments"
+  | "userRoles"
+  | "audit";
 
-export type DashboardNavGroupKey = "school" | "academics" | "business" | "admin";
+export type DashboardNavGroupKey =
+  | "home"
+  | "people"
+  | "enrollment"
+  | "teaching"
+  | "finance"
+  | "hr"
+  | "academics"
+  | "masterSettings"
+  | "admin";
 
 export type DashboardNavItem = {
   href: string;
@@ -42,8 +63,16 @@ export type DashboardNavGroup = {
   items: DashboardNavItem[];
 };
 
+/**
+ * IA (docs/ia-redesign-proposal.md, approved): ordered by frequency — daily
+ * work at the top, yearly configuration at the bottom. Finance and payroll
+ * items are top-level (no expandable wrapper); only Academic Setup keeps
+ * submodules because it absorbs Structure + Facilities.
+ */
 export const DASHBOARD_NAV: DashboardNavItem[] = [
   { href: "/dashboard", key: "overview" },
+
+  // PEOPLE — one home for every person type.
   {
     href: "/dashboard/people",
     key: "students",
@@ -54,65 +83,129 @@ export const DASHBOARD_NAV: DashboardNavItem[] = [
     key: "teachers",
     anyOf: ["hr.manage", "classroom.manage"]
   },
-  { href: "/dashboard/structure", key: "structure", anyOf: ["academic_setup.manage"] },
-  { href: "/dashboard/academic-setup", key: "academicSetup", anyOf: ["academic_setup.manage"] },
-  { href: "/dashboard/admissions", key: "admissions", anyOf: ["admissions.manage"] },
-  { href: "/dashboard/enrollments", key: "enrollments", anyOf: ["student.manage"] },
-  {
-    href: "/dashboard/calendar",
-    key: "calendar",
-    anyOf: ["calendar.manage", "student.view"]
-  },
-  {
-    href: "/dashboard/timetable",
-    key: "timetable",
-    anyOf: ["timetable.manage", "student.view"]
-  },
-  {
-    href: "/dashboard/exams",
-    key: "exams",
-    anyOf: ["exam.manage", "grade.approve", "report_card.generate"]
-  },
-  { href: "/dashboard/finance", key: "finance", anyOf: ["finance.manage"] },
-  { href: "/dashboard/salary", key: "salary", anyOf: ["salary.manage"] },
-  {
-    href: "/dashboard/communication",
-    key: "communication",
-    anyOf: ["communication.manage"]
-  },
-  { href: "/dashboard/audit", key: "audit", anyOf: ["audit.view"] },
-  { href: "/dashboard/settings/user-roles", key: "settings", anyOf: ["identity.manage"] },
   {
     href: "/dashboard/team",
     key: "team",
     anyOf: ["hr.manage", "identity.manage"]
   },
-  { href: "/dashboard/departments", key: "departments", anyOf: ["hr.manage"] }
+
+  // ENROLLMENT — the seasonal pipeline, in process order.
+  { href: "/dashboard/admissions", key: "admissions", anyOf: ["admissions.manage"] },
+  { href: "/dashboard/enrollments", key: "enrollments", anyOf: ["student.manage"] },
+
+  // TEACHING — weekly rhythm (attendance/exams/report cards land here later).
+  {
+    href: "/dashboard/timetable",
+    key: "timetable",
+    anyOf: ["timetable.manage", "student.view"]
+  },
+
+  // FINANCE — the accountant's day, frequency-ordered.
+  { href: "/dashboard/finance/overview", key: "financeOverview", anyOf: ["finance.manage"] },
+  { href: "/dashboard/finance/billing", key: "collection", anyOf: ["finance.manage"] },
+  { href: "/dashboard/finance/invoices", key: "invoices", anyOf: ["finance.manage"] },
+  { href: "/dashboard/finance/payments", key: "payments", anyOf: ["finance.manage"] },
+  { href: "/dashboard/finance/fee-structures", key: "feeStructures", anyOf: ["finance.manage"] },
+  { href: "/dashboard/finance/discounts", key: "discounts", anyOf: ["finance.manage"] },
+
+  // HR & PAYROLL — leaves daily, payroll monthly.
+  { href: "/dashboard/salary/leaves", key: "leaves", anyOf: ["leave.manage"] },
+  { href: "/dashboard/salary/run", key: "runPayroll", anyOf: ["salary.manage"] },
+  { href: "/dashboard/salary/pay-components", key: "deductions", anyOf: ["salary.manage"] },
+  { href: "/dashboard/salary/benefits", key: "benefits", anyOf: ["salary.manage"] },
+
+  // ACADEMICS — school structure as flat modules (years/terms/subjects/grades/campus).
+  {
+    href: "/dashboard/academic-setup/years",
+    key: "academicYears",
+    anyOf: ["academic_setup.manage"]
+  },
+  {
+    href: "/dashboard/academic-setup/terms",
+    key: "terms",
+    anyOf: ["academic_setup.manage"]
+  },
+  {
+    href: "/dashboard/academic-setup/subjects",
+    key: "subjects",
+    anyOf: ["academic_setup.manage"]
+  },
+  {
+    href: "/dashboard/academic-setup/grades-classrooms",
+    key: "gradesClassrooms",
+    anyOf: ["academic_setup.manage"]
+  },
+  { href: "/dashboard/structure", key: "structure", anyOf: ["academic_setup.manage"] },
+  { href: "/dashboard/facilities", key: "facilities", anyOf: ["facility.manage"] },
+
+  // MASTER SETTINGS — 1–2×/year configuration.
+  {
+    href: "/dashboard/settings/school-profile",
+    key: "schoolProfile",
+    anyOf: ["tenant.configure"]
+  },
+  {
+    href: "/dashboard/settings/school-schedule",
+    key: "schoolSchedule",
+    anyOf: ["academic_setup.manage"]
+  },
+  {
+    href: "/dashboard/settings/preferences",
+    key: "preferences",
+    anyOf: ["tenant.configure"]
+  },
+  { href: "/dashboard/departments", key: "departments", anyOf: ["hr.manage"] },
+
+  // ADMIN — access control + traceability.
+  {
+    href: "/dashboard/settings/user-roles",
+    key: "userRoles",
+    anyOf: ["identity.manage"]
+  },
+  { href: "/dashboard/audit", key: "audit", anyOf: ["audit.view"] }
 ];
 
+const groupItems = (keys: DashboardNavKey[]): DashboardNavItem[] =>
+  DASHBOARD_NAV.filter((item) => keys.includes(item.key));
+
 export const DASHBOARD_NAV_GROUPS: DashboardNavGroup[] = [
+  { key: "home", items: groupItems(["overview"]) },
+  { key: "people", items: groupItems(["students", "teachers", "team"]) },
+  { key: "enrollment", items: groupItems(["admissions", "enrollments"]) },
+  { key: "teaching", items: groupItems(["timetable"]) },
   {
-    key: "school",
-    items: DASHBOARD_NAV.filter((item) => ["overview", "students", "teachers"].includes(item.key))
+    key: "finance",
+    items: groupItems([
+      "financeOverview",
+      "collection",
+      "invoices",
+      "payments",
+      "feeStructures",
+      "discounts"
+    ])
   },
+  { key: "hr", items: groupItems(["leaves", "runPayroll", "deductions", "benefits"]) },
   {
     key: "academics",
-    items: DASHBOARD_NAV.filter((item) =>
-      ["structure", "academicSetup", "calendar", "timetable", "exams"].includes(item.key)
-    )
+    items: groupItems([
+      "academicYears",
+      "terms",
+      "subjects",
+      "gradesClassrooms",
+      "structure",
+      "facilities"
+    ])
   },
   {
-    key: "business",
-    items: DASHBOARD_NAV.filter((item) =>
-      ["admissions", "enrollments", "finance", "salary"].includes(item.key)
-    )
+    key: "masterSettings",
+    items: groupItems([
+      "schoolProfile",
+      "schoolSchedule",
+      "preferences",
+      "departments"
+    ])
   },
-  {
-    key: "admin",
-    items: DASHBOARD_NAV.filter((item) =>
-      ["communication", "audit", "settings", "team", "departments"].includes(item.key)
-    )
-  }
+  { key: "admin", items: groupItems(["userRoles", "audit"]) }
 ];
 
 export function visibleDashboardNav(

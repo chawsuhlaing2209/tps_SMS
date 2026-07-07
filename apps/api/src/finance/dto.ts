@@ -1,12 +1,18 @@
 import {
   IsString, IsNotEmpty, IsNumber, IsOptional, IsUUID,
-  IsBoolean, IsArray, ValidateNested, IsDateString, IsIn,
+  IsBoolean, IsArray, ValidateNested, IsDateString, IsIn, Min, Max,
 } from 'class-validator'
 import { Type, Transform } from 'class-transformer'
 import { paymentMethods } from '@sms/shared'
 
 function trimString({ value }: { value: unknown }) {
   return typeof value === 'string' ? value.trim() : value
+}
+
+function parseBoolean({ value }: { value: unknown }) {
+  if (value === true || value === 'true' || value === '1') return true
+  if (value === false || value === 'false' || value === '0') return false
+  return value
 }
 
 export class CreateFeeItemDto {
@@ -61,6 +67,19 @@ export class UpdateEnrollmentFeePlanDto {
   @IsUUID('4', { each: true })
   @IsOptional()
   declare gradeIds?: string[]
+}
+
+export class FeeItemGradeAmountDto {
+  @IsUUID() declare gradeId: string
+  @IsNumber() @Type(() => Number) declare amount: number
+}
+
+export class ReconcileFeeItemGradeAmountsDto {
+  @IsUUID() declare academicYearId: string
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => FeeItemGradeAmountDto)
+  declare entries: FeeItemGradeAmountDto[]
 }
 
 export class InvoiceItemDto {
@@ -118,10 +137,19 @@ export class ListInvoicesQueryDto {
   @IsUUID() @IsOptional() studentId?: string
   @IsString() @IsOptional() @IsIn(['enrollment', 'recurring', 'ad_hoc']) source?: string
   @IsString() @IsOptional() month?: string
+  @IsString() @IsOptional() dateFrom?: string
+  @IsString() @IsOptional() dateTo?: string
   @IsUUID() @IsOptional() academicYearId?: string
   @IsUUID() @IsOptional() gradeId?: string
-  @IsNumber() @IsOptional() @Type(() => Number) limit?: number
-  @IsNumber() @IsOptional() @Type(() => Number) offset?: number
+  @IsString() @Transform(trimString) @IsOptional() search?: string
+  @IsString() @IsOptional() @IsIn(['createdAt']) sortBy?: string
+  @IsString() @IsOptional() @IsIn(['asc', 'desc']) sortDir?: string
+  @IsNumber() @IsOptional() @Type(() => Number) @Min(1) @Max(200) limit?: number
+  @IsNumber() @IsOptional() @Type(() => Number) @Min(0) offset?: number
+}
+
+export class InvoiceMetricsQueryDto {
+  @IsUUID() @IsOptional() academicYearId?: string
 }
 
 export class ListPaymentsQueryDto {
@@ -129,17 +157,56 @@ export class ListPaymentsQueryDto {
   @IsBoolean() @IsOptional() @Transform(({ value }) => value === 'true') verified?: boolean
   @IsString() @IsOptional() dateFrom?: string
   @IsString() @IsOptional() dateTo?: string
-  @IsNumber() @IsOptional() @Type(() => Number) limit?: number
-  @IsNumber() @IsOptional() @Type(() => Number) offset?: number
+  @IsUUID() @IsOptional() academicYearId?: string
+  @IsString() @Transform(trimString) @IsOptional() search?: string
+  @IsNumber() @IsOptional() @Type(() => Number) @Min(1) @Max(200) limit?: number
+  @IsNumber() @IsOptional() @Type(() => Number) @Min(0) offset?: number
+}
+
+export class PaymentMetricsQueryDto {
+  @IsUUID() @IsOptional() academicYearId?: string
 }
 
 export class MonthlyReportQueryDto {
   @IsString() @IsNotEmpty() declare month: string
 }
 
+export class BillingRosterQueryDto {
+  @IsUUID() declare academicYearId: string
+  @IsString() @IsOptional() month?: string
+  @IsString() @IsOptional() dateFrom?: string
+  @IsString() @IsOptional() dateTo?: string
+  @IsUUID() @IsOptional() gradeId?: string
+  @IsString() @IsOptional() @IsIn(['paid', 'partial', 'due', 'overdue']) status?: string
+  @IsString() @Transform(trimString) @IsOptional() search?: string
+  @IsNumber() @IsOptional() @Type(() => Number) @Min(1) @Max(500) limit?: number
+  @IsNumber() @IsOptional() @Type(() => Number) @Min(0) offset?: number
+  @IsString() @IsOptional() @IsIn(['student', 'status', 'balance']) sortBy?: 'student' | 'status' | 'balance'
+  @IsString() @IsOptional() @IsIn(['asc', 'desc']) sortDir?: 'asc' | 'desc'
+  @IsBoolean() @IsOptional() @Transform(parseBoolean) owingOnly?: boolean
+  @IsBoolean() @IsOptional() @Transform(parseBoolean) metricsOnly?: boolean
+}
+
+export class CollectPaymentDto {
+  @IsUUID() declare studentId: string
+  @IsUUID() @IsOptional() academicYearId?: string
+  @IsNumber() @Type(() => Number) declare amount: number
+  @IsString() @IsNotEmpty() @IsIn([...paymentMethods]) declare method: string
+  @IsString() @Transform(trimString) @IsOptional() referenceNumber?: string
+  @IsString() @Transform(trimString) @IsOptional() notes?: string
+}
+
 export class ReceivablesQueryDto {
   @IsString() @IsOptional() gradeId?: string
   @IsString() @IsOptional() status?: string
+}
+
+export class FinanceOverviewQueryDto {
+  @IsUUID() @IsOptional() academicYearId?: string
+  @IsString() @IsOptional() month?: string
+  @IsIn(['month', 'term']) @IsOptional() scope?: 'month' | 'term'
+  /** 'lifetime' aggregates across all academic years; academicYearId is ignored. */
+  @IsIn(['lifetime']) @IsOptional() yearMode?: 'lifetime'
 }
 
 export class PaymentPlanInstallmentDto {

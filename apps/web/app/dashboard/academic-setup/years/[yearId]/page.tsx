@@ -1,11 +1,14 @@
 "use client";
 
+import { use } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useApiQuery } from "../../../../lib/api";
-import { Icon } from "../../../../lib/icon";
+import { useReferenceApiQuery } from "../../../../lib/api";
+import { Icon } from "../../../../lib/material-icon";
 import { PageHeader } from "../../../page-header-context";
+import { StatusBadge } from "../../../../../components/shared/badge";
+import { EmptyState } from "../../../../../components/shared/empty-state";
+import { StatCard, StatGrid } from "../../../../../components/shared/stat-card";
 
 type AcademicYearOverview = {
   id: string;
@@ -25,15 +28,18 @@ function formatDateRange(startsOn: string, endsOn: string) {
   return `${fmt.format(new Date(startsOn))} → ${fmt.format(new Date(endsOn))}`;
 }
 
-export default function AcademicYearDetailPage() {
-  const params = useParams<{ yearId: string }>();
-  const yearId = params.yearId;
+export default function AcademicYearDetailPage({
+  params
+}: {
+  params: Promise<{ yearId: string }>;
+}) {
+  const { yearId } = use(params);
   const t = useTranslations("academics");
   const setup = useTranslations("academicSetup");
   const nav = useTranslations("nav");
   const c = useTranslations("common");
 
-  const years = useApiQuery<AcademicYearOverview[]>(SETUP_PATH);
+  const years = useReferenceApiQuery<AcademicYearOverview[]>(SETUP_PATH);
   const year = years.data?.find((row) => row.id === yearId);
 
   return (
@@ -41,29 +47,47 @@ export default function AcademicYearDetailPage() {
       <PageHeader
         title={year?.name ?? t("years")}
         breadcrumbs={[
-          { label: nav("academicSetup") },
+          { label: nav("group_academics") },
           { label: setup("years"), href: "/dashboard/academic-setup/years" }
         ]}
-        backHref="/dashboard/academic-setup/years"
-        backLabel={setup("years")}
       />
 
       {years.isLoading ? (
-        <p className="muted">{c("loading")}</p>
+        <p className="pds-type-body-s-regular muted">{c("loading")}</p>
       ) : !year ? (
-        <p className="muted">{c("empty")}</p>
+        <section className="panel">
+          <EmptyState compact embedded icon="event_busy" title={c("empty")} />
+        </section>
       ) : (
         <section className="panel setup-year-detail">
-          <div className="setup-year-detail__main">
-            <p className="setup-year-detail__dates">
+          <div className="setup-year-detail__head">
+            <p className="pds-type-title-xs-bold setup-year-detail__dates">
               {formatDateRange(year.startsOn, year.endsOn)}
             </p>
-            <p className="muted">
-              {t("gradeCount")}: {year.gradeCount} · {t("classroomCount")}: {year.classroomCount} ·{" "}
-              {t("studentCount")}: {year.studentCount}
-            </p>
-            <p className="setup-year-detail__hint">{setup("yearGradesMovedHelp")}</p>
-            <Link href="/dashboard/academic-setup/grades-classrooms" className="btn-primary">
+            <StatusBadge status={year.status} />
+          </div>
+
+          <StatGrid>
+            <StatCard
+              icon={<Icon name="school" size={18} />}
+              label={t("gradeCount")}
+              value={year.gradeCount}
+            />
+            <StatCard
+              icon={<Icon name="meeting_room" size={18} />}
+              label={t("classroomCount")}
+              value={year.classroomCount}
+            />
+            <StatCard
+              icon={<Icon name="groups" size={18} />}
+              label={t("studentCount")}
+              value={year.studentCount}
+            />
+          </StatGrid>
+
+          <div className="setup-year-detail__footer">
+            <p className="pds-type-body-s-regular setup-year-detail__hint">{setup("yearGradesMovedHelp")}</p>
+            <Link href="/dashboard/academic-setup/grades-classrooms" className="pds-type-body-m-bold btn-primary">
               <Icon name="meeting_room" />
               {setup("gradesClassrooms")}
             </Link>

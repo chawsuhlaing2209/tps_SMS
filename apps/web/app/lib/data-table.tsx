@@ -11,7 +11,12 @@ import {
 } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { useMemo, useState, Fragment, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { appendNavigationTrail, type NavigationSegment } from "./navigation-trail";
+import { isPadaukRowInteractiveTarget } from "./table-row-interaction";
+import { useIsMobileTable } from "./use-media-query";
+import { subjectColor } from "../dashboard/structure/subject-colors";
+import { EntityList, EntityListItem } from "../../components/pds/composites/entity-list";
 import {
   Table,
   TableBody,
@@ -138,20 +143,27 @@ function prepareColumns<TData>(
     return next;
   });
 
-  if (!showUpdatedAt || enhanced.some((column) => column.id === "updatedAt")) {
-    return enhanced;
-  }
+  const withUpdatedAt =
+    !showUpdatedAt || enhanced.some((column) => column.id === "updatedAt")
+      ? enhanced
+      : [
+          ...enhanced,
+          {
+            id: "updatedAt",
+            header: updatedAtLabel,
+            accessorFn: (row) => getRowTimestamp(row),
+            cell: ({ row }) => formatRowTimestamp(row.original),
+            enableSorting: true
+          } as ColumnDef<TData, unknown>
+        ];
 
-  return [
-    ...enhanced,
-    {
-      id: "updatedAt",
-      header: updatedAtLabel,
-      accessorFn: (row) => getRowTimestamp(row),
-      cell: ({ row }) => formatRowTimestamp(row.original),
-      enableSorting: true
-    }
-  ];
+  // The actions column is always pinned to the far right (after "Last updated"),
+  // so every table exposes row actions in a consistent, sticky-right slot.
+  const actionsColumns = withUpdatedAt.filter((column) => column.id === "actions");
+  if (!actionsColumns.length) {
+    return withUpdatedAt;
+  }
+  return [...withUpdatedAt.filter((column) => column.id !== "actions"), ...actionsColumns];
 }
 
 function sortIndicator(isSorted: false | "asc" | "desc"): string {
@@ -165,14 +177,50 @@ function sortIndicator(isSorted: false | "asc" | "desc"): string {
 }
 
 function isInteractiveTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof Element)) {
-    return false;
-  }
-
-  return Boolean(target.closest("button, a, input, select, textarea, label, [data-row-stop]"));
+  return isPadaukRowInteractiveTarget(target);
 }
 
-/** Name cell styling when the row itself navigates via `getRowHref` / `onRowClick`. */
+export function deriveInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const first = parts[0]?.[0] ?? "";
+  const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "";
+  return (first + last).toUpperCase() || "?";
+}
+
+/** Avatar + name + optional email/subtitle for directory tables. */
+export function DirectoryMemberCell({
+  name,
+  email,
+  subtitle,
+  colorKey
+}: {
+  name: string;
+  email?: string | null;
+  subtitle?: ReactNode;
+  /** Hash key for avatar tint; defaults to `name`. */
+  colorKey?: string;
+}) {
+  const swatch = subjectColor(colorKey ?? name);
+  const meta = email ?? subtitle;
+
+  return (
+    <span className="directory-member">
+      <span
+        className="pds-type-title-xs-bold directory-avatar"
+        style={{ background: swatch.bg, color: swatch.text }}
+        aria-hidden
+      >
+        {deriveInitials(name)}
+      </span>
+      <span className="directory-member__text">
+        <span className="pds-type-body-m-medium directory-member__name">{name}</span>
+        {meta ? <span className="pds-type-body-s-regular directory-member__meta">{meta}</span> : null}
+      </span>
+    </span>
+  );
+}
+
+/** @deprecated Prefer {@link DirectoryMemberCell} for new directory tables. */
 export function DirectoryNameCell({
   name,
   avatar
@@ -180,13 +228,35 @@ export function DirectoryNameCell({
   name: string;
   avatar?: ReactNode;
 }) {
-  return (
-    <span className="directory-link">
-      {avatar}
-      {name}
-    </span>
-  );
+  if (avatar) {
+    return (
+      <span className="directory-member">
+        {avatar}
+        <span className="directory-member__text">
+          <span className="pds-type-body-m-medium directory-member__name">{name}</span>
+        </span>
+      </span>
+    );
+  }
+
+  return <DirectoryMemberCell name={name} />;
 }
+
+/**
+ * Card-list projection of a table row for small screens. Pages opt in by
+ * mapping their key columns onto an {@link EntityListItem}; tables without a
+ * `mobileItem` keep the horizontal-scroll fallback.
+ */
+export type DataTableMobileItem<TData> = {
+  title: (row: TData) => string;
+  /** 1–2 line summary of the key columns. */
+  meta?: (row: TData) => ReactNode;
+  /** Status badge, amount, or row actions (mark menus with `data-row-stop`). */
+  trailing?: (row: TData) => ReactNode;
+  icon?: string;
+  initials?: (row: TData) => string;
+  nameForColor?: (row: TData) => string;
+};
 
 /**
  * Sortable table wrapper. Appends a "Last updated" column by default and sorts
@@ -199,7 +269,10 @@ export function DataTable<TData>({
   updatedAtLabel,
   initialSorting,
   getRowHref,
-  onRowClick
+  onRowClick,
+  navigationFrom,
+  renderSubRow,
+  mobileItem
 }: {
   columns: ColumnDef<TData, unknown>[];
   data: TData[];
@@ -208,6 +281,12 @@ export function DataTable<TData>({
   initialSorting?: SortingState;
   getRowHref?: (row: TData) => string | null | undefined;
   onRowClick?: (row: TData) => void;
+  /** Current list page appended to the trail before row navigation. */
+  navigationFrom?: NavigationSegment;
+  /** Optional detail row rendered immediately after each data row. */
+  renderSubRow?: (row: Row<TData>) => ReactNode | null;
+  /** Opt-in card rendering below the md breakpoint (no effect with `renderSubRow`). */
+  mobileItem?: DataTableMobileItem<TData>;
 }) {
   const c = useTranslations("common");
   const router = useRouter();
@@ -231,10 +310,40 @@ export function DataTable<TData>({
     getSortedRowModel: getSortedRowModel()
   });
 
+  const isMobileTable = useIsMobileTable();
+
+  if (mobileItem && !renderSubRow && isMobileTable) {
+    return (
+      <EntityList className="data-table-mobile-list">
+        {table.getRowModel().rows.map((row: Row<TData>) => {
+          const original = row.original;
+          const href = getRowHref?.(original) ?? undefined;
+          return (
+            <EntityListItem
+              key={row.id}
+              title={mobileItem.title(original)}
+              meta={mobileItem.meta?.(original)}
+              trailing={mobileItem.trailing?.(original)}
+              icon={mobileItem.icon}
+              initials={mobileItem.initials?.(original)}
+              nameForColor={mobileItem.nameForColor?.(original)}
+              href={href}
+              onClick={!href && onRowClick ? () => onRowClick(original) : undefined}
+              navigationFrom={navigationFrom}
+            />
+          );
+        })}
+      </EntityList>
+    );
+  }
+
   const activateRow = (row: TData) => {
     if (getRowHref) {
       const href = getRowHref(row);
       if (href) {
+        if (navigationFrom) {
+          appendNavigationTrail(navigationFrom);
+        }
         router.push(href);
       }
       return;
@@ -268,11 +377,11 @@ export function DataTable<TData>({
             {headerGroup.headers.map((header) => {
               const canSort = header.column.getCanSort();
               return (
-                <TableHead key={header.id}>
+                <TableHead key={header.id} className={header.column.id === "actions" ? "col-actions" : undefined}>
                   {header.isPlaceholder ? null : canSort ? (
                     <button
                       type="button"
-                      className="table-sort"
+                      className="pds-type-caption-s table-sort"
                       onClick={header.column.getToggleSortingHandler()}
                     >
                       {flexRender(header.column.columnDef.header, header.getContext())}
@@ -291,25 +400,28 @@ export function DataTable<TData>({
         {table.getRowModel().rows.map((row: Row<TData>) => {
           const href = getRowHref?.(row.original);
           const clickable = rowIsInteractive && (onRowClick || href);
+          const subRow = renderSubRow?.(row);
 
           return (
-            <TableRow
-              key={row.id}
-              className={clickable ? "table-row--clickable" : undefined}
-              tabIndex={clickable ? 0 : undefined}
-              role={clickable ? "link" : undefined}
-              aria-label={clickable && href ? c("openRecord") : undefined}
-              onClick={clickable ? (event) => handleRowClick(row.original, event) : undefined}
-              onKeyDown={
-                clickable ? (event) => handleRowKeyDown(row.original, event) : undefined
-              }
-            >
-              {row.getVisibleCells().map((cell) => (
-                <TableCell key={cell.id}>
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </TableCell>
-              ))}
-            </TableRow>
+            <Fragment key={row.id}>
+              <TableRow
+                className={clickable ? "table-row--clickable" : undefined}
+                tabIndex={clickable ? 0 : undefined}
+                role={clickable ? "link" : undefined}
+                aria-label={clickable && href ? c("openRecord") : undefined}
+                onClick={clickable ? (event) => handleRowClick(row.original, event) : undefined}
+                onKeyDown={
+                  clickable ? (event) => handleRowKeyDown(row.original, event) : undefined
+                }
+              >
+                {row.getVisibleCells().map((cell) => (
+                  <TableCell key={cell.id} className={cell.column.id === "actions" ? "col-actions" : undefined}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
+                ))}
+              </TableRow>
+              {subRow}
+            </Fragment>
           );
         })}
       </TableBody>

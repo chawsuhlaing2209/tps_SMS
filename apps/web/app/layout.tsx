@@ -1,9 +1,9 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import { Bricolage_Grotesque, Hanken_Grotesk } from "next/font/google";
 import type { ReactNode } from "react";
-import { AppToaster } from "./components/app-toaster";
+import { AppToaster } from "../components/shared/app-toaster";
 import { QueryProvider } from "./lib/query-provider";
 import "./globals.css";
 
@@ -45,7 +45,7 @@ export default async function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400,0..1,0&display=block"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400,0..1,0&display=swap"
           rel="stylesheet"
         />
       </head>

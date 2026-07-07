@@ -9,6 +9,7 @@ import {
   IsString,
   IsUUID,
   Min,
+  ValidateIf,
   ValidateNested
 } from "class-validator";
 
@@ -22,6 +23,11 @@ export class CreateAcademicYearDto {
 
   @IsDateString()
   endsOn!: string;
+
+  /** Clone classrooms + grade-subject assignments from this year (never enrollments). */
+  @IsOptional()
+  @IsUUID()
+  importStructureFromYearId?: string;
 }
 
 export class UpdateAcademicYearDto {
@@ -82,6 +88,11 @@ export class CreateGradeDto {
   @IsArray()
   @IsUUID("4", { each: true })
   subjectIds?: string[];
+
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsUUID()
+  gradeChiefStaffId?: string | null;
 }
 
 export class UpdateGradeDto {
@@ -108,6 +119,11 @@ export class UpdateGradeDto {
   @IsArray()
   @IsUUID("4", { each: true })
   subjectIds?: string[];
+
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsUUID()
+  gradeChiefStaffId?: string | null;
 }
 
 export class CreateSectionDto {
@@ -137,6 +153,14 @@ export class CreateSubjectDto {
   subjectType?: string;
 
   @IsOptional()
+  @IsString()
+  colorKey?: string;
+
+  @IsOptional()
+  @IsString()
+  iconKey?: string;
+
+  @IsOptional()
   @IsUUID()
   academicYearId?: string;
 
@@ -159,6 +183,14 @@ export class UpdateSubjectDto {
   @IsOptional()
   @IsString()
   subjectType?: string;
+
+  @IsOptional()
+  @IsString()
+  colorKey?: string;
+
+  @IsOptional()
+  @IsString()
+  iconKey?: string;
 
   @IsOptional()
   @IsUUID()

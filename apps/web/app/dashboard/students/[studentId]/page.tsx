@@ -1,34 +1,53 @@
 "use client";
+import { FormInput, FormTextarea } from "../../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useMemo, useState, use } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { SegmentedControl } from "../../../../components/pds/composites/segmented-control";
 import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
-import { useApiMutation, useApiQuery } from "../../../lib/api";
+import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
+import { EmptyState } from "../../../../components/shared/empty-state";
+import { NavigationBackLink } from "../../../../components/shared/navigation-back-link";
+import { Button } from "../../../../components/ui/button";
+import { StatusPill } from "../../../../components/pds/subcomponents/status-pill";
+import { StatusBadge } from "../../../../components/shared/badge";
+import { ApiError, useApiMutation, useApiQuery } from "../../../lib/api";
+import { PdsSelectField } from "../../../../components/pds";
+import { RecordFormModal } from "../../../lib/record-modal";
 import { DataTable } from "../../../lib/data-table";
+import { subjectColor } from "../../structure/subject-colors";
 import { Field } from "../../../lib/form";
-import { HeroMoreActionsMenu, HeroOutlineAction, HeroPrimaryAction } from "../../../lib/hero-more-actions";
-import { Icon } from "../../../lib/icon";
+import { HeroMoreActionsMenu, HeroPrimaryAction } from "../../../lib/hero-more-actions";
+import { Icon } from "../../../lib/material-icon";
 import { hasAnyPermission } from "../../../lib/permissions";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { RecordList, RecordListItem, RecordListPanel } from "../../../lib/record-list";
 import { getSession } from "../../../lib/session";
-import { TablePanelBody, TablePanelHead } from "../../../lib/table-panel";
+import { TablePanelBody, DataTableSection } from "../../../lib/table-panel";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
+import { formatMMK } from "../../../lib/money";
 import { zodResolver } from "../../../lib/zod-resolver";
+import { navigateWithTrail } from "../../../lib/navigation-trail";
 import { EnrollmentWizard } from "../../enrollments/enrollment-wizard";
+import { RequestDiscountSheet } from "../../finance/discounts/request-discount-sheet";
 import { PageHeader } from "../../page-header-context";
 import { StudentFamilyPanel } from "../student-family-panel";
+import { StudentRecurrentBillingPanel } from "../student-recurrent-billing-panel";
+import { StudentDocumentsPanel } from "../student-documents-panel";
+import { BillingInvoicePreviewModal } from "../../finance/billing/invoice-preview-modal";
+import { CancelEnrollmentDialog } from "../cancel-enrollment-dialog";
 
 type StudentProfile = {
   id: string;
   fullName: string;
   admissionNumber: string;
   status: string;
+  archivedAt: string | null;
   familyGroupId: string | null;
   dateOfBirth: string | null;
   gender: string | null;
@@ -36,7 +55,7 @@ type StudentProfile = {
   medicalNotes: string | null;
   guardians: Array<{
     student_guardians: { relationship: string };
-    guardians: { id: string; fullName: string; phone: string | null };
+    guardians: { id: string; fullName: string; phone: string | null; email: string | null };
   }>;
   classrooms: Array<{
     classroom_students: { effectiveFrom: string; effectiveTo: string | null };
@@ -71,13 +90,26 @@ type Enrollment = {
   gradeId: string;
   invoiceId: string | null;
   status: string;
+  cancelledAt?: string | null;
   billingSnapshot?: { optionalFeeItemIds?: string[] } | null;
   updatedAt?: string;
+};
+
+type MembershipRow = {
+  id: string;
+  classroomId: string | null;
+  classroomName: string;
+  gradeName: string;
+  startDate: string | null;
+  status: string;
+  lastUpdated: string | null;
+  enrollment: Enrollment | null;
 };
 
 type StudentBillingSummary = {
   totalOutstanding: number;
   totalPaid: number;
+  recordable: number;
   invoices: Array<{
     id: string;
     invoiceNumber: string;
@@ -88,8 +120,11 @@ type StudentBillingSummary = {
   }>;
   activeServices: Array<{
     id: string;
+    feeItemId: string;
     feeItemName: string;
+    billingType: string;
     effectiveFrom: string;
+    monthlyAmount?: number | null;
   }>;
   discounts: Array<{
     id: string;
@@ -98,6 +133,8 @@ type StudentBillingSummary = {
     reason: string;
   }>;
 };
+
+type ProfileTab = "overview" | "family" | "billing" | "documents";
 
 const ACTIVE_STATUSES = new Set(["draft", "enrolled", "transferred"]);
 
@@ -118,20 +155,90 @@ function formatMonthYear(value: string | null) {
   );
 }
 
-export default function StudentDetailPage() {
-  const params = useParams<{ studentId: string }>();
-  const studentId = params.studentId;
+function formatShortDate(value: string | null | undefined) {
+  if (!value) {
+    return "—";
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+  }).format(new Date(value));
+}
+
+function formatRelativeUpdated(value: string | null | undefined, todayLabel: string) {
+  if (!value) {
+    return "—";
+  }
+  const date = new Date(value);
+  const now = new Date();
+  const time = new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
+  const sameDay =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+  if (sameDay) {
+    return `${todayLabel} · ${time}`;
+  }
+  const dayLabel = new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    month: "short"
+  }).format(date);
+  return `${dayLabel} · ${time}`;
+}
+
+function parseProfileTab(value: string | null, canViewFinance: boolean): ProfileTab {
+  if (value === "family") {
+    return "family";
+  }
+  if (value === "billing" && canViewFinance) {
+    return "billing";
+  }
+  if (value === "documents") {
+    return "documents";
+  }
+  return "overview";
+}
+
+export default function StudentDetailPage({
+  params
+}: {
+  params: Promise<{ studentId: string }>;
+}) {
+  const { studentId } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const studentHref = `/dashboard/students/${studentId}`;
   const t = useTranslations("students");
   const e = useTranslations("enrollments");
-  const p = useTranslations("people");
   const c = useTranslations("common");
   const nav = useTranslations("nav");
   const permissions = getSession()?.permissions;
   const canManage = hasAnyPermission(permissions, ["student.manage"]);
   const canViewFinance = hasAnyPermission(permissions, ["finance.manage"]);
+  const canRequestDiscount = hasAnyPermission(permissions, ["discount.request"]);
   const f = useTranslations("finance");
+  const d = useTranslations("discounts");
   const currentYear = useCurrentAcademicYear();
+
+  const activeTab = parseProfileTab(searchParams.get("tab"), canViewFinance);
+
+  const setActiveTab = useCallback(
+    (tab: ProfileTab) => {
+      const next = new URLSearchParams(searchParams.toString());
+      if (tab === "overview") {
+        next.delete("tab");
+      } else {
+        next.set("tab", tab);
+      }
+      const query = next.toString();
+      router.replace(query ? `${studentHref}?${query}` : studentHref, { scroll: false });
+    },
+    [router, searchParams, studentHref]
+  );
 
   const student = useApiQuery<StudentProfile>(
     (tenant) => `/tenants/${tenant}/students/${studentId}/profile`
@@ -149,9 +256,18 @@ export default function StudentDetailPage() {
 
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [deleteForeverOpen, setDeleteForeverOpen] = useState(false);
   const [statusConfirm, setStatusConfirm] = useState<"deactivate" | "activate" | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [resumeDraft, setResumeDraft] = useState<Enrollment | null>(null);
+  const [requestDiscountOpen, setRequestDiscountOpen] = useState(false);
+  const [previewInvoiceId, setPreviewInvoiceId] = useState<string | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<{ id: string; invoiceId: string | null } | null>(null);
+  const [assignTarget, setAssignTarget] = useState<Enrollment | null>(null);
+  const [assignClassroomId, setAssignClassroomId] = useState("");
+  const [assignError, setAssignError] = useState<string | null>(null);
+  const [unassignTarget, setUnassignTarget] = useState<Enrollment | null>(null);
 
   const update = useApiMutation<
     {
@@ -171,6 +287,68 @@ export default function StudentDetailPage() {
       invalidatePaths: (_b, tenant) => [
         `/tenants/${tenant}/students/${studentId}/profile`,
         `/tenants/${tenant}/students`
+      ]
+    }
+  );
+
+  const archiveStudent = useApiMutation<Record<string, never>, StudentProfile>(
+    (_body, tenant) => ({
+      path: `/tenants/${tenant}/students/${studentId}/archive`,
+      init: { method: "POST" }
+    }),
+    {
+      invalidatePaths: (_b, tenant) => [
+        `/tenants/${tenant}/students/${studentId}/profile`,
+        `/tenants/${tenant}/students`
+      ]
+    }
+  );
+
+  const restoreStudent = useApiMutation<Record<string, never>, StudentProfile>(
+    (_body, tenant) => ({
+      path: `/tenants/${tenant}/students/${studentId}/restore`,
+      init: { method: "POST" }
+    }),
+    {
+      invalidatePaths: (_b, tenant) => [
+        `/tenants/${tenant}/students/${studentId}/profile`,
+        `/tenants/${tenant}/students`
+      ]
+    }
+  );
+
+  const deleteStudent = useApiMutation<Record<string, never>, { id: string; deleted: boolean }>(
+    (_body, tenant) => ({
+      path: `/tenants/${tenant}/students/${studentId}`,
+      init: { method: "DELETE" }
+    }),
+    {
+      invalidatePaths: (_b, tenant) => [`/tenants/${tenant}/students`]
+    }
+  );
+
+  const assignClassroom = useApiMutation<{ enrollmentId: string; classroomId: string }, unknown>(
+    (body, tenant) => ({
+      path: `/tenants/${tenant}/enrollments/${body.enrollmentId}/assign-classroom`,
+      init: { method: "POST", body: JSON.stringify({ classroomId: body.classroomId }) }
+    }),
+    {
+      invalidatePaths: (_b, tenant) => [
+        `/tenants/${tenant}/students/${studentId}/profile`,
+        `/tenants/${tenant}/enrollments?studentId=${studentId}`
+      ]
+    }
+  );
+
+  const unassignClassroom = useApiMutation<{ enrollmentId: string }, unknown>(
+    (body, tenant) => ({
+      path: `/tenants/${tenant}/enrollments/${body.enrollmentId}/unassign-classroom`,
+      init: { method: "POST" }
+    }),
+    {
+      invalidatePaths: (_b, tenant) => [
+        `/tenants/${tenant}/students/${studentId}/profile`,
+        `/tenants/${tenant}/enrollments?studentId=${studentId}`
       ]
     }
   );
@@ -256,8 +434,6 @@ export default function StudentDetailPage() {
   const classroomName = (id: string | null) =>
     id ? (classrooms.data?.find((room) => room.id === id)?.name ?? id) : "—";
   const gradeName = (id: string) => grades.data?.find((grade) => grade.id === id)?.name ?? id;
-  const yearName = (id: string) =>
-    id === currentYear.data?.id ? (currentYear.data?.name ?? id) : id;
 
   const openEnrollmentWizard = (draft: Enrollment | null = null) => {
     setResumeDraft(draft);
@@ -269,50 +445,163 @@ export default function StudentDetailPage() {
     void enrollments.refetch();
   };
 
-  const enrollmentColumns: ColumnDef<Enrollment, unknown>[] = [
-    { id: "classroom", header: e("classroom"), accessorFn: (row) => classroomName(row.classroomId) },
-    { id: "grade", header: e("grade"), accessorFn: (row) => gradeName(row.gradeId) },
-    { id: "year", header: e("academicYear"), accessorFn: (row) => yearName(row.academicYearId) },
+  const membershipRows = useMemo((): MembershipRow[] => {
+    if (!student.data) {
+      return [];
+    }
+
+    if (enrollments.data?.length) {
+      return enrollments.data.map((row) => {
+        const placement = student.data!.classrooms.find(
+          (item) => item.classrooms.id === row.classroomId
+        );
+        return {
+          id: row.id,
+          classroomId: row.classroomId,
+          classroomName: classroomName(row.classroomId),
+          gradeName: gradeName(row.gradeId),
+          startDate: placement?.classroom_students.effectiveFrom ?? null,
+          status: row.status,
+          lastUpdated: row.updatedAt ?? null,
+          enrollment: row
+        };
+      });
+    }
+
+    return student.data.classrooms.map((row) => ({
+      id: `${row.classrooms.id}-${row.classroom_students.effectiveFrom}`,
+      classroomId: row.classrooms.id,
+      classroomName: row.classrooms.name,
+      gradeName: student.data!.profile?.gradeName ?? "—",
+      startDate: row.classroom_students.effectiveFrom,
+      status: row.classroom_students.effectiveTo == null ? "active" : "archived",
+      lastUpdated: null,
+      enrollment: null
+    }));
+  }, [enrollments.data, student.data, classrooms.data, grades.data]);
+
+  const membershipColumns: ColumnDef<MembershipRow, unknown>[] = [
+    { id: "classroom", header: t("membershipClass"), accessorKey: "classroomName" },
+    { id: "grade", header: t("membershipGrade"), accessorKey: "gradeName" },
+    {
+      id: "startDate",
+      header: t("membershipStartDate"),
+      accessorFn: (row) => formatShortDate(row.startDate)
+    },
     {
       id: "status",
-      header: e("status"),
+      header: c("status"),
       accessorKey: "status",
-      cell: ({ row }) => (
-        <span className={`badge badge--${row.original.status}`}>{row.original.status}</span>
+      cell: ({ row }) =>
+        row.original.enrollment?.cancelledAt ? (
+          <StatusBadge status="cancelled" label={e("cancelledStatus")} />
+        ) : (
+        <StatusBadge
+          status={row.original.status}
+          label={
+            row.original.status === "active"
+              ? t("placementActive")
+              : row.original.status === "archived" && !row.original.enrollment
+                ? t("membershipCompleted")
+                : row.original.enrollment
+                  ? e(`status_${row.original.status}` as "status_draft")
+                  : t(`status_${row.original.status}` as "status_archived")
+          }
+        />
       )
     },
     {
-      id: "invoice",
-      header: e("invoice"),
-      cell: ({ row }) =>
-        row.original.invoiceId ? (
-          <Link className="row-action" href={`/dashboard/finance/invoices/${row.original.invoiceId}`}>
-            {e("viewInvoice")}
-          </Link>
-        ) : (
-          "—"
-        )
+      id: "lastUpdated",
+      header: t("membershipLastUpdated"),
+      accessorFn: (row) => formatRelativeUpdated(row.lastUpdated ?? row.startDate, t("updatedToday"))
     },
     {
       id: "actions",
-      header: e("actions"),
+      header: c("actions"),
       enableSorting: false,
       cell: ({ row }) => {
-        if (row.original.status === "draft" && !row.original.invoiceId) {
-          return (
-            <button type="button" className="row-action" onClick={() => openEnrollmentWizard(row.original)}>
-              {e("continueEnrollment")}
-            </button>
-          );
+        const enrollment = row.original.enrollment;
+        const items = [];
+
+        if (
+          enrollment &&
+          !enrollment.invoiceId &&
+          (enrollment.status === "draft" || enrollment.status === "approved")
+        ) {
+          items.push({
+            id: "continue",
+            label: e("continueEnrollment"),
+            icon: "play_arrow",
+            onSelect: () => openEnrollmentWizard(enrollment)
+          });
         }
-        if (row.original.status === "approved" && !row.original.invoiceId) {
-          return (
-            <button type="button" className="row-action" onClick={() => openEnrollmentWizard(row.original)}>
-              {e("continueEnrollment")}
-            </button>
-          );
+        if (enrollment?.invoiceId) {
+          const invoiceId = enrollment.invoiceId;
+          items.push({
+            id: "invoice",
+            label: e("viewInvoice"),
+            icon: "receipt_long",
+            onSelect: () => setPreviewInvoiceId(invoiceId)
+          });
+          if (canViewFinance && !enrollment.cancelledAt) {
+            items.push({
+              id: "cancel",
+              label: e("cancelEnrollment"),
+              icon: "cancel",
+              destructive: true,
+              onSelect: () => setCancelTarget({ id: enrollment.id, invoiceId })
+            });
+          }
         }
-        return null;
+        if (canManage && enrollment && !enrollment.cancelledAt) {
+          if (row.original.classroomId) {
+            items.push({
+              id: "move-classroom",
+              label: t("moveClassroom"),
+              icon: "sync_alt",
+              onSelect: () => {
+                setAssignClassroomId("");
+                setAssignError(null);
+                setAssignTarget(enrollment);
+              }
+            });
+            items.push({
+              id: "remove-classroom",
+              label: t("removeFromClassroom"),
+              icon: "person_remove",
+              onSelect: () => setUnassignTarget(enrollment)
+            });
+          } else {
+            items.push({
+              id: "assign-classroom",
+              label: t("assignClassroom"),
+              icon: "door_open",
+              onSelect: () => {
+                setAssignClassroomId("");
+                setAssignError(null);
+                setAssignTarget(enrollment);
+              }
+            });
+          }
+        }
+        if (row.original.classroomId) {
+          const classroomId = row.original.classroomId;
+          items.push({
+            id: "classroom",
+            label: t("membershipDetailsLink"),
+            icon: "meeting_room",
+            onSelect: () =>
+              navigateWithTrail(router, `/dashboard/structure/rooms/${classroomId}`, {
+                label: data?.fullName ?? t("profileTitle"),
+                href: studentHref
+              })
+          });
+        }
+
+        if (!items.length) {
+          return "—";
+        }
+        return <RowMoreActionsMenu ariaLabel={c("moreActions")} items={items} />;
       }
     }
   ];
@@ -321,35 +610,61 @@ export default function StudentDetailPage() {
     if (!student.data) {
       return "";
     }
-    const { profile, admissionNumber } = student.data;
+    const { profile: heroProfile, admissionNumber } = student.data;
     const bits = [
       `${t("rollLabel")} ${admissionNumber}`,
-      profile.gradeName && profile.classroomName
-        ? `${profile.gradeName} · ${profile.classroomName}`
-        : profile.gradeName ?? profile.classroomName,
-      profile.streamLabel ? `${profile.streamLabel} ${t("streamSuffix")}` : null,
-      profile.enrolledAt
-        ? t("enrolledMeta", { date: formatMonthYear(profile.enrolledAt) ?? profile.enrolledAt })
+      heroProfile.gradeName && heroProfile.classroomName
+        ? `${heroProfile.gradeName} · ${heroProfile.classroomName}`
+        : heroProfile.gradeName ?? heroProfile.classroomName,
+      heroProfile.streamLabel ? `${heroProfile.streamLabel} ${t("streamSuffix")}` : null,
+      heroProfile.enrolledAt
+        ? t("enrolledMeta", {
+            date: formatMonthYear(heroProfile.enrolledAt) ?? heroProfile.enrolledAt
+          })
         : null
     ].filter(Boolean);
     return bits.join(" · ");
   }, [student.data, t]);
 
-  if (student.isLoading) {
-    return <p className="muted">{c("loading")}</p>;
-  }
-
-  if (student.isError || !student.data) {
-    return (
-      <div className="page-stack">
-        <p className="error-text">{t("notFound")}</p>
-        <Link href="/dashboard/people?tab=students">{t("backToPeople")}</Link>
-      </div>
-    );
-  }
-
   const data = student.data;
-  const profile = data.profile;
+  const profile = data?.profile;
+
+  const linkedGuardians = useMemo(() => {
+    const mapped =
+      data?.guardians.map((row) => ({
+        id: row.guardians.id,
+        fullName: row.guardians.fullName,
+        phone: row.guardians.phone,
+        email: row.guardians.email,
+        relationship: row.student_guardians.relationship
+      })) ?? [];
+
+    if (mapped.length > 0 || !profile?.primaryGuardian) {
+      return mapped;
+    }
+
+    return [
+      {
+        id: profile.primaryGuardian.id,
+        fullName: profile.primaryGuardian.fullName,
+        phone: profile.primaryGuardian.phone,
+        email: null,
+        relationship: profile.primaryGuardian.relationship
+      }
+    ];
+  }, [data?.guardians, profile?.primaryGuardian]);
+
+  const tabOptions = useMemo(() => {
+    const options = [
+      { id: "overview", label: t("tabOverview") },
+      { id: "family", label: t("tabFamily") }
+    ];
+    if (canViewFinance) {
+      options.push({ id: "billing", label: t("tabBilling") });
+    }
+    options.push({ id: "documents", label: t("tabDocuments") });
+    return options;
+  }, [canViewFinance, t]);
 
   async function handleStatusToggle(nextChecked: boolean) {
     if (!canManage) {
@@ -368,424 +683,635 @@ export default function StudentDetailPage() {
     setStatusConfirm(null);
   }
 
-  async function handleDelete() {
-    await update.mutateAsync({ status: "archived" });
+  async function handleArchive() {
+    await archiveStudent.mutateAsync({});
     setDeleteOpen(false);
+    router.push("/dashboard/people?tab=students");
+  }
+
+  async function handleRestore() {
+    await restoreStudent.mutateAsync({});
+    setRestoreOpen(false);
+  }
+
+  async function handlePermanentDelete() {
+    // A blocking-dependency 409 surfaces its message via the shared error toast.
+    await deleteStudent.mutateAsync({});
+    setDeleteForeverOpen(false);
     router.push("/dashboard/people?tab=students");
   }
 
   return (
     <div className="student-profile-page">
       <PageHeader
-        title={data.fullName}
+        title={data?.fullName ?? t("profileTitle")}
+        segment={{ label: data?.fullName ?? t("profileTitle"), href: studentHref }}
         breadcrumbs={[
-          { label: nav("group_school") },
-          { label: p("directoryTitle"), href: "/dashboard/people?tab=students" }
+          { label: nav("students"), href: "/dashboard/people?tab=students" },
+          { label: data?.fullName ?? t("profileTitle") }
         ]}
-        backHref="/dashboard/people?tab=students"
-        backLabel={t("backToPeople")}
       />
 
-      <section className="structure-room-banner student-profile-banner">
-        <div className="structure-room-banner__main student-profile-banner__main">
-          <span className="student-profile-avatar">{studentInitials(data.fullName)}</span>
-          <div>
-            <h2 className="structure-room-banner__title">{data.fullName}</h2>
-            <p className="structure-room-banner__meta">{heroMeta}</p>
-            {!canManage ? (
-              <span className="student-profile-status-label">
-                {t(`status_${data.status}` as "status_enrolled")}
-              </span>
-            ) : null}
-          </div>
+      {student.isLoading ? <p className="pds-type-body-s-regular muted">{c("loading")}</p> : null}
+
+      {!student.isLoading && (student.isError || !data) ? (
+        <div className="page-stack">
+          <p className="pds-type-body-m-medium error-text">{t("notFound")}</p>
         </div>
-        <div className="structure-room-banner__actions student-profile-banner__actions">
-          {canManage ? (
-            <HeroMoreActionsMenu
-              label={t("moreActions")}
-              items={[
-                {
-                  id: "edit",
-                  label: t("editProfile"),
-                  icon: "edit",
-                  onSelect: () => setEditOpen(true)
-                },
-                {
-                  id: "active",
-                  label: isActive ? t("setAsInactive") : t("markActive"),
-                  icon: isActive ? "pause_circle" : "check_circle",
-                  onSelect: () => void handleStatusToggle(!isActive)
-                },
-                {
-                  id: "delete",
-                  label: c("delete"),
-                  icon: "delete",
-                  destructive: true,
-                  onSelect: () => setDeleteOpen(true)
-                }
-              ]}
-            />
-          ) : null}
-          {profile.primaryGuardian?.phone ? (
-            <HeroPrimaryAction href={`tel:${profile.primaryGuardian.phone.replace(/\s+/g, "")}`}>
-              <Icon name="send" />
-              {t("messageGuardian")}
-            </HeroPrimaryAction>
-          ) : (
-            <HeroPrimaryAction href="/dashboard/communication">
-              <Icon name="send" />
-              {t("messageGuardian")}
-            </HeroPrimaryAction>
-          )}
-          <HeroOutlineAction href="/dashboard/exams">
-            <Icon name="grading" />
-            {t("reportCard")}
-          </HeroOutlineAction>
-        </div>
-      </section>
-
-      <div className="student-profile-stats">
-        <article className="student-profile-stat">
-          <span className="student-profile-stat__label">{t("attendanceStat")}</span>
-          <strong className="student-profile-stat__value">
-            {profile.attendancePercent != null ? `${profile.attendancePercent}%` : "—"}
-          </strong>
-        </article>
-        <article className="student-profile-stat">
-          <span className="student-profile-stat__label">{t("termGpaStat")}</span>
-          <strong className="student-profile-stat__value">
-            {profile.termGpa != null ? profile.termGpa.toFixed(1) : "—"}
-          </strong>
-        </article>
-        <article className="student-profile-stat">
-          <span className="student-profile-stat__label">{t("feesStat")}</span>
-          <strong
-            className={
-              profile.feeStatus === "paid_in_full"
-                ? "student-profile-stat__value student-profile-stat__value--success"
-                : "student-profile-stat__value"
-            }
-          >
-            {t(`feeStatus_${profile.feeStatus}`)}
-          </strong>
-        </article>
-        <article className="student-profile-stat">
-          <span className="student-profile-stat__label">{t("guardianStat")}</span>
-          {profile.primaryGuardian ? (
-            <>
-              <strong className="student-profile-stat__value student-profile-stat__value--compact">
-                {profile.primaryGuardian.fullName}
-              </strong>
-              <span className="student-profile-stat__sub">
-                {profile.primaryGuardian.phone ?? t("noGuardianPhone")}
-              </span>
-            </>
-          ) : (
-            <strong className="student-profile-stat__value">—</strong>
-          )}
-        </article>
-      </div>
-
-      <StudentFamilyPanel
-        studentId={studentId}
-        familyGroupId={data.familyGroupId}
-        hasGuardian={data.guardians.length > 0 || Boolean(profile.primaryGuardian)}
-        canManage={canManage}
-        onUpdated={() => void student.refetch()}
-      />
-
-      <section className="panel student-profile-enrollments">
-        <TablePanelHead
-          title={t("enrollmentsTitle")}
-          onRefresh={refreshEnrollmentData}
-          onAdd={canManage ? () => openEnrollmentWizard(null) : undefined}
-          addLabel={t("enrollInClassroom")}
-        />
-        <p className="muted panel-help">{t("enrollmentsHelp")}</p>
-
-        {data.classrooms.length > 0 ? (
-          <div className="student-profile-placements">
-            <h4>{t("classroomPlacementsTitle")}</h4>
-            <ul className="student-profile-placement-list">
-              {data.classrooms.map((row) => {
-                const active = row.classroom_students.effectiveTo == null;
-                return (
-                  <li key={`${row.classrooms.id}-${row.classroom_students.effectiveFrom}`}>
-                    <Link href={`/dashboard/structure/rooms/${row.classrooms.id}`}>
-                      {row.classrooms.name}
-                    </Link>
-                    <span className={active ? "badge badge--active" : "muted"}>
-                      {active
-                        ? t("placementActive")
-                        : t("placementEnded", {
-                            date: new Intl.DateTimeFormat(undefined, {
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric"
-                            }).format(new Date(row.classroom_students.effectiveTo!))
-                          })}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ) : null}
-
-        <TablePanelBody
-          loading={enrollments.isLoading}
-          error={enrollments.isError ? c("somethingWrong") : null}
-        >
-          {!enrollments.data?.length ? (
-            <p className="muted">{t("noEnrollmentsYet")}</p>
-          ) : (
-            <DataTable columns={enrollmentColumns} data={enrollments.data} />
-          )}
-        </TablePanelBody>
-      </section>
-
-      {canViewFinance ? (
-        <section className="panel student-profile-billing">
-          <TablePanelHead
-            title={f("studentBilling")}
-            onRefresh={() => void billing.refetch()}
-          />
-          <TablePanelBody
-            loading={billing.isLoading}
-            error={billing.isError ? c("somethingWrong") : null}
-          >
-            {billing.data ? (
-              <>
-                <div className="student-profile-stats">
-                  <article className="student-profile-stat">
-                    <span className="student-profile-stat__label">{f("totalOutstanding")}</span>
-                    <strong className="student-profile-stat__value">
-                      {billing.data.totalOutstanding.toLocaleString()}
-                    </strong>
-                  </article>
-                  <article className="student-profile-stat">
-                    <span className="student-profile-stat__label">{f("totalPaid")}</span>
-                    <strong className="student-profile-stat__value">
-                      {billing.data.totalPaid.toLocaleString()}
-                    </strong>
-                  </article>
-                </div>
-
-                <h4>{f("invoices")}</h4>
-                {!billing.data.invoices.length ? (
-                  <p className="muted">{f("noInvoices")}</p>
-                ) : (
-                  <ul className="student-profile-billing-list">
-                    {billing.data.invoices.map((invoice) => (
-                      <li key={invoice.id}>
-                        <Link href={`/dashboard/finance/invoices/${invoice.id}`}>
-                          {invoice.invoiceNumber}
-                        </Link>
-                        <span className="muted">
-                          {f(`source_${invoice.source}`)} · {invoice.total} · {invoice.status}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                <h4>{f("activeServices")}</h4>
-                {!billing.data.activeServices.length ? (
-                  <p className="muted">{f("noActiveServices")}</p>
-                ) : (
-                  <ul className="student-profile-billing-list">
-                    {billing.data.activeServices.map((service) => (
-                      <li key={service.id}>
-                        {service.feeItemName}
-                        <span className="muted">{service.effectiveFrom}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                <h4>{f("billingDiscounts")}</h4>
-                {!billing.data.discounts.length ? (
-                  <p className="muted">{f("noDiscounts")}</p>
-                ) : (
-                  <ul className="student-profile-billing-list">
-                    {billing.data.discounts.map((discount) => (
-                      <li key={discount.id}>
-                        {discount.ruleName}
-                        <span className="muted">
-                          {discount.status} · {discount.reason}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </>
-            ) : null}
-          </TablePanelBody>
-        </section>
       ) : null}
 
-      <RecordListPanel
-        title={t("subjectsThisTerm")}
-        empty={!profile.subjects.length ? t("noSubjectsThisTerm") : undefined}
-      >
-        {profile.subjects.length ? (
-          <RecordList>
-            {profile.subjects.map((subject) => (
-              <RecordListItem
-                key={subject.id}
-                nameForColor={subject.name}
-                title={subject.name}
-                meta={subject.code ?? undefined}
-                trailing={
-                  isActive ? (
-                    <span className="record-list-item__badge">{t("onTrack")}</span>
-                  ) : undefined
-                }
-              />
-            ))}
-          </RecordList>
-        ) : null}
-      </RecordListPanel>
-
-      {canManage ? (
+      {data && profile ? (
         <>
-          <RecordFormSheet
-            open={editOpen}
-            onOpenChange={setEditOpen}
-            title={t("editProfileTitle")}
-            help={t("editProfileHelp")}
-            onSubmit={editForm.handleSubmit(async (values) => {
-              await update.mutateAsync({
-                firstName: values.firstName,
-                lastName: values.lastName,
-                address: values.address,
-                medicalNotes: values.medicalNotes
-              });
+          <NavigationBackLink
+            fallback={{ label: nav("students"), href: "/dashboard/people?tab=students" }}
+          />
 
-              if (
-                values.guardianFirstName.trim() &&
-                values.guardianLastName.trim() &&
-                values.guardianPhone.trim()
-              ) {
-                if (guardian) {
-                  await updateGuardian.mutateAsync({
-                    guardianId: guardian.id,
-                    firstName: values.guardianFirstName,
-                    lastName: values.guardianLastName,
-                    phone: values.guardianPhone
-                  });
-                } else {
-                  const created = await createGuardian.mutateAsync({
-                    firstName: values.guardianFirstName,
-                    lastName: values.guardianLastName,
-                    relationship: "guardian",
-                    phone: values.guardianPhone
-                  });
-                  await linkGuardian.mutateAsync({
-                    guardianId: created.id,
-                    relationship: "guardian"
-                  });
+          <section className="structure-room-banner student-profile-banner">
+            <div className="structure-room-banner__main student-profile-banner__main">
+              <span
+                className="student-profile-avatar"
+                style={{ background: subjectColor(data.fullName).bg, color: subjectColor(data.fullName).text }}
+              >
+                {studentInitials(data.fullName)}
+              </span>
+              <div>
+                <div className="student-profile-banner__title-row">
+                  <h2 className="structure-room-banner__title">{data.fullName}</h2>
+                  <StatusPill tone={isActive ? "active" : "inactive"}>
+                    {isActive ? t("statusActive") : t("statusInactive")}
+                  </StatusPill>
+                </div>
+                <p className="pds-type-body-s-regular structure-room-banner__meta">{heroMeta}</p>
+              </div>
+            </div>
+            <div className="structure-room-banner__actions student-profile-banner__actions">
+              {canManage ? (
+                <HeroPrimaryAction onClick={() => setEditOpen(true)}>
+                  <Icon name="edit" />
+                  {t("editProfile")}
+                </HeroPrimaryAction>
+              ) : null}
+              {canManage ? (
+                <HeroMoreActionsMenu
+                  label={t("moreActions")}
+                  items={[
+                    ...(profile.primaryGuardian?.phone
+                      ? [
+                          {
+                            id: "message",
+                            label: t("messageGuardian"),
+                            icon: "send",
+                            onSelect: () => {
+                              const phone = profile.primaryGuardian!.phone!.replace(/\s+/g, "");
+                              window.location.href = `tel:${phone}`;
+                            }
+                          }
+                        ]
+                      : []),
+                    {
+                      id: "active",
+                      label: isActive ? t("setAsInactive") : t("markActive"),
+                      icon: isActive ? "pause_circle" : "check_circle",
+                      onSelect: () => void handleStatusToggle(!isActive)
+                    },
+                    ...(data?.archivedAt
+                      ? [
+                          {
+                            id: "restore",
+                            label: c("restore"),
+                            icon: "restore",
+                            onSelect: () => setRestoreOpen(true)
+                          },
+                          {
+                            id: "deleteForever",
+                            label: c("deletePermanently"),
+                            icon: "delete_forever",
+                            destructive: true,
+                            onSelect: () => setDeleteForeverOpen(true)
+                          }
+                        ]
+                      : [
+                          {
+                            id: "archive",
+                            label: c("archive"),
+                            icon: "archive",
+                            destructive: true,
+                            onSelect: () => setDeleteOpen(true)
+                          }
+                        ])
+                  ]}
+                />
+              ) : null}
+            </div>
+          </section>
+
+          <div className="student-profile-stats">
+            <article className="student-profile-stat">
+              <span className="pds-type-body-s-regular student-profile-stat__label">
+                {t("attendanceStat")}
+              </span>
+              <strong className="student-profile-stat__value">
+                {profile.attendancePercent != null ? `${profile.attendancePercent}%` : "—"}
+              </strong>
+            </article>
+            <article className="student-profile-stat">
+              <span className="pds-type-body-s-regular student-profile-stat__label">
+                {t("termGpaStat")}
+              </span>
+              <strong className="student-profile-stat__value">
+                {profile.termGpa != null ? profile.termGpa.toFixed(1) : "—"}
+              </strong>
+            </article>
+            {canViewFinance ? (
+              <article className="student-profile-stat">
+                <span className="pds-type-body-s-regular student-profile-stat__label">
+                  {f("totalOutstanding")}
+                </span>
+                <strong className="student-profile-stat__value student-profile-stat__value--compact">
+                  {billing.data ? formatMMK(billing.data.totalOutstanding) : "—"}
+                </strong>
+                <span className="pds-type-body-m-medium student-profile-stat__sub">
+                  {billing.data
+                    ? t("paidStatSub", { amount: formatMMK(billing.data.totalPaid) })
+                    : f("totalPaid")}
+                </span>
+              </article>
+            ) : (
+              <article className="student-profile-stat">
+                <span className="pds-type-body-s-regular student-profile-stat__label">
+                  {t("bestMonthStat")}
+                </span>
+                <strong className="student-profile-stat__value">{t("bestMonthPlaceholder")}</strong>
+              </article>
+            )}
+            <article className="student-profile-stat">
+              <span className="pds-type-body-s-regular student-profile-stat__label">
+                {t("guardianStat")}
+              </span>
+              {profile.primaryGuardian ? (
+                <>
+                  <strong className="student-profile-stat__value student-profile-stat__value--compact">
+                    {profile.primaryGuardian.fullName}
+                  </strong>
+                  <span className="pds-type-body-m-medium student-profile-stat__sub">
+                    {profile.primaryGuardian.phone ?? t("noGuardianPhone")}
+                  </span>
+                </>
+              ) : (
+                <strong className="student-profile-stat__value">—</strong>
+              )}
+            </article>
+          </div>
+
+          <SegmentedControl
+            className="student-profile-tabs"
+            ariaLabel={t("profileTabsAria")}
+            options={tabOptions}
+            value={activeTab}
+            onChange={(id) => setActiveTab(id as ProfileTab)}
+          />
+
+          {activeTab === "overview" ? (
+            <div className="student-profile-tab-content">
+              <div className="panel student-profile-tab-panel">
+                <div className="dash-page-title">
+                  <h2 className="pds-type-title-s-extrabold dash-page-title__heading">
+                    {t("classroomMembershipsTitle")}
+                  </h2>
+                  <div className="dash-page-title__actions">
+                    {canManage ? (
+                      <Button
+                        type="button"
+                        buttonType="filled"
+                        buttonColor="secondary"
+                        prefixIcon="add"
+                        onClick={() => openEnrollmentWizard(null)}
+                      >
+                        {t("enrollStudentCta")}
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+                <DataTableSection>
+                  <TablePanelBody
+                    variant="plain"
+                    loading={enrollments.isLoading}
+                    error={enrollments.isError ? c("somethingWrong") : null}
+                    empty={!membershipRows.length}
+                    emptyIcon="school"
+                    emptyTitle={t("noEnrollmentsYet")}
+                    emptyAction={
+                      canManage ? (
+                        <Button
+                          type="button"
+                          buttonType="filled"
+                          buttonColor="secondary"
+                          prefixIcon="add"
+                          onClick={() => openEnrollmentWizard(null)}
+                        >
+                          {t("enrollStudentCta")}
+                        </Button>
+                      ) : undefined
+                    }
+                  >
+                    {membershipRows.length ? (
+                      <DataTable
+                        columns={membershipColumns}
+                        data={membershipRows}
+                        showUpdatedAt={false}
+                      />
+                    ) : null}
+                  </TablePanelBody>
+                </DataTableSection>
+              </div>
+
+              <RecordListPanel
+                title={t("subjectsThisTerm")}
+                empty={!profile.subjects.length ? t("noSubjectsThisTerm") : undefined}
+              >
+                {profile.subjects.length ? (
+                  <RecordList className="pds-entity-list--two-col">
+                    {profile.subjects.map((subject) => (
+                      <RecordListItem
+                        key={subject.id}
+                        nameForColor={subject.name}
+                        title={subject.name}
+                        trailing={
+                          isActive ? (
+                            <span className="record-list-item__badge">{t("onTrack")}</span>
+                          ) : undefined
+                        }
+                      />
+                    ))}
+                  </RecordList>
+                ) : null}
+              </RecordListPanel>
+            </div>
+          ) : null}
+
+          {activeTab === "family" ? (
+            <div className="student-profile-tab-content">
+              <StudentFamilyPanel
+                variant="tab"
+                studentId={studentId}
+                studentName={data.fullName}
+                familyGroupId={data.familyGroupId}
+                guardians={linkedGuardians}
+                primaryGuardian={
+                  profile.primaryGuardian
+                    ? { id: profile.primaryGuardian.id, fullName: profile.primaryGuardian.fullName }
+                    : null
                 }
-              }
+                hasGuardian={data.guardians.length > 0 || Boolean(profile.primaryGuardian)}
+                canManage={canManage}
+                onUpdated={() => void student.refetch()}
+                sectionTitle={t("familyTitle")}
+              />
+            </div>
+          ) : null}
 
-              setEditOpen(false);
-            })}
+          {activeTab === "billing" && canViewFinance ? (
+            <div className="student-profile-tab-content">
+              <div className="panel student-profile-tab-panel student-profile-tab-panel--billing">
+                <div className="dash-page-title">
+                  <h2 className="pds-type-title-s-extrabold dash-page-title__heading">
+                    {t("recurrentBillingTitle")}
+                  </h2>
+                  <div className="dash-page-title__actions">
+                    {canRequestDiscount ? (
+                      <button
+                        type="button"
+                        className="pds-type-body-m-bold btn-ghost"
+                        onClick={() => setRequestDiscountOpen(true)}
+                      >
+                        <Icon name="volunteer_activism" size={18} />
+                        {d("request")}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+                <StudentRecurrentBillingPanel
+                  studentId={studentId}
+                  studentName={data.fullName}
+                  academicYearId={currentYear.data?.id ?? null}
+                  data={billing.data}
+                  loading={billing.isLoading}
+                  error={billing.isError}
+                  canManage={canManage}
+                  onRefresh={() => void billing.refetch()}
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {activeTab === "documents" ? (
+            <div className="student-profile-tab-content">
+              <StudentDocumentsPanel studentId={studentId} canManage={canManage} />
+            </div>
+          ) : null}
+
+          {canManage ? (
+            <>
+              <RecordFormSheet
+                open={editOpen}
+                onOpenChange={setEditOpen}
+                title={t("editProfileTitle")}
+                help={t("editProfileHelp")}
+                onSubmit={editForm.handleSubmit(async (values) => {
+                  await update.mutateAsync({
+                    firstName: values.firstName,
+                    lastName: values.lastName,
+                    address: values.address,
+                    medicalNotes: values.medicalNotes
+                  });
+
+                  if (
+                    values.guardianFirstName.trim() &&
+                    values.guardianLastName.trim() &&
+                    values.guardianPhone.trim()
+                  ) {
+                    if (guardian) {
+                      await updateGuardian.mutateAsync({
+                        guardianId: guardian.id,
+                        firstName: values.guardianFirstName,
+                        lastName: values.guardianLastName,
+                        phone: values.guardianPhone
+                      });
+                    } else {
+                      const created = await createGuardian.mutateAsync({
+                        firstName: values.guardianFirstName,
+                        lastName: values.guardianLastName,
+                        relationship: "guardian",
+                        phone: values.guardianPhone
+                      });
+                      await linkGuardian.mutateAsync({
+                        guardianId: created.id,
+                        relationship: "guardian"
+                      });
+                    }
+                  }
+
+                  setEditOpen(false);
+                })}
+                footer={
+                  <>
+                    <button
+                      type="button"
+                      className="pds-type-body-m-bold btn-ghost"
+                      onClick={() => setEditOpen(false)}
+                    >
+                      {c("cancel")}
+                    </button>
+                    <button
+                      type="submit"
+                      className="pds-type-body-m-bold btn-primary"
+                      disabled={
+                        update.isPending || updateGuardian.isPending || createGuardian.isPending
+                      }
+                    >
+                      <Icon name="check" />
+                      {update.isPending ? c("loading") : c("save")}
+                    </button>
+                  </>
+                }
+              >
+                <Field label={t("firstName")} error={editForm.formState.errors.firstName?.message}>
+                  <FormInput {...editForm.register("firstName")} />
+                </Field>
+                <Field label={t("lastName")} error={editForm.formState.errors.lastName?.message}>
+                  <FormInput {...editForm.register("lastName")} />
+                </Field>
+                <Field label={t("address")}>
+                  <FormInput {...editForm.register("address")} />
+                </Field>
+                <Field label={t("medicalNotes")}>
+                  <FormTextarea {...editForm.register("medicalNotes")} rows={3} />
+                </Field>
+                <div className="student-profile-edit-divider">
+                  <h4>{t("guardianContactTitle")}</h4>
+                  <p className="pds-type-body-s-regular muted">{t("guardianContactHelp")}</p>
+                </div>
+                <Field label={t("guardianFirstName")}>
+                  <FormInput {...editForm.register("guardianFirstName")} />
+                </Field>
+                <Field label={t("guardianLastName")}>
+                  <FormInput {...editForm.register("guardianLastName")} />
+                </Field>
+                <Field label={t("guardianPhone")}>
+                  <FormInput {...editForm.register("guardianPhone")} />
+                </Field>
+              </RecordFormSheet>
+
+              <ConfirmDialog
+                open={deleteOpen}
+                onOpenChange={setDeleteOpen}
+                title={t("archiveStudentTitle")}
+                description={t("archiveStudentHelp")}
+                confirmLabel={c("archive")}
+                cancelLabel={c("cancel")}
+                destructive
+                loading={archiveStudent.isPending}
+                onConfirm={() => void handleArchive()}
+              />
+
+              <ConfirmDialog
+                open={restoreOpen}
+                onOpenChange={setRestoreOpen}
+                title={t("restoreStudentTitle")}
+                description={t("restoreStudentHelp")}
+                confirmLabel={c("restore")}
+                cancelLabel={c("cancel")}
+                loading={restoreStudent.isPending}
+                onConfirm={() => void handleRestore()}
+              />
+
+              <ConfirmDialog
+                open={deleteForeverOpen}
+                onOpenChange={setDeleteForeverOpen}
+                title={t("deleteStudentTitle")}
+                description={t("deleteStudentHelp")}
+                confirmLabel={c("deletePermanently")}
+                cancelLabel={c("cancel")}
+                destructive
+                loading={deleteStudent.isPending}
+                onConfirm={() => void handlePermanentDelete()}
+              />
+
+              <ConfirmDialog
+                open={statusConfirm !== null}
+                onOpenChange={(open) => {
+                  if (!open) {
+                    setStatusConfirm(null);
+                  }
+                }}
+                title={statusConfirm === "deactivate" ? t("deactivateTitle") : t("activateTitle")}
+                description={
+                  statusConfirm === "deactivate" ? t("deactivateHelp") : t("activateHelp")
+                }
+                confirmLabel={
+                  statusConfirm === "deactivate" ? t("deactivateConfirm") : t("activateConfirm")
+                }
+                cancelLabel={c("cancel")}
+                loading={update.isPending}
+                onConfirm={() => void confirmStatusChange()}
+              />
+            </>
+          ) : null}
+
+          {canRequestDiscount ? (
+            <RequestDiscountSheet
+              open={requestDiscountOpen}
+              onOpenChange={setRequestDiscountOpen}
+              studentId={studentId}
+              studentName={student.data?.fullName}
+              onRequested={() => void billing.refetch()}
+            />
+          ) : null}
+
+          <BillingInvoicePreviewModal
+            invoiceId={previewInvoiceId}
+            open={Boolean(previewInvoiceId)}
+            onOpenChange={(open) => {
+              if (!open) {
+                setPreviewInvoiceId(null);
+              }
+            }}
+          />
+
+          {cancelTarget ? (
+            <CancelEnrollmentDialog
+              open={Boolean(cancelTarget)}
+              onOpenChange={(open) => {
+                if (!open) setCancelTarget(null);
+              }}
+              enrollmentId={cancelTarget.id}
+              invoiceId={cancelTarget.invoiceId}
+              studentName={data.fullName}
+              onCancelled={() => {
+                refreshEnrollmentData();
+                void billing.refetch();
+              }}
+            />
+          ) : null}
+
+          <RecordFormModal
+            open={assignTarget !== null}
+            onOpenChange={(open) => {
+              if (!open) {
+                setAssignTarget(null);
+                setAssignError(null);
+              }
+            }}
+            title={t("assignClassroom")}
+            help={t("assignClassroomHelp")}
+            headerIcon="door_open"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              if (!assignTarget) return;
+              if (!assignClassroomId) {
+                setAssignError(c("required"));
+                return;
+              }
+              setAssignError(null);
+              try {
+                await assignClassroom.mutateAsync({
+                  enrollmentId: assignTarget.id,
+                  classroomId: assignClassroomId
+                });
+                setAssignTarget(null);
+                refreshEnrollmentData();
+              } catch (error) {
+                setAssignError(error instanceof ApiError ? error.message : c("somethingWrong"));
+              }
+            }}
             footer={
               <>
-                <button type="button" className="btn-ghost" onClick={() => setEditOpen(false)}>
+                <button
+                  type="button"
+                  className="pds-type-body-m-bold btn-ghost"
+                  onClick={() => setAssignTarget(null)}
+                >
                   {c("cancel")}
                 </button>
                 <button
                   type="submit"
-                  className="btn-primary"
-                  disabled={update.isPending || updateGuardian.isPending || createGuardian.isPending}
+                  className="pds-type-body-m-bold btn-primary"
+                  disabled={assignClassroom.isPending || !assignClassroomId}
                 >
-                  <Icon name="check" />
-                  {update.isPending ? c("loading") : c("save")}
+                  <Icon name="door_open" />
+                  {assignClassroom.isPending ? c("loading") : t("assignClassroomConfirm")}
                 </button>
               </>
             }
           >
-            <Field label={t("firstName")} error={editForm.formState.errors.firstName?.message}>
-              <input {...editForm.register("firstName")} />
+            <Field label={t("membershipClass")}>
+              <PdsSelectField
+                value={assignClassroomId}
+                onValueChange={(value) =>
+                  setAssignClassroomId(typeof value === "string" ? value : "")
+                }
+                placeholder={t("assignClassroomPlaceholder")}
+                options={(classrooms.data ?? [])
+                  .filter(
+                    (room) =>
+                      !assignTarget ||
+                      (room.gradeId === assignTarget.gradeId &&
+                        room.academicYearId === assignTarget.academicYearId &&
+                        room.id !== assignTarget.classroomId)
+                  )
+                  .map((room) => ({ value: room.id, label: room.name }))}
+              />
             </Field>
-            <Field label={t("lastName")} error={editForm.formState.errors.lastName?.message}>
-              <input {...editForm.register("lastName")} />
-            </Field>
-            <Field label={t("address")}>
-              <input {...editForm.register("address")} />
-            </Field>
-            <Field label={t("medicalNotes")}>
-              <textarea {...editForm.register("medicalNotes")} rows={3} />
-            </Field>
-            <div className="student-profile-edit-divider">
-              <h4>{t("guardianContactTitle")}</h4>
-              <p className="muted">{t("guardianContactHelp")}</p>
-            </div>
-            <Field label={t("guardianFirstName")}>
-              <input {...editForm.register("guardianFirstName")} />
-            </Field>
-            <Field label={t("guardianLastName")}>
-              <input {...editForm.register("guardianLastName")} />
-            </Field>
-            <Field label={t("guardianPhone")}>
-              <input {...editForm.register("guardianPhone")} />
-            </Field>
-          </RecordFormSheet>
+            {assignError ? (
+              <p className="pds-type-body-m-medium error-text" role="alert">
+                {assignError}
+              </p>
+            ) : null}
+          </RecordFormModal>
 
           <ConfirmDialog
-            open={deleteOpen}
-            onOpenChange={setDeleteOpen}
-            title={t("deleteStudentTitle")}
-            description={t("deleteStudentHelp")}
-            confirmLabel={c("delete")}
+            open={unassignTarget !== null}
+            onOpenChange={(open) => {
+              if (!open) setUnassignTarget(null);
+            }}
+            title={t("removeFromClassroom")}
+            description={t("removeFromClassroomBody", { name: data.fullName })}
+            confirmLabel={t("removeFromClassroom")}
             cancelLabel={c("cancel")}
             destructive
-            loading={update.isPending}
-            onConfirm={() => void handleDelete()}
-          />
-
-          <ConfirmDialog
-            open={statusConfirm !== null}
-            onOpenChange={(open) => {
-              if (!open) {
-                setStatusConfirm(null);
-              }
+            loading={unassignClassroom.isPending}
+            onConfirm={async () => {
+              if (!unassignTarget) return;
+              await unassignClassroom.mutateAsync({ enrollmentId: unassignTarget.id });
+              setUnassignTarget(null);
+              refreshEnrollmentData();
             }}
-            title={statusConfirm === "deactivate" ? t("deactivateTitle") : t("activateTitle")}
-            description={
-              statusConfirm === "deactivate" ? t("deactivateHelp") : t("activateHelp")
-            }
-            confirmLabel={statusConfirm === "deactivate" ? t("deactivateConfirm") : t("activateConfirm")}
-            cancelLabel={c("cancel")}
-            loading={update.isPending}
-            onConfirm={() => void confirmStatusChange()}
           />
-        </>
-      ) : null}
 
-      {canManage ? (
-        <EnrollmentWizard
-          open={wizardOpen}
-          onOpenChange={(open) => {
-            setWizardOpen(open);
-            if (!open) {
-              setResumeDraft(null);
-            }
-          }}
-          classrooms={classrooms.data}
-          grades={grades.data}
-          academicYears={currentYear.data ? [currentYear.data] : undefined}
-          initialDraft={resumeDraft}
-          initialStudentId={studentId}
-          lockStudent
-          studentDisplayName={data.fullName}
-          extraInvalidatePaths={(tenant) => [
-            `/tenants/${tenant}/students/${studentId}/profile`,
-            `/tenants/${tenant}/students`
-          ]}
-          onSaved={refreshEnrollmentData}
-        />
+          {canManage ? (
+            <EnrollmentWizard
+              open={wizardOpen}
+              onOpenChange={(open) => {
+                setWizardOpen(open);
+                if (!open) {
+                  setResumeDraft(null);
+                }
+              }}
+              classrooms={classrooms.data}
+              grades={grades.data}
+              academicYears={currentYear.data ? [currentYear.data] : undefined}
+              initialDraft={resumeDraft}
+              initialStudentId={studentId}
+              lockStudent
+              studentDisplayName={data.fullName}
+              extraInvalidatePaths={(tenant) => [
+                `/tenants/${tenant}/students/${studentId}/profile`,
+                `/tenants/${tenant}/students`
+              ]}
+              onSaved={refreshEnrollmentData}
+            />
+          ) : null}
+        </>
       ) : null}
     </div>
   );

@@ -1,4 +1,5 @@
 "use client";
+import { FormInput } from "../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
@@ -6,10 +7,12 @@ import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { type UseQueryResult } from "@tanstack/react-query";
-import { useApiMutation, useApiQuery } from "../../lib/api";
+import { ConfirmDialog } from "../../../components/shared/confirm-dialog";
+import { RowMoreActionsMenu } from "../../../components/shared/row-more-actions";
+import { useApiMutation, useReferenceApiQuery } from "../../lib/api";
 import { DataTable } from "../../lib/data-table";
 import { Field } from "../../lib/form";
-import { Icon } from "../../lib/icon";
+import { Icon } from "../../lib/material-icon";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
 import { zodResolver } from "../../lib/zod-resolver";
@@ -27,7 +30,7 @@ export type MasterField = {
 export function useMasterDataResource<T extends StatusRecord = StatusRecord>(resource: string) {
   const path = (tenantId: string) => `/tenants/${tenantId}/academics/${resource}`;
 
-  const query = useApiQuery<T[]>(path);
+  const query = useReferenceApiQuery<T[]>(path);
 
   const create = useApiMutation<Record<string, unknown>>(
     (body, tenantId) => ({
@@ -58,7 +61,7 @@ export function useMasterDataResource<T extends StatusRecord = StatusRecord>(res
 
   const reactivate = useApiMutation<{ id: string }>(
     ({ id }, tenantId) => ({
-      path: `${path(tenantId)}/${id}/reactivate`,
+      path: `${path(tenantId)}/${id}/restore`,
       init: { method: "POST" }
     }),
     { invalidatePaths: (_body, tenantId) => [path(tenantId)] }
@@ -96,7 +99,8 @@ export function MasterDataPanel<T extends StatusRecord>({
   columns,
   addLabel,
   editTitle,
-  createTitle
+  createTitle,
+  canManage = true
 }: {
   title: string;
   query: UseQueryResult<T[]>;
@@ -109,10 +113,12 @@ export function MasterDataPanel<T extends StatusRecord>({
   addLabel?: string;
   editTitle: string;
   createTitle: string;
+  canManage?: boolean;
 }) {
   const t = useTranslations("academics");
   const c = useTranslations("common");
   const [formMode, setFormMode] = useState<FormMode<T> | null>(null);
+  const [archivingRecord, setArchivingRecord] = useState<T | null>(null);
   const requiredMessage = c("required");
 
   const defaultValues = useMemo(() => {
@@ -155,34 +161,54 @@ export function MasterDataPanel<T extends StatusRecord>({
       id: "actions",
       header: t("actions"),
       enableSorting: false,
-      cell: ({ row }) => (
-        <div style={{ display: "flex", gap: "8px" }}>
-          {row.original.status !== "archived" ? (
-            <>
-              <button type="button" className="row-action" onClick={() => openEdit(row.original)}>
-                {t("edit")}
-              </button>
-              <button
-                type="button"
-                className="row-action"
-                disabled={archive.isPending}
-                onClick={() => void archive.mutateAsync({ id: row.original.id })}
-              >
-                {archive.isPending ? t("archiving") : t("archive")}
-              </button>
-            </>
+      cell: ({ row }) =>
+        canManage ? (
+          row.original.status !== "archived" ? (
+            <RowMoreActionsMenu
+              ariaLabel={c("moreActions")}
+              items={[
+                {
+                  id: "view",
+                  label: c("view"),
+                  icon: "visibility",
+                  onSelect: () => openEdit(row.original)
+                },
+                {
+                  id: "edit",
+                  label: c("edit"),
+                  icon: "edit",
+                  onSelect: () => openEdit(row.original)
+                },
+                {
+                  id: "archive",
+                  label: t("archive"),
+                  icon: "inventory_2",
+                  destructive: true,
+                  onSelect: () => setArchivingRecord(row.original)
+                }
+              ]}
+            />
           ) : (
-            <button
-              type="button"
-              className="row-action"
-              disabled={reactivate.isPending}
-              onClick={() => void reactivate.mutateAsync({ id: row.original.id })}
-            >
-              {reactivate.isPending ? t("reactivating") : t("reactivate")}
-            </button>
-          )}
-        </div>
-      )
+            <RowMoreActionsMenu
+              ariaLabel={c("moreActions")}
+              items={[
+                {
+                  id: "view",
+                  label: c("view"),
+                  icon: "visibility",
+                  onSelect: () => openEdit(row.original)
+                },
+                {
+                  id: "reactivate",
+                  label: t("reactivate"),
+                  icon: "restore",
+                  disabled: reactivate.isPending,
+                  onSelect: () => void reactivate.mutateAsync({ id: row.original.id })
+                }
+              ]}
+            />
+          )
+        ) : null
     }
   ];
 
@@ -193,13 +219,7 @@ export function MasterDataPanel<T extends StatusRecord>({
     : null;
 
   return (
-    <section className="panel">
-      <TablePanelHead
-        title={title}
-        onRefresh={() => void query.refetch()}
-        onAdd={openCreate}
-        addLabel={addLabel ?? c("add")}
-      />
+    <>
       <TablePanelBody loading={query.isLoading} error={error} empty={!query.data?.length}>
         <DataTable
           columns={tableColumns}
@@ -242,7 +262,7 @@ export function MasterDataPanel<T extends StatusRecord>({
           <>
             <button
               type="button"
-              className="btn-ghost"
+              className="pds-type-body-m-bold btn-ghost"
               onClick={() => {
                 setFormMode(null);
                 form.reset(defaultValues);
@@ -250,7 +270,7 @@ export function MasterDataPanel<T extends StatusRecord>({
             >
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={form.formState.isSubmitting}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={form.formState.isSubmitting}>
               <Icon name="check" />
               {form.formState.isSubmitting
                 ? t("creating")
@@ -267,7 +287,7 @@ export function MasterDataPanel<T extends StatusRecord>({
             label={field.label}
             error={form.formState.errors[field.key]?.message as string | undefined}
           >
-            <input
+            <FormInput
               type={field.type === "number" ? "number" : "text"}
               placeholder={field.placeholder}
               {...form.register(field.key)}
@@ -275,6 +295,23 @@ export function MasterDataPanel<T extends StatusRecord>({
           </Field>
         ))}
       </RecordFormSheet>
-    </section>
+
+      <ConfirmDialog
+        open={archivingRecord !== null}
+        onOpenChange={(open) => {
+          if (!open) setArchivingRecord(null);
+        }}
+        title={t("archiveRecordTitle")}
+        description={t("archiveRecordHelp")}
+        confirmLabel={t("archive")}
+        destructive
+        loading={archive.isPending}
+        onConfirm={async () => {
+          if (!archivingRecord) return;
+          await archive.mutateAsync({ id: archivingRecord.id });
+          setArchivingRecord(null);
+        }}
+      />
+    </>
   );
 }

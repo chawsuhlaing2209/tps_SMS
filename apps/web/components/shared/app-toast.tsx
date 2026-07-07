@@ -1,6 +1,6 @@
 "use client";
 
-import { Icon } from "../../app/lib/icon";
+import { Icon } from "../../app/lib/material-icon";
 
 export type AppToastVariant = "success" | "error";
 

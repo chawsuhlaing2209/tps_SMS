@@ -52,6 +52,65 @@ export function parseCorrectionReason(reason: unknown): string {
   return correctionReasonSchema.parse(reason);
 }
 
+/** Inclusive bounds for user-entered percentage amounts (0–100). */
+export const PERCENT_MIN = 0;
+export const PERCENT_MAX = 100;
+export const PERCENT_RANGE_MESSAGE = "Enter a percentage between 0 and 100.";
+
+export function parsePercentString(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const num = Number(trimmed);
+  if (!Number.isFinite(num)) return null;
+  return num;
+}
+
+export function isPercentInRange(value: number): boolean {
+  return Number.isFinite(value) && value >= PERCENT_MIN && value <= PERCENT_MAX;
+}
+
+export function clampPercentValue(value: number): number {
+  if (!Number.isFinite(value)) return PERCENT_MIN;
+  return Math.min(PERCENT_MAX, Math.max(PERCENT_MIN, value));
+}
+
+export function clampPercentString(value: string): string {
+  if (value === "" || value === "-") return value;
+  const num = parsePercentString(value);
+  if (num === null) return value;
+  if (num > PERCENT_MAX) return String(PERCENT_MAX);
+  if (num < PERCENT_MIN) return String(PERCENT_MIN);
+  return value;
+}
+
+export function assertPercentInRange(
+  value: number,
+  message: string = PERCENT_RANGE_MESSAGE
+): void {
+  if (!isPercentInRange(value)) {
+    throw new Error(message);
+  }
+}
+
+export const percentAmountSchema = z
+  .number()
+  .min(PERCENT_MIN, PERCENT_RANGE_MESSAGE)
+  .max(PERCENT_MAX, PERCENT_RANGE_MESSAGE);
+
+export function addPercentStringIssue(
+  ctx: z.RefinementCtx,
+  value: string,
+  path: (string | number)[],
+  message: string = PERCENT_RANGE_MESSAGE
+): boolean {
+  const num = parsePercentString(value);
+  if (num === null || !isPercentInRange(num)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message, path });
+    return false;
+  }
+  return true;
+}
+
 export const gradeChiefAssignmentItemSchema = z.object({
   academicYearId: z.string().uuid(),
   gradeId: z.string().uuid()
@@ -66,11 +125,28 @@ export const subjectAssignmentItemSchema = z.object({
   subjectId: z.string().uuid()
 });
 
-export const updateTeacherAssignmentsSchema = z.object({
-  gradeChief: z.array(gradeChiefAssignmentItemSchema).default([]),
-  homeroom: z.array(homeroomAssignmentItemSchema).default([]),
-  subjectTeaching: z.array(subjectAssignmentItemSchema).default([])
-});
+export const updateTeacherAssignmentsSchema = z
+  .object({
+    gradeChief: z.array(gradeChiefAssignmentItemSchema).default([]),
+    homeroom: z.array(homeroomAssignmentItemSchema).default([]),
+    subjectTeaching: z.array(subjectAssignmentItemSchema).default([])
+  })
+  .superRefine((data, ctx) => {
+    if (data.homeroom.length > 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "A teacher can only be homeroom teacher for one classroom.",
+        path: ["homeroom"]
+      });
+    }
+    if (data.gradeChief.length > 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "A teacher can only be grade chief for one grade.",
+        path: ["gradeChief"]
+      });
+    }
+  });
 
 export type UpdateTeacherAssignmentsInput = z.infer<typeof updateTeacherAssignmentsSchema>;
 
@@ -170,34 +246,31 @@ export const enrollmentFeeLineSchema = z.object({
 
 export type EnrollmentFeeLine = z.infer<typeof enrollmentFeeLineSchema>;
 
-export const siblingDiscountCriteriaSchema = z.object({
-  type: z.literal("sibling"),
-  minEnrolledSiblings: z.number().int().min(0).optional(),
-  siblingOrdinal: z.number().int().min(2).optional(),
-  appliesToFeeTypes: z.array(z.string()).optional()
-});
-
-export const discountCriteriaSchema = z.union([
-  siblingDiscountCriteriaSchema,
-  z.object({ type: z.string() })
-]);
+export const discountCriteriaSchema = z.object({ type: z.string() });
 
 export const enrollmentPreviewInputSchema = z.object({
   studentId: z.string().uuid(),
   academicYearId: z.string().uuid(),
   gradeId: z.string().uuid(),
   classroomId: z.string().uuid().optional(),
-  optionalFeeItemIds: z.array(z.string().uuid()).default([])
+  optionalFeeItemIds: z.array(z.string().uuid()).default([]),
+  excludedDiscountRuleIds: z.array(z.string().uuid()).optional(),
+  forcedDiscountRuleIds: z.array(z.string().uuid()).optional(),
+  collectPayment: z.boolean().optional(),
+  paymentMethod: z.string().optional()
 });
 
 export type EnrollmentPreviewInput = z.infer<typeof enrollmentPreviewInputSchema>;
 
 export const enrollmentPreviewDiscountSchema = z.object({
   id: z.string(),
+  ruleId: z.string().optional(),
   name: z.string(),
   discountType: z.string(),
   amount: z.number(),
   source: z.enum(["student_discount", "rule"]),
+  stackable: z.boolean().optional(),
+  eligibilityReason: z.string().optional(),
   status: z.string().optional(),
   requiresApproval: z.boolean().optional()
 });
@@ -208,6 +281,18 @@ export const enrollmentPreviewPendingDiscountSchema = z.object({
   status: z.string(),
   reason: z.string()
 });
+
+export const enrollmentPreviewDiscountOptionSchema = z.object({
+  ruleId: z.string().uuid(),
+  name: z.string(),
+  subtitle: z.string().optional(),
+  amount: z.number(),
+  applied: z.boolean(),
+  eligibility: z.enum(["auto_applied", "eligible", "not_eligible"]),
+  canToggle: z.boolean()
+});
+
+export type EnrollmentPreviewDiscountOption = z.infer<typeof enrollmentPreviewDiscountOptionSchema>;
 
 export const enrollmentPreviewResultSchema = z.object({
   feeLines: z.array(enrollmentFeeLineSchema),
@@ -222,10 +307,12 @@ export const enrollmentPreviewResultSchema = z.object({
     })
   ),
   discounts: z.array(enrollmentPreviewDiscountSchema),
+  discountOptions: z.array(enrollmentPreviewDiscountOptionSchema).default([]),
   pendingDiscounts: z.array(enrollmentPreviewPendingDiscountSchema).default([]),
   siblingSummary: z.object({
     eligible: z.boolean(),
     enrolledSiblingCount: z.number().int(),
+    studentPosition: z.number().int().optional(),
     message: z.string()
   }),
   subtotal: z.number(),
@@ -270,6 +357,8 @@ export const enrollmentPaymentMethods = paymentMethods;
 export const enrollmentConfirmSchema = z.object({
   dueDate: z.string().optional(),
   optionalFeeItemIds: z.array(z.string().uuid()).optional(),
+  excludedDiscountRuleIds: z.array(z.string().uuid()).optional(),
+  forcedDiscountRuleIds: z.array(z.string().uuid()).optional(),
   collectPayment: z.boolean().default(false),
   paymentMethod: z.enum(paymentMethods).optional(),
   paymentAmount: z.number().positive().optional(),

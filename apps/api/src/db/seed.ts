@@ -1,7 +1,7 @@
 import { config } from "dotenv";
-import { rolePermissions, roles as roleKeys } from "@sms/shared";
+import { buildInvoiceNumber, rolePermissions, roles as roleKeys } from "@sms/shared";
 import argon2 from "argon2";
-import { and, eq, isNull, ne } from "drizzle-orm";
+import { and, eq, isNull, ne, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import {
@@ -14,26 +14,39 @@ import {
   enrollmentFeePlans,
   enrollmentFeePlanGrades,
   enrollments,
-  familyGroups,
   feeItems,
   gradeChiefAssignments,
   gradeSubjects,
   grades,
-  guardians,
+  invoiceItems,
+  invoices,
   paymentPlanInstallments,
   paymentPlans,
+  payments,
+  receipts,
   roles,
+  schoolOperatingHourBlocks,
+  schoolScheduleSettings,
   staff,
-  studentServices,
   students,
   subjects,
   teachingSectorGrades,
   teachingSectors,
   tenantSettings,
   tenants,
+  timetablePeriods,
   userRoles,
   users
 } from "./schema.js";
+import { buildPeriodRowsFromSchedule } from "../school-schedule/school-schedule.service.js";
+import { seedAcademicCatalog } from "./seed-academic-catalog.js";
+import { seedDemoClassroomAssignments } from "./seed-demo-classroom-assignments.js";
+import { seedFacilityRooms } from "./seed-facility-rooms.js";
+import { seedDemoTimetable } from "./seed-demo-timetable.js";
+import { printDemoAlphaCredentials, seedDemoAlpha } from "./seed-demo-alpha.js";
+import { seedDemoTeachers } from "./seed-demo-teachers.js";
+import { seedDemoEnquiries } from "./seed-demo-enquiries.js";
+import { seedDepartments } from "./seed-departments.js";
 
 // Load env from the API folder first, then the repo root.
 config();
@@ -344,6 +357,306 @@ async function seedDemoClassroomData(
   await seedDemoPaymentPlans(db, tenantId);
 }
 
+const DEMO_TUITION_BY_GRADE: Record<string, string> = {
+  KG: "850000",
+  "Grade 1": "500000",
+  "Grade 2": "520000",
+  "Grade 3": "540000",
+  "Grade 4": "560000",
+  "Grade 5": "1000000",
+  "Grade 6": "620000",
+  "Grade 7": "640000",
+  "Grade 8": "660000",
+  "Grade 9": "1100000",
+  "Grade 10": "1200000",
+  "Grade 11": "1300000",
+  "Grade 12": "1400000"
+};
+
+async function seedDemoEnrollmentBillingAllGrades(
+  db: ReturnType<typeof drizzle>,
+  tenantId: string,
+  academicYearId: string,
+  gradeIds: Map<string, string>
+) {
+  const ensureFeeItem = async (name: string, feeType: string, billingType: string) => {
+    const [existing] = await db
+      .select({ id: feeItems.id })
+      .from(feeItems)
+      .where(and(eq(feeItems.tenantId, tenantId), eq(feeItems.name, name)));
+
+    if (existing) {
+      return existing.id;
+    }
+
+    const [created] = await db
+      .insert(feeItems)
+      .values({ tenantId, name, feeType, billingType, status: "active" })
+      .returning({ id: feeItems.id });
+
+    return created!.id;
+  };
+
+  const registrationId = await ensureFeeItem("Registration Fee", "registration", "one_time");
+  const transportId = await ensureFeeItem("School Transport", "transport", "monthly");
+
+  const sharedPlans = [
+    { feeItemId: registrationId, amount: "50000" },
+    { feeItemId: transportId, amount: "40000" }
+  ];
+
+  const ensurePlanGrade = async (feeItemId: string, amount: string, gradeId: string) => {
+    const [existingPlan] = await db
+      .select({ id: enrollmentFeePlans.id })
+      .from(enrollmentFeePlans)
+      .where(
+        and(
+          eq(enrollmentFeePlans.tenantId, tenantId),
+          eq(enrollmentFeePlans.academicYearId, academicYearId),
+          eq(enrollmentFeePlans.feeItemId, feeItemId),
+          eq(enrollmentFeePlans.amount, amount)
+        )
+      );
+
+    const planId =
+      existingPlan?.id ??
+      (
+        await db
+          .insert(enrollmentFeePlans)
+          .values({ tenantId, academicYearId, feeItemId, amount })
+          .returning({ id: enrollmentFeePlans.id })
+      )[0]?.id;
+
+    if (!planId) return;
+
+    const [existingGrade] = await db
+      .select({ id: enrollmentFeePlanGrades.id })
+      .from(enrollmentFeePlanGrades)
+      .where(
+        and(
+          eq(enrollmentFeePlanGrades.tenantId, tenantId),
+          eq(enrollmentFeePlanGrades.planId, planId),
+          eq(enrollmentFeePlanGrades.gradeId, gradeId)
+        )
+      );
+
+    if (!existingGrade) {
+      await db.insert(enrollmentFeePlanGrades).values({ tenantId, planId, gradeId });
+    }
+  };
+
+  // One reusable "Tuition" component with per-grade amounts (grades that share
+  // an amount share a plan via ensurePlanGrade), instead of a component per grade.
+  const tuitionId = await ensureFeeItem("Tuition", "tuition", "one_time");
+  for (const [gradeName, gradeId] of gradeIds) {
+    const tuitionAmount = DEMO_TUITION_BY_GRADE[gradeName] ?? "500000";
+    await ensurePlanGrade(tuitionId, tuitionAmount, gradeId);
+    for (const plan of sharedPlans) {
+      await ensurePlanGrade(plan.feeItemId, plan.amount, gradeId);
+    }
+  }
+
+  await seedDemoPaymentPlans(db, tenantId);
+}
+
+/** Default school hours + generated lesson periods for the active academic year. */
+async function seedTimetableSchedule(
+  db: ReturnType<typeof drizzle>,
+  tenantId: string,
+  academicYearId: string,
+  actorUserId: string | null
+) {
+  const [existingPeriod] = await db
+    .select({ id: timetablePeriods.id })
+    .from(timetablePeriods)
+    .where(
+      and(
+        eq(timetablePeriods.tenantId, tenantId),
+        eq(timetablePeriods.academicYearId, academicYearId)
+      )
+    )
+    .limit(1);
+
+  if (existingPeriod) {
+    return;
+  }
+
+  const [existingSettings] = await db
+    .select({ id: schoolScheduleSettings.id })
+    .from(schoolScheduleSettings)
+    .where(eq(schoolScheduleSettings.tenantId, tenantId))
+    .limit(1);
+
+  if (!existingSettings) {
+    await db.insert(schoolScheduleSettings).values({
+      tenantId,
+      shortBreakStartsAt: "10:15",
+      shortBreakEndsAt: "10:30",
+      lunchBreakStartsAt: "12:00",
+      lunchBreakEndsAt: "13:00",
+      periodDurationMinutes: 45,
+      workingDays: [1, 2, 3, 4, 5],
+      createdBy: actorUserId,
+      updatedBy: actorUserId
+    });
+  }
+
+  const [existingBlock] = await db
+    .select({ id: schoolOperatingHourBlocks.id })
+    .from(schoolOperatingHourBlocks)
+    .where(eq(schoolOperatingHourBlocks.tenantId, tenantId))
+    .limit(1);
+
+  let blockId = existingBlock?.id;
+
+  if (!blockId) {
+    const [block] = await db
+      .insert(schoolOperatingHourBlocks)
+      .values({
+        tenantId,
+        label: "Regular school day",
+        startsAt: "08:00",
+        endsAt: "15:00",
+        isPrimary: true,
+        sortOrder: 0,
+        createdBy: actorUserId,
+        updatedBy: actorUserId
+      })
+      .returning({ id: schoolOperatingHourBlocks.id });
+    blockId = block?.id;
+  }
+
+  if (!blockId || !actorUserId) {
+    return;
+  }
+
+  const rows = buildPeriodRowsFromSchedule({
+    tenantId,
+    academicYearId,
+    actorUserId,
+    periodDurationMinutes: 45,
+    shortBreakStartsAt: "10:15",
+    shortBreakEndsAt: "10:30",
+    lunchBreakStartsAt: "12:00",
+    lunchBreakEndsAt: "13:00",
+    blocks: [
+      {
+        id: blockId,
+        label: "Regular school day",
+        startsAt: "08:00",
+        endsAt: "15:00",
+        isPrimary: true,
+        sortOrder: 0
+      }
+    ]
+  });
+
+  if (rows.length) {
+    await db.insert(timetablePeriods).values(rows);
+  }
+}
+
+/**
+ * Links legacy seeded invoices to enrollments so finance list/payment APIs resolve grade and year.
+ */
+async function backfillBillingInvoiceLinks(
+  db: ReturnType<typeof drizzle>,
+  tenantId: string,
+  studentId: string,
+  academicYearId: string,
+  gradeId: string
+) {
+  const [enrollment] = await db
+    .select({ id: enrollments.id })
+    .from(enrollments)
+    .where(
+      and(
+        eq(enrollments.tenantId, tenantId),
+        eq(enrollments.studentId, studentId),
+        eq(enrollments.academicYearId, academicYearId),
+        eq(enrollments.gradeId, gradeId),
+        eq(enrollments.status, "approved")
+      )
+    );
+
+  if (!enrollment) return;
+
+  const [student] = await db
+    .select({ familyGroupId: students.familyGroupId })
+    .from(students)
+    .where(and(eq(students.tenantId, tenantId), eq(students.id, studentId)));
+
+  await db
+    .update(invoices)
+    .set({
+      enrollmentId: enrollment.id,
+      familyGroupId: student?.familyGroupId ?? null
+    })
+    .where(
+      and(
+        eq(invoices.tenantId, tenantId),
+        eq(invoices.studentId, studentId),
+        isNull(invoices.enrollmentId)
+      )
+    );
+
+  const openInvoices = await db
+    .select({ id: invoices.id, dueDate: invoices.dueDate, status: invoices.status })
+    .from(invoices)
+    .where(
+      and(
+        eq(invoices.tenantId, tenantId),
+        eq(invoices.studentId, studentId),
+        eq(invoices.status, "unpaid")
+      )
+    );
+
+  const today = new Date().toISOString().slice(0, 10);
+  for (const invoice of openInvoices) {
+    if (invoice.dueDate && invoice.dueDate < today) {
+      await db
+        .update(invoices)
+        .set({ status: "overdue" })
+        .where(eq(invoices.id, invoice.id));
+    }
+  }
+
+  const invoiceRows = await db
+    .select({ id: invoices.id, invoiceNumber: invoices.invoiceNumber })
+    .from(invoices)
+    .where(and(eq(invoices.tenantId, tenantId), eq(invoices.studentId, studentId)));
+
+  for (const invoice of invoiceRows) {
+    const [payment] = await db
+      .select({ id: payments.id })
+      .from(payments)
+      .where(
+        and(
+          eq(payments.tenantId, tenantId),
+          eq(payments.invoiceId, invoice.id),
+          eq(payments.kind, "payment")
+        )
+      );
+
+    if (!payment) continue;
+
+    const [existingReceipt] = await db
+      .select({ id: receipts.id })
+      .from(receipts)
+      .where(and(eq(receipts.tenantId, tenantId), eq(receipts.paymentId, payment.id)));
+
+    if (!existingReceipt) {
+      const suffix = invoice.invoiceNumber.split("-").pop() ?? payment.id.slice(0, 6);
+      await db.insert(receipts).values({
+        tenantId,
+        paymentId: payment.id,
+        receiptNumber: `PKR-${suffix}`,
+        issuedAt: new Date("2026-06-12T03:00:00Z")
+      });
+    }
+  }
+}
+
 async function seedDemoPaymentPlans(db: ReturnType<typeof drizzle>, tenantId: string) {
   const ensurePlan = async (
     name: string,
@@ -446,7 +759,7 @@ async function seedDemoEnrollmentBilling(
     return created!.id;
   };
 
-  const tuitionId = await ensureFeeItem("Grade 1 Tuition", "tuition", "one_time");
+  const tuitionId = await ensureFeeItem("Tuition", "tuition", "one_time");
   const registrationId = await ensureFeeItem("Registration Fee", "registration", "one_time");
   const transportId = await ensureFeeItem("School Transport", "transport", "monthly");
 
@@ -535,149 +848,109 @@ async function seedDemoEnrollmentBilling(
   const [existingSiblingRule] = await db
     .select({ id: discountRules.id })
     .from(discountRules)
-    .where(and(eq(discountRules.tenantId, tenantId), eq(discountRules.name, "Sibling 10%")));
+    .where(and(eq(discountRules.tenantId, tenantId), eq(discountRules.name, "Sibling discount — 2nd child")));
 
   if (!existingSiblingRule) {
     await db.insert(discountRules).values({
       tenantId,
-      name: "Sibling 10%",
+      name: "Sibling discount — 2nd child",
       discountType: "sibling",
       valueType: "percentage",
       value: "10",
+      triggerMode: "auto",
+      stackable: true,
+      sortOrder: 0,
       criteria: {
         type: "sibling",
+        appliesTo: {
+          billingContexts: ["enrollment", "recurring"],
+          feeTypes: ["tuition"]
+        },
         minEnrolledSiblings: 1,
-        appliesToFeeTypes: ["tuition"]
+        siblingOrdinal: 2,
+        notes: "Applied when enrolling the 2nd child in the same family for the academic year."
       },
       status: "active"
     });
   }
 
-  const [existingFamily] = await db
-    .select({ id: familyGroups.id })
-    .from(familyGroups)
-    .where(and(eq(familyGroups.tenantId, tenantId), eq(familyGroups.name, "Demo Kyaw Family")));
-
-  let familyGroupId = existingFamily?.id;
-
-  if (!familyGroupId) {
-    const [guardian] = await db
-      .insert(guardians)
-      .values({
-        tenantId,
-        fullName: "U Kyaw Kyaw",
-        phone: "09123456789",
-        preferredChannel: "phone"
-      })
-      .returning({ id: guardians.id });
-
-    const [family] = await db
-      .insert(familyGroups)
-      .values({
-        tenantId,
-        name: "Demo Kyaw Family",
-        primaryGuardianId: guardian!.id
-      })
-      .returning({ id: familyGroups.id });
-
-    familyGroupId = family!.id;
-  }
-
-  const ensureStudent = async (admissionNumber: string, fullName: string, status: "draft" | "enrolled") => {
-    const [existing] = await db
-      .select({ id: students.id })
-      .from(students)
-      .where(and(eq(students.tenantId, tenantId), eq(students.admissionNumber, admissionNumber)));
-
-    if (existing) {
-      await db
-        .update(students)
-        .set({ familyGroupId, status, fullName })
-        .where(eq(students.id, existing.id));
-      return existing.id;
+  const demoRules = [
+    {
+      name: "Merit scholarship — top 3",
+      discountType: "scholarship",
+      value: "15",
+      triggerMode: "request",
+      stackable: false,
+      criteria: {
+        type: "scholarship",
+        appliesTo: {
+          billingContexts: ["enrollment"],
+          feeTypes: ["tuition"]
+        },
+        requiresDocumentation: true,
+        notes: "Awarded to top 3 students in each grade every term."
+      }
+    },
+    {
+      name: "Staff child waiver",
+      discountType: "staff",
+      value: "20",
+      triggerMode: "request",
+      stackable: false,
+      criteria: {
+        type: "staff_child",
+        appliesTo: {
+          billingContexts: ["enrollment", "recurring"],
+          feeTypes: ["tuition"]
+        },
+        requiresDocumentation: true,
+        notes: "For children of full-time staff members."
+      }
+    },
+    {
+      name: "Financial-Need Bursary",
+      discountType: "custom",
+      value: "25",
+      triggerMode: "request",
+      stackable: false,
+      status: "inactive" as const,
+      criteria: {
+        type: "custom",
+        appliesTo: {
+          billingContexts: ["enrollment", "recurring"],
+          feeTypes: ["tuition", "registration", "transport"]
+        },
+        requiresDocumentation: true,
+        notes: "Awarded on application for families with demonstrated financial need."
+      }
     }
+  ] as const;
 
-    const [created] = await db
-      .insert(students)
-      .values({
+  for (const rule of demoRules) {
+    const [existing] = await db
+      .select({ id: discountRules.id })
+      .from(discountRules)
+      .where(and(eq(discountRules.tenantId, tenantId), eq(discountRules.name, rule.name)));
+
+    if (!existing) {
+      await db.insert(discountRules).values({
         tenantId,
-        familyGroupId,
-        admissionNumber,
-        fullName,
-        dateOfBirth: admissionNumber === "DEMO-001" ? "2018-03-15" : "2020-08-20",
-        status
-      })
-      .returning({ id: students.id });
-
-    return created!.id;
-  };
-
-  const olderStudentId = await ensureStudent("DEMO-001", "Maung Maung Kyaw", "enrolled");
-  await ensureStudent("DEMO-002", "Ma Hla Kyaw", "draft");
-
-  for (let i = 3; i <= 102; i++) {
-    const num = String(i).padStart(3, "0");
-    await ensureStudent(`DEMO-${num}`, `Demo Student ${num}`, i % 5 === 0 ? "enrolled" : "draft");
-  }
-
-  const [existingEnrollment] = await db
-    .select({ id: enrollments.id })
-    .from(enrollments)
-    .where(
-      and(
-        eq(enrollments.tenantId, tenantId),
-        eq(enrollments.studentId, olderStudentId),
-        eq(enrollments.academicYearId, academicYearId)
-      )
-    );
-
-  if (!existingEnrollment) {
-    await db.insert(enrollments).values({
-      tenantId,
-      studentId: olderStudentId,
-      academicYearId,
-      gradeId,
-      classroomId,
-      status: "approved",
-      billingSnapshot: { optionalFeeItemIds: [] }
-    });
-
-    await db.insert(classroomStudents).values({
-      tenantId,
-      classroomId,
-      studentId: olderStudentId,
-      effectiveFrom: "2026-06-01",
-      movementReason: "seed_enrollment"
-    });
-  }
-
-  const [transportFee] = await db
-    .select({ id: feeItems.id })
-    .from(feeItems)
-    .where(and(eq(feeItems.tenantId, tenantId), eq(feeItems.name, "School Transport")));
-
-  if (transportFee) {
-    const [existingService] = await db
-      .select({ id: studentServices.id })
-      .from(studentServices)
-      .where(
-        and(
-          eq(studentServices.tenantId, tenantId),
-          eq(studentServices.studentId, olderStudentId),
-          eq(studentServices.feeItemId, transportFee.id),
-          isNull(studentServices.effectiveTo)
-        )
-      );
-
-    if (!existingService) {
-      await db.insert(studentServices).values({
-        tenantId,
-        studentId: olderStudentId,
-        feeItemId: transportFee.id,
-        effectiveFrom: "2026-06-01"
+        name: rule.name,
+        discountType: rule.discountType,
+        valueType: "percentage",
+        value: rule.value,
+        triggerMode: rule.triggerMode,
+        stackable: rule.stackable,
+        criteria: rule.criteria,
+        status: "status" in rule ? rule.status : "active"
       });
     }
   }
+
+  await db
+    .update(discountRules)
+    .set({ status: "inactive" })
+    .where(and(eq(discountRules.tenantId, tenantId), eq(discountRules.status, "archived")));
 }
 
 async function seedTenant(
@@ -747,7 +1020,12 @@ async function seedTenant(
 
   let academicYearId = existingYear?.id;
 
-  if (!academicYearId) {
+  if (academicYearId) {
+    await db
+      .update(academicYears)
+      .set({ status: "active" })
+      .where(eq(academicYears.id, academicYearId));
+  } else {
     const [academicYear] = await db
       .insert(academicYears)
       .values({
@@ -770,9 +1048,23 @@ async function seedTenant(
     await db.insert(subjects).values({ tenantId: tenant.id, name: "Mathematics", code: "MATH" });
   }
 
-  if (input.slug === "demo-alpha") {
+  if (input.slug === "demo-alpha" && academicYearId) {
+    const catalog = await seedAcademicCatalog(db, tenant.id, academicYearId);
     await seedTeachingSectors(db, tenant.id);
-    await seedDemoClassroomData(db, tenant.id, input.slug, ownerPasswordHash);
+    await seedFacilityRooms(db, tenant.id);
+    await seedDemoTeachers(db, tenant.id, academicYearId, input.slug, ownerPasswordHash, catalog);
+    await seedDemoClassroomAssignments(db, tenant.id, academicYearId, input.slug, catalog);
+    await seedDemoEnrollmentBillingAllGrades(db, tenant.id, academicYearId, catalog.gradeIds);
+    await seedDemoAlpha(db, tenant.id, academicYearId, ownerPasswordHash);
+    await seedDepartments(db, tenant.id);
+    await seedDemoEnquiries(db, tenant.id);
+  }
+
+  if (academicYearId && owner?.id) {
+    await seedTimetableSchedule(db, tenant.id, academicYearId, owner.id);
+    if (input.slug === "demo-alpha") {
+      await seedDemoTimetable(db, tenant.id, academicYearId, owner.id);
+    }
   }
 
   return { tenant, academicYearId };
@@ -789,10 +1081,40 @@ async function verifyIsolation(db: ReturnType<typeof drizzle>, tenantId: string)
   }
 }
 
+/**
+ * Safety guard: demo seeding overwrites tenant settings and creates demo
+ * accounts with known passwords. It must never run against a shared
+ * (staging/production) database by accident — only against localhost, or a
+ * remote DB when the operator explicitly opts in via ALLOW_REMOTE_DB_SEED=1
+ * (e.g. CI, or a freshly provisioned staging instance).
+ */
+function assertSeedTargetIsSafe(connectionString: string) {
+  if (process.env.ALLOW_REMOTE_DB_SEED === "1") {
+    return;
+  }
+  const host = (() => {
+    try {
+      return new URL(connectionString).hostname;
+    } catch {
+      return "";
+    }
+  })();
+  const localHosts = new Set(["localhost", "127.0.0.1", "::1", "postgres", "db"]);
+  if (!localHosts.has(host)) {
+    console.error(
+      `Refusing to seed non-local database host "${host}".\n` +
+        "Demo seeding creates accounts with published passwords and overwrites tenant settings.\n" +
+        "If this is intentional (fresh staging/CI database), re-run with ALLOW_REMOTE_DB_SEED=1."
+    );
+    process.exit(1);
+  }
+}
+
 async function main() {
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL ?? "postgres://sms:sms@localhost:5432/sms"
-  });
+  const connectionString =
+    process.env.DATABASE_URL ?? "postgres://sms:sms@localhost:5432/sms";
+  assertSeedTargetIsSafe(connectionString);
+  const pool = new Pool({ connectionString });
   const db = drizzle(pool);
 
   try {
@@ -826,11 +1148,9 @@ async function main() {
       );
     }
     console.log(
-      `  • Demo teacher (demo-alpha only)  ·  tenant demo-alpha  ·  email teacher@demo-alpha.example.edu.mm  ·  password ${DEMO_OWNER_PASSWORD}`
+      `  • Demo teachers (demo-alpha)  ·  13 accounts  ·  e.g. teacher@demo-alpha.example.edu.mm  ·  password ${DEMO_OWNER_PASSWORD}`
     );
-    console.log(
-      "    Grade chief of Grade 1, homeroom of Room A, teaches Maths in Room A — edit under People → Teacher assignments."
-    );
+    printDemoAlphaCredentials(DEMO_OWNER_PASSWORD);
   } finally {
     await pool.end();
   }

@@ -1,8 +1,9 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { InputWrapper } from "../../components/shared/input-wrapper";
 
-/** Labeled form control with an inline validation message. Omit `label` for unlabeled controls (use aria-label on the child). */
+/** @deprecated Prefer `InputWrapper` from `components/shared/input-wrapper`. Thin alias for legacy call sites. */
 export function Field({
   label,
   error,
@@ -14,18 +15,16 @@ export function Field({
 }) {
   if (!label) {
     return (
-      <div className="form-field form-field--unlabeled">
+      <div className="pds-type-body-s-semibold form-field form-field--unlabeled">
         {children}
-        {error ? <span className="field-error">{error}</span> : null}
+        {error ? <span className="pds-type-body-s-regular field-error">{error}</span> : null}
       </div>
     );
   }
 
   return (
-    <label className="form-field">
-      <span>{label}</span>
+    <InputWrapper label={label} error={error} labelStyle="default">
       {children}
-      {error ? <span className="field-error">{error}</span> : null}
-    </label>
+    </InputWrapper>
   );
 }

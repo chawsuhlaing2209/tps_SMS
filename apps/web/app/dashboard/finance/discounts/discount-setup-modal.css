@@ -1,0 +1,96 @@
+/* Discount setup wizard modal — Figma 132:32111 */
+
+.record-modal--wide.record-modal--discount-setup {
+  max-width: min(800px, calc(100vw - var(--pds-padding-x-large)));
+  width: min(800px, calc(100vw - var(--pds-padding-x-large)));
+}
+
+.record-modal--discount-setup .pds-modal__body,
+.record-modal--discount-setup .pds-modal__footer {
+  padding-inline: var(--pds-padding-xx-large);
+}
+
+.record-modal--discount-setup .pds-modal__body {
+  max-height: min(58vh, 520px);
+  overflow-y: auto;
+  padding-block: var(--pds-padding-large);
+}
+
+.record-modal--discount-setup .pds-modal__footer {
+  border-top: 1px solid var(--pds-border-color-primary);
+}
+
+.record-modal--discount-setup .discount-setup-section {
+  gap: var(--pds-gap-x-large);
+}
+
+.record-modal--discount-setup .form-stack {
+  gap: var(--pds-gap-x-large);
+}
+
+.record-modal--discount-setup .stepper--ceremony {
+  margin-inline: calc(-1 * var(--pds-padding-x-small));
+  padding-inline: var(--pds-padding-x-small);
+}
+
+/* Application mode cards — Figma 132:34922 */
+.record-modal--discount-setup .application-mode-grid {
+  display: flex;
+  gap: var(--pds-gap-small);
+}
+
+.record-modal--discount-setup .selection-card--stack {
+  align-items: flex-start;
+  align-self: stretch;
+  background: var(--pds-background-card);
+  border-color: var(--pds-border-color-primary);
+  border-radius: var(--pds-radius-14);
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: var(--pds-gap-medium);
+  min-width: 0;
+  padding: 13px 17px;
+}
+
+.record-modal--discount-setup .selection-card--stack:hover:not(:disabled) {
+  border-color: var(--pds-border-color-primary);
+}
+
+.record-modal--discount-setup .selection-card--stack.selection-card--selected {
+  background: var(--pds-background-layout-primary);
+  border-color: var(--pds-border-color-active);
+  border-radius: var(--pds-radius-12);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--pds-brand-accent) 18%, transparent);
+}
+
+.record-modal--discount-setup .selection-card--stack .selection-card__icon {
+  background: transparent;
+  border-radius: 0;
+  color: var(--pds-text-placeholder);
+  height: auto;
+  width: auto;
+}
+
+.record-modal--discount-setup .selection-card--stack.selection-card--selected .selection-card__icon {
+  color: var(--pds-notification-foreground-success);
+}
+
+.record-modal--discount-setup .selection-card--stack .selection-card__body {
+  gap: 0;
+  padding-right: 0;
+}
+
+.record-modal--discount-setup .selection-card--stack .selection-card__title {
+  font-family: var(--pds-type-body-m-bold-font-family);
+  font-size: var(--pds-type-body-m-bold-font-size);
+  font-weight: var(--pds-type-body-m-bold-font-weight);
+  line-height: var(--pds-type-body-m-bold-line-height);
+}
+
+.record-modal--discount-setup .selection-card--stack .selection-card__desc {
+  color: var(--pds-text-secondary);
+  font-family: var(--pds-type-body-s-regular-font-family);
+  font-size: var(--pds-type-body-s-regular-font-size);
+  font-weight: var(--pds-type-body-s-regular-font-weight);
+  line-height: var(--pds-type-body-s-regular-line-height);
+}

@@ -1,4 +1,5 @@
 "use client";
+import { FormDatePicker, FormInput } from "../../../components/shared/form-input";
 
 import { myanmarPhoneSchema, type StaffQualification } from "@sms/shared";
 import { useTranslations } from "next-intl";
@@ -7,8 +8,9 @@ import { useFieldArray, useForm } from "react-hook-form";
 import { z } from "zod";
 import { useApiMutation, useApiQuery } from "../../lib/api";
 import { Field } from "../../lib/form";
-import { Icon } from "../../lib/icon";
-import { RecordFormSheet } from "../../lib/record-sheet";
+import { Icon } from "../../lib/material-icon";
+import { RecordFormModal } from "../../lib/record-modal";
+import { PdsSelectField } from "../../../components/pds";
 import { zodResolver } from "../../lib/zod-resolver";
 
 type Department = { id: string; name: string };
@@ -141,18 +143,19 @@ export function TeacherEditSheet({
   }
 
   return (
-    <RecordFormSheet
+    <RecordFormModal
       open={open}
+      size="wide"
       onOpenChange={onOpenChange}
       title={t("editTeacher")}
       help={t("editHelp")}
       onSubmit={form.handleSubmit((values) => void onSubmit(values))}
       footer={
         <>
-          <button type="button" className="btn-ghost" onClick={() => onOpenChange(false)}>
+          <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => onOpenChange(false)}>
             {c("cancel")}
           </button>
-          <button type="submit" className="btn-primary" disabled={provisionUpdate.isPending}>
+          <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={provisionUpdate.isPending}>
             <Icon name="check" />
             {provisionUpdate.isPending ? c("loading") : c("save")}
           </button>
@@ -160,38 +163,53 @@ export function TeacherEditSheet({
       }
     >
       <Field label={c("name")} error={form.formState.errors.fullName?.message}>
-        <input {...form.register("fullName")} />
+        <FormInput {...form.register("fullName")} />
       </Field>
       <Field label={t("email")} error={form.formState.errors.email?.message}>
-        <input type="email" {...form.register("email")} />
+        <FormInput type="email" {...form.register("email")} />
       </Field>
       <Field label={t("phone")} error={form.formState.errors.phone?.message}>
-        <input {...form.register("phone")} placeholder="09XXXXXXXXX" />
+        <FormInput {...form.register("phone")} placeholder="09XXXXXXXXX" />
       </Field>
       <Field label={t("department")}>
-        <select {...form.register("departmentId")}>
-          <option value="">{t("departmentPlaceholder")}</option>
-          {departments.data?.map((department) => (
-            <option key={department.id} value={department.id}>
-              {department.name}
-            </option>
-          ))}
-        </select>
+        <PdsSelectField
+          variant="form"
+          value={form.watch("departmentId")}
+          onValueChange={(value) =>
+            form.setValue("departmentId", typeof value === "string" ? value : "", {
+              shouldValidate: true
+            })
+          }
+          placeholder={t("departmentPlaceholder")}
+          options={
+            departments.data?.map((department) => ({
+              value: department.id,
+              label: department.name
+            })) ?? []
+          }
+        />
       </Field>
       <Field label={t("joinDate")}>
-        <input type="date" {...form.register("joinDate")} />
+        <FormDatePicker
+          type="day"
+          variant="form"
+          value={form.watch("joinDate")}
+          onValueChange={(next) => form.setValue("joinDate", next, { shouldValidate: true })}
+          placeholder={t("joinDate")}
+          ariaLabel={t("joinDate")}
+        />
       </Field>
       <Field label={t("promotionTitle")}>
-        <input
+        <FormInput
           {...form.register("promotionTitle")}
           placeholder={t("promotionTitlePlaceholder")}
         />
-        <p className="muted">{t("promotionTitleHelp")}</p>
+        <p className="pds-type-body-s-regular muted">{t("promotionTitleHelp")}</p>
       </Field>
 
-      <div className="form-section-head">
-        <h3>{t("qualificationsTitle")}</h3>
-        <p className="muted">{t("qualificationsHelp")}</p>
+      <div className="pds-type-body-l-medium form-section-head">
+        <h3 className="pds-type-title-xxs-extrabold">{t("qualificationsTitle")}</h3>
+        <p className="pds-type-body-s-regular muted">{t("qualificationsHelp")}</p>
       </div>
 
       {qualifications.fields.map((field, index) => (
@@ -200,24 +218,24 @@ export function TeacherEditSheet({
             label={t("qualificationTitle")}
             error={form.formState.errors.qualifications?.[index]?.title?.message}
           >
-            <input
+            <FormInput
               {...form.register(`qualifications.${index}.title`)}
               placeholder={t("qualificationTitlePlaceholder")}
             />
           </Field>
           <Field label={t("qualificationInstitution")}>
-            <input
+            <FormInput
               {...form.register(`qualifications.${index}.institution`)}
               placeholder={t("qualificationInstitutionPlaceholder")}
             />
           </Field>
           <Field label={t("qualificationYear")}>
-            <input {...form.register(`qualifications.${index}.year`)} placeholder="2020" />
+            <FormInput {...form.register(`qualifications.${index}.year`)} placeholder="2020" />
           </Field>
           {qualifications.fields.length > 1 ? (
             <button
               type="button"
-              className="btn-ghost btn-ghost--compact"
+              className="pds-type-body-m-bold btn-ghost btn-ghost--compact"
               onClick={() => qualifications.remove(index)}
             >
               {t("removeQualification")}
@@ -228,12 +246,12 @@ export function TeacherEditSheet({
 
       <button
         type="button"
-        className="btn-ghost"
+        className="pds-type-body-m-bold btn-ghost"
         onClick={() => qualifications.append({ title: "", institution: "", year: "" })}
       >
         <Icon name="add" />
         {t("addQualification")}
       </button>
-    </RecordFormSheet>
+    </RecordFormModal>
   );
 }

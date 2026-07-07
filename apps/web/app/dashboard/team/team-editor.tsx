@@ -1,21 +1,24 @@
 "use client";
 
 import { type ColumnDef } from "@tanstack/react-table";
-import { myanmarPhoneSchema, roleDisplayFor } from "@sms/shared";
+import { roleDisplayFor } from "@sms/shared";
 import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { useApiMutation, useApiQuery } from "../../lib/api";
-import { DataTable } from "../../lib/data-table";
-import { Field } from "../../lib/form";
-import { Icon } from "../../lib/icon";
+import { createPortal } from "react-dom";
+import { PdsSearchBar, PdsSearchFiltersRow } from "../../../components/pds";
+import { StatusBadge, Badge } from "../../../components/shared/badge";
+import { useApiQuery } from "../../lib/api";
+import { DataTable, DirectoryMemberCell } from "../../lib/data-table";
+import { Icon } from "../../lib/material-icon";
+import { resetNavigationTrail } from "../../lib/navigation-trail";
+import { PaginationControls } from "../../lib/pagination-controls";
 import { hasAnyPermission } from "../../lib/permissions";
-import { RecordFormSheet } from "../../lib/record-sheet";
+import { localizedRoleLabel } from "../../lib/role-label";
 import { getSession } from "../../lib/session";
-import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
-import { TableSearchInput } from "../../lib/table-search";
-import { zodResolver } from "../../lib/zod-resolver";
+import { TablePanelBody, DataTableSection } from "../../lib/table-panel";
+import { useDashPageTitleActionsTarget } from "../dashboard-page-title";
+import { TeamMemberFormSheet } from "./team-member-form-sheet";
 
 type StaffOverview = {
   id: string;
@@ -34,316 +37,164 @@ type StaffOverview = {
 };
 
 type Role = { id: string; key: string; name: string };
-type Department = { id: string; name: string };
 
-type TeamFormValues = {
-  fullName: string;
-  email: string;
-  phone: string;
-  roleKey: string;
-  departmentId: string;
-  joinDate: string;
+type StaffOverviewPage = {
+  data: StaffOverview[];
+  total: number;
+  limit: number;
+  offset: number;
 };
 
-type FormMode = { type: "create" } | { type: "edit"; staff: StaffOverview };
+const PAGE_SIZE = 50;
 
-const STAFF_OVERVIEW_PATH = (tenant: string) =>
-  `/tenants/${tenant}/hr/staff/overview?excludeEmploymentRole=teacher`;
+const staffOverviewPath = (tenant: string, page: number, search: string) => {
+  const params = new URLSearchParams({
+    excludeEmploymentRole: "teacher",
+    limit: String(PAGE_SIZE),
+    offset: String(page * PAGE_SIZE)
+  });
+  if (search.trim()) params.set("search", search.trim());
+  return `/tenants/${tenant}/hr/staff/overview?${params.toString()}`;
+};
+
 const ASSIGNABLE_ROLES_PATH = (tenant: string) =>
   `/tenants/${tenant}/hr/assignable-roles?scope=team`;
-const DEPARTMENTS_PATH = (tenant: string) => `/tenants/${tenant}/departments/active`;
 
 export function TeamEditor() {
   const t = useTranslations("team");
+  const tNames = useTranslations("settings.roles.names");
   const c = useTranslations("common");
+  const router = useRouter();
   const permissions = getSession()?.permissions;
   const canManageHr = hasAnyPermission(permissions, ["hr.manage"]);
   const canView = canManageHr || hasAnyPermission(permissions, ["identity.manage"]);
 
-  const [formMode, setFormMode] = useState<FormMode | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [saved, setSaved] = useState<string | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
-
-  const queryPath = search.trim()
-    ? (tenant: string) =>
-        `${STAFF_OVERVIEW_PATH(tenant)}&search=${encodeURIComponent(search.trim())}`
-    : STAFF_OVERVIEW_PATH;
-
-  const staff = useApiQuery<StaffOverview[]>(canView ? queryPath : () => null);
-  const roles = useApiQuery<Role[]>((tenant) =>
-    canManageHr ? ASSIGNABLE_ROLES_PATH(tenant) : null
-  );
-  const departments = useApiQuery<Department[]>((tenant) =>
-    canManageHr ? DEPARTMENTS_PATH(tenant) : null
-  );
-
-  const provision = useApiMutation(
-    (body: Record<string, unknown>, tenant) => ({
-      path: `/tenants/${tenant}/hr/staff/provision`,
-      init: { method: "POST", body: JSON.stringify(body) }
-    }),
-    { invalidatePaths: (_b, tenant) => [STAFF_OVERVIEW_PATH(tenant)] }
-  );
-
-  const provisionUpdate = useApiMutation(
-    ({ staffId, body }: { staffId: string; body: Record<string, unknown> }, tenant) => ({
-      path: `/tenants/${tenant}/hr/staff/${staffId}/provision`,
-      init: { method: "PATCH", body: JSON.stringify(body) }
-    }),
-    { invalidatePaths: (_b, tenant) => [STAFF_OVERVIEW_PATH(tenant)] }
-  );
-
-  const roleOptions = useMemo(() => {
-    const base = roles.data ?? [];
-    if (formMode?.type === "edit" && formMode.staff.rbacRoleKey) {
-      const currentKey = formMode.staff.rbacRoleKey;
-      if (!base.some((role) => role.key === currentKey)) {
-        return [
-          { id: currentKey, key: currentKey, name: roleDisplayFor(currentKey).label },
-          ...base
-        ];
-      }
-    }
-    return base.filter((role) => role.key !== "teacher");
-  }, [roles.data, formMode]);
-
-  const schema = z.object({
-    fullName: z.string().trim().min(1, c("required")),
-    email: z.string().email(t("invalidEmail")),
-    phone: myanmarPhoneSchema,
-    roleKey: z.string().trim().min(1, c("required")),
-    departmentId: z.string(),
-    joinDate: z.string()
-  });
-
-  const form = useForm<TeamFormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      fullName: "",
-      email: "",
-      phone: "",
-      roleKey: "",
-      departmentId: "",
-      joinDate: ""
-    }
-  });
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
-    if (!roleOptions.length || formMode?.type !== "create") {
-      return;
-    }
-    const current = form.getValues("roleKey");
-    if (current && roleOptions.some((role) => role.key === current)) {
-      return;
-    }
-    const preferred = roleOptions[0]?.key ?? "";
-    if (preferred) {
-      form.setValue("roleKey", preferred);
-    }
-  }, [roleOptions, formMode, form]);
+    setPage(0);
+  }, [search]);
 
-  const openCreate = () => {
-    form.reset({
-      fullName: "",
-      email: "",
-      phone: "",
-      roleKey: roleOptions[0]?.key ?? "",
-      departmentId: "",
-      joinDate: ""
-    });
-    setFormMode({ type: "create" });
-  };
+  const queryPath = useMemo(
+    () => (tenant: string) => staffOverviewPath(tenant, page, search),
+    [page, search]
+  );
 
-  const openEdit = (member: StaffOverview) => {
-    form.reset({
-      fullName: member.fullName,
-      email: member.email ?? member.loginEmail ?? "",
-      phone: member.phone ?? "",
-      roleKey: member.rbacRoleKey ?? roleOptions[0]?.key ?? "",
-      departmentId: member.departmentId ?? "",
-      joinDate: member.joinDate ?? ""
-    });
-    setFormMode({ type: "edit", staff: member });
-  };
+  const staff = useApiQuery<StaffOverviewPage>(canView ? queryPath : () => null);
+  const roles = useApiQuery<Role[]>((tenant) =>
+    canView ? ASSIGNABLE_ROLES_PATH(tenant) : null
+  );
+
+  const roleLabel = (key: string, name?: string) =>
+    localizedRoleLabel(roleDisplayFor(key, name), tNames, name);
 
   const columns: ColumnDef<StaffOverview, unknown>[] = [
-    { id: "name", header: c("name"), accessorKey: "fullName" },
+    {
+      id: "name",
+      header: c("staffMember"),
+      cell: ({ row }) => (
+        <DirectoryMemberCell name={row.original.fullName} email={row.original.email ?? row.original.loginEmail} />
+      )
+    },
     {
       id: "role",
       header: t("role"),
-      accessorFn: (row) =>
-        roleDisplayFor(row.rbacRoleKey ?? "", roles.data?.find((r) => r.key === row.rbacRoleKey)?.name)
-          .label
+      cell: ({ row }) => {
+        const roleKey = row.original.rbacRoleKey ?? "";
+        const roleName = roles.data?.find((r) => r.key === roleKey)?.name;
+        const label = roleLabel(roleKey, roleName);
+        return <Badge tone="neutral">{label}</Badge>;
+      }
     },
-    { id: "department", header: t("department"), accessorFn: (row) => row.department ?? "—" },
     {
-      id: "login",
-      header: t("loginStatus"),
-      accessorFn: (row) =>
-        row.userId
-          ? row.loginStatus
-            ? t(`loginStatus_${row.loginStatus}`)
-            : t("loginActive")
-          : t("loginNone")
+      id: "department",
+      header: c("subjectGrade"),
+      accessorFn: (row) => row.department ?? "—"
     },
     {
       id: "status",
       header: c("status"),
       accessorKey: "status",
-      cell: ({ row }) => (
-        <span className={`badge badge--${row.original.status}`}>{row.original.status}</span>
-      )
+      cell: ({ row }) => <StatusBadge status={row.original.status} />
     }
   ];
-
-  async function handleSubmit(values: TeamFormValues) {
-    setSaved(null);
-    setFormError(null);
-
-    const payload = {
-      fullName: values.fullName,
-      email: values.email,
-      phone: values.phone,
-      roleKey: values.roleKey,
-      createLogin: true,
-      departmentId: values.departmentId || undefined,
-      joinDate: values.joinDate || undefined
-    };
-
-    try {
-      if (formMode?.type === "create") {
-        await provision.mutateAsync(payload);
-      } else if (formMode?.type === "edit") {
-        await provisionUpdate.mutateAsync({
-          staffId: formMode.staff.id,
-          body: payload
-        });
-      }
-
-      setSaved(t("saved"));
-      setFormMode(null);
-      form.reset();
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : c("somethingWrong"));
-    }
-  }
 
   if (!canView) {
     return null;
   }
 
   return (
-    <section className="panel">
-      <TablePanelHead
-        title={t("listTitle")}
-        help={t("listHelp")}
-        onRefresh={() => void staff.refetch()}
-        onAdd={canManageHr ? openCreate : undefined}
-        addLabel={t("addMember")}
-        extra={
-          <TableSearchInput
-            placeholder={t("search")}
-            value={search}
-            aria-label={t("search")}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        }
-      />
-      <TablePanelBody
-        loading={staff.isLoading}
-        error={staff.isError ? c("somethingWrong") : null}
-        empty={!staff.data?.length}
-      >
-        <DataTable
-          columns={columns}
-          data={staff.data ?? []}
-          onRowClick={canManageHr ? (member) => openEdit(member) : undefined}
+    <>
+      <DataTableSection>
+        <TeamHeaderActionsPortal onAdd={canManageHr ? () => setCreateOpen(true) : undefined} />
+        <PdsSearchFiltersRow
+          filters={
+            <PdsSearchBar
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={t("search")}
+              aria-label={t("search")}
+            />
+          }
         />
-      </TablePanelBody>
+        <TablePanelBody
+          variant="card-plain"
+          loading={staff.isLoading}
+          error={staff.isError ? c("somethingWrong") : null}
+          empty={!staff.data?.data.length}
+        >
+          <DataTable
+            columns={columns}
+            data={staff.data?.data ?? []}
+            onRowClick={(member) => {
+              resetNavigationTrail([
+                { label: t("title"), href: "/dashboard/team" },
+                { label: member.fullName, href: `/dashboard/team/${member.id}` }
+              ]);
+              router.push(`/dashboard/team/${member.id}`);
+            }}
+          />
+        </TablePanelBody>
+      </DataTableSection>
+
+      <PaginationControls
+        page={page}
+        pageSize={PAGE_SIZE}
+        total={staff.data?.total ?? 0}
+        onPageChange={setPage}
+      />
 
       {canManageHr ? (
-        <RecordFormSheet
-          open={formMode !== null}
-          onOpenChange={(open) => {
-            if (!open) {
-              setFormMode(null);
-              form.reset();
-            }
-          }}
-          title={formMode?.type === "edit" ? t("editMember") : t("addMember")}
-          help={t("formHelp")}
-          onSubmit={(event) => {
-            event.preventDefault();
-            void form.handleSubmit((values) => void handleSubmit(values))();
-          }}
-          footer={
-            <>
-              <button type="button" className="btn-ghost" onClick={() => setFormMode(null)}>
-                {c("cancel")}
-              </button>
-              <button type="submit" className="btn-primary" disabled={form.formState.isSubmitting}>
-                <Icon name="check" />
-                {form.formState.isSubmitting ? c("loading") : c("save")}
-              </button>
-            </>
-          }
-        >
-          <Field label={c("name")} error={form.formState.errors.fullName?.message}>
-            <input {...form.register("fullName")} />
-          </Field>
-          <Field label={t("role")} error={form.formState.errors.roleKey?.message}>
-            {roles.isLoading ? (
-              <p className="muted">{c("loading")}</p>
-            ) : roleOptions.length ? (
-              <select {...form.register("roleKey")}>
-                {roleOptions.map((role) => (
-                  <option key={role.id} value={role.key}>
-                    {roleDisplayFor(role.key, role.name).label}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <p className="muted">{t("noRolesAvailable")}</p>
-            )}
-          </Field>
-          <Field label={t("email")} error={form.formState.errors.email?.message}>
-            <input type="email" {...form.register("email")} />
-          </Field>
-          <Field label={t("phone")} error={form.formState.errors.phone?.message}>
-            <input {...form.register("phone")} placeholder="09XXXXXXXXX" />
-          </Field>
-          <Field label={t("department")}>
-            <select {...form.register("departmentId")}>
-              <option value="">{t("departmentPlaceholder")}</option>
-              {departments.data?.map((department) => (
-                <option key={department.id} value={department.id}>
-                  {department.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label={t("joinDate")}>
-            <input type="date" {...form.register("joinDate")} />
-          </Field>
-          {formMode?.type === "edit" && formMode.staff.userId ? (
-            <p className="muted">{t("loginLinked", { email: formMode.staff.loginEmail ?? "—" })}</p>
-          ) : (
-            <p className="muted">{t("loginAutoHelp")}</p>
-          )}
-          {formError ? (
-            <p className="error-text" role="alert">
-              {formError}
-            </p>
-          ) : null}
-        </RecordFormSheet>
+        <TeamMemberFormSheet
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          member={null}
+          onSaved={() => void staff.refetch()}
+        />
       ) : null}
+    </>
+  );
+}
 
-      {saved ? (
-        <p className="form-feedback form-feedback--ok" role="status">
-          {saved}
-        </p>
+function TeamHeaderActionsPortal({ onAdd }: { onAdd?: () => void }) {
+  const t = useTranslations("team");
+  const target = useDashPageTitleActionsTarget();
+
+  if (!target) {
+    return null;
+  }
+
+  return createPortal(
+    <>
+      {onAdd ? (
+        <button type="button" className="pds-type-body-m-bold btn-primary" onClick={onAdd}>
+          <Icon name="add" />
+          {t("addMember")}
+        </button>
       ) : null}
-    </section>
+    </>,
+    target
   );
 }

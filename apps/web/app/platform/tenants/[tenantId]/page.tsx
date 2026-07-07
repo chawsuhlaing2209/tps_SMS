@@ -1,17 +1,18 @@
 "use client";
+import { FormInput } from "../../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { featureFlags as allFeatureFlagKeys } from "@sms/shared";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useState, use } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { usePlatformMutation, usePlatformQuery } from "../../../lib/api";
 import { DataTable } from "../../../lib/data-table";
 import { Field } from "../../../lib/form";
 import { zodResolver } from "../../../lib/zod-resolver";
+import { StatusBadge } from "../../../../components/shared/badge";
 
 type Tenant = {
   id: string;
@@ -61,9 +62,12 @@ type SaveSettingsBody = {
 
 const TENANTS_PATH = "/platform/tenants";
 
-export default function TenantDetailPage() {
-  const params = useParams<{ tenantId: string }>();
-  const tenantId = params.tenantId;
+export default function TenantDetailPage({
+  params
+}: {
+  params: Promise<{ tenantId: string }>;
+}) {
+  const { tenantId } = use(params);
   const t = useTranslations("platformTenants");
   const c = useTranslations("common");
   const [settingsSaved, setSettingsSaved] = useState(false);
@@ -152,7 +156,7 @@ export default function TenantDetailPage() {
       cell: ({ row }) => (
         <button
           type="button"
-          className={row.original.enabled ? "badge badge--active" : "badge"}
+          className={row.original.enabled ? "pds-type-body-s-semibold badge badge--tone-success" : "pds-type-body-s-semibold badge badge--tone-neutral"}
           disabled={toggleFlag.isPending}
           onClick={() =>
             void toggleFlag.mutateAsync({ key: row.original.key, enabled: !row.original.enabled })
@@ -170,13 +174,13 @@ export default function TenantDetailPage() {
   }));
 
   if (tenants.isLoading) {
-    return <p className="muted">{c("loading")}</p>;
+    return <p className="pds-type-body-s-regular muted">{c("loading")}</p>;
   }
 
   if (!tenant) {
     return (
       <div className="page-stack">
-        <p className="error-text">{t("tenantNotFound")}</p>
+        <p className="pds-type-body-m-medium error-text">{t("tenantNotFound")}</p>
         <Link href="/platform/tenants">{t("backToList")}</Link>
       </div>
     );
@@ -185,12 +189,12 @@ export default function TenantDetailPage() {
   return (
     <div className="page-stack">
       <div className="page-head">
-        <Link href="/platform/tenants" className="muted">
+        <Link href="/platform/tenants" className="pds-type-body-s-regular muted">
           {t("backToList")}
         </Link>
-        <h1>
+        <h1 className="pds-type-title-m-extrabold">
           {tenant.name}{" "}
-          <span className={`badge badge--${tenant.status}`}>{t(`status_${tenant.status}`)}</span>
+          <StatusBadge status={tenant.status} label={t(`status_${tenant.status}`)} />
         </h1>
         <p>
           <code>{tenant.slug}</code> · {tenant.timezone} · {tenant.currency}
@@ -199,7 +203,7 @@ export default function TenantDetailPage() {
 
       <section className="panel">
         <div className="panel-head">
-          <h2>{c("status")}</h2>
+          <h2 className="pds-type-title-xs-bold">{c("status")}</h2>
         </div>
         <div className="entity-form" style={{ flexDirection: "row", gap: "8px", flexWrap: "wrap" }}>
           {(["active", "suspended", "archived"] as const).map((status) => (
@@ -215,21 +219,21 @@ export default function TenantDetailPage() {
           ))}
         </div>
         {statusMessage ? (
-          <p className="form-feedback form-feedback--ok" role="status">
+          <p className="pds-type-body-m-medium form-feedback form-feedback--ok" role="status">
             {statusMessage}
           </p>
         ) : null}
         {updateStatus.isError ? (
-          <p className="error-text">{updateStatus.error.message}</p>
+          <p className="pds-type-body-m-medium error-text">{updateStatus.error.message}</p>
         ) : null}
       </section>
 
       <section className="panel">
         <div className="panel-head">
-          <h2>{t("settingsTitle")}</h2>
+          <h2 className="pds-type-title-xs-bold">{t("settingsTitle")}</h2>
           <button
             type="button"
-            className="btn-primary"
+            className="pds-type-body-m-bold btn-primary"
             disabled={saveSettings.isPending || settings.isLoading}
             onClick={() => void submitSettings()}
           >
@@ -237,46 +241,46 @@ export default function TenantDetailPage() {
           </button>
         </div>
         {settings.isLoading ? (
-          <p className="muted">{c("loading")}</p>
+          <p className="pds-type-body-s-regular muted">{c("loading")}</p>
         ) : (
           <form className="entity-form" onSubmit={(event) => void submitSettings(event)}>
             <Field label={t("schoolName")} error={settingsForm.formState.errors.schoolName?.message}>
-              <input {...settingsForm.register("schoolName")} />
+              <FormInput {...settingsForm.register("schoolName")} />
             </Field>
             <Field label={t("contactEmail")} error={settingsForm.formState.errors.contactEmail?.message}>
-              <input {...settingsForm.register("contactEmail")} />
+              <FormInput {...settingsForm.register("contactEmail")} />
             </Field>
             <Field label={t("contactPhone")}>
-              <input {...settingsForm.register("contactPhone")} />
+              <FormInput {...settingsForm.register("contactPhone")} />
             </Field>
             <Field label={t("address")}>
-              <input {...settingsForm.register("address")} />
+              <FormInput {...settingsForm.register("address")} />
             </Field>
             <Field label={t("receiptPrefix")}>
-              <input {...settingsForm.register("receiptPrefix")} />
+              <FormInput {...settingsForm.register("receiptPrefix")} />
             </Field>
             <Field label={t("invoicePrefix")}>
-              <input {...settingsForm.register("invoicePrefix")} />
+              <FormInput {...settingsForm.register("invoicePrefix")} />
             </Field>
           </form>
         )}
         {settingsSaved ? (
-          <p className="form-feedback form-feedback--ok" role="status">
+          <p className="pds-type-body-m-medium form-feedback form-feedback--ok" role="status">
             {t("settingsSaved")}
           </p>
         ) : null}
         {saveSettings.isError ? (
-          <p className="error-text">{saveSettings.error.message}</p>
+          <p className="pds-type-body-m-medium error-text">{saveSettings.error.message}</p>
         ) : null}
       </section>
 
       <section className="panel">
         <div className="panel-head">
-          <h2>{t("featuresTitle")}</h2>
+          <h2 className="pds-type-title-xs-bold">{t("featuresTitle")}</h2>
         </div>
-        <p className="muted">{t("featuresHelp")}</p>
+        <p className="pds-type-body-s-regular muted">{t("featuresHelp")}</p>
         {flags.isLoading ? (
-          <p className="muted">{c("loading")}</p>
+          <p className="pds-type-body-s-regular muted">{c("loading")}</p>
         ) : (
           <DataTable columns={flagColumns} data={flagRows} />
         )}

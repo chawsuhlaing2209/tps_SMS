@@ -1,4 +1,5 @@
 "use client";
+import { FormDatePicker, FormInput } from "../../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
@@ -6,15 +7,19 @@ import Link from "next/link";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { PdsSelectField } from "../../../../components/pds";
 import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
-import { Switch } from "../../../../components/ui/switch";
-import { useApiMutation, useApiQuery } from "../../../lib/api";
+import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
+import { Toggle } from "../../../../components/shared/toggle";
+import { StatusBadge } from "../../../../components/shared/badge";
+import { useApiMutation, useReferenceApiQuery } from "../../../lib/api";
 import { DataTable } from "../../../lib/data-table";
 import { Field } from "../../../lib/form";
-import { Icon } from "../../../lib/icon";
+import { Icon } from "../../../lib/material-icon";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { TablePanelBody, TablePanelHead } from "../../../lib/table-panel";
 import { zodResolver } from "../../../lib/zod-resolver";
+import { ModulePageHeader } from "../../module-page-header";
 
 type AcademicYearOverview = {
   id: string;
@@ -29,6 +34,7 @@ type AcademicYearOverview = {
 };
 
 type YearValues = { name: string; startsOn: string; endsOn: string };
+type CreateYearBody = YearValues & { importStructureFromYearId?: string };
 type FormMode = { type: "create" } | { type: "edit"; year: AcademicYearOverview };
 type ToggleConfirm = {
   year: AcademicYearOverview;
@@ -46,14 +52,17 @@ const invalidateYearPaths = (tenant: string) => [
 
 export default function AcademicYearsPage() {
   const t = useTranslations("academics");
+  const setup = useTranslations("academicSetup");
   const c = useTranslations("common");
   const [formMode, setFormMode] = useState<FormMode | null>(null);
   const [toggleConfirm, setToggleConfirm] = useState<ToggleConfirm | null>(null);
+  const [deletingYear, setDeletingYear] = useState<AcademicYearOverview | null>(null);
+  const [importFromYearId, setImportFromYearId] = useState("");
 
-  const years = useApiQuery<AcademicYearOverview[]>(SETUP_PATH);
+  const years = useReferenceApiQuery<AcademicYearOverview[]>(SETUP_PATH);
   const activeYear = years.data?.find((year) => year.status === "active");
 
-  const create = useApiMutation<YearValues>(
+  const create = useApiMutation<CreateYearBody>(
     (body, tenant) => ({
       path: `/tenants/${tenant}/academics/academic-years`,
       init: { method: "POST", body: JSON.stringify(body) }
@@ -67,6 +76,14 @@ export default function AcademicYearsPage() {
       init: { method: "PATCH", body: JSON.stringify({ active }) }
     }),
     { invalidatePaths: (_b, tenant) => invalidateYearPaths(tenant) }
+  );
+
+  const deleteYear = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({
+      path: `/tenants/${tenant}/academics/academic-years/${id}`,
+      init: { method: "DELETE" }
+    }),
+    { invalidatePaths: (_b, tenant) => [SETUP_PATH(tenant)] }
   );
 
   const update = useApiMutation<YearValues & { id: string }>(
@@ -93,6 +110,7 @@ export default function AcademicYearsPage() {
 
   const openCreate = () => {
     form.reset({ name: "", startsOn: "", endsOn: "" });
+    setImportFromYearId("");
     setFormMode({ type: "create" });
   };
 
@@ -132,13 +150,13 @@ export default function AcademicYearsPage() {
 
         return (
           <div className="year-active-toggle">
-            <Switch
+            <Toggle
               checked={isActive}
               disabled={setActive.isPending}
               aria-label={t("toggleYearActive", { name: year.name })}
-              onCheckedChange={(checked) => requestToggle(year, checked)}
+              onCheckedChange={(checked: boolean) => requestToggle(year, checked)}
             />
-            <span className={`badge badge--${year.status}`}>{year.status}</span>
+            <StatusBadge status={year.status} />
           </div>
         );
       }
@@ -148,18 +166,42 @@ export default function AcademicYearsPage() {
       header: t("actions"),
       enableSorting: false,
       cell: ({ row }) => (
-        <div style={{ display: "flex", gap: "8px" }}>
-          {row.original.status !== "archived" ? (
-            <>
-              <button type="button" className="row-action" onClick={() => openEdit(row.original)}>
-                {t("edit")}
-              </button>
-              <Link href={`/dashboard/academic-setup/years/${row.original.id}`} className="row-action">
-                {t("view")}
-              </Link>
-            </>
-          ) : null}
-        </div>
+        <RowMoreActionsMenu
+          ariaLabel={c("moreActions")}
+          items={[
+            ...(row.original.status !== "archived"
+              ? [
+                  {
+                    id: "edit",
+                    label: c("edit"),
+                    icon: "edit",
+                    onSelect: () => openEdit(row.original)
+                  },
+                  {
+                    id: "archive",
+                    label: c("archive"),
+                    icon: "archive",
+                    destructive: true,
+                    onSelect: () => requestToggle(row.original, false)
+                  }
+                ]
+              : [
+                  {
+                    id: "restore",
+                    label: c("restore"),
+                    icon: "restore",
+                    onSelect: () => requestToggle(row.original, true)
+                  },
+                  {
+                    id: "delete",
+                    label: c("deletePermanently"),
+                    icon: "delete_forever",
+                    destructive: true,
+                    onSelect: () => setDeletingYear(row.original)
+                  }
+                ])
+          ]}
+        />
       )
     }
   ];
@@ -178,21 +220,33 @@ export default function AcademicYearsPage() {
     : t("deactivateYearBody", { year: toggleConfirm?.year.name ?? "" });
 
   return (
-    <section className="panel">
-      {activeYear ? (
-        <p className="panel-banner">
-          {t("workingYear")}: <strong>{activeYear.name}</strong>
-        </p>
-      ) : (
-        <p className="panel-banner panel-banner--warning">{t("noWorkingYear")}</p>
-      )}
+    <>
+      <ModulePageHeader
+        navKey="academicYears"
+        title={setup("years")}
+        actions={
+          <>
+            <button type="button" className="pds-type-body-m-bold btn-primary" onClick={openCreate}>
+              <Icon name="add" />
+              {t("addYear")}
+            </button>
+          </>
+        }
+      />
       <TablePanelHead
-        title={t("years")}
-        onRefresh={() => void years.refetch()}
-        onAdd={openCreate}
-        addLabel={t("addYear")}
+        banner={
+          activeYear ? (
+            <>
+              {t("workingYear")}: <strong>{activeYear.name}</strong>
+            </>
+          ) : (
+            t("noWorkingYear")
+          )
+        }
+        bannerVariant={activeYear ? "default" : "warning"}
       />
       <TablePanelBody
+        variant="plain"
         loading={years.isLoading}
         error={years.isError ? c("somethingWrong") : null}
         empty={!years.data?.length}
@@ -218,17 +272,20 @@ export default function AcademicYearsPage() {
           if (formMode?.type === "edit") {
             await update.mutateAsync({ ...values, id: formMode.year.id });
           } else {
-            await create.mutateAsync(values);
+            await create.mutateAsync({
+              ...values,
+              importStructureFromYearId: importFromYearId || undefined
+            });
           }
           setFormMode(null);
           form.reset();
         })}
         footer={
           <>
-            <button type="button" className="btn-ghost" onClick={() => setFormMode(null)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setFormMode(null)}>
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={form.formState.isSubmitting}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={form.formState.isSubmitting}>
               <Icon name="check" />
               {form.formState.isSubmitting
                 ? t("creating")
@@ -240,14 +297,44 @@ export default function AcademicYearsPage() {
         }
       >
         <Field label={c("name")} error={form.formState.errors.name?.message}>
-          <input placeholder={t("yearNamePlaceholder")} {...form.register("name")} />
+          <FormInput placeholder={t("yearNamePlaceholder")} {...form.register("name")} />
         </Field>
         <Field label={t("starts")} error={form.formState.errors.startsOn?.message}>
-          <input type="date" {...form.register("startsOn")} />
+          <FormDatePicker
+            type="day"
+            variant="form"
+            value={form.watch("startsOn")}
+            onValueChange={(next) => form.setValue("startsOn", next, { shouldValidate: true })}
+            placeholder={t("starts")}
+            ariaLabel={t("starts")}
+          />
         </Field>
         <Field label={t("ends")} error={form.formState.errors.endsOn?.message}>
-          <input type="date" {...form.register("endsOn")} />
+          <FormDatePicker
+            type="day"
+            variant="form"
+            value={form.watch("endsOn")}
+            onValueChange={(next) => form.setValue("endsOn", next, { shouldValidate: true })}
+            placeholder={t("ends")}
+            ariaLabel={t("ends")}
+          />
         </Field>
+        {formMode?.type === "create" && years.data?.length ? (
+          <Field label={t("importStructureLabel")}>
+            <PdsSelectField
+              value={importFromYearId}
+              onValueChange={(value) =>
+                setImportFromYearId(typeof value === "string" ? value : "")
+              }
+              placeholder={t("importStructureNone")}
+              options={years.data.map((year) => ({
+                value: year.id,
+                label: year.name
+              }))}
+            />
+            <p className="pds-type-body-s-regular muted">{t("importStructureHelp")}</p>
+          </Field>
+        ) : null}
       </RecordFormSheet>
 
       <ConfirmDialog
@@ -268,6 +355,24 @@ export default function AcademicYearsPage() {
             .then(() => setToggleConfirm(null));
         }}
       />
-    </section>
+
+      <ConfirmDialog
+        open={deletingYear !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeletingYear(null);
+        }}
+        title={t("deleteYearTitle")}
+        description={t("deleteYearHelp", { name: deletingYear?.name ?? "" })}
+        confirmLabel={c("deletePermanently")}
+        cancelLabel={c("cancel")}
+        destructive
+        loading={deleteYear.isPending}
+        onConfirm={async () => {
+          if (!deletingYear) return;
+          await deleteYear.mutateAsync({ id: deletingYear.id });
+          setDeletingYear(null);
+        }}
+      />
+    </>
   );
 }

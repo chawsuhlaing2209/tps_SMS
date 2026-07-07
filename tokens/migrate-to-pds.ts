@@ -1,0 +1,326 @@
+/**
+ * Replace legacy Padauk CSS variables with PDS tokens across the web app.
+ * Run: npx tsx tokens/migrate-to-pds.ts
+ */
+
+import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const WEB = join(ROOT, "apps/web");
+
+/** Legacy `--*` → PDS `--pds-*` mapping (longest keys first at runtime). */
+export const LEGACY_TO_PDS: Record<string, string> = {
+  "--brand-ui-gradient-start": "--pds-color-chartreuse-green-800",
+  "--brand-ui-gradient-end": "--pds-color-chartreuse-green-700",
+  "--brand-ui-on-brand": "--pds-color-spring-green-900",
+  "--brand-ui-active": "--pds-color-chartreuse-green-500",
+  "--brand-ui-hover": "--pds-color-chartreuse-green-600",
+  "--color-brand-gradient-start": "--pds-color-chartreuse-green-800",
+  "--color-brand-gradient-end": "--pds-color-chartreuse-green-700",
+  "--color-brand-active": "--pds-color-chartreuse-green-500",
+  "--color-brand-hover": "--pds-color-chartreuse-green-600",
+  "--color-chartreuse-green-63": "--pds-compliment-brand",
+  "--color-chartreuse-green-90": "--pds-background-frame",
+  "--color-on-shell-white-10": "--pds-color-neutral-on-shell-white-10",
+  "--color-on-shell-white-35": "--pds-color-neutral-on-shell-white-35",
+  "--color-on-shell-white-50": "--pds-color-neutral-on-shell-white-50",
+  "--color-on-shell-light": "--pds-color-neutral-200",
+  "--color-spring-green-10": "--pds-primary",
+  "--color-spring-green-49": "--pds-color-neutral-800",
+  "--color-spring-green-55": "--pds-color-neutral-600",
+  "--color-white-solid": "--pds-color-neutral-solid-2",
+  "--color-danger-glow-40": "--pds-status-error-frosted-soft",
+  "--color-danger-glow-45": "--pds-status-error-frosted",
+  "--color-shadow-popover": "--pds-color-spring-green-1000a50",
+  "--color-grey-93": "--pds-background-layout-secondary",
+  "--color-grey-96": "--pds-background-layout-primary",
+  "--color-on-brand": "--pds-color-spring-green-900",
+  "--color-cat-mustard": "--pds-color-yellow-500",
+  "--color-red-67": "--pds-color-red-67",
+  "--on-shell-alpha-white-08": "--pds-color-neutral-on-shell-white-08",
+  "--on-shell-alpha-white-10": "--pds-color-neutral-on-shell-white-10",
+  "--on-shell-alpha-white-20": "--pds-color-neutral-on-shell-white-20",
+  "--on-shell-alpha-white-35": "--pds-color-neutral-on-shell-white-35",
+  "--on-shell-alpha-white-50": "--pds-color-neutral-on-shell-white-50",
+  "--on-shell-alpha-white-72": "--pds-color-neutral-on-shell-white-72",
+  "--on-shell-error": "--pds-color-red-on-shell-error",
+  "--on-shell-faint": "--pds-color-neutral-250",
+  "--on-shell-light": "--pds-color-neutral-200",
+  "--on-shell-soft": "--pds-color-neutral-400",
+  "--shell-ui-gradient-start": "--pds-color-spring-green-950",
+  "--shell-ui-gradient-end": "--pds-color-spring-green-800",
+  "--status-danger-muted-bg": "--pds-notification-background-error-hover",
+  "--status-danger-bg": "--pds-notification-background-error",
+  "--status-danger-border": "--pds-status-error-lower",
+  "--status-danger-fg": "--pds-status-error",
+  "--status-info-muted-bg": "--pds-notification-background-info-hover",
+  "--status-info-muted-fg": "--pds-color-blue-600",
+  "--status-info-bg": "--pds-notification-background-info",
+  "--status-info-border": "--pds-status-info-lower",
+  "--status-info-fg": "--pds-status-info",
+  "--status-success-muted-bg": "--pds-notification-background-success-hover",
+  "--status-success-muted-fg": "--pds-color-green-700",
+  "--status-success-bg": "--pds-notification-background-success",
+  "--status-success-border": "--pds-status-success-lower",
+  "--status-success-fg": "--pds-status-success",
+  "--status-warning-muted-bg": "--pds-color-yellow-300",
+  "--status-warning-muted-fg": "--pds-color-yellow-800",
+  "--status-warning-banner-bg": "--pds-color-yellow-200",
+  "--status-warning-banner-border": "--pds-color-yellow-400",
+  "--status-warning-highlight-bg": "--pds-color-yellow-150",
+  "--status-warning-highlight-border": "--pds-color-yellow-500",
+  "--status-draft-bg": "--pds-color-yellow-100",
+  "--status-draft-border": "--pds-color-yellow-600",
+  "--status-draft-fg": "--pds-color-red-status-draft-fg",
+  "--structure-stat-background": "--pds-shell-raise",
+  "--structure-stat-border": "--pds-shell-line-soft",
+  "--structure-stat-label-color": "--pds-muted-on-dark",
+  "--structure-stat-value-color": "--pds-text-invert-primary",
+  "--structure-stat-padding-x": "--pds-padding-medium",
+  "--structure-stat-padding-y": "--pds-padding-small",
+  "--structure-stat-radius": "--pds-radius-14",
+  "--structure-banner-padding-x": "--pds-padding-x-large",
+  "--structure-banner-padding-y": "--pds-padding-x-large",
+  "--structure-banner-radius": "--pds-radius-24",
+  "--structure-card-radius": "--pds-radius-base",
+  "--structure-grade-radius": "--pds-radius-16",
+  "--structure-tab-radius": "--pds-radius-pill",
+  "--layout-content-max": "--pds-width-1180",
+  "--layout-sidebar-width": "--pds-size-jumbo",
+  "--layout-gutter-x": "--pds-padding-xx-large",
+  "--layout-gutter-x-compact": "--pds-padding-large",
+  "--layout-gutter-y": "--pds-size-large",
+  "--layout-gutter-bottom": "--pds-padding-xx-large",
+  "--layout-section-gap": "--pds-gap-large",
+  "--layout-page-gap": "--pds-gap-large",
+  "--layout-column-gap": "--pds-gap-large",
+  "--layout-topbar-y": "--pds-gap-large",
+  "--form-field-gap": "--pds-input-field-gap",
+  "--form-input-padding-x": "--pds-input-padding-x",
+  "--form-input-padding-y": "--pds-input-padding-y",
+  "--form-stack-gap": "--pds-input-stack-gap",
+  "--frame-body-gap": "--pds-gap-large",
+  "--frame-header-body-gap": "--pds-gap-medium",
+  "--frame-label-gap": "--pds-gap-medium",
+  "--frame-padding": "--pds-padding-large",
+  "--frame-radius": "--pds-radius-24",
+  "--record-list-gap": "--pds-gap-x-small",
+  "--record-list-item-gap": "--pds-gap-medium",
+  "--record-list-item-padding": "--pds-padding-small",
+  "--record-list-icon-size": "--pds-size-small",
+  "--font-family-body-stack": "--pds-font-family-body-stack",
+  "--font-family-display-stack": "--pds-font-family-display-stack",
+  "--font-sans": "--pds-font-family-body-stack",
+  "--font-heading": "--pds-font-family-display-stack",
+  "--font-body": "--pds-font-family-font-2",
+  "--font-display": "--pds-font-family-font-1",
+  "--font-size-10": "--pds-font-size-10",
+  "--font-size-11": "--pds-font-size-11",
+  "--font-size-12": "--pds-font-size-12",
+  "--font-size-13": "--pds-font-size-13",
+  "--font-size-14": "--pds-font-size-14",
+  "--font-size-15": "--pds-font-size-15",
+  "--font-size-16": "--pds-font-size-16",
+  "--font-size-18": "--pds-font-size-18",
+  "--font-size-19": "--pds-font-size-19",
+  "--font-size-22": "--pds-font-size-22",
+  "--font-size-25": "--pds-font-size-25",
+  "--font-size-26": "--pds-font-size-26",
+  "--font-size-30": "--pds-font-size-30",
+  "--font-size-28": "--pds-size-x-large",
+  "--letter-spacing-1-2": "--pds-letter-spacing-1-2",
+  "--breakpoint-sm": "--pds-breakpoint-sm",
+  "--breakpoint-md": "--pds-breakpoint-md",
+  "--breakpoint-lg": "--pds-breakpoint-lg",
+  "--width-1180": "--pds-width-1180",
+  "--width-240": "--pds-width-240",
+  "--width-92": "--pds-width-92",
+  "--size-46": "--pds-size-xx-large",
+  "--size-56": "--pds-size-xxx-large",
+  "--size-236": "--pds-size-jumbo",
+  "--height-56": "--pds-height-56",
+  "--radius-pill": "--pds-radius-pill",
+  "--radius-base": "--pds-radius-base",
+  "--radius-card": "--pds-radius-base",
+  "--radius-input": "--pds-radius-8",
+  "--radius-sm": "--pds-radius-12",
+  "--radius-md": "--pds-radius-14",
+  "--radius-lg": "--pds-radius-24",
+  "--radius-mark": "--pds-radius-14",
+  "--radius-banner": "--pds-radius-24",
+  "--radius-chip": "--pds-radius-14",
+  "--radius-grade": "--pds-radius-16",
+  "--radius": "--pds-radius-base",
+  "--space-0": "--pds-gap-xx-small",
+  "--space-0_5": "--pds-gap-xx-small",
+  "--space-1": "--pds-gap-x-small",
+  "--space-1_5": "--pds-gap-x-small",
+  "--space-2": "--pds-gap-small",
+  "--space-2_5": "--pds-gap-x-small",
+  "--space-3": "--pds-gap-medium",
+  "--space-3_25": "--pds-gap-medium",
+  "--space-3_5": "--pds-gap-medium",
+  "--space-4": "--pds-gap-large",
+  "--space-5": "--pds-padding-large",
+  "--space-6": "--pds-gap-x-large",
+  "--space-6_5": "--pds-size-large",
+  "--space-7": "--pds-padding-xx-large",
+  "--space-8": "--pds-padding-xx-large",
+  "--space-9": "--pds-size-xxx-large",
+  "--space-10": "--pds-padding-xx-large",
+  "--spacing-3": "--pds-gap-x-small",
+  "--spacing-5": "--pds-gap-x-small",
+  "--spacing-7": "--pds-gap-small",
+  "--spacing-9": "--pds-gap-small",
+  "--spacing-10": "--pds-gap-x-small",
+  "--spacing-11": "--pds-padding-small",
+  "--spacing-12": "--pds-gap-medium",
+  "--spacing-13": "--pds-gap-medium",
+  "--spacing-14": "--pds-gap-medium",
+  "--spacing-15": "--pds-padding-small",
+  "--spacing-17": "--pds-padding-medium",
+  "--spacing-18": "--pds-padding-large",
+  "--spacing-19": "--pds-font-size-19",
+  "--spacing-20": "--pds-padding-large",
+  "--spacing-21": "--pds-padding-large",
+  "--spacing-22": "--pds-radius-24",
+  "--spacing-26": "--pds-size-large",
+  "--spacing-28": "--pds-size-x-large",
+  "--spacing-30": "--pds-font-size-30",
+  "--spacing-32": "--pds-size-medium",
+  "--spacing-34": "--pds-size-large",
+  "--spacing-36": "--pds-size-x-large",
+  "--spacing-38": "--pds-size-x-large",
+  "--spacing-40": "--pds-padding-xx-large",
+  "--spacing-42": "--pds-size-xx-large",
+  "--spacing-44": "--pds-size-xx-large",
+  "--spacing-45": "--pds-size-xx-large",
+  "--spacing-48": "--pds-size-xxx-large",
+  "--spacing-60": "--pds-padding-xx-large",
+  "--spacing-64": "--pds-size-xxx-large",
+  "--spacing-72": "--pds-size-xxx-large",
+  "--spacing-108": "--pds-width-1180",
+  "--spacing-140": "--pds-width-240",
+  "--spacing-150": "--pds-width-240",
+  "--spacing-160": "--pds-width-240",
+  "--spacing-180": "--pds-width-240",
+  "--spacing-196": "--pds-width-240",
+  "--spacing-200": "--pds-width-240",
+  "--spacing-220": "--pds-width-240",
+  "--spacing-240": "--pds-width-240",
+  "--spacing-280": "--pds-width-240",
+  "--spacing-420": "--pds-width-240",
+  "--spacing-820": "--pds-width-1180",
+  "--item-spacing-5": "--pds-gap-x-small",
+  "--item-spacing-6": "--pds-gap-x-small",
+  "--item-spacing-7": "--pds-gap-small",
+  "--item-spacing-10": "--pds-gap-x-small",
+  "--item-spacing-s": "--pds-gap-large",
+  "--item-spacing-s-plus": "--pds-gap-x-large",
+  "--item-spacing-xs": "--pds-gap-small",
+  "--item-spacing-xxs": "--pds-gap-x-small",
+  "--item-spacing-xxxs": "--pds-gap-xx-small",
+  "--shadow-auth": "--pds-color-blue-950a",
+  "--shadow-popover": "--pds-color-spring-green-1000a50",
+  "--shadow-panel": "--pds-color-spring-green-1000a",
+  "--shadow-inset-brand": "--pds-color-spring-green-focus-ring",
+  "--focus-ring": "--pds-color-spring-green-focus-ring",
+  "--gradient-shell": "--pds-gradient-shell",
+  "--chip-border": "--pds-background-frame",
+  "--cat-blue": "--pds-color-azure-60",
+  "--cat-coral": "--pds-color-accent-pomegrate",
+  "--cat-green": "--pds-color-green-500",
+  "--cat-lilac": "--pds-color-accent-purple",
+  "--cat-mustard": "--pds-color-yellow-500",
+  "--cat-pink": "--pds-color-accent-pink",
+  "--cat-sky": "--pds-color-blue-400",
+  "--cat-teal": "--pds-color-cyan-47",
+  "--subject-blue": "--pds-color-azure-60",
+  "--subject-coral": "--pds-color-accent-pomegrate",
+  "--subject-teal": "--pds-color-cyan-47",
+  "--brand-100": "--pds-background-layout-secondary",
+  "--brand-50": "--pds-background-layout-primary",
+  "--brand-700": "--pds-brand-accent",
+  "--brand-900": "--pds-primary",
+  "--brand-dark": "--pds-brand-dark",
+  "--brand-ink": "--pds-brand-ink",
+  "--tab-inactive-fg": "--pds-foreground-contrast-medium",
+  "--muted-foreground": "--pds-text-secondary",
+  "--text-muted": "--pds-text-secondary",
+  "--surface-muted": "--pds-background-layout-secondary",
+  "--background": "--pds-background-layout-primary",
+  "--foreground": "--pds-text-primary",
+  "--muted": "--pds-muted",
+  "--muted-on-dark": "--pds-muted-on-dark",
+  "--card": "--pds-background-card",
+  "--border": "--pds-border-color-primary",
+  "--border-soft": "--pds-border-color-soft",
+  "--accent": "--pds-brand-accent",
+  "--brand": "--pds-compliment-brand",
+  "--subtle": "--pds-background-layout-secondary",
+  "--surface": "--pds-background-layout-primary",
+  "--shell": "--pds-shell",
+  "--shell-raise": "--pds-shell-raise",
+  "--shell-line": "--pds-shell-line",
+  "--shell-line-soft": "--pds-shell-line-soft",
+  "--link": "--pds-foreground-link",
+  "--danger": "--pds-color-red-danger",
+  "--danger-strong": "--pds-color-red-danger-strong",
+  "--info": "--pds-color-azure-60",
+  "--info-strong": "--pds-color-blue-700",
+  "--warning": "--pds-status-warning",
+  "--text": "--pds-text-primary",
+};
+
+const SORTED_LEGACY_KEYS = Object.keys(LEGACY_TO_PDS).sort(
+  (a, b) => b.length - a.length,
+);
+
+function migrateContent(source: string): string {
+  let next = source;
+  for (const legacy of SORTED_LEGACY_KEYS) {
+    const pds = LEGACY_TO_PDS[legacy]!;
+    next = next.replaceAll(`var(${legacy})`, `var(${pds})`);
+  }
+  return next;
+}
+
+function walk(dir: string, out: string[] = []): string[] {
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    const stat = statSync(full);
+    if (stat.isDirectory()) {
+      if (entry === "node_modules" || entry === ".next") continue;
+      walk(full, out);
+      continue;
+    }
+    if (/\.(css|tsx?|ts)$/.test(entry)) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+function migrateFile(path: string): boolean {
+  const source = readFileSync(path, "utf8");
+  const migrated = migrateContent(source);
+  if (migrated === source) return false;
+  writeFileSync(path, migrated);
+  return true;
+}
+
+const targets = walk(WEB).filter(
+  (path) => !path.endsWith("design-tokens.css") && !path.endsWith("design-tokens.dtcg.json"),
+);
+
+let changed = 0;
+for (const path of targets) {
+  if (migrateFile(path)) {
+    changed += 1;
+    console.log(`Migrated ${path.replace(`${ROOT}/`, "")}`);
+  }
+}
+
+console.log(`Updated ${changed} files.`);

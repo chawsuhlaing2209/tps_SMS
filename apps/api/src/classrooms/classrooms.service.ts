@@ -1,4 +1,4 @@
-import { Injectable, Inject, NotFoundException } from "@nestjs/common";
+import { Injectable, Inject, BadRequestException, NotFoundException } from "@nestjs/common";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
@@ -9,6 +9,9 @@ import {
   classroomStudents,
   classroomSubjectTeachers,
   classrooms,
+  enrollments,
+  facilityRooms,
+  gradeChiefAssignments,
   gradeSubjects,
   grades,
   staff,
@@ -17,8 +20,15 @@ import {
   timetableSlots
 } from "../db/schema.js";
 import { TeacherAssignmentService } from "../identity/teacher-assignment.service.js";
+import {
+  buildTeacherAssignmentSnapshot,
+  isTeacherEligibleForClassroomSubject,
+  isTeacherEligibleForHomeroom,
+  resolveTeacherCapability,
+  type TeacherAssignmentSnapshot
+} from "../hr/teacher-eligibility.js";
 import type { TenantContext } from "../tenancy/tenant-context.js";
-import type { CreateClassroomDto, UpdateClassroomDto } from "./dto.js";
+import type { CreateClassroomDto, UpdateClassroomDto, AssignClassroomSubjectTeacherDto } from "./dto.js";
 
 @Injectable()
 export class ClassroomsService {
@@ -27,6 +37,35 @@ export class ClassroomsService {
     private readonly teacherAssignmentService: TeacherAssignmentService,
     private readonly auditService: AuditService
   ) {}
+
+  private async resolveFacilityRoomLink(
+    tenantId: string,
+    facilityRoomId: string | null
+  ): Promise<{ facilityRoomId: string | null; room: string | null; capacity: number | null }> {
+    if (!facilityRoomId) {
+      return { facilityRoomId: null, room: null, capacity: null };
+    }
+
+    const [facility] = await this.db
+      .select({
+        id: facilityRooms.id,
+        name: facilityRooms.name,
+        capacity: facilityRooms.capacity,
+        status: facilityRooms.status
+      })
+      .from(facilityRooms)
+      .where(and(eq(facilityRooms.tenantId, tenantId), eq(facilityRooms.id, facilityRoomId)));
+
+    if (!facility || facility.status !== "active") {
+      throw new BadRequestException("Facility room not found or inactive.");
+    }
+
+    return {
+      facilityRoomId: facility.id,
+      room: facility.name,
+      capacity: facility.capacity
+    };
+  }
 
   private dedupeSubjectsByCode<
     T extends { subjectId: string; subjectCode: string | null }
@@ -83,6 +122,7 @@ export class ClassroomsService {
         sectionId: classrooms.sectionId,
         capacity: classrooms.capacity,
         room: classrooms.room,
+        facilityRoomId: classrooms.facilityRoomId,
         classTeacherStaffId: classrooms.classTeacherStaffId,
         status: classrooms.status,
         updatedAt: classrooms.updatedAt
@@ -91,7 +131,8 @@ export class ClassroomsService {
       .innerJoin(academicYears, eq(classrooms.academicYearId, academicYears.id))
       .innerJoin(grades, eq(classrooms.gradeId, grades.id))
       .where(and(...conditions))
-      .orderBy(classrooms.name);
+      .orderBy(classrooms.name)
+      .limit(200);
   }
 
   async createClassroom(
@@ -112,12 +153,15 @@ export class ClassroomsService {
     }
 
     const [grade] = await this.db
-      .select({ id: grades.id })
+      .select({ id: grades.id, status: grades.status })
       .from(grades)
       .where(and(eq(grades.tenantId, tenantId), eq(grades.id, dto.gradeId)));
 
     if (!grade) {
       throw new NotFoundException("Grade not found.");
+    }
+    if (grade.status !== "active") {
+      throw new BadRequestException("Cannot create a classroom for an archived grade.");
     }
 
     if (dto.classTeacherStaffId) {
@@ -129,7 +173,14 @@ export class ClassroomsService {
       if (!teacher) {
         throw new NotFoundException("Staff member not found.");
       }
+
+      await this.assertTeacherEligibleForHomeroom(tenantId, dto.classTeacherStaffId, dto.gradeId);
     }
+
+    const facilityFields =
+      dto.facilityRoomId !== undefined
+        ? await this.resolveFacilityRoomLink(tenantId, dto.facilityRoomId ?? null)
+        : null;
 
     const [classroom] = await this.db
       .insert(classrooms)
@@ -138,8 +189,9 @@ export class ClassroomsService {
         academicYearId: dto.academicYearId,
         gradeId: dto.gradeId,
         name: dto.name,
-        capacity: dto.capacity ?? null,
-        room: dto.room ?? null,
+        capacity: facilityFields?.capacity ?? dto.capacity ?? null,
+        room: facilityFields?.room ?? dto.room ?? null,
+        facilityRoomId: facilityFields?.facilityRoomId ?? null,
         classTeacherStaffId: dto.classTeacherStaffId ?? null,
         createdBy: actorUserId,
         updatedBy: actorUserId
@@ -192,14 +244,20 @@ export class ClassroomsService {
 
     if (dto.gradeId) {
       const [grade] = await this.db
-        .select({ id: grades.id })
+        .select({ id: grades.id, status: grades.status })
         .from(grades)
         .where(and(eq(grades.tenantId, tenantId), eq(grades.id, dto.gradeId)));
 
       if (!grade) {
         throw new NotFoundException("Grade not found.");
       }
+      if (grade.status !== "active") {
+        throw new BadRequestException("Cannot move a classroom to an archived grade.");
+      }
     }
+
+    const effectiveGradeId = dto.gradeId ?? previous.gradeId;
+    const gradeIsChanging = dto.gradeId !== undefined && dto.gradeId !== previous.gradeId;
 
     if (dto.classTeacherStaffId) {
       const [teacher] = await this.db
@@ -210,7 +268,30 @@ export class ClassroomsService {
       if (!teacher) {
         throw new NotFoundException("Staff member not found.");
       }
+
+      await this.assertTeacherEligibleForHomeroom(
+        tenantId,
+        dto.classTeacherStaffId,
+        effectiveGradeId
+      );
+    } else if (
+      dto.classTeacherStaffId === undefined &&
+      gradeIsChanging &&
+      previous.classTeacherStaffId
+    ) {
+      // Grade is changing but the existing homeroom teacher is being kept. Re-check
+      // that they are still eligible to be homeroom for the new grade level.
+      await this.assertTeacherEligibleForHomeroom(
+        tenantId,
+        previous.classTeacherStaffId,
+        effectiveGradeId
+      );
     }
+
+    const facilityFields =
+      dto.facilityRoomId !== undefined
+        ? await this.resolveFacilityRoomLink(tenantId, dto.facilityRoomId ?? null)
+        : null;
 
     const [classroom] = await this.db
       .update(classrooms)
@@ -218,8 +299,20 @@ export class ClassroomsService {
         academicYearId: dto.academicYearId ?? previous.academicYearId,
         gradeId: dto.gradeId ?? previous.gradeId,
         name: dto.name ?? previous.name,
-        capacity: dto.capacity === undefined ? previous.capacity : dto.capacity,
-        room: dto.room === undefined ? previous.room : dto.room,
+        capacity:
+          facilityFields !== null
+            ? facilityFields.capacity
+            : dto.capacity === undefined
+              ? previous.capacity
+              : dto.capacity,
+        room:
+          facilityFields !== null
+            ? facilityFields.room
+            : dto.room === undefined
+              ? previous.room
+              : dto.room,
+        facilityRoomId:
+          facilityFields !== null ? facilityFields.facilityRoomId : previous.facilityRoomId,
         classTeacherStaffId:
           dto.classTeacherStaffId === undefined
             ? previous.classTeacherStaffId
@@ -391,6 +484,7 @@ export class ClassroomsService {
         subjectId: subjects.id,
         subjectName: subjects.name,
         subjectCode: subjects.code,
+        subjectColorKey: subjects.colorKey,
         teacherStaffId: classroomSubjectTeachers.teacherStaffId,
         teacherName: staff.fullName
       })
@@ -438,6 +532,7 @@ export class ClassroomsService {
       name: classroom.name,
       room: classroom.room,
       capacity: classroom.capacity,
+      facilityRoomId: classroom.facilityRoomId,
       status: classroom.status,
       gradeId: classroom.gradeId,
       gradeName: grade?.name ?? null,
@@ -451,6 +546,7 @@ export class ClassroomsService {
         subjectId: row.subjectId,
         subjectName: row.subjectName,
         subjectCode: row.subjectCode,
+        subjectColorKey: row.subjectColorKey,
         teacherStaffId: row.teacherStaffId,
         teacherName: row.teacherName,
         periodsPerWeek: periodsBySubject.get(row.subjectId) ?? 0
@@ -536,7 +632,8 @@ export class ClassroomsService {
       .select({
         id: subjects.id,
         name: subjects.name,
-        code: subjects.code
+        code: subjects.code,
+        colorKey: subjects.colorKey
       })
       .from(gradeSubjects)
       .innerJoin(subjects, eq(gradeSubjects.subjectId, subjects.id))
@@ -550,7 +647,7 @@ export class ClassroomsService {
       .orderBy(subjects.name);
 
     const seen = new Set<string>();
-    const unique: { id: string; name: string; code: string | null }[] = [];
+    const unique: { id: string; name: string; code: string | null; colorKey: string | null }[] = [];
 
     for (const row of rows) {
       const key = row.code?.trim().toLowerCase() || row.id;
@@ -575,6 +672,7 @@ export class ClassroomsService {
         name: classrooms.name,
         room: classrooms.room,
         capacity: classrooms.capacity,
+        facilityRoomId: classrooms.facilityRoomId,
         status: classrooms.status,
         updatedAt: classrooms.updatedAt,
         classTeacherStaffId: classrooms.classTeacherStaffId,
@@ -660,10 +758,23 @@ export class ClassroomsService {
         id: students.id,
         fullName: students.fullName,
         admissionNumber: students.admissionNumber,
-        status: students.status
+        status: students.status,
+        // The active enrollment that placed the student here — powers roster
+        // actions (move / remove / cancel).
+        enrollmentId: enrollments.id,
+        invoiceId: enrollments.invoiceId
       })
       .from(classroomStudents)
       .innerJoin(students, eq(classroomStudents.studentId, students.id))
+      .leftJoin(
+        enrollments,
+        and(
+          eq(enrollments.studentId, classroomStudents.studentId),
+          eq(enrollments.classroomId, classroomStudents.classroomId),
+          eq(enrollments.tenantId, tenantId),
+          isNull(enrollments.cancelledAt)
+        )
+      )
       .where(
         and(
           eq(classroomStudents.tenantId, tenantId),
@@ -672,5 +783,292 @@ export class ClassroomsService {
         )
       )
       .orderBy(students.fullName);
+  }
+
+  async listEligibleSubjectTeachers(
+    tenantId: string,
+    classroomId: string,
+    subjectId: string,
+    currentTeacherStaffId?: string | null
+  ) {
+    const classroom = await this.getClassroomOrThrow(tenantId, classroomId);
+
+    const [mapping] = await this.db
+      .select({ id: gradeSubjects.id })
+      .from(gradeSubjects)
+      .where(
+        and(
+          eq(gradeSubjects.tenantId, tenantId),
+          eq(gradeSubjects.academicYearId, classroom.academicYearId),
+          eq(gradeSubjects.gradeId, classroom.gradeId),
+          eq(gradeSubjects.subjectId, subjectId)
+        )
+      );
+
+    if (!mapping) {
+      throw new BadRequestException(
+        "Subject is not part of this classroom's grade curriculum for the academic year."
+      );
+    }
+
+    const teacherRows = await this.db
+      .select({
+        id: staff.id,
+        fullName: staff.fullName,
+        teacherProfile: staff.teacherProfile
+      })
+      .from(staff)
+      .where(
+        and(
+          eq(staff.tenantId, tenantId),
+          eq(staff.employmentRole, "teacher"),
+          eq(staff.status, "active")
+        )
+      )
+      .orderBy(staff.fullName);
+
+    if (!teacherRows.length) {
+      return { data: [] };
+    }
+
+    const teacherIds = teacherRows.map((row) => row.id);
+    const snapshots = await this.loadTeacherAssignmentSnapshots(tenantId, teacherIds);
+
+    const eligible = teacherRows.filter((teacher) => {
+      if (currentTeacherStaffId && teacher.id === currentTeacherStaffId) {
+        return true;
+      }
+      const capability = resolveTeacherCapability(
+        teacher.teacherProfile,
+        snapshots.get(teacher.id) ?? { subjectIds: [], gradeIds: [] }
+      );
+      return isTeacherEligibleForClassroomSubject(capability, classroom.gradeId, subjectId);
+    });
+
+    return {
+      data: eligible.map((row) => ({ id: row.id, fullName: row.fullName }))
+    };
+  }
+
+  private async loadTeacherAssignmentSnapshots(tenantId: string, teacherIds: string[]) {
+    const empty = (): TeacherAssignmentSnapshot => ({ subjectIds: [], gradeIds: [] });
+    const snapshots = new Map<string, TeacherAssignmentSnapshot>(
+      teacherIds.map((id) => [id, empty()])
+    );
+
+    if (!teacherIds.length) {
+      return snapshots;
+    }
+
+    const subjectRows = await this.db
+      .select({
+        teacherStaffId: classroomSubjectTeachers.teacherStaffId,
+        subjectId: classroomSubjectTeachers.subjectId,
+        gradeId: classrooms.gradeId
+      })
+      .from(classroomSubjectTeachers)
+      .innerJoin(classrooms, eq(classroomSubjectTeachers.classroomId, classrooms.id))
+      .where(
+        and(
+          eq(classroomSubjectTeachers.tenantId, tenantId),
+          eq(classrooms.status, "active"),
+          inArray(classroomSubjectTeachers.teacherStaffId, teacherIds)
+        )
+      );
+
+    const homeroomRows = await this.db
+      .select({
+        teacherStaffId: classrooms.classTeacherStaffId,
+        gradeId: classrooms.gradeId
+      })
+      .from(classrooms)
+      .where(
+        and(
+          eq(classrooms.tenantId, tenantId),
+          eq(classrooms.status, "active"),
+          inArray(classrooms.classTeacherStaffId, teacherIds)
+        )
+      );
+
+    const chiefRows = await this.db
+      .select({
+        teacherStaffId: gradeChiefAssignments.staffId,
+        gradeId: gradeChiefAssignments.gradeId
+      })
+      .from(gradeChiefAssignments)
+      .where(
+        and(
+          eq(gradeChiefAssignments.tenantId, tenantId),
+          inArray(gradeChiefAssignments.staffId, teacherIds)
+        )
+      );
+
+    for (const teacherId of teacherIds) {
+      const snapshot = buildTeacherAssignmentSnapshot({
+        subjectTeaching: subjectRows
+          .filter((row) => row.teacherStaffId === teacherId)
+          .map((row) => ({ subjectId: row.subjectId, gradeId: row.gradeId })),
+        homeroom: homeroomRows
+          .filter((row) => row.teacherStaffId === teacherId)
+          .map((row) => ({ gradeId: row.gradeId })),
+        gradeChief: chiefRows
+          .filter((row) => row.teacherStaffId === teacherId)
+          .map((row) => ({ gradeId: row.gradeId }))
+      });
+      snapshots.set(teacherId, snapshot);
+    }
+
+    return snapshots;
+  }
+
+  private async assertTeacherEligibleForHomeroom(
+    tenantId: string,
+    teacherStaffId: string,
+    gradeId: string
+  ) {
+    const [member] = await this.db
+      .select({
+        id: staff.id,
+        teacherProfile: staff.teacherProfile
+      })
+      .from(staff)
+      .where(and(eq(staff.tenantId, tenantId), eq(staff.id, teacherStaffId)));
+
+    if (!member) {
+      throw new NotFoundException("Staff member not found.");
+    }
+
+    const snapshots = await this.loadTeacherAssignmentSnapshots(tenantId, [teacherStaffId]);
+    const capability = resolveTeacherCapability(
+      member.teacherProfile,
+      snapshots.get(teacherStaffId) ?? { subjectIds: [], gradeIds: [] }
+    );
+
+    if (!isTeacherEligibleForHomeroom(capability, gradeId)) {
+      throw new BadRequestException(
+        "This teacher is not eligible to be homeroom teacher for this grade level."
+      );
+    }
+  }
+
+  private async assertTeacherEligibleForSubject(
+    tenantId: string,
+    teacherStaffId: string,
+    classroom: { gradeId: string },
+    subjectId: string
+  ) {
+    const [member] = await this.db
+      .select({
+        id: staff.id,
+        teacherProfile: staff.teacherProfile
+      })
+      .from(staff)
+      .where(and(eq(staff.tenantId, tenantId), eq(staff.id, teacherStaffId)));
+
+    if (!member) {
+      throw new NotFoundException("Staff member not found.");
+    }
+
+    const snapshots = await this.loadTeacherAssignmentSnapshots(tenantId, [teacherStaffId]);
+    const capability = resolveTeacherCapability(
+      member.teacherProfile,
+      snapshots.get(teacherStaffId) ?? { subjectIds: [], gradeIds: [] }
+    );
+
+    if (!isTeacherEligibleForClassroomSubject(capability, classroom.gradeId, subjectId)) {
+      throw new BadRequestException(
+        "This teacher is not qualified to teach this subject at this grade level."
+      );
+    }
+  }
+
+  async assignSubjectTeacher(
+    tenantId: string,
+    classroomId: string,
+    subjectId: string,
+    dto: AssignClassroomSubjectTeacherDto,
+    actorUserId?: string
+  ) {
+    const classroom = await this.getClassroomOrThrow(tenantId, classroomId);
+
+    const [mapping] = await this.db
+      .select({ id: gradeSubjects.id })
+      .from(gradeSubjects)
+      .where(
+        and(
+          eq(gradeSubjects.tenantId, tenantId),
+          eq(gradeSubjects.academicYearId, classroom.academicYearId),
+          eq(gradeSubjects.gradeId, classroom.gradeId),
+          eq(gradeSubjects.subjectId, subjectId)
+        )
+      );
+
+    if (!mapping) {
+      throw new BadRequestException(
+        "Subject is not part of this classroom's grade curriculum for the academic year."
+      );
+    }
+
+    if (dto.teacherStaffId) {
+      await this.assertTeacherEligibleForSubject(
+        tenantId,
+        dto.teacherStaffId,
+        classroom,
+        subjectId
+      );
+    }
+
+    const [previous] = await this.db
+      .select({
+        id: classroomSubjectTeachers.id,
+        teacherStaffId: classroomSubjectTeachers.teacherStaffId
+      })
+      .from(classroomSubjectTeachers)
+      .where(
+        and(
+          eq(classroomSubjectTeachers.tenantId, tenantId),
+          eq(classroomSubjectTeachers.classroomId, classroomId),
+          eq(classroomSubjectTeachers.subjectId, subjectId)
+        )
+      );
+
+    await this.db
+      .delete(classroomSubjectTeachers)
+      .where(
+        and(
+          eq(classroomSubjectTeachers.tenantId, tenantId),
+          eq(classroomSubjectTeachers.classroomId, classroomId),
+          eq(classroomSubjectTeachers.subjectId, subjectId)
+        )
+      );
+
+    if (dto.teacherStaffId) {
+      await this.db.insert(classroomSubjectTeachers).values({
+        tenantId,
+        classroomId,
+        subjectId,
+        teacherStaffId: dto.teacherStaffId,
+        createdBy: actorUserId,
+        updatedBy: actorUserId
+      });
+    }
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "classroom_subject_teacher.assign",
+      recordType: "Classroom",
+      recordId: classroomId,
+      before: previous
+        ? { subjectId, teacherStaffId: previous.teacherStaffId }
+        : undefined,
+      after: { subjectId, teacherStaffId: dto.teacherStaffId ?? null }
+    });
+
+    return {
+      classroomId,
+      subjectId,
+      teacherStaffId: dto.teacherStaffId ?? null
+    };
   }
 }

@@ -1,26 +1,69 @@
-import { ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { and, eq, sql } from "drizzle-orm";
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException
+} from "@nestjs/common";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
+import { ClassroomsService } from "../classrooms/classrooms.service.js";
 import { DB, type Database } from "../db/db.module.js";
-import { subjects, timetablePeriods, timetableSlots } from "../db/schema.js";
-import type { CreatePeriodDto, CreateTimetableSlotDto, ListTimetableSlotsQueryDto, PublishTimetableDto } from "./dto.js";
+import {
+  classrooms,
+  gradeSubjects,
+  grades,
+  schoolOperatingHourBlocks,
+  schoolScheduleSettings,
+  staff,
+  subjects,
+  timetablePeriods,
+  timetableSlots
+} from "../db/schema.js";
+import {
+  buildPeriodRowsFromSchedule,
+  SchoolScheduleService
+} from "../school-schedule/school-schedule.service.js";
+import type {
+  CreatePeriodDto,
+  CreateTimetableSlotDto,
+  EligibleTeachersQueryDto,
+  GeneratePeriodsDto,
+  ListTimetableSlotsQueryDto,
+  PublishTimetableDto,
+  TeacherScheduleConflictQueryDto,
+  UpdateTimetableSlotDto
+} from "./dto.js";
+import { listTeacherScheduleConflicts } from "./timetable-conflicts.js";
 
 @Injectable()
 export class TimetableService {
   constructor(
     @Inject(DB) private readonly db: Database,
-    private readonly auditService: AuditService
+    private readonly auditService: AuditService,
+    private readonly schoolScheduleService: SchoolScheduleService,
+    private readonly classroomsService: ClassroomsService
   ) {}
 
-  listPeriods(tenantId: string) {
+  listPeriods(tenantId: string, academicYearId?: string) {
+    const filters = [eq(timetablePeriods.tenantId, tenantId)];
+    if (academicYearId) {
+      filters.push(eq(timetablePeriods.academicYearId, academicYearId));
+    }
+
     return this.db
       .select()
       .from(timetablePeriods)
-      .where(eq(timetablePeriods.tenantId, tenantId))
-      .orderBy(timetablePeriods.sortOrder);
+      .where(and(...filters))
+      .orderBy(timetablePeriods.sortOrder)
+      .limit(200);
   }
 
   async createPeriod(tenantId: string, actorUserId: string, dto: CreatePeriodDto) {
+    if (!dto.academicYearId) {
+      throw new BadRequestException("academicYearId is required.");
+    }
+
     const [period] = await this.db
       .insert(timetablePeriods)
       .values({
@@ -29,13 +72,90 @@ export class TimetableService {
         startsAt: dto.startTime,
         endsAt: dto.endTime,
         sortOrder: dto.sortOrder,
-        academicYearId: dto.academicYearId!,
+        academicYearId: dto.academicYearId,
+        periodType: dto.isBreak ? "short_break" : "lesson",
+        isBreak: dto.isBreak ?? false,
         createdBy: actorUserId,
         updatedBy: actorUserId
       })
       .returning();
 
     return period;
+  }
+
+  async generatePeriods(tenantId: string, actorUserId: string, dto: GeneratePeriodsDto) {
+    const settings = await this.schoolScheduleService.getSettings(tenantId);
+
+    if (!settings.operatingHourBlocks.length) {
+      throw new BadRequestException("Configure school operating hours before generating periods.");
+    }
+
+    const blocks = await this.db
+      .select()
+      .from(schoolOperatingHourBlocks)
+      .where(eq(schoolOperatingHourBlocks.tenantId, tenantId));
+
+    const [slotCount] = await this.db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(timetableSlots)
+      .innerJoin(timetablePeriods, eq(timetableSlots.periodId, timetablePeriods.id))
+      .where(
+        and(
+          eq(timetableSlots.tenantId, tenantId),
+          eq(timetablePeriods.academicYearId, dto.academicYearId)
+        )
+      );
+
+    if ((slotCount?.count ?? 0) > 0 && !dto.replaceExisting) {
+      throw new ConflictException(
+        "Timetable slots already exist for this academic year. Pass replaceExisting to regenerate periods."
+      );
+    }
+
+    const rows = buildPeriodRowsFromSchedule({
+      tenantId,
+      academicYearId: dto.academicYearId,
+      actorUserId,
+      periodDurationMinutes: settings.periodDurationMinutes,
+      shortBreakStartsAt: settings.shortBreakStartsAt,
+      shortBreakEndsAt: settings.shortBreakEndsAt,
+      lunchBreakStartsAt: settings.lunchBreakStartsAt,
+      lunchBreakEndsAt: settings.lunchBreakEndsAt,
+      blocks: blocks.map((block) => ({
+        id: block.id,
+        label: block.label,
+        startsAt: block.startsAt,
+        endsAt: block.endsAt,
+        isPrimary: block.isPrimary,
+        sortOrder: block.sortOrder
+      }))
+    });
+
+    if (!rows.length) {
+      throw new BadRequestException("No periods could be generated from the current operating hours.");
+    }
+
+    await this.db
+      .delete(timetablePeriods)
+      .where(
+        and(
+          eq(timetablePeriods.tenantId, tenantId),
+          eq(timetablePeriods.academicYearId, dto.academicYearId)
+        )
+      );
+
+    const created = await this.db.insert(timetablePeriods).values(rows).returning();
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId,
+      action: "timetable_periods.generate",
+      recordType: "TimetablePeriod",
+      recordId: dto.academicYearId,
+      after: { count: created.length }
+    });
+
+    return { generated: created.length, periods: created };
   }
 
   async listSlots(tenantId: string, query: ListTimetableSlotsQueryDto) {
@@ -47,6 +167,10 @@ export class TimetableService {
 
     if (query.staffId) {
       filters.push(eq(timetableSlots.teacherStaffId, query.staffId));
+    }
+
+    if (query.academicYearId) {
+      filters.push(eq(timetablePeriods.academicYearId, query.academicYearId));
     }
 
     return this.db
@@ -64,15 +188,228 @@ export class TimetableService {
         publishedAt: timetableSlots.publishedAt,
         createdAt: timetableSlots.createdAt,
         updatedAt: timetableSlots.updatedAt,
-        subjectName: subjects.name
+        subjectName: subjects.name,
+        subjectColorKey: subjects.colorKey,
+        subjectIconKey: subjects.iconKey,
+        teacherFullName: staff.fullName,
+        periodName: timetablePeriods.name,
+        periodStartsAt: timetablePeriods.startsAt,
+        periodEndsAt: timetablePeriods.endsAt,
+        periodType: timetablePeriods.periodType,
+        isBreak: timetablePeriods.isBreak
       })
       .from(timetableSlots)
+      .innerJoin(timetablePeriods, eq(timetableSlots.periodId, timetablePeriods.id))
       .leftJoin(subjects, eq(timetableSlots.subjectId, subjects.id))
-      .where(and(...filters));
+      .leftJoin(staff, eq(timetableSlots.teacherStaffId, staff.id))
+      .where(and(...filters))
+      .limit(500);
+  }
+
+  listEligibleTeachersForSlot(
+    tenantId: string,
+    classroomId: string,
+    subjectId: string,
+    query: EligibleTeachersQueryDto = {}
+  ) {
+    return this.classroomsService.listEligibleSubjectTeachers(
+      tenantId,
+      classroomId,
+      subjectId,
+      query.includeStaffId
+    );
+  }
+
+  async getTeacherScheduleConflict(tenantId: string, query: TeacherScheduleConflictQueryDto) {
+    const filters = [
+      eq(timetableSlots.tenantId, tenantId),
+      eq(timetableSlots.teacherStaffId, query.staffId),
+      eq(timetableSlots.periodId, query.periodId),
+      eq(timetableSlots.dayOfWeek, query.dayOfWeek)
+    ];
+
+    if (query.excludeSlotId) {
+      filters.push(ne(timetableSlots.id, query.excludeSlotId));
+    }
+
+    const [existing] = await this.db
+      .select({
+        slotId: timetableSlots.id,
+        classroomId: timetableSlots.classroomId,
+        classroomName: classrooms.name,
+        gradeId: classrooms.gradeId,
+        gradeName: grades.name,
+        subjectName: subjects.name,
+        teacherFullName: staff.fullName,
+        periodName: timetablePeriods.name,
+        periodStartsAt: timetablePeriods.startsAt,
+        periodEndsAt: timetablePeriods.endsAt,
+        dayOfWeek: timetableSlots.dayOfWeek
+      })
+      .from(timetableSlots)
+      .innerJoin(classrooms, eq(timetableSlots.classroomId, classrooms.id))
+      .innerJoin(grades, eq(classrooms.gradeId, grades.id))
+      .innerJoin(timetablePeriods, eq(timetableSlots.periodId, timetablePeriods.id))
+      .leftJoin(subjects, eq(timetableSlots.subjectId, subjects.id))
+      .leftJoin(staff, eq(timetableSlots.teacherStaffId, staff.id))
+      .where(and(...filters))
+      .limit(1);
+
+    if (!existing) {
+      return { hasConflict: false as const };
+    }
+
+    return {
+      hasConflict: true as const,
+      existing
+    };
+  }
+
+  private async assertSubjectInGradeCurriculum(
+    tenantId: string,
+    classroomId: string,
+    subjectId: string
+  ) {
+    const [classroom] = await this.db
+      .select({
+        academicYearId: classrooms.academicYearId,
+        gradeId: classrooms.gradeId
+      })
+      .from(classrooms)
+      .where(and(eq(classrooms.tenantId, tenantId), eq(classrooms.id, classroomId)))
+      .limit(1);
+
+    if (!classroom) {
+      throw new NotFoundException("Classroom not found.");
+    }
+
+    const [mapping] = await this.db
+      .select({ id: gradeSubjects.id })
+      .from(gradeSubjects)
+      .where(
+        and(
+          eq(gradeSubjects.tenantId, tenantId),
+          eq(gradeSubjects.academicYearId, classroom.academicYearId),
+          eq(gradeSubjects.gradeId, classroom.gradeId),
+          eq(gradeSubjects.subjectId, subjectId)
+        )
+      )
+      .limit(1);
+
+    if (!mapping) {
+      throw new BadRequestException(
+        "Subject is not part of this classroom's grade curriculum for the academic year."
+      );
+    }
+  }
+
+  private async assertTeacherEligibleForSlot(
+    tenantId: string,
+    classroomId: string,
+    subjectId: string,
+    staffId: string
+  ) {
+    const { data } = await this.classroomsService.listEligibleSubjectTeachers(
+      tenantId,
+      classroomId,
+      subjectId,
+      staffId
+    );
+
+    if (!data.some((teacher) => teacher.id === staffId)) {
+      throw new BadRequestException(
+        "Selected teacher is not eligible to teach this subject for this grade."
+      );
+    }
+  }
+
+  private async assertNoTeacherScheduleConflict(
+    tenantId: string,
+    input: TeacherScheduleConflictQueryDto
+  ) {
+    const conflict = await this.getTeacherScheduleConflict(tenantId, input);
+    if (conflict.hasConflict) {
+      const existing = conflict.existing;
+      throw new ConflictException(
+        `Teacher is already scheduled in ${existing.gradeName} · ${existing.classroomName} (${existing.subjectName ?? "lesson"}) at this day and period.`
+      );
+    }
+  }
+
+  async getClassroomOverview(tenantId: string, classroomId: string, academicYearId?: string) {
+    const [classroom] = await this.db
+      .select({
+        id: classrooms.id,
+        name: classrooms.name,
+        gradeId: classrooms.gradeId,
+        academicYearId: classrooms.academicYearId
+      })
+      .from(classrooms)
+      .where(and(eq(classrooms.id, classroomId), eq(classrooms.tenantId, tenantId)))
+      .limit(1);
+
+    if (!classroom) {
+      throw new NotFoundException("Classroom not found.");
+    }
+
+    const yearId = academicYearId ?? classroom.academicYearId;
+    const periods = await this.listPeriods(tenantId, yearId);
+    const lessonPeriods = periods.filter((period) => !period.isBreak);
+    const slots = await this.listSlots(tenantId, { classroomId, academicYearId: yearId });
+
+    const subjectIds = new Set(slots.map((slot) => slot.subjectId));
+    const teacherIds = new Set(
+      slots.map((slot) => slot.teacherStaffId).filter((id): id is string => Boolean(id))
+    );
+    const workingDays = await this.getWorkingDays(tenantId);
+    const totalLessonCells = lessonPeriods.length * workingDays.length;
+    const filledCells = slots.length;
+    const freePeriods = Math.max(totalLessonCells - filledCells, 0);
+
+    return {
+      classroom,
+      workingDays,
+      stats: {
+        periodsPerWeek: filledCells,
+        subjects: subjectIds.size,
+        teachers: teacherIds.size,
+        freePeriods
+      },
+      periods,
+      slots
+    };
+  }
+
+  private async getWorkingDays(tenantId: string) {
+    const [settings] = await this.db
+      .select({ workingDays: schoolScheduleSettings.workingDays })
+      .from(schoolScheduleSettings)
+      .where(eq(schoolScheduleSettings.tenantId, tenantId))
+      .limit(1);
+
+    return settings?.workingDays?.length ? settings.workingDays : [1, 2, 3, 4, 5];
   }
 
   async createSlot(tenantId: string, actorUserId: string, dto: CreateTimetableSlotDto) {
-    // Check classroom conflict
+    const [period] = await this.db
+      .select()
+      .from(timetablePeriods)
+      .where(and(eq(timetablePeriods.id, dto.periodId), eq(timetablePeriods.tenantId, tenantId)))
+      .limit(1);
+
+    if (!period) {
+      throw new NotFoundException("Period not found.");
+    }
+
+    if (period.isBreak) {
+      throw new BadRequestException("Cannot assign lessons to break periods.");
+    }
+
+    const workingDays = await this.getWorkingDays(tenantId);
+    if (!workingDays.includes(dto.dayOfWeek)) {
+      throw new BadRequestException("Selected day is not a configured working day.");
+    }
+
     const [classroomConflict] = await this.db
       .select()
       .from(timetableSlots)
@@ -89,21 +426,20 @@ export class TimetableService {
       throw new ConflictException("Classroom already has a class in this period");
     }
 
-    // Check teacher conflict
-    const [teacherConflict] = await this.db
-      .select()
-      .from(timetableSlots)
-      .where(
-        and(
-          eq(timetableSlots.tenantId, tenantId),
-          eq(timetableSlots.teacherStaffId, dto.staffId),
-          eq(timetableSlots.periodId, dto.periodId),
-          eq(timetableSlots.dayOfWeek, dto.dayOfWeek)
-        )
-      );
+    await this.assertSubjectInGradeCurriculum(tenantId, dto.classroomId, dto.subjectId);
 
-    if (teacherConflict) {
-      throw new ConflictException("Teacher already assigned in this period");
+    if (dto.staffId) {
+      await this.assertTeacherEligibleForSlot(
+        tenantId,
+        dto.classroomId,
+        dto.subjectId,
+        dto.staffId
+      );
+      await this.assertNoTeacherScheduleConflict(tenantId, {
+        staffId: dto.staffId,
+        periodId: dto.periodId,
+        dayOfWeek: dto.dayOfWeek
+      });
     }
 
     const today = new Date().toISOString().slice(0, 10);
@@ -114,7 +450,7 @@ export class TimetableService {
         tenantId,
         classroomId: dto.classroomId,
         subjectId: dto.subjectId,
-        teacherStaffId: dto.staffId,
+        teacherStaffId: dto.staffId ?? null,
         periodId: dto.periodId,
         dayOfWeek: dto.dayOfWeek,
         room: dto.roomLabel ?? null,
@@ -131,6 +467,97 @@ export class TimetableService {
       recordType: "TimetableSlot",
       recordId: slot!.id,
       after: { classroomId: dto.classroomId, periodId: dto.periodId, dayOfWeek: dto.dayOfWeek }
+    });
+
+    return slot;
+  }
+
+  async updateSlot(
+    tenantId: string,
+    slotId: string,
+    actorUserId: string,
+    dto: UpdateTimetableSlotDto
+  ) {
+    const [existing] = await this.db
+      .select()
+      .from(timetableSlots)
+      .where(and(eq(timetableSlots.id, slotId), eq(timetableSlots.tenantId, tenantId)))
+      .limit(1);
+
+    if (!existing) {
+      throw new NotFoundException("Timetable slot not found.");
+    }
+
+    const [period] = await this.db
+      .select()
+      .from(timetablePeriods)
+      .where(and(eq(timetablePeriods.id, existing.periodId), eq(timetablePeriods.tenantId, tenantId)))
+      .limit(1);
+
+    if (!period || period.isBreak) {
+      throw new BadRequestException("Cannot assign lessons to break periods.");
+    }
+
+    const [classroomConflict] = await this.db
+      .select()
+      .from(timetableSlots)
+      .where(
+        and(
+          eq(timetableSlots.tenantId, tenantId),
+          eq(timetableSlots.classroomId, existing.classroomId),
+          eq(timetableSlots.periodId, existing.periodId),
+          eq(timetableSlots.dayOfWeek, existing.dayOfWeek),
+          ne(timetableSlots.id, slotId)
+        )
+      )
+      .limit(1);
+
+    if (classroomConflict) {
+      throw new ConflictException("Classroom already has a class in this period");
+    }
+
+    await this.assertSubjectInGradeCurriculum(tenantId, existing.classroomId, dto.subjectId);
+
+    if (dto.staffId) {
+      await this.assertTeacherEligibleForSlot(
+        tenantId,
+        existing.classroomId,
+        dto.subjectId,
+        dto.staffId
+      );
+      await this.assertNoTeacherScheduleConflict(tenantId, {
+        staffId: dto.staffId,
+        periodId: existing.periodId,
+        dayOfWeek: existing.dayOfWeek,
+        excludeSlotId: slotId
+      });
+    }
+
+    const [slot] = await this.db
+      .update(timetableSlots)
+      .set({
+        subjectId: dto.subjectId,
+        teacherStaffId: dto.staffId ?? null,
+        updatedBy: actorUserId,
+        updatedAt: new Date()
+      })
+      .where(and(eq(timetableSlots.id, slotId), eq(timetableSlots.tenantId, tenantId)))
+      .returning();
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId,
+      action: "timetable_slot.update",
+      recordType: "TimetableSlot",
+      recordId: slotId,
+      before: {
+        subjectId: existing.subjectId,
+        teacherStaffId: existing.teacherStaffId
+      },
+      after: {
+        subjectId: dto.subjectId,
+        teacherStaffId: dto.staffId
+      }
     });
 
     return slot;
@@ -164,6 +591,48 @@ export class TimetableService {
 
   async publishTimetable(tenantId: string, actorUserId: string, dto: PublishTimetableDto) {
     const filters = [eq(timetableSlots.tenantId, tenantId)];
+
+    if (dto.classroomId) {
+      filters.push(eq(timetableSlots.classroomId, dto.classroomId));
+    }
+
+    if (dto.academicYearId) {
+      const periodRows = await this.db
+        .select({ id: timetablePeriods.id })
+        .from(timetablePeriods)
+        .where(
+          and(
+            eq(timetablePeriods.tenantId, tenantId),
+            eq(timetablePeriods.academicYearId, dto.academicYearId)
+          )
+        );
+      const periodIds = periodRows.map((row) => row.id);
+      if (!periodIds.length) {
+        return { published: 0 };
+      }
+      filters.push(inArray(timetableSlots.periodId, periodIds));
+    }
+
+    const scopedSlots = await this.db
+      .select({
+        id: timetableSlots.id,
+        teacherStaffId: timetableSlots.teacherStaffId,
+        periodId: timetableSlots.periodId,
+        dayOfWeek: timetableSlots.dayOfWeek
+      })
+      .from(timetableSlots)
+      .where(and(...filters));
+
+    const conflicts = listTeacherScheduleConflicts(
+      scopedSlots.filter(
+        (slot): slot is typeof slot & { teacherStaffId: string } => Boolean(slot.teacherStaffId)
+      )
+    );
+    if (conflicts.length) {
+      throw new ConflictException(
+        "Cannot publish timetable: one or more teachers are scheduled in multiple classes at the same time."
+      );
+    }
 
     const result = await this.db
       .update(timetableSlots)

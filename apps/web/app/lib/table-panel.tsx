@@ -2,84 +2,122 @@
 
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { Icon } from "./icon";
+import { EmptyState } from "../../components/shared/empty-state";
 
-export function TablePanelHead({
-  title,
-  help,
-  onRefresh,
-  onAdd,
-  addLabel,
-  extra
+/**
+ * Vertical stack for a list page: optional context banner, then table card.
+ * Primary actions belong in {@link PageHeader} / dash-page-title; filters use
+ * {@link PdsSearchFiltersRow}.
+ */
+export function DataTableSection({
+  children,
+  className
 }: {
-  title: string;
-  help?: ReactNode;
-  onRefresh?: () => void;
-  onAdd?: () => void;
-  addLabel?: string;
-  extra?: ReactNode;
+  children: ReactNode;
+  className?: string;
 }) {
-  const c = useTranslations("common");
-
   return (
-    <div className="panel-head">
-      <div className="panel-head__titles">
-        <h2>{title}</h2>
-        {help ? <p className="panel-head__help">{help}</p> : null}
-      </div>
-      <div className="panel-actions">
-        {extra}
-        {onAdd ? (
-          <button type="button" className="btn-primary" onClick={onAdd}>
-            <Icon name="add" />
-            {addLabel ?? c("add")}
-          </button>
-        ) : null}
-        {onRefresh ? (
-          <button type="button" className="btn-ghost" onClick={onRefresh}>
-            <Icon name="refresh" />
-            {c("refresh")}
-          </button>
-        ) : null}
-      </div>
+    <div className={["table-page-section", className].filter(Boolean).join(" ")}>
+      {children}
     </div>
   );
 }
 
+/**
+ * Optional context banner above a table (e.g. working year). No row actions here.
+ */
+export function TablePanelHead({
+  title: _title,
+  banner,
+  bannerVariant = "default",
+  help
+}: {
+  /** @deprecated Section titles are not rendered; page context lives in the top bar. */
+  title?: string;
+  /** Left-side context copy (e.g. working year). Rendered with banner styling. */
+  banner?: ReactNode;
+  bannerVariant?: "default" | "warning";
+  /** @deprecated Prefer {@link PageHeader} `description` for page-level intro copy. */
+  help?: ReactNode;
+}) {
+  if (banner) {
+    return (
+      <div
+        className={[
+          "module-strip module-strip--row table-toolbar-card",
+          bannerVariant === "warning" ? "table-toolbar-card--warning" : null
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        <p className="pds-type-body-m-medium table-toolbar-card__banner">{banner}</p>
+      </div>
+    );
+  }
+
+  if (help) {
+    return <p className="pds-type-body-s-regular muted">{help}</p>;
+  }
+
+  return null;
+}
+
+/**
+ * Floating table card — table only, no toolbar. Handles loading / empty / error inside the card.
+ */
 export function TablePanelBody({
   loading,
   error,
   empty,
+  emptyIcon,
+  emptyTitle,
+  emptyDescription,
+  emptyAction,
+  variant = "card",
+  unwrapEmpty,
   children
 }: {
   loading?: boolean;
   error?: string | null;
   empty?: boolean;
+  /** When set, the empty case renders a rich EmptyState instead of muted text. */
+  emptyIcon?: string;
+  emptyTitle?: ReactNode;
+  emptyDescription?: ReactNode;
+  emptyAction?: ReactNode;
+  /** `plain` skips wrappers entirely. `card-plain` is an alias for `card`. */
+  variant?: "card" | "card-plain" | "plain";
+  /** Render empty state directly in the parent panel (no table-card wrapper). */
+  unwrapEmpty?: boolean;
   children: ReactNode;
 }) {
   const c = useTranslations("common");
+  const plain = variant === "plain";
+
+  const wrapCard = (content: ReactNode) =>
+    plain ? content : <section className="table-card">{content}</section>;
 
   if (loading) {
-    return (
-      <div className="panel-body">
-        <p className="muted">{c("loading")}</p>
-      </div>
-    );
+    return wrapCard(<p className="pds-type-body-s-regular muted">{c("loading")}</p>);
   }
   if (error) {
-    return (
-      <div className="panel-body">
-        <p className="error-text">{error}</p>
-      </div>
+    return wrapCard(
+      <EmptyState compact embedded icon="error" title={c("somethingWrong")} description={error} />
     );
   }
   if (empty) {
-    return (
-      <div className="panel-body">
-        <p className="muted">{c("empty")}</p>
-      </div>
+    const emptyState = (
+      <EmptyState
+        compact
+        embedded
+        icon={emptyIcon ?? "inbox"}
+        title={emptyTitle ?? c("empty")}
+        description={emptyDescription}
+        action={emptyAction}
+      />
     );
+    return unwrapEmpty ? emptyState : wrapCard(emptyState);
   }
 
-  return <div className="panel-body">{children}</div>;
+  return wrapCard(children);
 }

@@ -1,17 +1,25 @@
 "use client";
+import { FormInput, TextAreaInput } from "../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
+import { RowMoreActionsMenu } from "../../../components/shared/row-more-actions";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useApiMutation, useApiQuery } from "../../lib/api";
+import { fetchAllPaginated } from "../../lib/export-csv";
+import { getSession } from "../../lib/session";
 import { DataTable, DirectoryNameCell } from "../../lib/data-table";
 import { Field } from "../../lib/form";
-import { Icon } from "../../lib/icon";
+import { Icon } from "../../lib/material-icon";
 import { RecordFormSheet } from "../../lib/record-sheet";
-import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
+import { DataTableSection, TablePanelBody } from "../../lib/table-panel";
 import { zodResolver } from "../../lib/zod-resolver";
+import { StatusBadge } from "../../../components/shared/badge";
+import { ExportCsvButton } from "../../../components/shared/export-csv-button";
+import { StatCard, StatGrid } from "../../../components/shared/stat-card";
+import { ModulePageHeader } from "../module-page-header";
 
 type Enquiry = {
   id: string;
@@ -44,6 +52,7 @@ const ENQUIRIES_PATH = (tenant: string) => `/tenants/${tenant}/admissions/enquir
 
 export default function AdmissionsPage() {
   const t = useTranslations("admissions");
+  const nav = useTranslations("nav");
   const c = useTranslations("common");
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -95,41 +104,113 @@ export default function AdmissionsPage() {
       header: c("status"),
       accessorKey: "status",
       cell: ({ row }) => (
-        <span className={`badge badge--${row.original.status}`}>{row.original.status}</span>
+        <StatusBadge status={row.original.status} />
       )
-    }
+    },
+    {
+      id: "actions",
+      header: "",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <RowMoreActionsMenu
+          ariaLabel={c("moreActions")}
+          items={[
+            {
+              id: "view",
+              label: c("view"),
+              icon: "visibility",
+              onSelect: () => {
+                window.location.href = `/dashboard/admissions/${row.original.id}`;
+              }
+            }
+          ]}
+        />
+      )
+    } satisfies ColumnDef<Enquiry, unknown>
   ];
 
   return (
     <div className="page-stack">
-      <div className="stat-grid">
-        <div className="stat-card">
-          <span className="stat-label">{t("totalEnquiries")}</span>
-          <span className="stat-value">
-            {dashboard.isLoading ? "…" : (dashboard.data?.totalEnquiries ?? 0)}
-          </span>
-        </div>
-      </div>
-
-      <section className="panel">
-        <TablePanelHead
-          title={t("listTitle")}
-          onRefresh={() => void enquiries.refetch()}
-          onAdd={() => setSheetOpen(true)}
-          addLabel={t("createEnquiry")}
+      <ModulePageHeader
+        navKey="admissions"
+        title={nav("admissions")}
+        description={t("description")}
+        actions={
+          <>
+            <ExportCsvButton
+              disabled={enquiries.isLoading}
+              onExport={async () => {
+                const tenantId = getSession()?.tenantId;
+                if (!tenantId) {
+                  throw new Error(c("notSignedIn"));
+                }
+                const rows = await fetchAllPaginated<Enquiry>(
+                  (limit, offset) =>
+                    `/tenants/${tenantId}/admissions/enquiries?limit=${limit}&offset=${offset}`,
+                  (json) => {
+                    const payload = json as EnquiryList;
+                    return { rows: payload.data, total: payload.total };
+                  }
+                );
+                return {
+                  filename: "enquiries.csv",
+                  columns: [
+                    { key: "prospectiveStudentName", header: t("prospect") },
+                    { key: "targetGrade", header: t("grade") },
+                    { key: "source", header: t("source") },
+                    { key: "guardianPhone", header: t("guardianPhone") },
+                    { key: "status", header: c("status") },
+                    { key: "createdAt", header: t("when") }
+                  ],
+                  rows: rows.map((row) => ({
+                    prospectiveStudentName: row.prospectiveStudentName,
+                    targetGrade: row.targetGrade ?? "",
+                    source: row.source,
+                    guardianPhone: row.guardianPhone ?? "",
+                    status: row.status,
+                    createdAt: row.createdAt
+                  }))
+                };
+              }}
+            />
+            <button type="button" className="pds-type-body-m-bold btn-primary" onClick={() => setSheetOpen(true)}>
+              <Icon name="add" />
+              {t("createEnquiry")}
+            </button>
+          </>
+        }
+      />
+      <StatGrid>
+        <StatCard
+          icon={<Icon name="group_add" size={18} />}
+          label={t("totalEnquiries")}
+          value={dashboard.isLoading ? "…" : (dashboard.data?.totalEnquiries ?? 0)}
         />
+      </StatGrid>
+
+      <DataTableSection>
+
         <TablePanelBody
           loading={enquiries.isLoading}
           error={enquiries.isError ? c("somethingWrong") : null}
           empty={!enquiries.data?.data.length}
+          emptyIcon="group_add"
+          emptyTitle={t("empty")}
+          emptyAction={
+            <button type="button" className="pds-type-body-m-bold btn-primary" onClick={() => setSheetOpen(true)}>
+              <Icon name="add" />
+              {t("createEnquiry")}
+            </button>
+          }
         >
           <DataTable
             columns={columns}
             data={enquiries.data?.data ?? []}
             getRowHref={(enquiry) => `/dashboard/admissions/${enquiry.id}`}
+            navigationFrom={{ label: nav("admissions"), href: "/dashboard/admissions" }}
           />
         </TablePanelBody>
-      </section>
+      </DataTableSection>
 
       <RecordFormSheet
         open={sheetOpen}
@@ -153,10 +234,10 @@ export default function AdmissionsPage() {
         })}
         footer={
           <>
-            <button type="button" className="btn-ghost" onClick={() => setSheetOpen(false)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setSheetOpen(false)}>
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={form.formState.isSubmitting}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={form.formState.isSubmitting}>
               <Icon name="add" />
               {form.formState.isSubmitting ? c("loading") : t("createEnquiry")}
             </button>
@@ -164,19 +245,19 @@ export default function AdmissionsPage() {
         }
       >
         <Field label={t("prospect")} error={form.formState.errors.prospectName?.message}>
-          <input {...form.register("prospectName")} />
+          <FormInput {...form.register("prospectName")} />
         </Field>
         <Field label={t("guardianPhone")}>
-          <input {...form.register("guardianPhone")} />
+          <FormInput {...form.register("guardianPhone")} />
         </Field>
         <Field label={t("grade")}>
-          <input {...form.register("interestedGrade")} />
+          <FormInput {...form.register("interestedGrade")} />
         </Field>
         <Field label={t("source")} error={form.formState.errors.source?.message}>
-          <input {...form.register("source")} />
+          <FormInput {...form.register("source")} />
         </Field>
         <Field label={t("notes")}>
-          <textarea rows={2} {...form.register("notes")} />
+          <TextAreaInput maxLength={300} placeholder={t("notes")} {...form.register("notes")} />
         </Field>
       </RecordFormSheet>
     </div>

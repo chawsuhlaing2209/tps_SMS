@@ -1,0 +1,172 @@
+/* PDS TopNavBar — Figma 119:9730 */
+
+.pds-top-nav-bar {
+  background: var(--pds-background-frame);
+  border-bottom: 1px solid var(--pds-border-color-primary);
+  flex-shrink: 0;
+  /* viewport-fit=cover: keep the bar clear of notches/cutouts. */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  padding-top: env(safe-area-inset-top);
+  position: sticky;
+  top: 0;
+  width: 100%;
+  z-index: 20;
+}
+
+.pds-top-nav-bar__inner {
+  align-items: center;
+  display: flex;
+  gap: var(--pds-gap-large);
+  justify-content: space-between;
+  margin-inline: 0;
+  max-width: 1320px;
+  min-height: calc(
+    var(--pds-type-body-m-bold-line-height) + var(--pds-padding-x-small) * 2 +
+      var(--pds-padding-xx-small) * 2
+  );
+  padding: var(--pds-padding-x-small) var(--pds-padding-xx-large);
+  width: 100%;
+}
+
+.pds-top-nav-bar__breadcrumb {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pds-top-nav-bar__utilities {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--pds-gap-small);
+}
+
+.pds-top-nav-bar__page-actions {
+  align-items: center;
+  display: flex;
+  flex: 1 1 auto;
+  gap: var(--pds-gap-small);
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.pds-top-nav-bar__locale.pds-segmented-control {
+  align-items: stretch;
+  background: var(--pds-background-layout-secondary);
+  border-color: var(--pds-border-color-primary);
+}
+
+.pds-top-nav-bar__locale .pds-segmented-control__option {
+  min-width: 0;
+  padding-inline: var(--pds-padding-small);
+}
+
+.working-year-badge--top-nav {
+  background: var(--pds-background-layout-secondary);
+  border-color: var(--pds-border-color-primary);
+  border-radius: var(--pds-radius-12);
+  color: var(--pds-text-primary);
+  font-family: var(--pds-type-body-m-bold-font-family);
+  font-size: var(--pds-type-body-m-bold-font-size);
+  font-weight: var(--pds-type-body-m-bold-font-weight);
+  line-height: var(--pds-type-body-m-bold-line-height);
+  padding: var(--pds-padding-x-small) var(--pds-padding-small);
+}
+
+.working-year-badge--top-nav:hover {
+  border-color: var(--pds-border-color-primary);
+  color: var(--pds-text-primary);
+}
+
+.pds-top-nav-bar__notifications {
+  align-items: center;
+  background: var(--pds-background-card);
+  border: 1px solid var(--pds-border-color-primary);
+  border-radius: var(--pds-radius-12);
+  color: var(--pds-text-primary);
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: calc(
+    var(--pds-type-body-m-bold-line-height) + var(--pds-padding-x-small) * 2 +
+      var(--pds-padding-xx-small) * 2
+  );
+  justify-content: center;
+  position: relative;
+  width: calc(
+    var(--pds-type-body-m-bold-line-height) + var(--pds-padding-x-small) * 2 +
+      var(--pds-padding-xx-small) * 2
+  );
+}
+
+.pds-top-nav-bar__notifications:hover {
+  border-color: var(--pds-brand-dark);
+}
+
+.pds-top-nav-bar__notifications:focus-visible {
+  box-shadow: 0 0 0 3px var(--pds-states-focus);
+  outline: none;
+}
+
+.pds-top-nav-bar__notifications-dot {
+  background: var(--pds-color-accent-pomegrate);
+  border: var(--pds-gap-xx-small) solid var(--pds-background-card);
+  border-radius: var(--pds-radius-pill);
+  height: var(--pds-gap-small);
+  position: absolute;
+  right: var(--pds-gap-small);
+  top: var(--pds-gap-small);
+  width: var(--pds-gap-small);
+}
+
+.pds-top-nav-bar__menu-btn {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--pds-radius-8);
+  color: var(--pds-text-secondary);
+  cursor: pointer;
+  display: none;
+  flex-shrink: 0;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0;
+}
+
+.pds-top-nav-bar__menu-btn:hover {
+  background: var(--pds-background-frame);
+  color: var(--pds-text-primary);
+}
+
+.pds-top-nav-bar__menu-btn:focus-visible {
+  box-shadow: 0 0 0 3px var(--pds-states-focus);
+  outline: none;
+}
+
+@media (max-width: 960px) { /* = --pds-breakpoint-lg; CSS vars don't work in @media conditions */
+  .pds-top-nav-bar__inner {
+    flex-wrap: wrap;
+  }
+
+  .pds-top-nav-bar__page-actions {
+    flex: 1 1 100%;
+    order: 3;
+  }
+
+  .pds-top-nav-bar__menu-btn {
+    display: inline-flex;
+  }
+}
+
+@media (max-width: 640px) { /* = --pds-breakpoint-sm */
+  .pds-top-nav-bar__inner {
+    padding-left: var(--pds-padding-medium);
+    padding-right: var(--pds-padding-medium);
+  }
+
+  .pds-top-nav-bar__utilities {
+    flex-wrap: wrap;
+    row-gap: var(--pds-gap-x-small);
+  }
+}

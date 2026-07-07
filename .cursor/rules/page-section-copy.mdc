@@ -1,0 +1,13 @@
+---
+description: Page section titles and descriptions in the dashboard shell
+globs: apps/web/app/dashboard/**/*.tsx
+alwaysApply: false
+---
+
+# Page section copy
+
+- Publish the page title and **section description** via `PageHeader` / `ModulePageHeader` `description` prop.
+- `DashboardPageTitle` renders the description **directly under the title** (left column); actions stay on the right.
+- Do **not** duplicate the same copy in the page body (`TablePanelHead help`, standalone `<p className="muted">`, etc.).
+- `TablePanelHead help` is only for table-specific context that is not the page intro (rare).
+- Typography: title `pds-type-title-m-extrabold`, description `pds-type-body-s-regular muted`.

@@ -13,6 +13,7 @@ import {
 } from "class-validator";
 import { Type } from "class-transformer";
 
+
 export class RegisterStudentGuardianDto {
   @IsOptional()
   @IsUUID()
@@ -159,6 +160,12 @@ export class UpdateGuardianDto {
   @IsOptional()
   @IsString()
   email?: string;
+
+  /** Link to a staff record (marks the guardian as school staff); null unlinks. */
+  @IsOptional()
+  @ValidateIf((o) => o.staffId !== null)
+  @IsUUID()
+  staffId?: string | null;
 }
 
 export class CreateGuardianDto {
@@ -232,6 +239,11 @@ export class ListStudentsQueryDto {
   @IsOptional()
   @IsEnum(["draft", "enrolled", "transferred", "withdrawn", "graduated", "archived"])
   status?: "draft" | "enrolled" | "transferred" | "withdrawn" | "graduated" | "archived";
+
+  /** Archive lifecycle filter. Defaults to "active" (non-archived) when omitted. */
+  @IsOptional()
+  @IsIn(["active", "archived", "all"])
+  view?: "active" | "archived" | "all";
 
   @IsOptional()
   @IsUUID()

@@ -3,10 +3,12 @@ import { isTenantConfigurablePermission, roleDisplayFor, rolePermissions, roles 
 import { and, asc, eq, sql } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
-import { roles, sessions, tenants, userRoles, users } from "../db/schema.js";
+import { roles, sessions, tenantSettings, tenants, userRoles, users } from "../db/schema.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
 import type { AssignRoleDto, CreateSessionDto, CreateTenantRoleDto, InviteUserDto, UpdateTenantRoleDto } from "./dto.js";
+import { AuthService } from "./auth.service.js";
 import { PasswordService } from "./password.service.js";
+import { TenantContextCache } from "./tenant-context.cache.js";
 
 export interface ProvisionedOwner {
   userId: string;
@@ -14,13 +16,33 @@ export interface ProvisionedOwner {
   credentialsSent: boolean;
 }
 
+/**
+ * The only user columns that may leave the API. Never select or return the
+ * full users row — it contains passwordHash.
+ */
+const publicUserColumns = {
+  id: users.id,
+  tenantId: users.tenantId,
+  email: users.email,
+  phone: users.phone,
+  displayName: users.displayName,
+  status: users.status,
+  lastLoginAt: users.lastLoginAt,
+  createdAt: users.createdAt,
+  updatedAt: users.updatedAt
+};
+
+export type PublicUser = Omit<typeof users.$inferSelect, "passwordHash">;
+
 @Injectable()
 export class IdentityService {
   constructor(
     @Inject(DB) private readonly db: Database,
     private readonly auditService: AuditService,
     private readonly passwordService: PasswordService,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    private readonly authService: AuthService,
+    private readonly tenantContextCache: TenantContextCache
   ) {}
 
   async seedTenantRoles(tenantId: string) {
@@ -53,7 +75,11 @@ export class IdentityService {
   }
 
   listTenantUsers(tenantId: string) {
-    return this.db.select().from(users).where(eq(users.tenantId, tenantId));
+    return this.db
+      .select(publicUserColumns)
+      .from(users)
+      .where(eq(users.tenantId, tenantId))
+      .limit(200);
   }
 
   listTenantRoles(tenantId: string) {
@@ -256,7 +282,52 @@ export class IdentityService {
       }
     });
 
+    if (permissions || dto.status) {
+      this.tenantContextCache.invalidateTenant(tenantId);
+    }
+
     return this.getTenantRole(tenantId, roleId);
+  }
+
+  /**
+   * Delete a custom tenant role. Built-in roles (seeded defaults) and roles that
+   * still have users assigned cannot be deleted — the caller must reassign first.
+   */
+  async deleteTenantRole(tenantId: string, roleId: string, actorUserId?: string) {
+    const [existing] = await this.db
+      .select()
+      .from(roles)
+      .where(and(eq(roles.tenantId, tenantId), eq(roles.id, roleId)));
+
+    if (!existing) {
+      throw new NotFoundException("Tenant role not found.");
+    }
+
+    if ((defaultRoles as readonly string[]).includes(existing.key)) {
+      throw new BadRequestException("Built-in roles can't be deleted.");
+    }
+
+    const withUsers = await this.getTenantRole(tenantId, roleId);
+    if (withUsers.userCount > 0) {
+      throw new BadRequestException(
+        `Cannot delete a role assigned to ${withUsers.userCount} user(s). Reassign them first.`
+      );
+    }
+
+    await this.db.delete(roles).where(and(eq(roles.tenantId, tenantId), eq(roles.id, roleId)));
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      action: "role.delete",
+      recordType: "Role",
+      recordId: roleId,
+      before: { name: existing.name, key: existing.key, status: existing.status },
+      after: { deleted: true }
+    });
+
+    this.tenantContextCache.invalidateTenant(tenantId);
+    return { deleted: true, roleId };
   }
 
   async findUserByContact(
@@ -322,7 +393,7 @@ export class IdentityService {
         status: "active",
         passwordHash
       })
-      .returning();
+      .returning({ id: users.id });
 
     if (!user) {
       throw new BadRequestException("Failed to create the school owner account.");
@@ -386,7 +457,7 @@ export class IdentityService {
       passwordHash = await this.passwordService.hash(plainPassword);
     }
 
-    let user: typeof users.$inferSelect | undefined;
+    let user: PublicUser | undefined;
     try {
       [user] = await this.db
         .insert(users)
@@ -398,7 +469,7 @@ export class IdentityService {
           status: dto.email ? "active" : "invited",
           passwordHash
         })
-        .returning();
+        .returning(publicUserColumns);
     } catch (error) {
       if (this.isUniqueViolation(error)) {
         throw new ConflictException(
@@ -420,20 +491,35 @@ export class IdentityService {
 
       if (dto.email && plainPassword) {
         const [tenant] = await this.db
-          .select({ name: tenants.name, slug: tenants.slug })
+          .select({
+            name: tenants.name,
+            slug: tenants.slug,
+            schoolName: tenantSettings.schoolName
+          })
           .from(tenants)
+          .leftJoin(tenantSettings, eq(tenantSettings.tenantId, tenants.id))
           .where(eq(tenants.id, tenantId));
 
         if (tenant) {
           await this.notifications.sendOwnerWelcomeEmail({
             tenantId,
             recipient: dto.email,
-            schoolName: tenant.name,
+            schoolName: tenant.schoolName ?? tenant.name,
             tenantSlug: tenant.slug,
             displayName: dto.displayName,
             password: plainPassword
           });
         }
+      }
+
+      if (!dto.email && user.status === "invited") {
+        const { token, expiresAt } = await this.authService.issueActivationToken(tenantId, user.id);
+        return {
+          ...user,
+          credentialsSent: false,
+          activationToken: token,
+          activationExpiresAt: expiresAt
+        };
       }
     }
 
@@ -495,6 +581,8 @@ export class IdentityService {
       after: { userId: dto.userId, roleId: dto.roleId }
     });
 
+    this.tenantContextCache.invalidateUser(tenantId, dto.userId);
+
     return assignment ?? { tenantId, userId: dto.userId, roleId: dto.roleId };
   }
 
@@ -509,7 +597,15 @@ export class IdentityService {
         userAgent: dto.userAgent,
         ipAddress: dto.ipAddress
       })
-      .returning();
+      .returning({
+        id: sessions.id,
+        tenantId: sessions.tenantId,
+        userId: sessions.userId,
+        expiresAt: sessions.expiresAt,
+        userAgent: sessions.userAgent,
+        ipAddress: sessions.ipAddress,
+        createdAt: sessions.createdAt
+      });
 
     return session;
   }

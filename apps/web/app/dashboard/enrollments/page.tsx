@@ -1,8 +1,14 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
-import { EnrollmentsWorkspace } from "./enrollments-workspace";
 import { PageHeader } from "../page-header-context";
+import { WorkspaceLoading } from "../../lib/workspace-loading";
+
+const EnrollmentsWorkspace = dynamic(
+  () => import("./enrollments-workspace").then((module) => module.EnrollmentsWorkspace),
+  { loading: () => <WorkspaceLoading /> }
+);
 
 export default function EnrollmentsPage() {
   const t = useTranslations("enrollments");
@@ -13,7 +19,8 @@ export default function EnrollmentsPage() {
       <PageHeader
         title={t("title")}
         description={t("description")}
-        breadcrumbs={[{ label: nav("group_business") }, { label: nav("enrollments") }]}
+        breadcrumbs={[{ label: nav("group_enrollment") }, { label: nav("enrollments") }]}
+        actionsPortal
       />
       <EnrollmentsWorkspace />
     </div>

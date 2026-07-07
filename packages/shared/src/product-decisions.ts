@@ -1,5 +1,5 @@
 export const productDecisionDefaults = {
-  firstTenantSalaryScope: "salary_payment_records_only",
+  firstTenantSalaryScope: "full_payroll_module",
   lmsSubmissionScope: "teacher_completion_tracking_first",
   financeInvoiceScope: "per_student_invoices_with_family_balance_grouping",
   parentPortalInFirstGoLive: false,

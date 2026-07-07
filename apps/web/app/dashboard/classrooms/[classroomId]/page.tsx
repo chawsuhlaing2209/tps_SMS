@@ -1,15 +1,19 @@
 "use client";
 
-import { useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useEffect, use } from "react";
+import { useRouter } from "next/navigation";
 
-export default function ClassroomDetailRedirectPage() {
+export default function ClassroomDetailRedirectPage({
+  params
+}: {
+  params: Promise<{ classroomId: string }>;
+}) {
   const router = useRouter();
-  const params = useParams<{ classroomId: string }>();
+  const { classroomId } = use(params);
 
   useEffect(() => {
-    router.replace(`/dashboard/structure/rooms/${params.classroomId}`);
-  }, [params.classroomId, router]);
+    router.replace(`/dashboard/structure/rooms/${classroomId}`);
+  }, [classroomId, router]);
 
   return null;
 }

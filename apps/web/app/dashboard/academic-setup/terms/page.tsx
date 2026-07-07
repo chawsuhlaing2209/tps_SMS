@@ -1,19 +1,25 @@
 "use client";
+import { FormDatePicker, FormInput } from "../../../../components/shared/form-input";
 
+import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
+import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { useApiMutation, useApiQuery } from "../../../lib/api";
+import { useApiMutation, useReferenceApiQuery } from "../../../lib/api";
+import { hasAnyPermission } from "../../../lib/permissions";
+import { getSession } from "../../../lib/session";
 import { DataTable } from "../../../lib/data-table";
 import { Field } from "../../../lib/form";
-import { Icon } from "../../../lib/icon";
+import { Icon } from "../../../lib/material-icon";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { TablePanelBody, TablePanelHead } from "../../../lib/table-panel";
 import { zodResolver } from "../../../lib/zod-resolver";
 import { useAcademicYearContext } from "../use-academic-year-context";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
+import { ModulePageHeader } from "../../module-page-header";
 
 type Term = {
   id: string;
@@ -31,12 +37,16 @@ const TERMS_PATH = (tenant: string) => `/tenants/${tenant}/academics/terms`;
 
 export default function TermsPage() {
   const t = useTranslations("academics");
+  const setup = useTranslations("academicSetup");
   const c = useTranslations("common");
+  const permissions = getSession()?.permissions;
+  const canManage = hasAnyPermission(permissions, ["academic_setup.manage"]);
   const [formMode, setFormMode] = useState<FormMode | null>(null);
+  const [deletingTerm, setDeletingTerm] = useState<Term | null>(null);
 
   const currentYear = useCurrentAcademicYear();
   const { contextYearId } = useAcademicYearContext(currentYear.data);
-  const terms = useApiQuery<Term[]>(TERMS_PATH);
+  const terms = useReferenceApiQuery<Term[]>(TERMS_PATH);
 
   const create = useApiMutation<TermValues>(
     (body, tenant) => ({
@@ -111,33 +121,49 @@ export default function TermsPage() {
       id: "actions",
       header: t("actions"),
       enableSorting: false,
-      cell: ({ row }) => (
-        <div style={{ display: "flex", gap: "8px" }}>
-          <button type="button" className="row-action" onClick={() => openEdit(row.original)}>
-            {t("edit")}
-          </button>
-          <button
-            type="button"
-            className="row-action"
-            disabled={remove.isPending}
-            onClick={() => void remove.mutateAsync({ id: row.original.id })}
-          >
-            {c("delete")}
-          </button>
-        </div>
-      )
+      cell: ({ row }) =>
+        canManage ? (
+          <RowMoreActionsMenu
+            ariaLabel={c("moreActions")}
+            items={[
+              {
+                id: "edit",
+                label: c("edit"),
+                icon: "edit",
+                onSelect: () => openEdit(row.original)
+              },
+              {
+                id: "delete",
+                label: c("delete"),
+                icon: "delete",
+                destructive: true,
+                onSelect: () => setDeletingTerm(row.original)
+              }
+            ]}
+          />
+        ) : null
     }
   ];
 
   return (
-    <section className="panel">
-      <TablePanelHead
-        title={t("terms")}
-        onRefresh={() => void terms.refetch()}
-        onAdd={contextYearId ? openCreate : undefined}
-        addLabel={t("addTerm")}
+    <>
+      <ModulePageHeader
+        navKey="terms"
+        title={setup("terms")}
+        description={setup("description")}
+        actions={
+          <>
+            {canManage && contextYearId ? (
+              <button type="button" className="pds-type-body-m-bold btn-primary" onClick={openCreate}>
+                <Icon name="add" />
+                {t("addTerm")}
+              </button>
+            ) : null}
+          </>
+        }
       />
       <TablePanelBody
+        variant="plain"
         loading={terms.isLoading || currentYear.isLoading}
         error={terms.isError ? c("somethingWrong") : null}
         empty={!visibleTerms.length}
@@ -174,10 +200,10 @@ export default function TermsPage() {
         })}
         footer={
           <>
-            <button type="button" className="btn-ghost" onClick={() => setFormMode(null)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setFormMode(null)}>
               {c("cancel")}
             </button>
-            <button type="submit" className="btn-primary" disabled={form.formState.isSubmitting}>
+            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={form.formState.isSubmitting}>
               <Icon name="check" />
               {form.formState.isSubmitting
                 ? t("creating")
@@ -189,18 +215,49 @@ export default function TermsPage() {
         }
       >
         <Field label={t("year")}>
-          <input readOnly value={currentYear.data?.name ?? ""} />
+          <FormInput readOnly value={currentYear.data?.name ?? ""} />
         </Field>
         <Field label={c("name")} error={form.formState.errors.name?.message}>
-          <input placeholder={t("termNamePlaceholder")} {...form.register("name")} />
+          <FormInput placeholder={t("termNamePlaceholder")} {...form.register("name")} />
         </Field>
         <Field label={t("starts")} error={form.formState.errors.startsOn?.message}>
-          <input type="date" {...form.register("startsOn")} />
+          <FormDatePicker
+            type="day"
+            variant="form"
+            value={form.watch("startsOn")}
+            onValueChange={(next) => form.setValue("startsOn", next, { shouldValidate: true })}
+            placeholder={t("starts")}
+            ariaLabel={t("starts")}
+          />
         </Field>
         <Field label={t("ends")} error={form.formState.errors.endsOn?.message}>
-          <input type="date" {...form.register("endsOn")} />
+          <FormDatePicker
+            type="day"
+            variant="form"
+            value={form.watch("endsOn")}
+            onValueChange={(next) => form.setValue("endsOn", next, { shouldValidate: true })}
+            placeholder={t("ends")}
+            ariaLabel={t("ends")}
+          />
         </Field>
       </RecordFormSheet>
-    </section>
+
+      <ConfirmDialog
+        open={deletingTerm !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeletingTerm(null);
+        }}
+        title={t("deleteTermTitle")}
+        description={t("deleteTermHelp", { name: deletingTerm?.name ?? "" })}
+        confirmLabel={c("delete")}
+        destructive
+        loading={remove.isPending}
+        onConfirm={async () => {
+          if (!deletingTerm) return;
+          await remove.mutateAsync({ id: deletingTerm.id });
+          setDeletingTerm(null);
+        }}
+      />
+    </>
   );
 }

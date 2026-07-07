@@ -1,0 +1,69 @@
+/* Draft payroll compensation editor modal (payslip uses invoice shell). */
+
+.payroll-staff-config-modal {
+  max-height: min(90vh, 720px);
+  max-width: min(92vw, 560px);
+  width: 100%;
+}
+
+.payroll-staff-config-modal__stack {
+  display: grid;
+  gap: var(--pds-gap-large);
+}
+
+.payroll-staff-config-modal__staff {
+  align-items: center;
+  display: flex;
+  gap: var(--pds-gap-medium);
+}
+
+.payroll-staff-config-modal__staff-meta {
+  display: grid;
+  gap: var(--pds-gap-xx-small);
+  min-width: 0;
+}
+
+.payroll-staff-config-modal__field {
+  display: grid;
+  gap: var(--pds-gap-xx-small);
+}
+
+.payroll-staff-config-modal__label {
+  color: var(--pds-text-secondary);
+}
+
+.payroll-staff-config-modal__base-display {
+  align-items: baseline;
+  background: var(--pds-background-frame);
+  border: 1px solid var(--pds-border-color-primary);
+  border-radius: var(--pds-border-radius-8);
+  display: flex;
+  gap: var(--pds-gap-x-small);
+  justify-content: space-between;
+  padding: var(--pds-padding-medium) var(--pds-padding-large);
+}
+
+.payroll-staff-config-modal__suffix {
+  color: var(--pds-text-secondary);
+}
+
+.payroll-staff-config-modal__section {
+  display: grid;
+  gap: var(--pds-gap-small);
+}
+
+.payroll-staff-config-modal__section-head {
+  align-items: baseline;
+  display: flex;
+  gap: var(--pds-gap-medium);
+  justify-content: space-between;
+}
+
+.payroll-staff-config-modal__group-label {
+  color: var(--pds-muted);
+  margin: var(--pds-gap-x-small) 0 0;
+}
+
+.payroll-staff-config-modal__section > .payroll-staff-config-modal__group-label:first-of-type {
+  margin-top: 0;
+}

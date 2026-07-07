@@ -35,6 +35,7 @@ export const tenantPermissionCatalog: PermissionCatalogGroup[] = [
       { permission: "report_card.approve", labelKey: "reportCardEdit" },
       { permission: "exam.manage", labelKey: "examManage" },
       { permission: "classroom.manage", labelKey: "classroomManage" },
+      { permission: "facility.manage", labelKey: "facilityManage" },
       { permission: "lms.manage", labelKey: "lmsManage" },
       { permission: "academic_setup.manage", labelKey: "academicSetupManage" },
       { permission: "calendar.manage", labelKey: "calendarManage" },

@@ -1,13 +1,14 @@
 import * as React from 'react'
 import { cn } from '../../lib/utils'
+import { PadaukTableWrap } from '../../app/lib/padauk-table-wrap'
 
 const Table = React.forwardRef<
   HTMLTableElement,
   React.HTMLAttributes<HTMLTableElement>
 >(({ className, ...props }, ref) => (
-  <div className="padauk-table-wrap">
-    <table ref={ref} className={cn('padauk-table w-full caption-bottom', className)} {...props} />
-  </div>
+  <PadaukTableWrap>
+    <table ref={ref} className={cn('pds-type-body-m-medium padauk-table', className)} {...props} />
+  </PadaukTableWrap>
 ))
 Table.displayName = 'Table'
 
@@ -15,7 +16,7 @@ const TableHeader = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
 >(({ className, ...props }, ref) => (
-  <thead ref={ref} className={cn('[&_tr]:border-b', className)} {...props} />
+  <thead ref={ref} className={className} {...props} />
 ))
 TableHeader.displayName = 'TableHeader'
 
@@ -23,7 +24,7 @@ const TableBody = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
 >(({ className, ...props }, ref) => (
-  <tbody ref={ref} className={cn('[&_tr:last-child]:border-0', className)} {...props} />
+  <tbody ref={ref} className={className} {...props} />
 ))
 TableBody.displayName = 'TableBody'
 
@@ -31,11 +32,7 @@ const TableFooter = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
 >(({ className, ...props }, ref) => (
-  <tfoot
-    ref={ref}
-    className={cn('border-t bg-surface font-medium [&>tr]:last:border-b-0', className)}
-    {...props}
-  />
+  <tfoot ref={ref} className={className} {...props} />
 ))
 TableFooter.displayName = 'TableFooter'
 
@@ -43,11 +40,7 @@ const TableRow = React.forwardRef<
   HTMLTableRowElement,
   React.HTMLAttributes<HTMLTableRowElement>
 >(({ className, ...props }, ref) => (
-  <tr
-    ref={ref}
-    className={cn('border-b transition-colors hover:bg-surface-2 data-[state=selected]:bg-surface-2', className)}
-    {...props}
-  />
+  <tr ref={ref} className={cn(className)} {...props} />
 ))
 TableRow.displayName = 'TableRow'
 
@@ -55,11 +48,7 @@ const TableHead = React.forwardRef<
   HTMLTableCellElement,
   React.ThHTMLAttributes<HTMLTableCellElement>
 >(({ className, ...props }, ref) => (
-  <th
-    ref={ref}
-    className={cn('h-10 px-4 text-left align-middle font-medium text-text-muted', className)}
-    {...props}
-  />
+  <th ref={ref} className={cn("pds-type-caption-s", className)} {...props} />
 ))
 TableHead.displayName = 'TableHead'
 
@@ -67,7 +56,7 @@ const TableCell = React.forwardRef<
   HTMLTableCellElement,
   React.TdHTMLAttributes<HTMLTableCellElement>
 >(({ className, ...props }, ref) => (
-  <td ref={ref} className={cn('px-4 align-middle', className)} {...props} />
+  <td ref={ref} className={className} {...props} />
 ))
 TableCell.displayName = 'TableCell'
 
@@ -75,7 +64,7 @@ const TableCaption = React.forwardRef<
   HTMLTableCaptionElement,
   React.HTMLAttributes<HTMLTableCaptionElement>
 >(({ className, ...props }, ref) => (
-  <caption ref={ref} className={cn('mt-4 text-sm text-text-muted', className)} {...props} />
+  <caption ref={ref} className={className} {...props} />
 ))
 TableCaption.displayName = 'TableCaption'
 

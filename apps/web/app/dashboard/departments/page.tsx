@@ -1,17 +1,23 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Switch } from "../../../components/ui/switch";
+import { Toggle } from "../../../components/shared/toggle";
+import { ArchiveVisibilityFilter } from "../../../components/shared/archive-visibility-filter";
+import { ConfirmDialog } from "../../../components/shared/confirm-dialog";
+import { EmptyState } from "../../../components/shared/empty-state";
+import { FormField, FormInput, FormTextarea } from "../../../components/shared/form-input";
+import { RowMoreActionsMenu } from "../../../components/shared/row-more-actions";
+import { StatusBadge } from "../../../components/shared/badge";
 import { ApiError, useApiMutation, useApiQuery } from "../../lib/api";
-import { Field } from "../../lib/form";
-import { Icon } from "../../lib/icon";
+import { filterByArchiveVisibility, type ArchiveVisibility } from "../../lib/archive-filter";
+import { Icon } from "../../lib/material-icon";
 import { hasAnyPermission } from "../../lib/permissions";
 import { RecordFormSheet } from "../../lib/record-sheet";
 import { getSession } from "../../lib/session";
-import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
+import { TablePanelBody } from "../../lib/table-panel";
 import { zodResolver } from "../../lib/zod-resolver";
 import { PageHeader } from "../page-header-context";
 
@@ -19,7 +25,7 @@ type DepartmentRow = {
   id: string;
   name: string;
   description: string | null;
-  status: "active" | "inactive";
+  status: "active" | "inactive" | "archived";
   staffCount: number;
 };
 
@@ -36,8 +42,16 @@ export default function DepartmentsPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
+  const [visibility, setVisibility] = useState<ArchiveVisibility>("active");
+  const [deletingDepartment, setDeletingDepartment] = useState<DepartmentRow | null>(null);
+
   const departments = useApiQuery<DepartmentRow[]>((tenant) =>
     canManage ? DEPARTMENTS_PATH(tenant) : null
+  );
+
+  const visibleDepartments = useMemo(
+    () => filterByArchiveVisibility(departments.data ?? [], visibility),
+    [departments.data, visibility]
   );
 
   const schema = z.object({
@@ -63,6 +77,19 @@ export default function DepartmentsPage() {
       path: `${DEPARTMENTS_PATH(tenant)}/${departmentId}`,
       init: { method: "PATCH", body: JSON.stringify(body) }
     }),
+    { invalidatePaths: (_b, tenant) => [DEPARTMENTS_PATH(tenant)] }
+  );
+
+  const archiveDepartment = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({ path: `${DEPARTMENTS_PATH(tenant)}/${id}/archive`, init: { method: "POST" } }),
+    { invalidatePaths: (_b, tenant) => [DEPARTMENTS_PATH(tenant)] }
+  );
+  const restoreDepartment = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({ path: `${DEPARTMENTS_PATH(tenant)}/${id}/restore`, init: { method: "POST" } }),
+    { invalidatePaths: (_b, tenant) => [DEPARTMENTS_PATH(tenant)] }
+  );
+  const deleteDepartment = useApiMutation<{ id: string }>(
+    ({ id }, tenant) => ({ path: `${DEPARTMENTS_PATH(tenant)}/${id}`, init: { method: "DELETE" } }),
     { invalidatePaths: (_b, tenant) => [DEPARTMENTS_PATH(tenant)] }
   );
 
@@ -114,7 +141,7 @@ export default function DepartmentsPage() {
   }
 
   if (!canManage) {
-    return <p className="muted">{t("noAccess")}</p>;
+    return <EmptyState icon="lock" title={t("noAccess")} />;
   }
 
   return (
@@ -123,48 +150,93 @@ export default function DepartmentsPage() {
         title={t("title")}
         description={t("description")}
         breadcrumbs={[{ label: nav("group_admin") }, { label: nav("departments") }]}
+        actions={
+          <>
+            <ArchiveVisibilityFilter value={visibility} onChange={setVisibility} />
+            <button type="button" className="pds-type-body-m-bold btn-primary" onClick={openCreate}>
+              <Icon name="add" />
+              {t("addDepartment")}
+            </button>
+          </>
+        }
       />
 
-      <section className="panel">
-        <TablePanelHead
-          title={t("listTitle")}
-          help={t("listHelp")}
-          onRefresh={() => void departments.refetch()}
-          onAdd={openCreate}
-          addLabel={t("addDepartment")}
-        />
-        <TablePanelBody
+      <TablePanelBody
           loading={departments.isLoading}
           error={departments.isError ? c("somethingWrong") : null}
-          empty={!departments.data?.length}
+          empty={!visibleDepartments.length}
         >
           <ul className="departments-list">
-            {departments.data?.map((row) => (
-              <li key={row.id} className={row.status === "inactive" ? "departments-list__item--inactive" : undefined}>
+            {visibleDepartments.map((row) => (
+              <li key={row.id} className={row.status !== "active" ? "departments-list__item--inactive" : undefined}>
                 <button type="button" className="departments-list__main" onClick={() => openEdit(row)}>
                   <strong>{row.name}</strong>
-                  {row.description ? <span className="muted">{row.description}</span> : null}
-                  <span className="muted">{t("staffCount", { count: row.staffCount })}</span>
+                  {row.description ? <span className="pds-type-body-s-regular muted">{row.description}</span> : null}
+                  <span className="pds-type-body-s-regular muted">{t("staffCount", { count: row.staffCount })}</span>
                 </button>
-                <label className="departments-list__toggle">
-                  <span>{t("active")}</span>
-                  <Switch
-                    checked={row.status === "active"}
-                    disabled={row.status === "active" && row.staffCount > 0 ? false : false}
-                    onCheckedChange={(checked) => {
-                      if (!checked && row.staffCount > 0) {
-                        setFormError(t("cannotDisableWithStaff", { count: row.staffCount }));
-                        return;
-                      }
-                      void toggleStatus(row, checked);
-                    }}
-                  />
-                </label>
+                {row.status === "archived" ? (
+                  <StatusBadge status="archived" label={c("viewArchived")} />
+                ) : (
+                  <label className="pds-type-body-m-medium departments-list__toggle">
+                    <span>{t("active")}</span>
+                    <Toggle
+                      checked={row.status === "active"}
+                      onCheckedChange={(checked: boolean) => {
+                        if (!checked && row.staffCount > 0) {
+                          setFormError(t("cannotDisableWithStaff", { count: row.staffCount }));
+                          return;
+                        }
+                        void toggleStatus(row, checked);
+                      }}
+                    />
+                  </label>
+                )}
+                <RowMoreActionsMenu
+                  ariaLabel={c("moreActions")}
+                  items={[
+                    {
+                      id: "edit",
+                      label: c("edit"),
+                      icon: "edit",
+                      onSelect: () => openEdit(row)
+                    },
+                    ...(row.status === "archived"
+                      ? [
+                          {
+                            id: "restore",
+                            label: c("restore"),
+                            icon: "restore",
+                            onSelect: () =>
+                              void restoreDepartment.mutateAsync({ id: row.id }).then(() => {
+                                void departments.refetch();
+                              })
+                          },
+                          {
+                            id: "delete",
+                            label: c("deletePermanently"),
+                            icon: "delete_forever",
+                            destructive: true,
+                            onSelect: () => setDeletingDepartment(row)
+                          }
+                        ]
+                      : [
+                          {
+                            id: "archive",
+                            label: c("archive"),
+                            icon: "archive",
+                            destructive: true,
+                            onSelect: () =>
+                              void archiveDepartment.mutateAsync({ id: row.id }).then(() => {
+                                void departments.refetch();
+                              })
+                          }
+                        ])
+                  ]}
+                />
               </li>
             ))}
           </ul>
         </TablePanelBody>
-      </section>
 
       <RecordFormSheet
         open={createOpen}
@@ -180,12 +252,12 @@ export default function DepartmentsPage() {
         onSubmit={form.handleSubmit((values) => void onSubmit(values))}
         footer={
           <>
-            <button type="button" className="btn-ghost" onClick={() => setCreateOpen(false)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setCreateOpen(false)}>
               {c("cancel")}
             </button>
             <button
               type="submit"
-              className="btn-primary"
+              className="pds-type-body-m-bold btn-primary"
               disabled={createDepartment.isPending || updateDepartment.isPending}
             >
               {c("save")}
@@ -193,14 +265,33 @@ export default function DepartmentsPage() {
           </>
         }
       >
-        <Field label={t("name")} error={form.formState.errors.name?.message}>
-          <input {...form.register("name")} />
-        </Field>
-        <Field label={t("descriptionLabel")}>
-          <textarea {...form.register("description")} rows={3} />
-        </Field>
-        {formError ? <p className="error-text">{formError}</p> : null}
+        <FormField label={t("name")} error={form.formState.errors.name?.message}>
+          <FormInput {...form.register("name")} />
+        </FormField>
+        <FormField label={t("descriptionLabel")}>
+          <FormTextarea {...form.register("description")} rows={3} />
+        </FormField>
+        {formError ? <p className="pds-type-body-m-medium error-text">{formError}</p> : null}
       </RecordFormSheet>
+
+      <ConfirmDialog
+        open={deletingDepartment !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeletingDepartment(null);
+        }}
+        title={t("deleteDepartmentTitle")}
+        description={t("deleteDepartmentHelp", { name: deletingDepartment?.name ?? "" })}
+        confirmLabel={c("deletePermanently")}
+        cancelLabel={c("cancel")}
+        destructive
+        loading={deleteDepartment.isPending}
+        onConfirm={async () => {
+          if (!deletingDepartment) return;
+          await deleteDepartment.mutateAsync({ id: deletingDepartment.id });
+          setDeletingDepartment(null);
+          void departments.refetch();
+        }}
+      />
     </div>
   );
 }

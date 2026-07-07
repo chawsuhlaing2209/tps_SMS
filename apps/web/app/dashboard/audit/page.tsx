@@ -3,11 +3,12 @@
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { useApiQuery } from "../../lib/api";
+import { useLiveApiQuery } from "../../lib/api";
 import { DataTable } from "../../lib/data-table";
 import { PaginationControls } from "../../lib/pagination-controls";
-import { TablePanelBody, TablePanelHead } from "../../lib/table-panel";
-import { TableSearchInput } from "../../lib/table-search";
+import { TablePanelBody, DataTableSection } from "../../lib/table-panel";
+import { PdsSearchBar, PdsSearchFiltersRow } from "../../../components/pds";
+import { ModulePageHeader } from "../module-page-header";
 
 type AuditLog = {
   id: string;
@@ -25,11 +26,12 @@ const PAGE_SIZE = 50;
 
 export default function AuditPage() {
   const t = useTranslations("audit");
+  const nav = useTranslations("nav");
   const c = useTranslations("common");
   const [recordType, setRecordType] = useState("");
   const [page, setPage] = useState(0);
 
-  const audit = useApiQuery<AuditList>((tenant) => {
+  const audit = useLiveApiQuery<AuditList>((tenant) => {
     const params = new URLSearchParams({
       limit: String(PAGE_SIZE),
       offset: String(page * PAGE_SIZE)
@@ -52,36 +54,39 @@ export default function AuditPage() {
       id: "record",
       header: t("record"),
       accessorFn: (e) => e.recordId,
-      cell: ({ row }) => <span className="muted">{row.original.recordId.slice(0, 8)}</span>
+      cell: ({ row }) => <span className="pds-type-body-s-regular muted">{row.original.recordId.slice(0, 8)}</span>
     },
     {
       id: "actor",
       header: t("actor"),
       accessorFn: (e) => e.actorUserId ?? c("system"),
       cell: ({ row }) => (
-        <span className="muted">{row.original.actorUserId?.slice(0, 8) ?? c("system")}</span>
+        <span className="pds-type-body-s-regular muted">{row.original.actorUserId?.slice(0, 8) ?? c("system")}</span>
       )
     }
   ];
 
   return (
     <div className="page-stack">
-      <section className="panel">
-        <TablePanelHead
-          title={t("events")}
-          onRefresh={() => void audit.refetch()}
-          extra={
-            <TableSearchInput
-              value={recordType}
-              placeholder={t("filterPlaceholder")}
-              aria-label={t("filterRecordType")}
-              onChange={(e) => {
-                setRecordType(e.target.value);
-                setPage(0);
-              }}
-            />
-          }
-        />
+      <ModulePageHeader
+        navKey="audit"
+        title={nav("audit")}
+        description={t("description")}
+      />
+    <DataTableSection>
+      <PdsSearchFiltersRow
+        filters={
+          <PdsSearchBar
+            value={recordType}
+            onChange={(event) => {
+              setRecordType(event.target.value);
+              setPage(0);
+            }}
+            placeholder={t("filterPlaceholder")}
+            aria-label={t("filterRecordType")}
+          />
+        }
+      />
         <TablePanelBody
           loading={audit.isLoading}
           error={audit.isError ? c("somethingWrong") : null}
@@ -95,7 +100,7 @@ export default function AuditPage() {
           total={audit.data?.total ?? 0}
           onPageChange={setPage}
         />
-      </section>
+    </DataTableSection>
     </div>
   );
 }

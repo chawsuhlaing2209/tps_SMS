@@ -1,0 +1,228 @@
+.admission-detail-page {
+  display: grid;
+  gap: var(--pds-gap-x-large);
+  width: 100%;
+}
+
+.admission-detail-hero__title-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pds-gap-x-small);
+}
+
+.admission-detail-hero__status-chip {
+  background: var(--pds-compliment-brand);
+  border-radius: var(--pds-radius-pill);
+  color: var(--pds-text-primary);
+  padding: var(--pds-padding-xx-small) var(--pds-padding-small);
+}
+
+.admission-detail-hero__status-select.pds-select--filter {
+  flex-shrink: 0;
+  max-width: 200px;
+  min-width: 200px;
+  width: 200px;
+}
+
+.admission-detail-hero__status-select .pds-select__trigger {
+  background: transparent;
+  border: var(--pds-button-border) solid var(--pds-border-color-secondary);
+  border-radius: var(--pds-border-radius-pill);
+  color: var(--pds-button-color-text-on-dark);
+  font-weight: 700;
+  height: auto;
+  justify-content: space-between;
+  min-height: 36px;
+  padding: var(--pds-button-padding-y) var(--pds-button-padding-x);
+  width: 100%;
+}
+
+.admission-detail-hero__status-select .pds-select__trigger--selected {
+  background: transparent;
+  border-color: var(--pds-border-color-secondary);
+  color: var(--pds-button-color-text-on-dark);
+}
+
+.admission-detail-hero__status-select .pds-select__trigger:hover:not(:disabled),
+.admission-detail-hero__status-select .pds-select__trigger--focus,
+.admission-detail-hero__status-select .pds-select__trigger:focus-visible {
+  background: transparent;
+  border-color: var(--pds-button-color-border-outlined-hover);
+  box-shadow: none;
+  color: var(--pds-button-color-hover);
+  outline: none;
+}
+
+.admission-detail-hero__status-select .pds-select__trigger--filter {
+  min-width: 0;
+  width: 100%;
+}
+
+.admission-detail-hero__status-select .pds-select__trigger--filter .pds-select__value {
+  color: var(--pds-text-invert-primary);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.admission-detail-hero__status-select .pds-select__value::before {
+  content: "Status: ";
+  font-weight: 700;
+}
+
+.admission-detail-stats {
+  display: grid;
+  gap: var(--pds-gap-large);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.admission-detail-stat {
+  background: var(--pds-background-card);
+  border: 1px solid var(--pds-border-color-primary);
+  border-radius: var(--pds-border-radius-16);
+  display: grid;
+  gap: var(--pds-gap-x-small);
+  min-height: 100px;
+  padding: var(--pds-padding-medium) var(--pds-padding-large);
+}
+
+.admission-detail-stat__label {
+  color: var(--pds-text-placeholder);
+  margin: 0;
+}
+
+.admission-detail-stat__value {
+  color: var(--pds-text-primary);
+  margin: 0;
+}
+
+.admission-detail-stat__hint {
+  color: var(--pds-text-secondary);
+  margin: 0;
+}
+
+.admission-activities-header {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pds-gap-large);
+  justify-content: space-between;
+}
+
+.admission-activities-header__copy {
+  display: grid;
+  gap: var(--pds-gap-xx-small);
+  max-width: 40rem;
+  min-width: 0;
+}
+
+.admission-activities-header__title {
+  margin: 0;
+}
+
+.admission-activities-header__description {
+  margin: 0;
+}
+
+.admission-activities-table-wrap {
+  background: var(--pds-background-card);
+  border: 1px solid var(--pds-border-color-primary);
+  border-radius: var(--pds-border-radius-16);
+  overflow: hidden;
+  width: 100%;
+}
+
+.admission-activities-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.admission-activities-table th {
+  background: var(--pds-background-layout-primary);
+  border-bottom: 1px solid var(--pds-border-color-primary);
+  color: var(--pds-text-placeholder);
+  font-size: var(--pds-type-caption-s-font-size);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: var(--pds-padding-small) var(--pds-padding-large);
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.admission-activities-table th.admission-activities-table__actions {
+  text-align: right;
+}
+
+.admission-activities-table td {
+  border-top: 1px solid var(--pds-border-color-soft, var(--pds-border-color-primary));
+  padding: var(--pds-padding-small) var(--pds-padding-large);
+  vertical-align: middle;
+}
+
+.admission-activities-table td.admission-activities-table__actions {
+  text-align: right;
+  width: 8.25rem;
+}
+
+.admission-activities-table__date {
+  color: var(--pds-text-primary);
+}
+
+.admission-activities-table__type {
+  color: var(--pds-text-secondary);
+}
+
+.admission-activities-table__notes {
+  color: var(--pds-text-secondary);
+}
+
+.admission-activities-table__edit {
+  align-items: center;
+  background: var(--pds-background-card);
+  border: 1px solid var(--pds-border-color-primary);
+  border-radius: var(--pds-border-radius-8);
+  color: var(--pds-text-primary);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: var(--pds-type-body-s-semibold-font-size);
+  font-weight: 700;
+  gap: var(--pds-gap-xx-small);
+  padding: var(--pds-padding-x-small) var(--pds-padding-small);
+}
+
+.admission-activities-table__edit .ms {
+  font-size: 15px;
+  line-height: 15px;
+}
+
+.admission-activities-table__edit:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.admission-add-activity-modal.pds-modal {
+  max-width: min(92vw, 620px);
+  width: 100%;
+}
+
+.admission-add-activity-modal .pds-modal__body {
+  display: grid;
+  gap: var(--pds-gap-large);
+}
+
+@media (max-width: 960px) { /* = --pds-breakpoint-lg; CSS vars don't work in @media conditions */
+  .admission-detail-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) { /* = --pds-breakpoint-md; CSS vars don't work in @media conditions */
+  .admission-detail-stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admission-detail-hero__actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+}

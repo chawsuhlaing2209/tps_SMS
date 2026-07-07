@@ -1,8 +1,31 @@
-import { Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { and, eq } from "drizzle-orm";
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException
+} from "@nestjs/common";
+import {
+  createDiscountRuleSchema,
+  defaultStackable,
+  defaultTriggerMode,
+  deriveRuleTags,
+  normalizeDiscountType,
+  parseDiscountCriteria,
+  updateDiscountRuleSchema
+} from "@sms/shared";
+import { and, eq, gt, sql, sum } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
-import { discountRules, studentDiscounts, students } from "../db/schema.js";
+import {
+  academicYears,
+  discountRules,
+  enrollments,
+  invoiceDiscountLines,
+  invoices,
+  studentDiscounts,
+  students
+} from "../db/schema.js";
 import type {
   ApproveDiscountDto,
   CreateDiscountRuleDto,
@@ -12,6 +35,23 @@ import type {
   UpdateDiscountRuleDto
 } from "./dto.js";
 
+function enrichRule(rule: typeof discountRules.$inferSelect) {
+  const criteria = parseDiscountCriteria(rule.discountType, rule.criteria as Record<string, unknown>);
+  const triggerMode = (rule.triggerMode ?? defaultTriggerMode(rule.discountType)) as "auto" | "request";
+  return {
+    ...rule,
+    criteria,
+    triggerMode,
+    stackable: rule.stackable ?? defaultStackable(rule.discountType),
+    tags: deriveRuleTags({
+      discountType: rule.discountType,
+      triggerMode,
+      stackable: rule.stackable ?? defaultStackable(rule.discountType),
+      criteria
+    })
+  };
+}
+
 @Injectable()
 export class DiscountsService {
   constructor(
@@ -20,20 +60,131 @@ export class DiscountsService {
   ) {}
 
   listDiscountRules(tenantId: string) {
-    return this.db.select().from(discountRules).where(eq(discountRules.tenantId, tenantId));
+    return this.db
+      .select()
+      .from(discountRules)
+      .where(eq(discountRules.tenantId, tenantId))
+      .then((rows) => rows.map(enrichRule));
+  }
+
+  async getDiscountMetrics(tenantId: string, academicYearId?: string) {
+    let yearId = academicYearId;
+    if (!yearId) {
+      const [activeYear] = await this.db
+        .select({ id: academicYears.id })
+        .from(academicYears)
+        .where(and(eq(academicYears.tenantId, tenantId), eq(academicYears.status, "active")))
+        .limit(1);
+      yearId = activeYear?.id;
+    }
+
+    const rules = await this.db
+      .select()
+      .from(discountRules)
+      .where(eq(discountRules.tenantId, tenantId));
+
+    const activeTypes = rules.filter((rule) => rule.status === "active").length;
+    const configuredTotal = rules.length;
+    const activePercentageRules = rules.filter(
+      (rule) => rule.status === "active" && rule.valueType === "percentage"
+    );
+    const avgDiscountPercent =
+      activePercentageRules.length > 0
+        ? Math.round(
+            activePercentageRules.reduce((total, rule) => total + Number(rule.value), 0) /
+              activePercentageRules.length
+          )
+        : 0;
+
+    let enrolledStudents = 0;
+    let studentsBenefiting = 0;
+    let annualDiscountValue = 0;
+
+    if (yearId) {
+      const enrolledRows = await this.db
+        .select({ studentId: enrollments.studentId })
+        .from(enrollments)
+        .where(
+          and(
+            eq(enrollments.tenantId, tenantId),
+            eq(enrollments.academicYearId, yearId),
+            eq(enrollments.status, "approved")
+          )
+        );
+      enrolledStudents = new Set(enrolledRows.map((row) => row.studentId)).size;
+
+      const approvedDiscountRows = await this.db
+        .select({ studentId: studentDiscounts.studentId })
+        .from(studentDiscounts)
+        .where(
+          and(eq(studentDiscounts.tenantId, tenantId), eq(studentDiscounts.status, "approved"))
+        );
+
+      const invoiceDiscountRows = await this.db
+        .select({ studentId: invoices.studentId })
+        .from(invoices)
+        .innerJoin(enrollments, eq(invoices.enrollmentId, enrollments.id))
+        .where(
+          and(
+            eq(invoices.tenantId, tenantId),
+            eq(enrollments.academicYearId, yearId),
+            gt(invoices.discountTotal, "0")
+          )
+        );
+
+      studentsBenefiting = new Set([
+        ...approvedDiscountRows.map((row) => row.studentId),
+        ...invoiceDiscountRows.map((row) => row.studentId)
+      ]).size;
+
+      const [discountSum] = await this.db
+        .select({ total: sum(invoices.discountTotal) })
+        .from(invoices)
+        .innerJoin(enrollments, eq(invoices.enrollmentId, enrollments.id))
+        .where(and(eq(invoices.tenantId, tenantId), eq(enrollments.academicYearId, yearId)));
+
+      annualDiscountValue = Number(discountSum?.total ?? 0);
+    }
+
+    const enrollmentSharePercent =
+      enrolledStudents > 0 ? Math.round((studentsBenefiting / enrolledStudents) * 100) : 0;
+
+    return {
+      activeTypes,
+      configuredTotal,
+      studentsBenefiting,
+      enrolledStudents,
+      enrollmentSharePercent,
+      annualDiscountValue,
+      avgDiscountPercent
+    };
   }
 
   async createDiscountRule(tenantId: string, actorUserId: string, dto: CreateDiscountRuleDto) {
+    const parsed = createDiscountRuleSchema.safeParse(dto);
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.flatten());
+    }
+
+    const input = parsed.data;
+    const discountType =
+      normalizeDiscountType(input.discountType) === "staff_child" && input.discountType === "staff"
+        ? "staff"
+        : input.discountType;
+
     const [rule] = await this.db
       .insert(discountRules)
       .values({
         tenantId,
-        name: dto.name,
-        discountType: dto.discountType,
-        valueType: dto.valueType,
-        value: String(dto.value),
-        approvalThreshold: dto.approvalThreshold != null ? String(dto.approvalThreshold) : null,
-        criteria: dto.criteria ?? {},
+        name: input.name,
+        discountType,
+        valueType: input.valueType,
+        value: String(input.value),
+        approvalThreshold: input.approvalThreshold != null ? String(input.approvalThreshold) : null,
+        triggerMode: input.triggerMode ?? defaultTriggerMode(discountType),
+        stackable: input.stackable ?? defaultStackable(discountType),
+        sortOrder: input.sortOrder ?? 0,
+        criteria: input.criteria,
         createdBy: actorUserId,
         updatedBy: actorUserId
       })
@@ -45,10 +196,10 @@ export class DiscountsService {
       action: "discount_rule.create",
       recordType: "DiscountRule",
       recordId: rule!.id,
-      after: { name: dto.name, discountType: dto.discountType }
+      after: { name: input.name, discountType }
     });
 
-    return rule;
+    return enrichRule(rule!);
   }
 
   private async getDiscountRuleOrThrow(tenantId: string, ruleId: string) {
@@ -71,21 +222,31 @@ export class DiscountsService {
     dto: UpdateDiscountRuleDto
   ) {
     const previous = await this.getDiscountRuleOrThrow(tenantId, ruleId);
+    const parsed = updateDiscountRuleSchema.safeParse(dto);
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.flatten());
+    }
+
+    const input = parsed.data;
+    const discountType = input.discountType ?? previous.discountType;
 
     const [rule] = await this.db
       .update(discountRules)
       .set({
-        name: dto.name ?? previous.name,
-        discountType: dto.discountType ?? previous.discountType,
-        valueType: dto.valueType ?? previous.valueType,
-        value: dto.value != null ? String(dto.value) : previous.value,
+        name: input.name ?? previous.name,
+        discountType,
+        valueType: input.valueType ?? previous.valueType,
+        value: input.value != null ? String(input.value) : previous.value,
         approvalThreshold:
-          dto.approvalThreshold === null
+          input.approvalThreshold === null
             ? null
-            : dto.approvalThreshold != null
-              ? String(dto.approvalThreshold)
+            : input.approvalThreshold != null
+              ? String(input.approvalThreshold)
               : previous.approvalThreshold,
-        criteria: dto.criteria ?? previous.criteria,
+        triggerMode: input.triggerMode ?? previous.triggerMode ?? defaultTriggerMode(discountType),
+        stackable: input.stackable ?? previous.stackable ?? defaultStackable(discountType),
+        sortOrder: input.sortOrder ?? previous.sortOrder ?? 0,
+        criteria: input.criteria ?? parseDiscountCriteria(discountType, previous.criteria as Record<string, unknown>),
         updatedBy: actorUserId,
         updatedAt: new Date()
       })
@@ -98,96 +259,137 @@ export class DiscountsService {
       action: "discount_rule.update",
       recordType: "DiscountRule",
       recordId: ruleId,
-      before: previous as Record<string, unknown>,
-      after: rule as Record<string, unknown>
+      before: { name: previous.name },
+      after: { name: rule!.name }
     });
 
-    return rule;
+    return enrichRule(rule!);
   }
 
-  async archiveDiscountRule(tenantId: string, ruleId: string, actorUserId: string) {
+  /** Set a rule's status (enable/disable toggle uses active/inactive). */
+  private async setDiscountRuleStatus(
+    tenantId: string,
+    ruleId: string,
+    status: "active" | "inactive" | "archived",
+    action: string,
+    actorUserId: string
+  ) {
     const previous = await this.getDiscountRuleOrThrow(tenantId, ruleId);
-    if (previous.status === "archived") {
-      return previous;
-    }
-
     const [rule] = await this.db
       .update(discountRules)
-      .set({ status: "archived", updatedBy: actorUserId, updatedAt: new Date() })
+      .set({ status, updatedBy: actorUserId, updatedAt: new Date() })
       .where(and(eq(discountRules.id, ruleId), eq(discountRules.tenantId, tenantId)))
       .returning();
 
     await this.auditService.recordEvent({
       tenantId,
       actorUserId,
-      action: "discount_rule.archive",
+      action,
       recordType: "DiscountRule",
       recordId: ruleId,
       before: { status: previous.status },
-      after: { status: "archived" }
+      after: { status }
     });
 
-    return rule;
+    return enrichRule(rule!);
   }
 
+  /** Enable a rule (toggle on). */
+  enableDiscountRule(tenantId: string, ruleId: string, actorUserId: string) {
+    return this.setDiscountRuleStatus(tenantId, ruleId, "active", "discount_rule.enable", actorUserId);
+  }
+
+  /** Disable a rule (toggle off) — stays visible in the active view. */
+  disableDiscountRule(tenantId: string, ruleId: string, actorUserId: string) {
+    return this.setDiscountRuleStatus(tenantId, ruleId, "inactive", "discount_rule.disable", actorUserId);
+  }
+
+  archiveDiscountRule(tenantId: string, ruleId: string, actorUserId: string) {
+    return this.setDiscountRuleStatus(tenantId, ruleId, "archived", "discount_rule.archive", actorUserId);
+  }
+
+  async restoreDiscountRule(tenantId: string, ruleId: string, actorUserId: string) {
+    return this.setDiscountRuleStatus(tenantId, ruleId, "active", "discount_rule.restore", actorUserId);
+  }
+
+  /** @deprecated Use {@link restoreDiscountRule}. Kept for the legacy /reactivate route. */
   async reactivateDiscountRule(tenantId: string, ruleId: string, actorUserId: string) {
-    const previous = await this.getDiscountRuleOrThrow(tenantId, ruleId);
-    if (previous.status === "active") {
-      return previous;
+    return this.restoreDiscountRule(tenantId, ruleId, actorUserId);
+  }
+
+  async deleteDiscountRule(tenantId: string, ruleId: string, actorUserId: string) {
+    const rule = await this.getDiscountRuleOrThrow(tenantId, ruleId);
+
+    // Two-step safety: archive the rule before deleting it permanently.
+    if (rule.status !== "archived") {
+      throw new BadRequestException("Archive the discount rule before deleting it.");
     }
 
-    const [rule] = await this.db
-      .update(discountRules)
-      .set({ status: "active", updatedBy: actorUserId, updatedAt: new Date() })
-      .where(and(eq(discountRules.id, ruleId), eq(discountRules.tenantId, tenantId)))
-      .returning();
+    const n = sql<number>`count(*)::int`;
+    const [applied, invoiced] = await Promise.all([
+      this.db.select({ n }).from(studentDiscounts).where(and(eq(studentDiscounts.tenantId, tenantId), eq(studentDiscounts.discountRuleId, ruleId))),
+      this.db.select({ n }).from(invoiceDiscountLines).where(and(eq(invoiceDiscountLines.tenantId, tenantId), eq(invoiceDiscountLines.discountRuleId, ruleId)))
+    ]);
+    const dependencies = {
+      studentDiscounts: applied[0]?.n ?? 0,
+      invoiceLines: invoiced[0]?.n ?? 0
+    };
+    if (Object.values(dependencies).some((c) => c > 0)) {
+      throw new ConflictException({
+        message:
+          "This discount rule has been applied to students or invoices and cannot be deleted. Keep it archived instead.",
+        dependencies
+      });
+    }
+
+    await this.db
+      .delete(discountRules)
+      .where(and(eq(discountRules.tenantId, tenantId), eq(discountRules.id, ruleId)));
 
     await this.auditService.recordEvent({
       tenantId,
       actorUserId,
-      action: "discount_rule.reactivate",
+      action: "discount_rule.delete",
       recordType: "DiscountRule",
       recordId: ruleId,
-      before: { status: previous.status },
-      after: { status: "active" }
+      before: { name: rule.name, status: rule.status },
+      after: { deleted: true }
     });
 
-    return rule;
+    return { id: ruleId, deleted: true };
   }
 
-  async listStudentDiscounts(tenantId: string, query: ListStudentDiscountsQueryDto) {
+  listStudentDiscounts(tenantId: string, query: ListStudentDiscountsQueryDto) {
     const filters = [eq(studentDiscounts.tenantId, tenantId)];
-
     if (query.studentId) {
       filters.push(eq(studentDiscounts.studentId, query.studentId));
     }
-
     if (query.status) {
-      filters.push(eq(studentDiscounts.status, query.status as "draft" | "submitted" | "reviewed" | "approved" | "published" | "archived" | "rejected"));
+      filters.push(eq(studentDiscounts.status, query.status as typeof studentDiscounts.$inferSelect.status));
     }
 
     return this.db
       .select({
         id: studentDiscounts.id,
-        tenantId: studentDiscounts.tenantId,
         studentId: studentDiscounts.studentId,
+        studentName: students.fullName,
         discountRuleId: studentDiscounts.discountRuleId,
+        ruleName: discountRules.name,
+        discountType: discountRules.discountType,
         reason: studentDiscounts.reason,
         effectiveFrom: studentDiscounts.effectiveFrom,
         effectiveTo: studentDiscounts.effectiveTo,
-        status: studentDiscounts.status,
-        createdAt: studentDiscounts.createdAt,
-        updatedAt: studentDiscounts.updatedAt,
-        ruleName: discountRules.name,
-        studentFullName: students.fullName
+        status: studentDiscounts.status
       })
       .from(studentDiscounts)
-      .leftJoin(discountRules, eq(studentDiscounts.discountRuleId, discountRules.id))
-      .leftJoin(students, eq(studentDiscounts.studentId, students.id))
+      .innerJoin(students, eq(studentDiscounts.studentId, students.id))
+      .innerJoin(discountRules, eq(studentDiscounts.discountRuleId, discountRules.id))
       .where(and(...filters));
   }
 
   async requestDiscount(tenantId: string, actorUserId: string, dto: RequestStudentDiscountDto) {
+    const rule = await this.getDiscountRuleOrThrow(tenantId, dto.discountRuleId);
+
     const [discount] = await this.db
       .insert(studentDiscounts)
       .values({
@@ -197,7 +399,7 @@ export class DiscountsService {
         reason: dto.reason,
         effectiveFrom: dto.effectiveFrom,
         effectiveTo: dto.effectiveTo ?? null,
-        status: "draft",
+        status: "submitted",
         createdBy: actorUserId,
         updatedBy: actorUserId
       })
@@ -209,13 +411,18 @@ export class DiscountsService {
       action: "student_discount.request",
       recordType: "StudentDiscount",
       recordId: discount!.id,
-      after: { studentId: dto.studentId, discountRuleId: dto.discountRuleId, status: "draft" }
+      after: { ruleName: rule.name, studentId: dto.studentId }
     });
 
     return discount;
   }
 
-  async approveDiscount(tenantId: string, discountId: string, actorUserId: string, dto: ApproveDiscountDto) {
+  async approveDiscount(
+    tenantId: string,
+    discountId: string,
+    actorUserId: string,
+    dto: ApproveDiscountDto
+  ) {
     const [existing] = await this.db
       .select()
       .from(studentDiscounts)
@@ -225,13 +432,9 @@ export class DiscountsService {
       throw new NotFoundException("Student discount not found.");
     }
 
-    const [updated] = await this.db
+    const [discount] = await this.db
       .update(studentDiscounts)
-      .set({
-        status: "approved",
-        updatedBy: actorUserId,
-        updatedAt: new Date()
-      })
+      .set({ status: "approved", updatedBy: actorUserId, updatedAt: new Date() })
       .where(and(eq(studentDiscounts.id, discountId), eq(studentDiscounts.tenantId, tenantId)))
       .returning();
 
@@ -241,14 +444,19 @@ export class DiscountsService {
       action: "student_discount.approve",
       recordType: "StudentDiscount",
       recordId: discountId,
-      before: { status: existing.status },
-      after: { status: "approved", notes: dto.notes }
+      reason: dto.notes,
+      after: { status: "approved" }
     });
 
-    return updated;
+    return discount;
   }
 
-  async rejectDiscount(tenantId: string, discountId: string, actorUserId: string, dto: RejectDiscountDto) {
+  async rejectDiscount(
+    tenantId: string,
+    discountId: string,
+    actorUserId: string,
+    dto: RejectDiscountDto
+  ) {
     const [existing] = await this.db
       .select()
       .from(studentDiscounts)
@@ -258,13 +466,9 @@ export class DiscountsService {
       throw new NotFoundException("Student discount not found.");
     }
 
-    const [updated] = await this.db
+    const [discount] = await this.db
       .update(studentDiscounts)
-      .set({
-        status: "rejected",
-        updatedBy: actorUserId,
-        updatedAt: new Date()
-      })
+      .set({ status: "rejected", updatedBy: actorUserId, updatedAt: new Date() })
       .where(and(eq(studentDiscounts.id, discountId), eq(studentDiscounts.tenantId, tenantId)))
       .returning();
 
@@ -274,10 +478,10 @@ export class DiscountsService {
       action: "student_discount.reject",
       recordType: "StudentDiscount",
       recordId: discountId,
-      before: { status: existing.status },
-      after: { status: "rejected", reason: dto.reason }
+      reason: dto.reason,
+      after: { status: "rejected" }
     });
 
-    return updated;
+    return discount;
   }
 }

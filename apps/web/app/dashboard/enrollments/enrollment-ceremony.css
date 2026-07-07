@@ -1,0 +1,275 @@
+/* Enrollment ceremony modal — Figma 127:4849–127:7207 */
+
+.record-modal--ceremony .pds-modal__body,
+.record-modal--ceremony .pds-modal__footer {
+  padding-inline: var(--pds-padding-x-large);
+}
+
+.record-modal--ceremony .pds-modal__body {
+  padding-block: var(--pds-padding-large);
+}
+
+.record-modal--ceremony .pds-modal__footer {
+  border-top: 1px solid var(--pds-border-color-primary);
+}
+
+.enrollment-ceremony__stack {
+  display: grid;
+  gap: 22px;
+}
+
+.enrollment-ceremony__section-title {
+  color: var(--pds-text-placeholder);
+  letter-spacing: 0.078em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.enrollment-ceremony__section-hint {
+  color: var(--pds-text-disabled-2nd);
+  margin: 0;
+}
+
+.enrollment-ceremony__section {
+  display: grid;
+  gap: var(--pds-gap-medium);
+}
+
+.enrollment-student-banner {
+  align-items: center;
+  background: var(--pds-primary);
+  border-radius: var(--pds-border-radius-16);
+  display: flex;
+  gap: 14px;
+  padding: 14px 16px;
+}
+
+.enrollment-student-banner__avatar {
+  align-items: center;
+  background: var(--pds-compliment-brand);
+  border-radius: 13px;
+  color: var(--pds-text-primary);
+  display: inline-flex;
+  flex-shrink: 0;
+  font-size: 15px;
+  font-weight: 800;
+  height: 44px;
+  justify-content: center;
+  width: 44px;
+}
+
+.enrollment-student-banner__main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.enrollment-student-banner__name {
+  color: var(--pds-text-invert-primary);
+  margin: 0;
+}
+
+.enrollment-student-banner__meta {
+  color: var(--pds-text-placeholder);
+  margin: 0;
+}
+
+.enrollment-student-banner__badge {
+  background: var(--pds-compliment-brand);
+  border-radius: var(--pds-radius-pill);
+  color: var(--pds-text-primary);
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5.5px 11px;
+}
+
+.enrollment-fee-card {
+  align-items: center;
+  background: var(--pds-background-layout-primary);
+  border: 1px solid var(--pds-border-color-soft);
+  border-radius: var(--pds-radius-14);
+  display: flex;
+  gap: 13px;
+  padding: 15px 17px;
+}
+
+.enrollment-fee-card__icon {
+  align-items: center;
+  background: var(--pds-primary);
+  border-radius: 11px;
+  color: var(--pds-compliment-brand);
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+
+.enrollment-fee-card__copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.enrollment-fee-card__amount {
+  color: var(--pds-text-primary);
+  flex-shrink: 0;
+  font-weight: 800;
+}
+
+.enrollment-service-card {
+  align-items: center;
+  background: var(--pds-background-layout-primary);
+  border: 1.5px solid var(--pds-border-color-soft);
+  border-radius: var(--pds-radius-14);
+  cursor: pointer;
+  display: flex;
+  gap: 13px;
+  padding: 15.5px 17.5px;
+  text-align: left;
+  width: 100%;
+}
+
+.enrollment-service-card--selected {
+  background: var(--pds-color-chartreuse-green-100);
+  border-color: var(--pds-primary);
+}
+
+.enrollment-service-card__icon {
+  align-items: center;
+  background: var(--pds-background-canvas);
+  border: 1px solid var(--pds-border-color-soft);
+  border-radius: 11px;
+  color: var(--pds-status-success);
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+
+.enrollment-service-card__copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.enrollment-service-card__desc {
+  color: var(--pds-text-disabled-2nd);
+}
+
+.enrollment-services-subtotal {
+  align-items: center;
+  background: var(--pds-primary);
+  border-radius: var(--pds-radius-14);
+  display: flex;
+  justify-content: space-between;
+  padding: 15px 16px;
+}
+
+.enrollment-services-subtotal__label {
+  color: var(--pds-text-placeholder);
+  margin: 0;
+}
+
+.enrollment-services-subtotal__value {
+  align-items: baseline;
+  display: inline-flex;
+  gap: var(--pds-gap-x-small);
+  margin: 0;
+}
+
+.enrollment-services-subtotal__amount {
+  color: var(--pds-compliment-brand-ink);
+}
+
+.enrollment-services-subtotal__currency {
+  color: var(--pds-text-placeholder);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.enrollment-discount-card {
+  background: var(--pds-background-layout-primary);
+  border: 1px solid var(--pds-border-color-soft);
+  border-radius: var(--pds-radius-14);
+  display: grid;
+  gap: var(--pds-gap-small);
+  padding: var(--pds-padding-medium) var(--pds-padding-large);
+}
+
+.enrollment-discount-card__head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.enrollment-discount-card__amount {
+  color: var(--pds-status-success);
+  font-weight: 700;
+}
+
+.enrollment-discount-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pds-gap-x-small);
+}
+
+.enrollment-confirm-options {
+  display: grid;
+  gap: var(--pds-gap-small);
+}
+
+.enrollment-confirm-option {
+  align-items: center;
+  background: var(--pds-background-canvas);
+  border: 1.5px solid var(--pds-border-color-primary);
+  border-radius: var(--pds-radius-14);
+  cursor: pointer;
+  display: flex;
+  gap: 13px;
+  padding: 15.5px 17.5px;
+  text-align: left;
+  width: 100%;
+}
+
+.enrollment-confirm-option--selected {
+  background: var(--pds-color-chartreuse-green-100);
+  border-color: var(--pds-border-color-active);
+}
+
+.enrollment-confirm-option__icon {
+  align-items: center;
+  background: var(--pds-background-canvas);
+  border: 1px solid var(--pds-border-color-soft);
+  border-radius: var(--pds-radius-8);
+  color: var(--pds-text-primary);
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+
+.enrollment-confirm-option__copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.enrollment-confirm-option__hint {
+  color: var(--pds-text-placeholder);
+}
+
+.enrollment-ceremony__payment-fields {
+  display: grid;
+  gap: var(--pds-gap-large);
+}

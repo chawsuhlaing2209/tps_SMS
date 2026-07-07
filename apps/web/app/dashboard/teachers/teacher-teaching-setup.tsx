@@ -2,9 +2,11 @@
 
 import { useTranslations } from "next-intl";
 import type { UpdateTeacherTeachingSetupInput } from "@sms/shared";
-import { CheckboxList } from "../../../components/shared/checkbox-list";
-import { Switch } from "../../../components/ui/switch";
-import { Icon } from "../../lib/icon";
+import { CheckBox, CheckboxList, PdsSelectField } from "../../../components/pds";
+import { Badge } from "../../../components/shared/badge";
+import { EmptyState } from "../../../components/shared/empty-state";
+import { Toggle } from "../../../components/shared/toggle";
+import { Icon } from "../../lib/material-icon";
 
 export type TeachingSetupOptions = {
   academicYears: { id: string; name: string; status: string }[];
@@ -37,6 +39,7 @@ export type TeachingSetupOptions = {
 
 export type ClassroomAssignmentRow = {
   key: string;
+  gradeId: string;
   classroomId: string;
   homeroom: boolean;
   subjectId: string;
@@ -72,19 +75,8 @@ function classroomGradeId(options: TeachingSetupOptions | undefined, classroomId
   return options?.classrooms.find((row) => row.id === classroomId)?.gradeId;
 }
 
-function gradesForSectors(options: TeachingSetupOptions | undefined, sectorIds: string[]) {
-  const grades = options?.grades ?? [];
-  if (!options?.sectors.length || !sectorIds.length) {
-    return grades;
-  }
-  const allowed = new Set<string>();
-  for (const sectorId of sectorIds) {
-    const sector = options.sectors.find((row) => row.id === sectorId);
-    for (const gradeId of sector?.gradeIds ?? []) {
-      allowed.add(gradeId);
-    }
-  }
-  return grades.filter((grade) => allowed.has(grade.id));
+function sortedGrades(options: TeachingSetupOptions | undefined) {
+  return [...(options?.grades ?? [])].sort((left, right) => left.sortOrder - right.sortOrder);
 }
 
 export function teachingSetupToDraft(
@@ -108,6 +100,7 @@ export function teachingSetupToDraft(
   for (const row of existing.assignments.subjectTeaching) {
     rows.push({
       key: `${row.classroomId}:${row.subjectId}`,
+      gradeId: classroomGradeId(options, row.classroomId) ?? "",
       classroomId: row.classroomId,
       homeroom: homeroomIds.has(row.classroomId),
       subjectId: row.subjectId
@@ -118,6 +111,7 @@ export function teachingSetupToDraft(
   for (const classroomId of homeroomIds) {
     rows.push({
       key: classroomId,
+      gradeId: classroomGradeId(options, classroomId) ?? "",
       classroomId,
       homeroom: true,
       subjectId: ""
@@ -128,12 +122,7 @@ export function teachingSetupToDraft(
     [
       ...existing.capability.eligibleGradeIds,
       ...existing.assignments.gradeChief.map((row) => row.gradeId),
-      ...existing.assignments.homeroom
-        .map((row) => classroomGradeId(options, row.classroomId))
-        .filter((id): id is string => Boolean(id)),
-      ...existing.assignments.subjectTeaching
-        .map((row) => classroomGradeId(options, row.classroomId))
-        .filter((id): id is string => Boolean(id))
+      ...rows.map((row) => row.gradeId).filter(Boolean)
     ].filter(Boolean)
   );
 
@@ -146,7 +135,7 @@ export function teachingSetupToDraft(
         : inferredGrades,
     isGradeChief: existing.assignments.gradeChief.length > 0,
     chiefGradeIds: unique(existing.assignments.gradeChief.map((row) => row.gradeId)),
-    classroomRows: rows.length ? rows : [{ key: newRowKey(), classroomId: "", homeroom: false, subjectId: "" }]
+    classroomRows: rows.filter((row) => row.gradeId)
   };
 }
 
@@ -165,15 +154,17 @@ export function draftToTeachingSetup(
       : [];
 
   const homeroomIds = unique(
-    draft.classroomRows.filter((row) => row.homeroom && row.classroomId).map((row) => row.classroomId)
+    draft.classroomRows
+      .filter((row) => row.homeroom && row.classroomId && eligible.has(row.gradeId))
+      .map((row) => row.classroomId)
   );
   const homeroom = homeroomIds.map((classroomId) => ({ classroomId }));
 
   const subjectTeaching = draft.classroomRows
-    .filter((row) => row.classroomId && row.subjectId)
+    .filter((row) => row.classroomId && row.subjectId && eligible.has(row.gradeId))
     .filter((row) => {
-      const gradeId = classroomGradeId(options, row.classroomId);
-      return gradeId ? eligible.has(gradeId) : false;
+      const classroomGrade = classroomGradeId(options, row.classroomId);
+      return classroomGrade ? row.gradeId === classroomGrade : false;
     })
     .map((row) => ({ classroomId: row.classroomId, subjectId: row.subjectId }));
 
@@ -185,6 +176,31 @@ export function draftToTeachingSetup(
     },
     assignments: { gradeChief, homeroom, subjectTeaching }
   };
+}
+
+export function homeroomConflicts(
+  draft: TeachingSetupDraft,
+  options: TeachingSetupOptions | undefined,
+  currentStaffId: string | undefined
+): { classroomId: string; classroomName: string }[] {
+  if (!options) {
+    return [];
+  }
+
+  const conflicts: { classroomId: string; classroomName: string }[] = [];
+  for (const row of draft.classroomRows.filter((item) => item.homeroom && item.classroomId)) {
+    const classroom = options.classrooms.find((item) => item.id === row.classroomId);
+    if (
+      classroom?.classTeacherStaffId &&
+      classroom.classTeacherStaffId !== currentStaffId
+    ) {
+      conflicts.push({
+        classroomId: classroom.id,
+        classroomName: classroom.name
+      });
+    }
+  }
+  return conflicts;
 }
 
 export function chiefConflicts(
@@ -210,7 +226,7 @@ export function chiefConflicts(
     .filter((row): row is { gradeId: string; gradeName: string; staffName: string } => row !== null);
 }
 
-type Props = {
+type TeachingSetupFieldsProps = {
   draft: TeachingSetupDraft;
   onChange: (next: TeachingSetupDraft) => void;
   options: TeachingSetupOptions | undefined;
@@ -218,63 +234,25 @@ type Props = {
   loading?: boolean;
 };
 
-export function TeacherTeachingSetupFields({
+function TeachingSetupLoading({ loading }: { loading?: boolean }) {
+  const t = useTranslations("teachers");
+  if (!loading) {
+    return null;
+  }
+  return <p className="pds-type-body-s-regular muted">{t("loadingTeachingSetup")}</p>;
+}
+
+export function TeacherSubjectsSetupFields({
   draft,
   onChange,
   options,
-  currentStaffId,
   loading
-}: Props) {
+}: TeachingSetupFieldsProps) {
   const t = useTranslations("teachers");
 
   if (loading) {
-    return <p className="muted">{t("loadingTeachingSetup")}</p>;
+    return <TeachingSetupLoading loading />;
   }
-
-  const showSectors = (options?.sectors.length ?? 0) > 1;
-  const sectorGrades = gradesForSectors(options, draft.sectorIds);
-  const gradeName = (gradeId: string) =>
-    options?.grades.find((grade) => grade.id === gradeId)?.name ?? gradeId;
-
-  const eligibleGrades = sectorGrades.filter((grade) => draft.eligibleGradeIds.includes(grade.id));
-
-  const classroomOptions = (options?.classrooms ?? [])
-    .filter((room) => draft.eligibleGradeIds.includes(room.gradeId))
-    .map((room) => ({
-      id: room.id,
-      label: `${gradeName(room.gradeId)} · ${room.name}${room.room ? ` (${room.room})` : ""}`
-    }));
-
-  const subjectOptionsForClassroom = (classroomId: string) => {
-    const gradeId = classroomGradeId(options, classroomId);
-    if (!gradeId) {
-      return [];
-    }
-    const competent = new Set(draft.competentSubjectIds);
-    return (options?.gradeSubjects ?? [])
-      .filter((row) => row.gradeId === gradeId && competent.has(row.subjectId))
-      .map((row) => ({
-        id: row.subjectId,
-        label: `${row.subjectName}${row.subjectCode ? ` (${row.subjectCode})` : ""}`
-      }));
-  };
-
-  const setEligibleGradeIds = (gradeIds: string[]) => {
-    const allowedGrades = new Set(gradeIds);
-    const allowedClassrooms = new Set(
-      (options?.classrooms ?? [])
-        .filter((room) => allowedGrades.has(room.gradeId))
-        .map((room) => room.id)
-    );
-    onChange({
-      ...draft,
-      eligibleGradeIds: gradeIds,
-      chiefGradeIds: draft.chiefGradeIds.filter((id) => allowedGrades.has(id)),
-      classroomRows: draft.classroomRows.filter(
-        (row) => !row.classroomId || allowedClassrooms.has(row.classroomId)
-      )
-    });
-  };
 
   const setCompetentSubjectIds = (subjectIds: string[]) => {
     const allowed = new Set(subjectIds);
@@ -287,211 +265,292 @@ export function TeacherTeachingSetupFields({
     });
   };
 
-  const conflicts = chiefConflicts(draft, options, currentStaffId);
-
   return (
-    <div className="assign-step teaching-setup">
-      {showSectors ? (
-        <section className="assign-block">
-          <p className="field-label">{t("sectorLabel")}</p>
-          <p className="muted assign-help">{t("sectorHelp")}</p>
-          <CheckboxList
-            options={(options?.sectors ?? []).map((sector) => ({
-              id: sector.id,
-              label: sector.name
-            }))}
-            selectedIds={draft.sectorIds}
-            onChange={(sectorIds) =>
-              onChange({
-                ...draft,
-                sectorIds,
-                eligibleGradeIds: draft.eligibleGradeIds.filter((gradeId) =>
-                  gradesForSectors(options, sectorIds).some((grade) => grade.id === gradeId)
-                )
-              })
-            }
-          />
-        </section>
-      ) : null}
-
-      <section className="assign-block">
-        <p className="field-label">{t("subjectCompetencyLabel")}</p>
-        <p className="muted assign-help">{t("subjectCompetencyHelp")}</p>
-        <CheckboxList
-          options={(options?.subjects ?? []).map((subject) => ({
-            id: subject.id,
-            label: `${subject.name}${subject.code ? ` (${subject.code})` : ""}`
-          }))}
-          selectedIds={draft.competentSubjectIds}
-          onChange={setCompetentSubjectIds}
-          emptyMessage={<p className="muted">{t("noSubjectsCatalog")}</p>}
-        />
-      </section>
-
-      <section className="assign-block">
-        <p className="field-label">{t("gradeEligibilityLabel")}</p>
-        <p className="muted assign-help">{t("gradeEligibilityHelp")}</p>
-        <CheckboxList
-          options={sectorGrades.map((grade) => ({ id: grade.id, label: grade.name }))}
-          selectedIds={draft.eligibleGradeIds}
-          onChange={setEligibleGradeIds}
-          emptyMessage={<p className="muted">{t("noGradesAvailable")}</p>}
-        />
-      </section>
-
-      {draft.eligibleGradeIds.length === 0 ? (
-        <p className="muted assign-empty">{t("selectGradeEligibilityFirst")}</p>
-      ) : (
-        <>
-          <section className="assign-block">
-            <div className="assign-toggle">
-              <Switch
-                checked={draft.isGradeChief}
-                onCheckedChange={(checked) =>
-                  onChange({
-                    ...draft,
-                    isGradeChief: checked,
-                    chiefGradeIds: checked ? draft.chiefGradeIds : []
-                  })
-                }
-                aria-label={t("gradeChiefToggle")}
-              />
-              <div>
-                <strong>{t("gradeChiefToggle")}</strong>
-                <p className="muted assign-help">{t("gradeChiefHelp")}</p>
-              </div>
-            </div>
-            {draft.isGradeChief ? (
-              <>
-                <CheckboxList
-                  options={eligibleGrades.map((grade) => ({ id: grade.id, label: grade.name }))}
-                  selectedIds={draft.chiefGradeIds}
-                  onChange={(ids) => onChange({ ...draft, chiefGradeIds: ids })}
-                />
-                {conflicts.map((conflict) => (
-                  <p key={conflict.gradeId} className="assign-warning" role="alert">
-                    <Icon name="warning" size={16} />
-                    {t("chiefConflictWarning", {
-                      grade: conflict.gradeName,
-                      teacher: conflict.staffName
-                    })}
-                  </p>
-                ))}
-              </>
-            ) : null}
-          </section>
-
-          <section className="assign-block">
-            <div className="teaching-setup__classroom-head">
-              <div>
-                <p className="field-label">{t("classroomAssignmentsLabel")}</p>
-                <p className="muted assign-help">{t("classroomAssignmentsHelp")}</p>
-              </div>
-              <button
-                type="button"
-                className="btn-ghost btn-ghost--compact"
-                onClick={() =>
-                  onChange({
-                    ...draft,
-                    classroomRows: [
-                      ...draft.classroomRows,
-                      { key: newRowKey(), classroomId: "", homeroom: false, subjectId: "" }
-                    ]
-                  })
-                }
-              >
-                <Icon name="add" />
-                {t("addClassroomRow")}
-              </button>
-            </div>
-
-            {draft.classroomRows.length === 0 ? (
-              <p className="muted">{t("noClassroomRows")}</p>
-            ) : (
-              <div className="teaching-setup__table">
-                {draft.classroomRows.map((row, index) => (
-                  <div key={row.key} className="teaching-setup__row">
-                    <FieldSelect
-                      label={t("classroomColumn")}
-                      value={row.classroomId}
-                      options={classroomOptions}
-                      onChange={(classroomId) => {
-                        const next = [...draft.classroomRows];
-                        next[index] = { ...row, classroomId, subjectId: "" };
-                        onChange({ ...draft, classroomRows: next });
-                      }}
-                    />
-                    <label className="teaching-setup__homeroom">
-                      <input
-                        type="checkbox"
-                        checked={row.homeroom}
-                        onChange={(event) => {
-                          const next = [...draft.classroomRows];
-                          next[index] = { ...row, homeroom: event.target.checked };
-                          onChange({ ...draft, classroomRows: next });
-                        }}
-                      />
-                      {t("homeroomColumn")}
-                    </label>
-                    <FieldSelect
-                      label={t("subjectColumn")}
-                      value={row.subjectId}
-                      options={subjectOptionsForClassroom(row.classroomId)}
-                      onChange={(subjectId) => {
-                        const next = [...draft.classroomRows];
-                        next[index] = { ...row, subjectId };
-                        onChange({ ...draft, classroomRows: next });
-                      }}
-                      disabled={!row.classroomId || draft.competentSubjectIds.length === 0}
-                    />
-                    <button
-                      type="button"
-                      className="btn-ghost btn-ghost--compact teaching-setup__remove"
-                      onClick={() =>
-                        onChange({
-                          ...draft,
-                          classroomRows: draft.classroomRows.filter((item) => item.key !== row.key)
-                        })
-                      }
-                      aria-label={t("removeClassroomRow")}
-                    >
-                      <Icon name="close" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-        </>
-      )}
+    <div className="assign-step teaching-setup teaching-setup--subjects">
+      <CheckboxList
+        options={(options?.subjects ?? []).map((subject) => ({
+          id: subject.id,
+          label: `${subject.name}${subject.code ? ` (${subject.code})` : ""}`
+        }))}
+        selectedIds={draft.competentSubjectIds}
+        onChange={setCompetentSubjectIds}
+        emptyTitle={t("noSubjectsCatalog")}
+      />
     </div>
   );
 }
 
-function FieldSelect({
-  label,
-  value,
-  options,
+export function TeacherGradesSetupFields({
+  draft,
   onChange,
-  disabled
-}: {
-  label: string;
-  value: string;
-  options: { id: string; label: string }[];
-  onChange: (value: string) => void;
-  disabled?: boolean;
-}) {
+  options,
+  currentStaffId,
+  loading
+}: TeachingSetupFieldsProps) {
+  const t = useTranslations("teachers");
+
+  if (loading) {
+    return <TeachingSetupLoading loading />;
+  }
+
+  const grades = sortedGrades(options);
+  const selectedGrades = grades.filter((grade) => draft.eligibleGradeIds.includes(grade.id));
+  const conflicts = chiefConflicts(draft, options, currentStaffId);
+  const selectSingleId = (ids: string[]) => (ids.length <= 1 ? ids : [ids[ids.length - 1]!]);
+
+  const setEligibleGradeIds = (gradeIds: string[]) => {
+    const allowedGrades = new Set(gradeIds);
+    onChange({
+      ...draft,
+      eligibleGradeIds: gradeIds,
+      chiefGradeIds: draft.chiefGradeIds.filter((id) => allowedGrades.has(id)),
+      classroomRows: draft.classroomRows.filter((row) => allowedGrades.has(row.gradeId))
+    });
+  };
+
   return (
-    <label className="teaching-setup__field">
-      <span className="field-label">{label}</span>
-      <select value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
-        <option value="">—</option>
-        {options.map((option) => (
-          <option key={option.id} value={option.id}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
+    <div className="assign-step teaching-setup teaching-setup--grades">
+      <CheckboxList
+        options={grades.map((grade) => ({ id: grade.id, label: grade.name }))}
+        selectedIds={draft.eligibleGradeIds}
+        onChange={setEligibleGradeIds}
+        emptyTitle={t("noGradesAvailable")}
+      />
+
+      {draft.eligibleGradeIds.length > 0 ? (
+        <>
+          <div className="assign-toggle teaching-setup__grade-chief">
+            <Toggle
+              checked={draft.isGradeChief}
+              onCheckedChange={(checked) =>
+                onChange({
+                  ...draft,
+                  isGradeChief: checked,
+                  chiefGradeIds: checked ? draft.chiefGradeIds : []
+                })
+              }
+              aria-label={t("gradeChiefToggle")}
+            />
+            <div>
+              <strong className="pds-type-body-m-medium">{t("gradeChiefToggle")}</strong>
+              <p className="pds-type-body-s-regular muted assign-help">{t("gradeChiefHelp")}</p>
+            </div>
+          </div>
+          {draft.isGradeChief ? (
+            <>
+              <CheckboxList
+                options={selectedGrades.map((grade) => ({ id: grade.id, label: grade.name }))}
+                selectedIds={draft.chiefGradeIds}
+                onChange={(ids) => onChange({ ...draft, chiefGradeIds: selectSingleId(ids) })}
+              />
+              {conflicts.map((conflict) => (
+                <p key={conflict.gradeId} className="pds-type-body-s-regular assign-warning" role="alert">
+                  <Icon name="warning" size={16} />
+                  {t("chiefConflictWarning", {
+                    grade: conflict.gradeName,
+                    teacher: conflict.staffName
+                  })}
+                </p>
+              ))}
+            </>
+          ) : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+export function TeacherClassroomsSetupFields({
+  draft,
+  onChange,
+  options,
+  currentStaffId,
+  loading
+}: TeachingSetupFieldsProps) {
+  const t = useTranslations("teachers");
+
+  if (loading) {
+    return <TeachingSetupLoading loading />;
+  }
+
+  const grades = sortedGrades(options);
+  const selectedGrades = grades.filter((grade) => draft.eligibleGradeIds.includes(grade.id));
+  const homeroomConflictRows = homeroomConflicts(draft, options, currentStaffId);
+
+  const subjectOptionsForGrade = (gradeId: string) => {
+    const competent = new Set(draft.competentSubjectIds);
+    const gradeSubjectRows = (options?.gradeSubjects ?? []).filter((row) => row.gradeId === gradeId);
+    const competentRows = gradeSubjectRows.filter((row) => competent.has(row.subjectId));
+    const source = competentRows.length > 0 ? competentRows : gradeSubjectRows;
+    return source.map((row) => ({
+      id: row.subjectId,
+      label: `${row.subjectName}${row.subjectCode ? ` (${row.subjectCode})` : ""}`
+    }));
+  };
+
+  const classroomOptionsForGrade = (gradeId: string) =>
+    (options?.classrooms ?? [])
+      .filter((room) => room.gradeId === gradeId)
+      .map((room) => ({
+        id: room.id,
+        label: `${room.name}${room.room ? ` (${room.room})` : ""}`
+      }));
+
+  const addClassroomRow = (gradeId: string) => {
+    onChange({
+      ...draft,
+      classroomRows: [
+        ...draft.classroomRows,
+        { key: newRowKey(), gradeId, classroomId: "", homeroom: false, subjectId: "" }
+      ]
+    });
+  };
+
+  if (draft.eligibleGradeIds.length === 0) {
+    return (
+      <EmptyState compact embedded icon="school" title={t("selectGradesBeforeClassrooms")} />
+    );
+  }
+
+  return (
+    <div className="assign-step teaching-setup teaching-setup--classrooms">
+      <div className="teaching-setup__grade-groups">
+        {selectedGrades.map((grade) => {
+          const gradeRows = draft.classroomRows.filter((row) => row.gradeId === grade.id);
+          const isChief = draft.isGradeChief && draft.chiefGradeIds.includes(grade.id);
+          const classroomCatalog = classroomOptionsForGrade(grade.id);
+          const assignedClassroomIds = new Set(
+            gradeRows.map((row) => row.classroomId).filter(Boolean)
+          );
+          const canAddClassroomRow = classroomCatalog.some(
+            (option) => !assignedClassroomIds.has(option.id)
+          );
+
+          return (
+            <div key={grade.id} className="teaching-setup__grade-group">
+              <div className="teaching-setup__grade-group-head">
+                <div className="teaching-setup__grade-group-title">
+                  <span className="pds-type-body-m-bold">{grade.name}</span>
+                  {isChief ? <Badge tone="brand">{t("gradeChiefBadge")}</Badge> : null}
+                </div>
+                <button
+                  type="button"
+                  className="pds-type-body-m-bold btn-ghost btn-ghost--compact"
+                  disabled={!canAddClassroomRow}
+                  onClick={() => addClassroomRow(grade.id)}
+                >
+                  <Icon name="add" />
+                  {t("addClassroomRow")}
+                </button>
+              </div>
+
+              {classroomCatalog.length === 0 ? (
+                <p className="pds-type-body-s-regular muted teaching-setup__grade-empty" role="status">
+                  {t("noClassroomsForGradeInYear", { grade: grade.name })}
+                </p>
+              ) : gradeRows.length === 0 ? (
+                <p className="pds-type-body-s-regular muted teaching-setup__grade-empty">
+                  {t("noClassroomRowsForGrade")}
+                </p>
+              ) : (
+                <div className="teaching-setup__table">
+                  <div className="pds-type-caption-m teaching-setup__table-header">
+                    <span>{t("classroomColumn")}</span>
+                    <span className="teaching-setup__col-homeroom" title={t("homeroomColumn")}>
+                      {t("homeroomColumnAbbr")}
+                    </span>
+                    <span>{t("subjectColumn")}</span>
+                    <span className="sr-only">{t("removeClassroomRow")}</span>
+                  </div>
+                  {gradeRows.map((row, index) => {
+                    const rowIndex = draft.classroomRows.findIndex((item) => item.key === row.key);
+                    const classroomOptions = classroomCatalog.filter(
+                      (option) =>
+                        option.id === row.classroomId ||
+                        !gradeRows.some(
+                          (other) => other.key !== row.key && other.classroomId === option.id
+                        )
+                    );
+                    return (
+                      <div key={row.key} className="teaching-setup__row">
+                        <PdsSelectField
+                          variant="form"
+                          value={row.classroomId}
+                          disabled={classroomCatalog.length === 0}
+                          emptyLabel={t("noClassroomsAvailable")}
+                          onValueChange={(next) => {
+                            const classroomId = typeof next === "string" ? next : "";
+                            const nextRows = [...draft.classroomRows];
+                            nextRows[rowIndex] = { ...row, classroomId, subjectId: "" };
+                            onChange({ ...draft, classroomRows: nextRows });
+                          }}
+                          placeholder="—"
+                          options={classroomOptions.map((option) => ({
+                            value: option.id,
+                            label: option.label
+                          }))}
+                        />
+                        <CheckBox
+                          checked={row.homeroom}
+                          size="sm"
+                          showLabel={false}
+                          showDescription={false}
+                          label={t("homeroomColumn")}
+                          onCheckedChange={(checked) => {
+                            const nextRows = draft.classroomRows.map((item) => ({
+                              ...item,
+                              homeroom: checked && item.key === row.key
+                            }));
+                            onChange({ ...draft, classroomRows: nextRows });
+                          }}
+                          className="pds-type-body-s-regular teaching-setup__homeroom"
+                        />
+                        <PdsSelectField
+                          variant="form"
+                          value={row.subjectId}
+                          disabled={!row.classroomId}
+                          panelPosition={index === gradeRows.length - 1 ? "top" : "bottom"}
+                          onValueChange={(next) => {
+                            const subjectId = typeof next === "string" ? next : "";
+                            const nextRows = [...draft.classroomRows];
+                            nextRows[rowIndex] = { ...row, subjectId };
+                            onChange({ ...draft, classroomRows: nextRows });
+                          }}
+                          placeholder="—"
+                          options={subjectOptionsForGrade(grade.id).map((option) => ({
+                            value: option.id,
+                            label: option.label
+                          }))}
+                        />
+                        <button
+                          type="button"
+                          className="pds-type-body-m-bold btn-ghost btn-ghost--compact teaching-setup__remove"
+                          onClick={() =>
+                            onChange({
+                              ...draft,
+                              classroomRows: draft.classroomRows.filter((item) => item.key !== row.key)
+                            })
+                          }
+                          aria-label={t("removeClassroomRow")}
+                        >
+                          <Icon name="close" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {homeroomConflictRows.map((conflict) => (
+        <p key={conflict.classroomId} className="pds-type-body-s-regular assign-warning" role="alert">
+          <Icon name="warning" size={16} />
+          {t("homeroomConflictWarning", { classroom: conflict.classroomName })}
+        </p>
+      ))}
+    </div>
   );
 }

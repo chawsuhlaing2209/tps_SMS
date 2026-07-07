@@ -7,16 +7,21 @@ import {
   NotFoundException
 } from "@nestjs/common";
 import {
+  buildInvoiceNumber,
   mandatoryEnrollmentFeeTypes,
   type EnrollmentConfirmInput,
   type EnrollmentConfirmResult,
   type EnrollmentPreviewInput,
-  type EnrollmentPreviewResult,
-  siblingDiscountCriteriaSchema
+  type EnrollmentPreviewResult
 } from "@sms/shared";
-import { and, eq, inArray, isNull, ne, or, gte, lte } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, ne } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
+import {
+  evaluateDiscountsFromDb,
+  persistInvoiceDiscountLines,
+  siblingSummaryMessage
+} from "../discounts/discount-evaluation.logic.js";
 import { previewRecurringBilling } from "./enrollment-billing.logic.js";
 import {
   classrooms,
@@ -26,11 +31,14 @@ import {
   enrollmentFeePlanGrades,
   enrollments,
   feeItems,
+  guardians,
   invoiceItems,
   invoices,
   payments,
   enquiries,
+  staff,
   studentDiscounts,
+  studentGuardians,
   studentServices,
   students
 } from "../db/schema.js";
@@ -137,12 +145,22 @@ export class EnrollmentBillingService {
       input.studentId,
       input.academicYearId
     );
-    const { discounts, discountTotal, discountApprovalRequired } = await this.evaluateDiscounts(
-      tenantId,
-      student.id,
-      feeLines,
-      siblingSummary
-    );
+    const { discounts, discountTotal, discountApprovalRequired, discountOptions } =
+      await this.evaluateDiscounts(
+        tenantId,
+        student.id,
+        input.academicYearId,
+        input.gradeId,
+        feeLines,
+        siblingSummary,
+        {
+          billingContext: "enrollment",
+          collectPayment: input.collectPayment,
+          paymentMethod: input.paymentMethod,
+          excludedDiscountRuleIds: input.excludedDiscountRuleIds,
+          forcedDiscountRuleIds: input.forcedDiscountRuleIds
+        }
+      );
     const pendingDiscounts = await this.loadPendingDiscounts(tenantId, student.id);
 
     const confirmBlockers: string[] = [];
@@ -156,6 +174,7 @@ export class EnrollmentBillingService {
       feeLines,
       availableOptionalFees,
       discounts,
+      discountOptions,
       pendingDiscounts,
       siblingSummary,
       subtotal,
@@ -199,6 +218,7 @@ export class EnrollmentBillingService {
     feeLines: EnrollmentPreviewResult["feeLines"];
     availableOptionalFees: EnrollmentPreviewResult["availableOptionalFees"];
     discounts: EnrollmentPreviewResult["discounts"];
+    discountOptions?: EnrollmentPreviewResult["discountOptions"];
     pendingDiscounts: EnrollmentPreviewResult["pendingDiscounts"];
     siblingSummary: EnrollmentPreviewResult["siblingSummary"];
     subtotal: number;
@@ -213,6 +233,7 @@ export class EnrollmentBillingService {
       feeLines: input.feeLines,
       availableOptionalFees: input.availableOptionalFees,
       discounts: input.discounts,
+      discountOptions: input.discountOptions ?? [],
       pendingDiscounts: input.pendingDiscounts,
       siblingSummary: input.siblingSummary,
       subtotal: input.subtotal,
@@ -241,20 +262,22 @@ export class EnrollmentBillingService {
       throw new NotFoundException("Enrollment not found.");
     }
 
-    if (enrollment.invoiceId || enrollment.confirmedAt) {
+    if (enrollment.invoiceId) {
       throw new ConflictException("Enrollment is already confirmed.");
     }
 
-    if (!enrollment.classroomId) {
-      throw new BadRequestException("Enrollment has no classroom — cannot confirm.");
-    }
-
-    const classroomId = enrollment.classroomId;
-    const placement = await this.getClassroomPlacement(tenantId, classroomId);
+    // Classroom is optional — a student can be enrolled into a grade before a
+    // room has been planned. When a classroom is set, its placement is the
+    // source of truth for academic year / grade; otherwise the enrollment's own
+    // grade + year (chosen at create) are used and room placement is deferred.
+    const placement = enrollment.classroomId
+      ? await this.getClassroomPlacement(tenantId, enrollment.classroomId)
+      : null;
 
     if (
-      enrollment.academicYearId !== placement.academicYearId ||
-      enrollment.gradeId !== placement.gradeId
+      placement &&
+      (enrollment.academicYearId !== placement.academicYearId ||
+        enrollment.gradeId !== placement.gradeId)
     ) {
       await this.db
         .update(enrollments)
@@ -278,10 +301,14 @@ export class EnrollmentBillingService {
 
     const preview = await this.preview(tenantId, {
       studentId: enrollment.studentId,
-      academicYearId: placement.academicYearId,
-      gradeId: placement.gradeId,
-      classroomId,
-      optionalFeeItemIds
+      academicYearId: enrollment.academicYearId,
+      gradeId: enrollment.gradeId,
+      classroomId: enrollment.classroomId ?? undefined,
+      optionalFeeItemIds,
+      collectPayment: dto.collectPayment,
+      paymentMethod: dto.paymentMethod,
+      excludedDiscountRuleIds: dto.excludedDiscountRuleIds,
+      forcedDiscountRuleIds: dto.forcedDiscountRuleIds
     });
 
     if (!preview.canConfirm) {
@@ -314,7 +341,7 @@ export class EnrollmentBillingService {
       .where(and(eq(students.tenantId, tenantId), eq(students.id, enrollment.studentId)));
 
     const today = new Date().toISOString().slice(0, 10);
-    const invoiceNumber = `INV-${Date.now()}`;
+    const invoiceNumber = buildInvoiceNumber(new Date(today));
 
     const result = await this.db.transaction(async (tx) => {
       const [invoice] = await tx
@@ -349,6 +376,25 @@ export class EnrollmentBillingService {
           createdBy: actorUserId,
           updatedBy: actorUserId
         }))
+      );
+
+      await persistInvoiceDiscountLines(
+        tx,
+        tenantId,
+        invoice!.id,
+        preview.discounts.map((discount) => ({
+          id: discount.id,
+          ruleId: discount.ruleId ?? discount.id,
+          name: discount.name,
+          discountType: discount.discountType,
+          amount: discount.amount,
+          source: discount.source,
+          stackable: discount.stackable ?? false,
+          requiresApproval: discount.requiresApproval ?? false,
+          status: discount.status,
+          eligibilityReason: discount.eligibilityReason
+        })),
+        actorUserId
       );
 
       const recurringLines = preview.feeLines.filter((line) =>
@@ -587,7 +633,11 @@ export class EnrollmentBillingService {
       return {
         eligible: false,
         enrolledSiblingCount: 0,
-        message: "No family group linked — sibling discount not evaluated."
+        studentPosition: 1,
+        message: siblingSummaryMessage(
+          { eligible: false, enrolledSiblingCount: 0, studentPosition: 1 },
+          false
+        )
       };
     }
 
@@ -613,164 +663,225 @@ export class EnrollmentBillingService {
       );
 
     const count = siblingRows.length;
-    const eligible = count >= 1;
+    const summary = {
+      eligible: count >= 1,
+      enrolledSiblingCount: count,
+      studentPosition: count + 1
+    };
 
     return {
-      eligible,
-      enrolledSiblingCount: count,
-      message: eligible
-        ? `${count} enrolled sibling(s) in this family for the selected year.`
-        : "No enrolled siblings in this family for the selected year."
+      ...summary,
+      message: siblingSummaryMessage(summary, true)
     };
   }
 
   private async evaluateDiscounts(
     tenantId: string,
     studentId: string,
+    academicYearId: string,
+    gradeId: string,
     feeLines: EnrollmentPreviewResult["feeLines"],
-    siblingSummary: EnrollmentPreviewResult["siblingSummary"]
+    siblingSummary: EnrollmentPreviewResult["siblingSummary"],
+    options?: {
+      billingContext?: "enrollment" | "recurring";
+      collectPayment?: boolean;
+      paymentMethod?: string;
+      excludedDiscountRuleIds?: string[];
+      forcedDiscountRuleIds?: string[];
+    }
   ): Promise<{
     discounts: EnrollmentPreviewResult["discounts"];
     discountTotal: number;
     discountApprovalRequired: boolean;
+    discountOptions: EnrollmentPreviewResult["discountOptions"];
   }> {
-    const today = new Date().toISOString().slice(0, 10);
-    const discounts: EnrollmentPreviewResult["discounts"] = [];
-    let discountTotal = 0;
-    let discountApprovalRequired = false;
+    const parentIsFullTimeStaff = await this.hasActiveStaffGuardian(tenantId, studentId);
 
-    const approvedStudentDiscounts = await this.db
-      .select({
-        id: studentDiscounts.id,
-        ruleName: discountRules.name,
-        discountType: discountRules.discountType,
-        valueType: discountRules.valueType,
-        value: discountRules.value,
-        approvalThreshold: discountRules.approvalThreshold,
-        criteria: discountRules.criteria
-      })
-      .from(studentDiscounts)
-      .innerJoin(discountRules, eq(studentDiscounts.discountRuleId, discountRules.id))
+    const result = await evaluateDiscountsFromDb(this.db, {
+      tenantId,
+      studentId,
+      context: {
+        billingContext: options?.billingContext ?? "enrollment",
+        academicYearId,
+        gradeId,
+        feeLines,
+        siblingSummary: {
+          eligible: siblingSummary.eligible,
+          enrolledSiblingCount: siblingSummary.enrolledSiblingCount,
+          studentPosition: siblingSummary.studentPosition ?? siblingSummary.enrolledSiblingCount + 1
+        },
+        collectPayment: options?.collectPayment,
+        paymentMethod: options?.paymentMethod,
+        parentIsFullTimeStaff
+      },
+      excludedDiscountRuleIds: options?.excludedDiscountRuleIds,
+      forcedDiscountRuleIds: options?.forcedDiscountRuleIds
+    });
+
+    return {
+      discounts: result.discounts.map((discount) => ({
+        id: discount.id,
+        ruleId: discount.ruleId,
+        name: discount.name,
+        discountType: discount.discountType,
+        amount: discount.amount,
+        source: discount.source,
+        stackable: discount.stackable,
+        eligibilityReason: discount.eligibilityReason,
+        status: discount.status,
+        requiresApproval: discount.requiresApproval
+      })),
+      discountTotal: result.discountTotal,
+      discountApprovalRequired: result.discountApprovalRequired,
+      discountOptions: result.discountOptions
+    };
+  }
+
+  /**
+   * A guardian linked to an active staff record marks the student as a
+   * staff child — powers the parentIsFullTimeStaff discount criterion.
+   */
+  private async hasActiveStaffGuardian(tenantId: string, studentId: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: guardians.id })
+      .from(studentGuardians)
+      .innerJoin(guardians, eq(studentGuardians.guardianId, guardians.id))
+      .innerJoin(staff, eq(guardians.staffId, staff.id))
       .where(
         and(
-          eq(studentDiscounts.tenantId, tenantId),
-          eq(studentDiscounts.studentId, studentId),
-          eq(studentDiscounts.status, "approved"),
-          eq(discountRules.status, "active"),
-          lte(studentDiscounts.effectiveFrom, today),
-          or(isNull(studentDiscounts.effectiveTo), gte(studentDiscounts.effectiveTo, today))
+          eq(studentGuardians.tenantId, tenantId),
+          eq(studentGuardians.studentId, studentId),
+          eq(staff.tenantId, tenantId),
+          eq(staff.status, "active")
         )
-      );
+      )
+      .limit(1);
+    return Boolean(row);
+  }
 
-    for (const row of approvedStudentDiscounts) {
-      const amount = this.computeDiscountAmount(
-        feeLines,
-        row.valueType,
-        Number(row.value),
-        row.discountType,
-        row.criteria
-      );
-      if (amount <= 0) continue;
+  /**
+   * Assigns (or moves) an enrollment to a classroom after the fact — the
+   * ceremony allows enrolling without picking a room, and confirmed
+   * enrollments are otherwise immutable. Validates the classroom matches the
+   * enrollment's year and grade; approved enrollments get their classroom
+   * placement synced immediately.
+   */
+  async assignClassroom(
+    tenantId: string,
+    enrollmentId: string,
+    classroomId: string,
+    actorUserId: string
+  ) {
+    const [enrollment] = await this.db
+      .select()
+      .from(enrollments)
+      .where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.id, enrollmentId)));
 
-      const requiresApproval = this.exceedsThreshold(amount, row.approvalThreshold);
-      if (requiresApproval) discountApprovalRequired = true;
-
-      discounts.push({
-        id: row.id,
-        name: row.ruleName,
-        discountType: row.discountType,
-        amount,
-        source: "student_discount",
-        status: "approved",
-        requiresApproval
-      });
-      discountTotal += amount;
+    if (!enrollment) {
+      throw new NotFoundException("Enrollment not found.");
+    }
+    if (enrollment.cancelledAt) {
+      throw new BadRequestException("Cancelled enrollments cannot be assigned to a classroom.");
+    }
+    if (enrollment.classroomId === classroomId) {
+      return enrollment;
     }
 
-    if (siblingSummary.eligible) {
-      const siblingRules = await this.db
-        .select()
-        .from(discountRules)
+    await this.assertClassroomPlacement(
+      tenantId,
+      classroomId,
+      enrollment.academicYearId,
+      enrollment.gradeId
+    );
+
+    const today = new Date().toISOString().slice(0, 10);
+
+    const updated = await this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(enrollments)
+        .set({ classroomId, updatedBy: actorUserId, updatedAt: new Date() })
+        .where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.id, enrollmentId)))
+        .returning();
+
+      if (row!.status === "approved") {
+        await this.syncClassroomPlacementTx(tx, tenantId, row!, actorUserId, today, "classroom_assigned");
+      }
+
+      return row!;
+    });
+
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId,
+      action: "enrollment.assign_classroom",
+      recordType: "enrollment",
+      recordId: enrollmentId,
+      before: { classroomId: enrollment.classroomId },
+      after: { classroomId }
+    });
+
+    return updated;
+  }
+
+  /**
+   * Takes the student off the classroom roster without touching the
+   * enrollment's status or billing — the enrollment stays active with no
+   * classroom until reassigned.
+   */
+  async unassignClassroom(tenantId: string, enrollmentId: string, actorUserId: string) {
+    const [enrollment] = await this.db
+      .select()
+      .from(enrollments)
+      .where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.id, enrollmentId)));
+
+    if (!enrollment) {
+      throw new NotFoundException("Enrollment not found.");
+    }
+    if (!enrollment.classroomId) {
+      return enrollment;
+    }
+
+    const previousClassroomId = enrollment.classroomId;
+    const today = new Date().toISOString().slice(0, 10);
+
+    const updated = await this.db.transaction(async (tx) => {
+      await tx
+        .update(classroomStudents)
+        .set({
+          effectiveTo: today,
+          movementReason: "classroom_unassigned",
+          updatedBy: actorUserId,
+          updatedAt: new Date()
+        })
         .where(
           and(
-            eq(discountRules.tenantId, tenantId),
-            eq(discountRules.discountType, "sibling"),
-            eq(discountRules.status, "active")
+            eq(classroomStudents.tenantId, tenantId),
+            eq(classroomStudents.studentId, enrollment.studentId),
+            eq(classroomStudents.classroomId, previousClassroomId),
+            isNull(classroomStudents.effectiveTo)
           )
         );
 
-      for (const rule of siblingRules) {
-        if (discounts.some((d) => d.source === "rule" && d.discountType === "sibling")) {
-          continue;
-        }
+      const [row] = await tx
+        .update(enrollments)
+        .set({ classroomId: null, updatedBy: actorUserId, updatedAt: new Date() })
+        .where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.id, enrollmentId)))
+        .returning();
 
-        const parsed = siblingDiscountCriteriaSchema.safeParse(rule.criteria);
-        const criteria = parsed.success ? parsed.data : { type: "sibling" as const };
-        const minSiblings = criteria.minEnrolledSiblings ?? 1;
-        if (siblingSummary.enrolledSiblingCount < minSiblings) {
-          continue;
-        }
+      return row!;
+    });
 
-        const amount = this.computeDiscountAmount(
-          feeLines,
-          rule.valueType,
-          Number(rule.value),
-          rule.discountType,
-          rule.criteria
-        );
-        if (amount <= 0) continue;
+    await this.auditService.recordEvent({
+      tenantId,
+      actorUserId,
+      action: "enrollment.unassign_classroom",
+      recordType: "enrollment",
+      recordId: enrollmentId,
+      before: { classroomId: previousClassroomId },
+      after: { classroomId: null }
+    });
 
-        const requiresApproval = this.exceedsThreshold(amount, rule.approvalThreshold);
-        if (requiresApproval) discountApprovalRequired = true;
-
-        discounts.push({
-          id: rule.id,
-          name: rule.name,
-          discountType: rule.discountType,
-          amount,
-          source: "rule",
-          requiresApproval
-        });
-        discountTotal += amount;
-      }
-    }
-
-    return { discounts, discountTotal, discountApprovalRequired };
-  }
-
-  private exceedsThreshold(amount: number, threshold: string | null): boolean {
-    if (threshold == null) return false;
-    return amount > Number(threshold);
-  }
-
-  private computeDiscountAmount(
-    feeLines: EnrollmentPreviewResult["feeLines"],
-    valueType: string,
-    value: number,
-    discountType: string,
-    criteria: Record<string, unknown> | null
-  ): number {
-    const parsed = siblingDiscountCriteriaSchema.safeParse(criteria);
-    const appliesToFeeTypes =
-      parsed.success && parsed.data.appliesToFeeTypes?.length
-        ? parsed.data.appliesToFeeTypes
-        : discountType === "sibling"
-          ? [...mandatoryEnrollmentFeeTypes]
-          : null;
-
-    const eligibleLines =
-      appliesToFeeTypes != null
-        ? feeLines.filter((line) => appliesToFeeTypes.includes(line.feeType))
-        : feeLines;
-
-    const base = eligibleLines.reduce((sum, line) => sum + line.lineTotal, 0);
-    if (base <= 0) return 0;
-
-    if (valueType === "percentage") {
-      return Math.round((base * value) / 100);
-    }
-
-    return Math.min(value, base);
+    return updated;
   }
 
   private async syncClassroomPlacementTx(
@@ -778,7 +889,8 @@ export class EnrollmentBillingService {
     tenantId: string,
     enrollment: typeof enrollments.$inferSelect,
     actorUserId: string,
-    today: string
+    today: string,
+    movementReason = "enrollment_confirmed"
   ) {
     if (!enrollment.classroomId) return;
 
@@ -811,7 +923,7 @@ export class EnrollmentBillingService {
         classroomId: enrollment.classroomId,
         studentId: enrollment.studentId,
         effectiveFrom: today,
-        movementReason: "enrollment_confirmed",
+        movementReason,
         createdBy: actorUserId,
         updatedBy: actorUserId
       });
@@ -821,5 +933,603 @@ export class EnrollmentBillingService {
       .update(students)
       .set({ status: "enrolled", updatedBy: actorUserId, updatedAt: new Date() })
       .where(and(eq(students.tenantId, tenantId), eq(students.id, enrollment.studentId)));
+  }
+
+  async listAvailableOptionalServices(tenantId: string, studentId: string) {
+    const enrollment = await this.resolveApprovedEnrollment(tenantId, studentId);
+    const plans = await this.loadFeePlans(
+      tenantId,
+      enrollment.academicYearId,
+      enrollment.gradeId
+    );
+    const mandatoryTypes = new Set<string>(mandatoryEnrollmentFeeTypes);
+    const activeFeeItemIds = await this.loadActiveServiceFeeItemIds(tenantId, studentId);
+
+    return plans
+      .filter((plan) => !mandatoryTypes.has(plan.feeType))
+      .filter((plan) => !activeFeeItemIds.has(plan.feeItemId))
+      .map((plan) => ({
+        feeItemId: plan.feeItemId,
+        name: plan.feeItemName,
+        feeType: plan.feeType,
+        billingType: plan.billingType,
+        unitAmount: Number(plan.amount),
+        isRecurring: RECURRING_BILLING_TYPES.has(plan.billingType)
+      }));
+  }
+
+  async previewAddStudentService(
+    tenantId: string,
+    input: { studentId: string; feeItemIds: string[]; effectiveFrom: string }
+  ) {
+    const enrollment = await this.resolveApprovedEnrollment(tenantId, input.studentId);
+
+    const feeLines: EnrollmentPreviewResult["feeLines"] = [];
+    for (const feeItemId of input.feeItemIds) {
+      const plan = await this.resolveOptionalServicePlan(
+        tenantId,
+        enrollment,
+        feeItemId,
+        input.studentId
+      );
+      feeLines.push(this.buildOptionalServiceFeeLine(plan));
+    }
+
+    const anyRecurring = feeLines.some((line) => RECURRING_BILLING_TYPES.has(line.billingType));
+    const subtotal = feeLines.reduce((sum, line) => sum + line.lineTotal, 0);
+
+    const [studentRow] = await this.db
+      .select({ familyGroupId: students.familyGroupId })
+      .from(students)
+      .where(and(eq(students.tenantId, tenantId), eq(students.id, input.studentId)));
+    const siblingSummary = await this.buildSiblingSummary(
+      tenantId,
+      studentRow?.familyGroupId ?? null,
+      input.studentId,
+      enrollment.academicYearId
+    );
+
+    const { discounts, discountTotal, discountApprovalRequired } = feeLines.length
+      ? await this.evaluateDiscounts(
+          tenantId,
+          input.studentId,
+          enrollment.academicYearId,
+          enrollment.gradeId,
+          feeLines,
+          siblingSummary,
+          { billingContext: anyRecurring ? "recurring" : "enrollment" }
+        )
+      : { discounts: [], discountTotal: 0, discountApprovalRequired: false };
+
+    return {
+      studentId: input.studentId,
+      enrollmentId: enrollment.id,
+      effectiveFrom: input.effectiveFrom,
+      isRecurring: anyRecurring,
+      feeLines,
+      subtotal,
+      discountTotal,
+      total: Math.max(0, subtotal - discountTotal),
+      discounts,
+      discountApprovalRequired,
+      createsInvoice: feeLines.length > 0
+    };
+  }
+
+  async confirmAddStudentService(
+    tenantId: string,
+    actorUserId: string,
+    input: {
+      studentId: string;
+      feeItemIds: string[];
+      startDate: string;
+      dueDate?: string;
+      collectPayment?: boolean;
+      paymentMethod?: string;
+      paymentAmount?: number;
+      paymentReference?: string;
+      paymentNotes?: string;
+    },
+    actorPermissions: string[] = []
+  ) {
+    if (!input.feeItemIds.length) {
+      throw new BadRequestException("Select at least one service to add.");
+    }
+
+    const preview = await this.previewAddStudentService(tenantId, {
+      studentId: input.studentId,
+      feeItemIds: input.feeItemIds,
+      effectiveFrom: input.startDate
+    });
+
+    if (preview.discountApprovalRequired) {
+      throw new ForbiddenException(
+        "Discount approval is required before adding this service. Resolve pending discounts first."
+      );
+    }
+
+    if (input.collectPayment && !actorPermissions.includes("finance.manage")) {
+      throw new ForbiddenException("Finance permission is required to collect payment.");
+    }
+
+    const paymentAmount = input.paymentAmount ?? preview.total;
+    if (input.collectPayment) {
+      if (!input.paymentMethod) {
+        throw new BadRequestException("Payment method is required when collecting payment.");
+      }
+      if (paymentAmount <= 0 || paymentAmount > preview.total) {
+        throw new BadRequestException("Payment amount must be between 0 and the invoice total.");
+      }
+      if (input.paymentMethod !== "cash" && !input.paymentReference?.trim()) {
+        throw new BadRequestException("Transaction ID is required for non-cash payments.");
+      }
+    }
+
+    const enrollment = await this.resolveApprovedEnrollment(tenantId, input.studentId);
+    const [student] = await this.db
+      .select({ familyGroupId: students.familyGroupId })
+      .from(students)
+      .where(and(eq(students.tenantId, tenantId), eq(students.id, input.studentId)));
+
+    const today = new Date().toISOString().slice(0, 10);
+    const invoiceNumber = buildInvoiceNumber(new Date(today));
+    const isCash = input.paymentMethod === "cash";
+    const recurringLines = preview.feeLines.filter((line) =>
+      RECURRING_BILLING_TYPES.has(line.billingType)
+    );
+
+    const result = await this.db.transaction(async (tx) => {
+      // One invoice carries every selected optional service. Recurring services
+      // are also registered so they continue billing on future monthly runs
+      // ("first period billed today, then continues monthly").
+      const [invoice] = await tx
+        .insert(invoices)
+        .values({
+          tenantId,
+          studentId: input.studentId,
+          enrollmentId: enrollment.id,
+          familyGroupId: student?.familyGroupId ?? null,
+          invoiceNumber,
+          issueDate: today,
+          dueDate: input.dueDate ?? input.startDate,
+          subtotal: String(preview.subtotal),
+          discountTotal: String(preview.discountTotal),
+          total: String(preview.total),
+          status: "unpaid",
+          source: preview.isRecurring ? "recurring" : "ad_hoc",
+          createdBy: actorUserId,
+          updatedBy: actorUserId
+        })
+        .returning();
+
+      await tx.insert(invoiceItems).values(
+        preview.feeLines.map((line) => ({
+          tenantId,
+          invoiceId: invoice!.id,
+          feeItemId: line.feeItemId,
+          description: line.description,
+          quantity: String(line.quantity),
+          unitAmount: String(line.unitAmount),
+          total: String(line.lineTotal),
+          createdBy: actorUserId,
+          updatedBy: actorUserId
+        }))
+      );
+
+      await persistInvoiceDiscountLines(
+        tx,
+        tenantId,
+        invoice!.id,
+        preview.discounts.map((discount) => ({
+          id: discount.id,
+          ruleId: discount.ruleId ?? discount.id,
+          name: discount.name,
+          discountType: discount.discountType,
+          amount: discount.amount,
+          source: discount.source,
+          stackable: discount.stackable ?? false,
+          requiresApproval: discount.requiresApproval ?? false,
+          status: discount.status,
+          eligibilityReason: discount.eligibilityReason
+        })),
+        actorUserId
+      );
+
+      const studentServiceRows = recurringLines.length
+        ? await tx
+            .insert(studentServices)
+            .values(
+              recurringLines.map((line) => ({
+                tenantId,
+                studentId: input.studentId,
+                feeItemId: line.feeItemId,
+                effectiveFrom: input.startDate,
+                createdBy: actorUserId,
+                updatedBy: actorUserId
+              }))
+            )
+            .returning()
+        : [];
+
+      let paymentId: string | undefined;
+      if (input.collectPayment && input.paymentMethod) {
+        const [payment] = await tx
+          .insert(payments)
+          .values({
+            tenantId,
+            invoiceId: invoice!.id,
+            kind: "payment",
+            amount: String(paymentAmount),
+            method: input.paymentMethod as any,
+            referenceNumber: input.paymentReference?.trim() || null,
+            notes: input.paymentNotes,
+            paidAt: new Date(),
+            verifiedAt: isCash ? new Date() : null,
+            verifiedByUserId: isCash ? actorUserId : null,
+            createdBy: actorUserId,
+            updatedBy: actorUserId
+          })
+          .returning();
+        paymentId = payment!.id;
+        if (isCash) {
+          const newStatus =
+            paymentAmount >= preview.total ? "paid" : paymentAmount > 0 ? "partial" : "unpaid";
+          await tx
+            .update(invoices)
+            .set({ status: newStatus, updatedBy: actorUserId })
+            .where(eq(invoices.id, invoice!.id));
+        }
+      }
+
+      await this.auditService.recordEvent({
+        tenantId,
+        actorUserId: actorUserId ?? null,
+        action: "invoice.create",
+        recordType: "invoice",
+        recordId: invoice!.id,
+        after: {
+          ...(invoice as Record<string, unknown>),
+          source: preview.isRecurring ? "recurring" : "ad_hoc",
+          studentServiceAdd: true
+        }
+      });
+      for (const row of studentServiceRows) {
+        await this.auditService.recordEvent({
+          tenantId,
+          actorUserId: actorUserId ?? null,
+          action: "student_service.create",
+          recordType: "StudentService",
+          recordId: row.id,
+          after: row as Record<string, unknown>
+        });
+      }
+      if (paymentId) {
+        await this.auditService.recordEvent(
+          this.auditService.createEvent({
+            tenantId,
+            actorUserId,
+            action: "payment.record",
+            recordType: "payment",
+            recordId: paymentId,
+            after: { invoiceId: invoice!.id, studentServiceAdd: true }
+          })
+        );
+      }
+
+      return { invoice: invoice!, studentServices: studentServiceRows, paymentId };
+    });
+
+    return {
+      kind: preview.isRecurring ? ("recurring" as const) : ("one_time" as const),
+      studentServices: result.studentServices,
+      invoice: result.invoice,
+      paymentId: result.paymentId
+    };
+  }
+
+  private async resolveApprovedEnrollment(tenantId: string, studentId: string) {
+    const [enrollment] = await this.db
+      .select()
+      .from(enrollments)
+      .where(
+        and(
+          eq(enrollments.tenantId, tenantId),
+          eq(enrollments.studentId, studentId),
+          eq(enrollments.status, "approved")
+        )
+      )
+      .orderBy(desc(enrollments.confirmedAt))
+      .limit(1);
+
+    if (!enrollment?.confirmedAt) {
+      throw new BadRequestException(
+        "Student must have a confirmed enrollment before adding optional services."
+      );
+    }
+
+    return enrollment;
+  }
+
+  private async loadActiveServiceFeeItemIds(tenantId: string, studentId: string) {
+    const rows = await this.db
+      .select({ feeItemId: studentServices.feeItemId })
+      .from(studentServices)
+      .where(
+        and(
+          eq(studentServices.tenantId, tenantId),
+          eq(studentServices.studentId, studentId),
+          isNull(studentServices.effectiveTo)
+        )
+      );
+
+    return new Set(rows.map((row) => row.feeItemId));
+  }
+
+  private async resolveOptionalServicePlan(
+    tenantId: string,
+    enrollment: typeof enrollments.$inferSelect,
+    feeItemId: string,
+    studentId: string
+  ): Promise<PlanRow> {
+    const plans = await this.loadFeePlans(
+      tenantId,
+      enrollment.academicYearId,
+      enrollment.gradeId
+    );
+    const mandatoryTypes = new Set<string>(mandatoryEnrollmentFeeTypes);
+    const plan = plans.find((row) => row.feeItemId === feeItemId);
+
+    if (!plan || mandatoryTypes.has(plan.feeType)) {
+      throw new BadRequestException("Selected service is not available for this student's grade.");
+    }
+
+    const activeFeeItemIds = await this.loadActiveServiceFeeItemIds(tenantId, studentId);
+    if (activeFeeItemIds.has(feeItemId)) {
+      throw new ConflictException("Student already has this service active.");
+    }
+
+    return plan;
+  }
+
+  private buildOptionalServiceFeeLine(plan: PlanRow): EnrollmentPreviewResult["feeLines"][number] {
+    const unitAmount = Number(plan.amount);
+    return {
+      planId: plan.planId,
+      feeItemId: plan.feeItemId,
+      feeItemName: plan.feeItemName,
+      description: plan.feeItemName,
+      unitAmount,
+      quantity: 1,
+      lineTotal: unitAmount,
+      source: "optional",
+      feeType: plan.feeType,
+      billingType: plan.billingType,
+      mandatory: false
+    };
+  }
+
+  /**
+   * Cancel (withdraw) an enrollment. Cash-basis treatment:
+   * - Refund up to the net cash already paid (full / partial / none). The refund
+   *   is cash out; the non-refunded paid amount is forfeited and stays as
+   *   revenue automatically (net cash retained).
+   * - Void the unpaid remainder by closing the enrollment's invoices
+   *   (status = cancelled → recordable becomes 0).
+   * - Stop future recurring services so no further invoices are generated.
+   */
+  async cancelEnrollment(
+    tenantId: string,
+    enrollmentId: string,
+    actorUserId: string,
+    dto: {
+      refundMode: "full" | "partial" | "none";
+      refundAmount?: number;
+      method?: string;
+      referenceNumber?: string;
+      reason: string;
+    }
+  ) {
+    const reason = dto.reason.trim();
+    const result = await this.db.transaction(async (tx) => {
+      const [enr] = await tx
+        .select()
+        .from(enrollments)
+        .where(and(eq(enrollments.id, enrollmentId), eq(enrollments.tenantId, tenantId)));
+      if (!enr) throw new NotFoundException("Enrollment not found");
+      if (enr.cancelledAt) throw new BadRequestException("This enrollment is already cancelled.");
+
+      const invoiceRows = await tx
+        .select({ id: invoices.id })
+        .from(invoices)
+        .where(and(eq(invoices.tenantId, tenantId), eq(invoices.enrollmentId, enrollmentId)));
+      const invoiceIds = invoiceRows.map((r) => r.id);
+
+      // Net refundable cash across the enrollment's invoices, per verified payment.
+      let netCash = 0;
+      const refundable: Array<{ id: string; invoiceId: string; method: string; left: number }> = [];
+      if (invoiceIds.length) {
+        const payRows = await tx
+          .select({
+            id: payments.id,
+            invoiceId: payments.invoiceId,
+            kind: payments.kind,
+            amount: payments.amount,
+            method: payments.method,
+            refundedPaymentId: payments.refundedPaymentId,
+            verifiedAt: payments.verifiedAt
+          })
+          .from(payments)
+          .where(and(eq(payments.tenantId, tenantId), inArray(payments.invoiceId, invoiceIds)));
+
+        const refundedByPayment = new Map<string, number>();
+        for (const p of payRows) {
+          if (p.kind === "refund" && p.verifiedAt && p.refundedPaymentId) {
+            refundedByPayment.set(
+              p.refundedPaymentId,
+              (refundedByPayment.get(p.refundedPaymentId) ?? 0) + Number(p.amount)
+            );
+          }
+        }
+        for (const p of payRows) {
+          if (p.kind === "payment" && p.verifiedAt) {
+            const left = Math.max(0, Number(p.amount) - (refundedByPayment.get(p.id) ?? 0));
+            netCash += left;
+            if (left > 0) refundable.push({ id: p.id, invoiceId: p.invoiceId, method: p.method, left });
+          }
+        }
+      }
+
+      let refundTarget = 0;
+      if (dto.refundMode === "full") refundTarget = netCash;
+      else if (dto.refundMode === "partial") {
+        refundTarget = dto.refundAmount ?? 0;
+        if (refundTarget <= 0)
+          throw new BadRequestException("Partial refund amount must be greater than zero.");
+        if (refundTarget > netCash)
+          throw new BadRequestException(`Refund cannot exceed cash paid (${netCash}).`);
+      }
+
+      const refundMethod = dto.method ?? "cash";
+      const isCash = refundMethod === "cash";
+      if (refundTarget > 0 && !isCash && !dto.referenceNumber?.trim()) {
+        throw new BadRequestException("Refund transaction ID is required for non-cash refunds.");
+      }
+
+      // Allocate the refund across verified payments, largest refundable first.
+      const refundIds: string[] = [];
+      let remaining = refundTarget;
+      refundable.sort((a, b) => b.left - a.left);
+      for (const vp of refundable) {
+        if (remaining <= 0) break;
+        const amt = Math.min(remaining, vp.left);
+        const [refund] = await tx
+          .insert(payments)
+          .values({
+            tenantId,
+            createdBy: actorUserId,
+            updatedBy: actorUserId,
+            invoiceId: vp.invoiceId,
+            kind: "refund",
+            refundedPaymentId: vp.id,
+            amount: String(amt),
+            method: refundMethod as any,
+            referenceNumber: dto.referenceNumber?.trim() || null,
+            notes: reason,
+            paidAt: new Date(),
+            verifiedAt: isCash ? new Date() : null,
+            verifiedByUserId: isCash ? actorUserId : null
+          })
+          .returning();
+        if (refund) refundIds.push(refund.id);
+        remaining -= amt;
+      }
+
+      // Void the unpaid remainder by closing the enrollment's invoices.
+      if (invoiceIds.length) {
+        await tx
+          .update(invoices)
+          .set({ status: "cancelled", updatedBy: actorUserId, updatedAt: new Date() })
+          .where(and(eq(invoices.tenantId, tenantId), inArray(invoices.id, invoiceIds)));
+      }
+
+      // Stop future recurring services for the student.
+      const today = new Date().toISOString().slice(0, 10);
+      await tx
+        .update(studentServices)
+        .set({ effectiveTo: today, updatedBy: actorUserId, updatedAt: new Date() })
+        .where(
+          and(
+            eq(studentServices.tenantId, tenantId),
+            eq(studentServices.studentId, enr.studentId),
+            isNull(studentServices.effectiveTo)
+          )
+        );
+
+      // Remove the student from the classroom roster this enrollment placed
+      // them in.
+      if (enr.classroomId) {
+        await tx
+          .update(classroomStudents)
+          .set({
+            effectiveTo: today,
+            movementReason: "enrollment_cancelled",
+            updatedBy: actorUserId,
+            updatedAt: new Date()
+          })
+          .where(
+            and(
+              eq(classroomStudents.tenantId, tenantId),
+              eq(classroomStudents.studentId, enr.studentId),
+              eq(classroomStudents.classroomId, enr.classroomId),
+              isNull(classroomStudents.effectiveTo)
+            )
+          );
+      }
+
+      await tx
+        .update(enrollments)
+        .set({
+          cancelledAt: new Date(),
+          cancellationReason: reason,
+          refundMode: dto.refundMode,
+          updatedBy: actorUserId,
+          updatedAt: new Date()
+        })
+        .where(eq(enrollments.id, enrollmentId));
+
+      // Revert the student to draft when no other active enrollment remains.
+      const [otherActive] = await tx
+        .select({ id: enrollments.id })
+        .from(enrollments)
+        .where(
+          and(
+            eq(enrollments.tenantId, tenantId),
+            eq(enrollments.studentId, enr.studentId),
+            ne(enrollments.id, enrollmentId),
+            isNull(enrollments.cancelledAt),
+            inArray(enrollments.status, ["approved", "published"])
+          )
+        )
+        .limit(1);
+      if (!otherActive) {
+        await tx
+          .update(students)
+          .set({ status: "draft", updatedBy: actorUserId, updatedAt: new Date() })
+          .where(and(eq(students.tenantId, tenantId), eq(students.id, enr.studentId)));
+      }
+
+      return {
+        studentId: enr.studentId,
+        refunded: refundTarget,
+        forfeited: netCash - refundTarget,
+        voidedInvoices: invoiceIds.length,
+        refundIds
+      };
+    });
+
+    await this.auditService.recordEvent(
+      this.auditService.createEvent({
+        tenantId,
+        actorUserId,
+        action: "enrollment.cancel",
+        recordType: "enrollment",
+        recordId: enrollmentId,
+        reason,
+        after: {
+          refundMode: dto.refundMode,
+          refunded: result.refunded,
+          forfeited: result.forfeited,
+          voidedInvoices: result.voidedInvoices
+        }
+      })
+    );
+
+    return {
+      enrollmentId,
+      refundMode: dto.refundMode,
+      refunded: result.refunded,
+      forfeited: result.forfeited,
+      voidedInvoices: result.voidedInvoices
+    };
   }
 }
