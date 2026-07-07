@@ -1582,6 +1582,10 @@ h3,
   border-color: var(--pds-brand-dark);
 }.dash-content {
   padding: 0;
+}.finance-year-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--pds-gap-large);
 }.page-stack {
   align-content: start;
   display: grid;

@@ -19,7 +19,7 @@ import { zodResolver } from "../../../lib/zod-resolver";
 import { PageHeader } from "../../page-header-context";
 import { hasAnyPermission } from "../../../lib/permissions";
 import { getSession } from "../../../lib/session";
-import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
+import { useFinanceYear } from "../finance-year-context";
 import { CheckBox } from "../../../../components/pds";
 import { Button } from "../../../../components/ui/button";
 import { ConfirmDialog } from "../../../../components/shared/confirm-dialog";
@@ -91,8 +91,9 @@ export default function FeeStructuresPage() {
   const c = useTranslations("common");
   const permissions = getSession()?.permissions;
   const canManage = hasAnyPermission(permissions, ["finance.manage"]);
-  const currentYear = useCurrentAcademicYear();
-  const workingYearId = currentYear.data?.id ?? "";
+  // Fee structures are configured per year; Lifetime falls back to the active year.
+  const financeYear = useFinanceYear();
+  const workingYearId = financeYear.academicYearId || financeYear.activeYearId;
 
   const [selectedFeeItemId, setSelectedFeeItemId] = useState<string | null>(null);
   const [draft, setDraft] = useState<GradeDraft>({});

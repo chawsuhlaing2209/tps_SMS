@@ -1121,6 +1121,9 @@
   "finance": {
     "title": "ကြေးနှင့် ငွေတောင်းခံလွှာ",
     "description": "Enrollments၊ ငွေတောင်းခံလွှာများ၊ ငွေပေးချေမှုများ နှင့် collection reports။",
+    "yearFilterLabel": "ပညာသင်နှစ်ဖြင့် စစ်ထုတ်ရန်",
+    "yearFilterLifetime": "နှစ်အားလုံး",
+    "yearFilterActive": "{name} · လက်ရှိ",
     "feesBilling": {
       "collected": "ကောက်ခံပြီး",
       "outstanding": "ကျန်ရှိငွေ",
