@@ -1121,6 +1121,9 @@
   "finance": {
     "title": "Fees & Billing",
     "description": "Enrollments, invoices, payments, and collection reports.",
+    "yearFilterLabel": "Filter by academic year",
+    "yearFilterLifetime": "Lifetime",
+    "yearFilterActive": "{name} · Active",
     "feesBilling": {
       "collected": "Collected",
       "outstanding": "Outstanding",

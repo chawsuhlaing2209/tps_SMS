@@ -26,7 +26,7 @@ import { isPadaukRowInteractiveTarget } from "../../../lib/table-row-interaction
 import { Icon } from "../../../lib/material-icon";
 import { hasAnyPermission } from "../../../lib/permissions";
 import { getSession } from "../../../lib/session";
-import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
+import { useFinanceYear } from "../finance-year-context";
 import { PageHeader } from "../../page-header-context";
 import { DiscountSetupModal } from "./discount-setup-workspace";
 import { type DiscountRuleRecord } from "./discount-form";
@@ -150,8 +150,9 @@ export function DiscountsWorkspace() {
     }
   }, [searchParams, openCreate, openEdit, router]);
 
-  const currentYear = useCurrentAcademicYear();
-  const academicYearId = currentYear.data?.id ?? "";
+  // Discount metrics are per-year; Lifetime falls back to the active year.
+  const financeYear = useFinanceYear();
+  const academicYearId = financeYear.academicYearId || financeYear.activeYearId;
 
   const rules = useApiQuery<DiscountRuleRecord[]>(canView ? RULES_PATH : () => null);
   const metrics = useApiQuery<DiscountMetrics>((tenant) =>

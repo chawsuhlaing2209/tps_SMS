@@ -12,7 +12,7 @@ import { DirectoryMemberCell } from "../../../../lib/data-table";
 import { Icon } from "../../../../lib/material-icon";
 import { PadaukTableWrap } from "../../../../lib/padauk-table-wrap";
 import { PaginationControls } from "../../../../lib/pagination-controls";
-import { useCurrentAcademicYear } from "../../../../lib/use-current-academic-year";
+import { useFinanceYear } from "../../finance-year-context";
 import { Badge, type BadgeTone } from "../../../../../components/shared/badge";
 import { PdsSearchBar, PdsSearchFiltersRow, PdsSelectField } from "../../../../../components/pds";
 import { FinanceTableShell } from "../../finance-table-shell";
@@ -150,8 +150,9 @@ function CollectionRosterExportPortal({
 export function CollectionRosterPanel() {
   const tFees = useTranslations("finance.feesBilling");
 
-  const currentYear = useCurrentAcademicYear();
-  const academicYearId = currentYear.data?.id ?? "";
+  // The collection roster is inherently per-year; Lifetime falls back to the active year.
+  const financeYear = useFinanceYear();
+  const academicYearId = financeYear.academicYearId || financeYear.activeYearId;
 
   const [gradeId, setGradeId] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
@@ -212,7 +213,7 @@ export function CollectionRosterPanel() {
         sortKey={sortKey}
         sortDir={sortDir}
         issueDateRange={issueDateRange}
-        loading={currentYear.isLoading || roster.isLoading}
+        loading={financeYear.yearsLoading || roster.isLoading}
       />
       <p className="pds-type-body-s-regular muted panel-help">{tFees("collectionViewHelp")}</p>
 
@@ -322,7 +323,7 @@ export function CollectionRosterPanel() {
       />
 
       <FinanceTableShell
-        loading={currentYear.isLoading || roster.isLoading}
+        loading={financeYear.yearsLoading || roster.isLoading}
         error={roster.isError}
         empty={!rows.length}
         emptyMessage={tFees("empty")}

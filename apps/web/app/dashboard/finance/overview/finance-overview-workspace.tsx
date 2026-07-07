@@ -11,7 +11,7 @@ import { useMemo, useState } from "react";
 import { useApiQuery } from "../../../lib/api";
 import { Icon } from "../../../lib/material-icon";
 import { moduleBreadcrumbs } from "../../../lib/page-header-utils";
-import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
+import { useFinanceYear } from "../finance-year-context";
 import { PageHeader } from "../../page-header-context";
 import styles from "./finance-overview.module.css";
 
@@ -106,21 +106,24 @@ export function FinanceOverviewWorkspace() {
   const nav = useTranslations("nav");
   const c = useTranslations("common");
 
-  const currentYear = useCurrentAcademicYear();
+  const { academicYearId, isLifetime, yearsLoading } = useFinanceYear();
   const [scope, setScope] = useState<OverviewScope>("month");
   const month = new Date().toISOString().slice(0, 7);
-  const academicYearId = currentYear.data?.id ?? "";
 
   const overviewQuery = useMemo(() => {
     const params = new URLSearchParams();
-    if (academicYearId) params.set("academicYearId", academicYearId);
+    if (isLifetime) {
+      params.set("yearMode", "lifetime");
+    } else if (academicYearId) {
+      params.set("academicYearId", academicYearId);
+    }
     params.set("month", month);
     params.set("scope", scope);
     return `?${params.toString()}`;
-  }, [academicYearId, month, scope]);
+  }, [academicYearId, isLifetime, month, scope]);
 
   const overview = useApiQuery<FinanceOverview>((tenant) =>
-    academicYearId
+    academicYearId || isLifetime
       ? `/tenants/${tenant}/finance/reports/overview${overviewQuery}`
       : null,
   );
@@ -224,7 +227,7 @@ export function FinanceOverviewWorkspace() {
         </p>
       ) : null}
 
-      {overview.isLoading || currentYear.isLoading ? (
+      {overview.isLoading || yearsLoading ? (
         <p className="pds-type-body-s-regular muted">{c("loading")}</p>
       ) : overview.isError ? (
         <p className="pds-type-body-m-medium error-text">{c("somethingWrong")}</p>

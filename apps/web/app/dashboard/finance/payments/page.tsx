@@ -17,7 +17,7 @@ import { Icon } from "../../../lib/material-icon";
 import { PadaukTableWrap } from "../../../lib/padauk-table-wrap";
 import { PaginationControls } from "../../../lib/pagination-controls";
 import { RecordFormSheet } from "../../../lib/record-sheet";
-import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
+import { useFinanceYear } from "../finance-year-context";
 import { PageHeader } from "../../page-header-context";
 import { FinanceTableShell } from "../finance-table-shell";
 import { formatBillingMonth, formatCreatedAt } from "../format-finance";
@@ -94,12 +94,14 @@ function defaultPaidAtLocal() {
 
 function PaymentsExportPortal({
   academicYearId,
+  isLifetime = false,
   method,
   searchDebounced,
   loading,
   methodLabel
 }: {
   academicYearId: string;
+  isLifetime?: boolean;
   method: MethodFilter;
   searchDebounced: string;
   loading: boolean;
@@ -116,7 +118,7 @@ function PaymentsExportPortal({
 
   return createPortal(
     <ExportCsvButton
-      disabled={loading || !academicYearId}
+      disabled={loading || (!academicYearId && !isLifetime)}
       onExport={async () => {
         const tenantId = getSession()?.tenantId;
         if (!tenantId) {
@@ -173,8 +175,7 @@ export default function PaymentsPage() {
   const c = useTranslations("common");
   const router = useRouter();
 
-  const currentYear = useCurrentAcademicYear();
-  const academicYearId = currentYear.data?.id ?? "";
+  const { academicYearId, isLifetime, yearsLoading } = useFinanceYear();
 
   const [method, setMethod] = useState<MethodFilter>("");
   const [search, setSearch] = useState("");
@@ -212,11 +213,13 @@ export default function PaymentsPage() {
   }, [academicYearId, method, page, searchDebounced]);
 
   const metrics = useLiveApiQuery<PaymentMetrics>((tenant) =>
-    academicYearId ? `/tenants/${tenant}/finance/payments/metrics${metricsQuery}` : null
+    academicYearId || isLifetime
+      ? `/tenants/${tenant}/finance/payments/metrics${metricsQuery}`
+      : null
   );
 
   const payments = useLiveApiQuery<PaymentList>((tenant) =>
-    academicYearId ? `/tenants/${tenant}/finance/payments${listQuery}` : null
+    academicYearId || isLifetime ? `/tenants/${tenant}/finance/payments${listQuery}` : null
   );
 
   const refund = useApiMutation<
@@ -295,9 +298,10 @@ export default function PaymentsPage() {
       <PageHeader title={t("title")} breadcrumbs={[{ label: nav("financeCrumb") }]} actionsPortal />
       <PaymentsExportPortal
         academicYearId={academicYearId}
+        isLifetime={isLifetime}
         method={method}
         searchDebounced={searchDebounced}
-        loading={payments.isLoading || currentYear.isLoading}
+        loading={payments.isLoading || yearsLoading}
         methodLabel={(value) => tPay(`paymentMethods.${value}` as "paymentMethods.cash")}
       />
 
@@ -385,7 +389,7 @@ export default function PaymentsPage() {
       />
 
       <FinanceTableShell
-        loading={payments.isLoading || currentYear.isLoading}
+        loading={payments.isLoading || yearsLoading}
         error={payments.isError}
         empty={!rows.length}
         emptyMessage={t("empty")}

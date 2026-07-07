@@ -13,7 +13,7 @@ import { DirectoryMemberCell } from "../../../../lib/data-table";
 import { Icon } from "../../../../lib/material-icon";
 import { PadaukTableWrap } from "../../../../lib/padauk-table-wrap";
 import { PaginationControls } from "../../../../lib/pagination-controls";
-import { useCurrentAcademicYear } from "../../../../lib/use-current-academic-year";
+import { useFinanceYear } from "../../finance-year-context";
 import { Badge, type BadgeTone } from "../../../../../components/shared/badge";
 import { FinanceTableShell } from "../../finance-table-shell";
 import { appendIssueDateRangeParams, formatBillingMonth, formatCreatedAt } from "../../format-finance";
@@ -102,6 +102,7 @@ function buildExportQuery(input: {
 
 export function InvoicesListExportPortal({
   academicYearId,
+  isLifetime = false,
   status,
   source,
   searchDebounced,
@@ -110,6 +111,7 @@ export function InvoicesListExportPortal({
   loading
 }: {
   academicYearId: string;
+  isLifetime?: boolean;
   status: StatusFilter;
   source: SourceFilter;
   searchDebounced: string;
@@ -129,7 +131,7 @@ export function InvoicesListExportPortal({
 
   return createPortal(
     <ExportCsvButton
-      disabled={loading || !academicYearId}
+      disabled={loading || (!academicYearId && !isLifetime)}
       onExport={async () => {
         const tenantId = getSession()?.tenantId;
         if (!tenantId) {
@@ -189,8 +191,7 @@ export function InvoicesListPanel() {
   const tFees = useTranslations("finance.feesBilling");
   const tFinance = useTranslations("finance");
 
-  const currentYear = useCurrentAcademicYear();
-  const academicYearId = currentYear.data?.id ?? "";
+  const { academicYearId, isLifetime, yearsLoading } = useFinanceYear();
 
   const [status, setStatus] = useState<StatusFilter>("all");
   const [source, setSource] = useState<SourceFilter>("all");
@@ -228,7 +229,7 @@ export function InvoicesListPanel() {
   }, [academicYearId, issueDateRange, page, searchDebounced, sortDir, sortKey, source, status]);
 
   const invoices = useApiQuery<InvoiceList>((tenant) =>
-    academicYearId ? `/tenants/${tenant}/finance/invoices${listQuery}` : null
+    academicYearId || isLifetime ? `/tenants/${tenant}/finance/invoices${listQuery}` : null
   );
 
   const rows = invoices.data?.data ?? [];
@@ -255,12 +256,13 @@ export function InvoicesListPanel() {
     <>
       <InvoicesListExportPortal
         academicYearId={academicYearId}
+        isLifetime={isLifetime}
         status={status}
         source={source}
         searchDebounced={searchDebounced}
         sortKey={sortKey}
         sortDir={sortDir}
-        loading={currentYear.isLoading || invoices.isLoading}
+        loading={yearsLoading || invoices.isLoading}
       />
       <p className="pds-type-body-s-regular muted panel-help">{tFees("invoicesViewHelp")}</p>
 
@@ -316,7 +318,7 @@ export function InvoicesListPanel() {
       />
 
       <FinanceTableShell
-        loading={currentYear.isLoading || invoices.isLoading}
+        loading={yearsLoading || invoices.isLoading}
         error={invoices.isError}
         empty={!rows.length}
         emptyMessage={t("empty")}
