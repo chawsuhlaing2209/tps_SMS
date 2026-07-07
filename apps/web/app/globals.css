@@ -551,7 +551,7 @@ h3,
 }
 
 .dash-nav-parent--active {
-  margin-inline: var(--pds--x-small);
+  margin-inline: var(--pds-gap-x-small);
   width: calc(100% - 2 * var(--pds-gap-x-small));
 }
 
@@ -639,11 +639,11 @@ h3,
 
 .dash-nav-sublink {
   align-items: center;
-  border-radius: var(--pds-radius-10);
+  border-radius: var(--pds-radius-8);
   color: var(--pds-muted-on-dark);
   column-gap: var(--pds-gap-small);
   display: flex;
-  font-size: var(--pds-font-size-body-s);
+  font-size: var(--pds-type-body-s-regular-font-size);
   font-weight: 500;
   min-width: 0;
   overflow: hidden;
@@ -700,7 +700,7 @@ h3,
   border-radius: var(--pds-radius-8);
   box-shadow: 0 var(--pds-gap-x-small) var(--pds-gap-medium) var(--pds-color-spring-green-1000a50);
   color: var(--pds-background-card);
-  font-size: var(--pds-font-size-body-s);
+  font-size: var(--pds-type-body-s-regular-font-size);
   font-weight: 600;
   line-height: 1.3;
   max-width: 240px;
@@ -752,7 +752,7 @@ h3,
   color: var(--pds-text-secondary);
   cursor: pointer;
   display: flex;
-  font-size: var(--pds-font-size-body-s);
+  font-size: var(--pds-type-body-s-regular-font-size);
   font-weight: 500;
   gap: var(--pds-gap-small);
   outline: none;
@@ -3690,7 +3690,7 @@ button.btn-hero-outline:hover {
 .pds-attendance-toggle--present {
   background: var(--pds-notification-background-success-hover);
   border-color: var(--pds-status-success-lower);
-  color: var(--pds-notification-text-success);
+  color: var(--pds-notification-foreground-success);
 }
 
 .pds-attendance-toggle--late {
@@ -4525,11 +4525,11 @@ button.btn-hero-outline:hover {
 .people-billing__row {
   align-items: center;
   border: 1px solid var(--pds-border-color-primary);
-  border-radius: var(--pds-border-radius-12, 12px);
+  border-radius: var(--pds-radius-12);
   display: flex;
   gap: var(--pds-gap-medium);
   justify-content: space-between;
-  padding: var(--pds-padding-medium, 16px);
+  padding: var(--pds-padding-medium);
 }
 
 .people-billing__main {
@@ -5003,7 +5003,7 @@ button.btn-hero-outline:hover {
   gap: var(--pds-gap-small);
 }.student-family-panel__card-phone {
   color: var(--pds-text-primary);
-  font-size: var(--pds-size-x-small);
+  font-size: var(--pds-type-body-s-regular-font-size);
   white-space: nowrap;
 }.student-family-panel__contact-btn {
   align-items: center;
@@ -5025,7 +5025,7 @@ button.btn-hero-outline:hover {
   background: var(--pds-notification-background-info);
   color: var(--pds-notification-foreground-info);
   flex-shrink: 0;
-  font-size: var(--pds-size-x-small);
+  font-size: var(--pds-type-body-s-regular-font-size);
   padding: var(--pds-gap-xx-small) var(--pds-gap-medium);
 }.student-family-panel__tree-link {
   align-items: center;
@@ -5397,9 +5397,9 @@ button.btn-hero-outline:hover {
   opacity: 0.8;
 }.archived-record-banner {
   align-items: center;
-  background: var(--pds-background-subtle);
+  background: var(--pds-background-secondary);
   border: 1px solid var(--pds-border-color-primary);
-  border-radius: var(--pds-radius-medium);
+  border-radius: var(--pds-radius-12);
   display: flex;
   flex-wrap: wrap;
   gap: var(--pds-gap-small);
@@ -6428,7 +6428,7 @@ button.btn-hero-outline:hover {
 
 .input-wrapper__required {
   color: var(--pds-status-error);
-  font-size: var(--pds-type-body-m-medium-size, 0.875rem);
+  font-size: var(--pds-type-body-m-medium-font-size);
   line-height: 1;
 }
 
@@ -6464,8 +6464,8 @@ button.btn-hero-outline:hover {
 }
 
 .input-wrapper__link a {
-  color: var(--pds-foreground-link, var(--pds-color-spring-green-600));
-  font-size: var(--pds-type-body-m-medium-size, 0.875rem);
+  color: var(--pds-foreground-link);
+  font-size: var(--pds-type-body-m-medium-font-size);
   font-weight: 500;
   text-decoration: underline;
 }
@@ -8479,9 +8479,9 @@ button.btn-hero-outline:hover {
 /* Read-only payment summary shown inside the Verify payment modal so the
    operator can match amount / method / reference against the bank or wallet. */
 .verify-summary {
-  background: var(--pds-background-subtle, var(--pds-background-card));
+  background: var(--pds-background-secondary);
   border: 1px solid var(--pds-border-color-primary);
-  border-radius: var(--pds-border-radius-12, 12px);
+  border-radius: var(--pds-radius-12);
   display: flex;
   flex-direction: column;
   gap: var(--pds-gap-small);
@@ -9028,7 +9028,7 @@ button.btn-hero-outline:hover {
 .pds-options__empty {
   color: var(--pds-text-secondary);
   margin: 0;
-  padding: var(--pds-space-12) var(--pds-space-16);
+  padding: var(--pds-padding-small) var(--pds-padding-medium);
 }.pds-options__footer {
   align-items: center;
   background: var(--pds-background-canvas);
@@ -10111,7 +10111,7 @@ button.btn-hero-outline:hover {
 .record-sheet__content {
   background: var(--pds-background-card);
   border-left: 1px solid var(--pds-border-color-primary);
-  box-shadow: var(--pds-shadow-lg, 0 8px 32px rgba(15, 47, 31, 0.12));
+  box-shadow: 0 8px 32px color-mix(in srgb, var(--pds-color-spring-green-950) 12%, transparent);
 }
 
 .record-sheet__close {
