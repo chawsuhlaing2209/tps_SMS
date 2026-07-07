@@ -11,7 +11,6 @@ import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { DataTable, DirectoryMemberCell } from "../../../lib/data-table";
 import { Icon } from "../../../lib/material-icon";
 import { hasAnyPermission } from "../../../lib/permissions";
-import { moduleBreadcrumbs } from "../../../lib/page-header-utils";
 import { getSession } from "../../../lib/session";
 import { useTenantFormats } from "../../../lib/use-tenant-formats";
 import { DataTableSection, TablePanelBody } from "../../../lib/table-panel";
@@ -54,7 +53,6 @@ const runsPath = (tenant: string, month: string) =>
 
 export default function RunPayrollPage() {
   const t = useTranslations("salary");
-  const nav = useTranslations("nav");
   const c = useTranslations("common");
   const { formatMoney } = useTenantFormats();
   const permissions = getSession()?.permissions;
@@ -234,34 +232,19 @@ export default function RunPayrollPage() {
   return (
     <div className="directory-page">
       <ModulePageHeader
-        navKey="salary"
+        navKey="runPayroll"
         title={t("runPayroll")}
         description={t("runPayrollDescription")}
-        breadcrumbs={moduleBreadcrumbs("salary", nav, [{ label: t("runPayroll") }])}
         actions={
-          <>
-            <button
-              type="button"
-              className="pds-type-body-m-bold btn-ghost"
-              onClick={() => {
-                void runs.refetch();
-                void summary.refetch();
-                void records.refetch();
-              }}
-            >
-              <Icon name="refresh" />
-              {c("refresh")}
-            </button>
-            <button
-              type="button"
-              className="pds-type-body-m-bold btn-primary"
-              disabled={generating}
-              onClick={() => void handleGenerate()}
-            >
-              <Icon name="bolt" />
-              {generating ? c("loading") : t("generatePayroll")}
-            </button>
-          </>
+          <button
+            type="button"
+            className="pds-type-body-m-bold btn-primary"
+            disabled={generating}
+            onClick={() => void handleGenerate()}
+          >
+            <Icon name="bolt" />
+            {generating ? c("loading") : t("generatePayroll")}
+          </button>
         }
       />
 

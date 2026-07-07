@@ -431,7 +431,7 @@ export default function GradesClassroomsPage() {
       <PageHeader
         title={setup("gradesClassrooms")}
         breadcrumbs={[
-          { label: nav("academicSetup") },
+          { label: nav("group_academics") },
           { label: setup("gradesClassrooms") }
         ]}
       />

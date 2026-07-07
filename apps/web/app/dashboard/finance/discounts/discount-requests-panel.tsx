@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { FormTextarea } from "../../../../components/shared/form-input";
 import { TrailLink } from "../../../../components/shared/trail-link";
 import { useMemo, useState } from "react";
 import { useApiMutation, useApiQuery } from "../../../lib/api";
@@ -270,7 +271,7 @@ export function DiscountRequestsPanel() {
             {approveTarget.studentName} · {approveTarget.ruleName}
           </p>
           <Field label={t("approveNotes")}>
-            <textarea
+            <FormTextarea
               rows={3}
               value={approveNotes}
               placeholder={t("approveNotesPlaceholder")}
@@ -314,7 +315,7 @@ export function DiscountRequestsPanel() {
             {rejectTarget.studentName} · {rejectTarget.ruleName}
           </p>
           <Field label={t("rejectReason")}>
-            <textarea
+            <FormTextarea
               rows={3}
               value={rejectReason}
               placeholder={t("rejectReasonPlaceholder")}

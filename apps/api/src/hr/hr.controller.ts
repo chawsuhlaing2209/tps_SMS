@@ -90,6 +90,12 @@ export class HrController {
     return this.hrService.getTeacherProfile(tenantId, staffId);
   }
 
+  @Get("staff/:staffId/profile")
+  @RequireAnyPermissions("hr.manage", "identity.manage")
+  getStaffProfile(@Param("tenantId") tenantId: string, @Param("staffId") staffId: string) {
+    return this.hrService.getStaffProfile(tenantId, staffId);
+  }
+
   @Get("staff/:staffId")
   @RequireAnyPermissions("hr.manage", "classroom.manage")
   getStaff(@Param("tenantId") tenantId: string, @Param("staffId") staffId: string) {

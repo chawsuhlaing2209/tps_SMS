@@ -23,7 +23,8 @@ import {
   studentGuardians,
   studentServices,
   students,
-  subjects
+  subjects,
+  tenantSettings
 } from "../db/schema.js";
 import type {
   CreateGuardianDto,
@@ -296,29 +297,128 @@ export class StudentsService {
     return student;
   }
 
+  /**
+   * Resolves the school prefix for generated admission numbers: the prefix of
+   * the tenant's most recent formatted number (e.g. "YIA-26-012" → "YIA"),
+   * else the school-name initials from tenant settings, else "STU".
+   */
+  private async resolveAdmissionPrefix(
+    tx: Pick<Database, "select">,
+    tenantId: string
+  ): Promise<string> {
+    const [latest] = await tx
+      .select({ admissionNumber: students.admissionNumber })
+      .from(students)
+      .where(
+        and(
+          eq(students.tenantId, tenantId),
+          sql`${students.admissionNumber} ~ '^[A-Z]{2,6}-[0-9]{2}-[0-9]+$'`
+        )
+      )
+      .orderBy(desc(students.createdAt))
+      .limit(1);
+
+    if (latest) {
+      return latest.admissionNumber.split("-")[0]!;
+    }
+
+    const [settings] = await tx
+      .select({ schoolName: tenantSettings.schoolName })
+      .from(tenantSettings)
+      .where(eq(tenantSettings.tenantId, tenantId));
+
+    const initials = (settings?.schoolName ?? "")
+      .split(/\s+/)
+      .map((word) => word.replace(/[^A-Za-z]/g, ""))
+      .filter(Boolean)
+      .map((word) => word[0]!.toUpperCase())
+      .join("")
+      .slice(0, 6);
+
+    return initials.length >= 2 ? initials : "STU";
+  }
+
+  /**
+   * Generates the next sequential admission number, e.g. "YIA-26-013"
+   * (school prefix, 2-digit year, zero-padded sequence). Must run inside the
+   * same transaction as the student insert: the per-tenant advisory lock is
+   * held until commit, so concurrent enrollments cannot pick the same number.
+   */
+  private async nextAdmissionNumber(
+    tx: Pick<Database, "select" | "execute">,
+    tenantId: string
+  ): Promise<string> {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${`${tenantId}:admission_number`}, 0))`
+    );
+
+    const prefix = await this.resolveAdmissionPrefix(tx, tenantId);
+    const year = String(new Date().getFullYear() % 100).padStart(2, "0");
+    const stem = `${prefix}-${year}-`;
+
+    const [row] = await tx
+      .select({
+        maxSequence: sql<number>`coalesce(max((substring(${students.admissionNumber} from '[0-9]+$'))::int), 0)`
+      })
+      .from(students)
+      .where(
+        and(
+          eq(students.tenantId, tenantId),
+          sql`${students.admissionNumber} ~ ${`^${stem}[0-9]+$`}`
+        )
+      );
+
+    const next = Number(row?.maxSequence ?? 0) + 1;
+    return `${stem}${String(next).padStart(3, "0")}`;
+  }
+
+  private isAdmissionNumberConflict(error: unknown): boolean {
+    const cause = error instanceof Error && error.cause !== undefined ? error.cause : error;
+    return (
+      typeof cause === "object" &&
+      cause !== null &&
+      (cause as { code?: string }).code === "23505" &&
+      (cause as { constraint?: string }).constraint === "students_tenant_admission_unique"
+    );
+  }
+
   async create(tenantId: string, actorUserId: string | undefined, dto: CreateStudentDto) {
     if (dto.guardian || dto.household) {
       return this.registerStudent(tenantId, actorUserId, dto);
     }
 
-    const admissionNumber = dto.admissionNumber ?? `A-${Date.now()}`;
     const fullName = `${dto.firstName} ${dto.lastName}`;
 
-    const [student] = await this.db
-      .insert(students)
-      .values({
-        tenantId,
-        fullName,
-        dateOfBirth: dto.dateOfBirth,
-        gender: dto.gender,
-        admissionNumber,
-        photoFileId: dto.photoFileId,
-        address: dto.address,
-        medicalNotes: dto.medicalNotes,
-        createdBy: actorUserId,
-        updatedBy: actorUserId
-      })
-      .returning();
+    let student;
+    try {
+      student = await this.db.transaction(async (tx) => {
+        const admissionNumber =
+          dto.admissionNumber ?? (await this.nextAdmissionNumber(tx, tenantId));
+
+        const [created] = await tx
+          .insert(students)
+          .values({
+            tenantId,
+            fullName,
+            dateOfBirth: dto.dateOfBirth,
+            gender: dto.gender,
+            admissionNumber,
+            photoFileId: dto.photoFileId,
+            address: dto.address,
+            medicalNotes: dto.medicalNotes,
+            createdBy: actorUserId,
+            updatedBy: actorUserId
+          })
+          .returning();
+
+        return created!;
+      });
+    } catch (error) {
+      if (this.isAdmissionNumberConflict(error)) {
+        throw new ConflictException("Admission number is already in use.");
+      }
+      throw error;
+    }
 
     await this.auditService.recordEvent({
       tenantId,
@@ -356,10 +456,12 @@ export class StudentsService {
       throw new BadRequestException("Link a guardian before assigning a household.");
     }
 
-    const admissionNumber = dto.admissionNumber ?? `A-${Date.now()}`;
     const fullName = `${dto.firstName} ${dto.lastName}`;
 
     return this.db.transaction(async (tx) => {
+      const admissionNumber =
+        dto.admissionNumber ?? (await this.nextAdmissionNumber(tx, tenantId));
+
       const [student] = await tx
         .insert(students)
         .values({
@@ -500,6 +602,11 @@ export class StudentsService {
         guardianId,
         familyGroupId
       };
+    }).catch((error) => {
+      if (this.isAdmissionNumberConflict(error)) {
+        throw new ConflictException("Admission number is already in use.");
+      }
+      throw error;
     });
   }
 
@@ -585,7 +692,13 @@ export class StudentsService {
         updatedAt: new Date()
       })
       .where(and(eq(students.tenantId, tenantId), eq(students.id, studentId)))
-      .returning();
+      .returning()
+      .catch((error) => {
+        if (this.isAdmissionNumberConflict(error)) {
+          throw new ConflictException("Admission number is already in use.");
+        }
+        throw error;
+      });
 
     await this.auditService.recordEvent({
       tenantId,

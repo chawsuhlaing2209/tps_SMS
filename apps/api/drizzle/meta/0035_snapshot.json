@@ -1,5 +1,5 @@
 {
-  "id": "6c604a23-4edb-40d3-be84-c3a8d19f90d2",
+  "id": "4c39c092-572b-4b68-a5f9-ba1c85e42366",
   "prevId": "73b5e20d-2b3c-429c-ba72-0904e90a4269",
   "version": "7",
   "dialect": "postgresql",
@@ -8420,7 +8420,29 @@
           "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "students_tenant_admission_unique": {
+          "name": "students_tenant_admission_unique",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "admission_number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "students_family_group_id_family_groups_id_fk": {
           "name": "students_family_group_id_family_groups_id_fk",
@@ -8895,45 +8917,9 @@
           "primaryKey": false,
           "notNull": true
         },
-        "school_type": {
-          "name": "school_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "motto": {
-          "name": "motto",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "principal_name": {
-          "name": "principal_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "registration_number": {
-          "name": "registration_number",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "established_year": {
-          "name": "established_year",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
         "logo_file_id": {
           "name": "logo_file_id",
           "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "logo_mime_type": {
-          "name": "logo_mime_type",
-          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -8954,20 +8940,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "date_format": {
-          "name": "date_format",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'DD/MM/YYYY'"
-        },
-        "time_format": {
-          "name": "time_format",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'12h'"
         },
         "registration_details": {
           "name": "registration_details",

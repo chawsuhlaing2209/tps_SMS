@@ -19,7 +19,7 @@ export default function EnrollmentsPage() {
       <PageHeader
         title={t("title")}
         description={t("description")}
-        breadcrumbs={[{ label: nav("group_business") }, { label: nav("enrollments") }]}
+        breadcrumbs={[{ label: nav("group_enrollment") }, { label: nav("enrollments") }]}
         actionsPortal
       />
       <EnrollmentsWorkspace />

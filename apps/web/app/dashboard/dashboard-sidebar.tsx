@@ -34,6 +34,7 @@ import {
 } from "../lib/permissions";
 import { SidebarUserCard } from "./sidebar-user-card";
 import { useNavPrefetch } from "../lib/use-nav-prefetch";
+import { useSchoolBrand } from "../lib/use-school-brand";
 
 const SIDEBAR_COLLAPSED_KEY = "pds-sidebar-collapsed";
 
@@ -64,7 +65,7 @@ function withCollapsedTooltip(
 }
 
 type SubmoduleTranslators = Record<
-  "finance" | "academicSetup" | "settings" | "exams" | "salary" | "leaves",
+  "nav" | "finance" | "academicSetup" | "settings" | "exams" | "salary" | "leaves",
   ReturnType<typeof useTranslations>
 >;
 
@@ -152,6 +153,7 @@ function SidebarContent({
 
   const translators = useMemo<SubmoduleTranslators>(
     () => ({
+      nav: t,
       finance: tFinance,
       academicSetup: tAcademicSetup,
       settings: tSettings,
@@ -159,13 +161,16 @@ function SidebarContent({
       salary: tSalary,
       leaves: tLeaves
     }),
-    [tFinance, tAcademicSetup, tSettings, tExams, tSalary, tLeaves]
+    [t, tFinance, tAcademicSetup, tSettings, tExams, tSalary, tLeaves]
   );
 
   const navGroups = useMemo(
     () => visibleDashboardNavGroups(permissions),
     [permissions]
   );
+
+  const brand = useSchoolBrand();
+  const brandName = brand.data?.schoolName?.trim() || tenantSlug;
   const prefetchNav = useNavPrefetch();
 
   const navPrefetchHandlers = useCallback(
@@ -429,10 +434,17 @@ function SidebarContent({
     <>
       <div className="dash-brand">
         <span className="dash-brand-mark" aria-hidden>
-          <span className="dash-brand-mark__dot" />
+          {brand.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img className="dash-brand-mark__img" src={brand.logoUrl} alt="" />
+          ) : (
+            <span className="dash-brand-mark__dot" />
+          )}
         </span>
         <span className="dash-brand-text">
-          <span className="pds-type-title-l-extrabold dash-brand-name">{tenantSlug}</span>
+          <span className="pds-type-title-l-extrabold dash-brand-name" title={brandName}>
+            {brandName}
+          </span>
           <span className="pds-type-label-s-medium dash-brand-sub">{t("brandTagline")}</span>
         </span>
         {headerAction}

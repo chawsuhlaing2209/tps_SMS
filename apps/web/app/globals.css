@@ -798,6 +798,11 @@ h3,
   border-radius: 50% 50% 50% var(--pds-gap-x-small);
   height: var(--pds-padding-small);
   width: var(--pds-padding-small);
+}.dash-brand-mark__img {
+  border-radius: inherit;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
 }.dash-brand-text {
   display: flex;
   flex-direction: column;
@@ -1891,6 +1896,17 @@ h3,
   white-space: nowrap;
 }.padauk-table__muted {
   color: var(--pds-muted);
+}.leaves-staff-sub {
+  display: block;
+  margin-top: var(--pds-gap-xx-small);
+}.leaves-override-dot {
+  background: var(--pds-primary);
+  border-radius: 50%;
+  display: inline-block;
+  height: var(--pds-gap-x-small);
+  margin-inline-start: var(--pds-gap-x-small);
+  vertical-align: middle;
+  width: var(--pds-gap-x-small);
 }.padauk-table__stack {
   display: grid;
   gap: var(--pds-gap-xx-small);
@@ -6547,15 +6563,24 @@ button.btn-hero-outline:hover {
   white-space: nowrap;
 }
 
-/* Text area input — Figma 124:8799 */
+/* Text area input — Figma 124:8799; surface/border match TextInput (.form-field input). */
 .text-area-input {
   align-items: stretch;
-  background: var(--pds-background-primary, #fff);
-  border: 0.5px solid var(--pds-border-color-primary);
+  background: var(--pds-input-background-default);
+  border: var(--pds-button-border) solid var(--pds-input-border-default);
   border-radius: var(--pds-border-radius-8);
   display: flex;
   overflow: hidden;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
   width: 100%;
+}
+
+.text-area-input:hover:not(.text-area-input--disabled) {
+  background: var(--pds-input-background-hover);
+  border-color: var(--pds-border-color-active);
 }
 
 .text-area-input:focus-within {
@@ -6594,7 +6619,7 @@ button.btn-hero-outline:hover {
 }
 
 .text-area-input__body {
-  background: var(--pds-background-layout-secondary);
+  background: transparent;
   min-width: 0;
   padding: var(--pds-padding-small) var(--pds-padding-medium);
   width: 100%;
@@ -8334,6 +8359,11 @@ button.btn-hero-outline:hover {
   height: 36px;
   justify-content: center;
   width: 36px;
+}.receipt__logo-img {
+  border-radius: inherit;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
 }.receipt__school {
   color: var(--pds-text-primary);
   display: block;

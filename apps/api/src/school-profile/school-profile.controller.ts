@@ -12,7 +12,7 @@ import {
   UseInterceptors
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { RequirePermissions } from "../identity/permissions.decorator.js";
+import { RequireAnyPermissions, RequirePermissions } from "../identity/permissions.decorator.js";
 import { PermissionsGuard } from "../identity/permissions.guard.js";
 import { UpdateSchoolProfileDto, UpdateTenantPreferencesDto } from "./dto.js";
 import { SchoolProfileService } from "./school-profile.service.js";
@@ -60,7 +60,9 @@ export class SchoolProfileController {
   }
 
   @Get("school-profile/logo")
-  @RequirePermissions("tenant.configure")
+  // The logo appears on invoices, receipts, and payslips — every tenant role
+  // may load it (student.view + report.view together cover all roles).
+  @RequireAnyPermissions("student.view", "report.view", "tenant.configure")
   getLogo(@Param("tenantId") tenantId: string) {
     return this.schoolProfileService.getLogo(tenantId);
   }

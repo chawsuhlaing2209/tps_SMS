@@ -11,7 +11,6 @@ import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { DataTable } from "../../../lib/data-table";
 import { Icon } from "../../../lib/material-icon";
 import { hasAnyPermission } from "../../../lib/permissions";
-import { moduleBreadcrumbs } from "../../../lib/page-header-utils";
 import { getSession } from "../../../lib/session";
 import { DataTableSection, TablePanelBody } from "../../../lib/table-panel";
 import { ModulePageHeader } from "../../module-page-header";
@@ -40,7 +39,6 @@ function formatDefaultAmount(
 
 export default function PayComponentsPage() {
   const t = useTranslations("salary");
-  const nav = useTranslations("nav");
   const c = useTranslations("common");
   const permissions = getSession()?.permissions;
   const canManage = hasAnyPermission(permissions, ["salary.manage"]);
@@ -227,20 +225,9 @@ export default function PayComponentsPage() {
   return (
     <div className="directory-page pay-components-page">
       <ModulePageHeader
-        navKey="salary"
+        navKey="deductions"
         title={t("payComponentsTitle")}
         description={t("payComponentsDescription")}
-        breadcrumbs={moduleBreadcrumbs("salary", nav, [{ label: t("payComponentsTitle") }])}
-        actions={
-          <button
-            type="button"
-            className="pds-type-body-m-bold btn-ghost"
-            onClick={() => void payComponents.refetch()}
-          >
-            <Icon name="refresh" />
-            {c("refresh")}
-          </button>
-        }
       />
 
       <div className="benefits-workspace-toolbar benefits-workspace-toolbar--end">

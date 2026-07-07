@@ -16,7 +16,11 @@ import { TablePanelBody } from "../../lib/table-panel";
 import { useDashPageTitleActionsTarget } from "../dashboard-page-title";
 import { WorkspaceLoading } from "../../lib/workspace-loading";
 import { PdsDatePickerField, PdsSearchFiltersRow, PdsSelectField } from "../../../components/pds";
-import { parseDayRangeValue, toDayValue } from "../../../components/pds/date-picker-utils";
+import {
+  currentMonthDayRangeValue,
+  parseDayRangeValue,
+  toDayValue
+} from "../../../components/pds/date-picker-utils";
 import { StatusBadge } from "../../../components/shared/badge";
 import { StatCard, StatGrid } from "../../../components/shared/stat-card";
 import { RowMoreActionsMenu } from "../../../components/shared/row-more-actions";
@@ -66,7 +70,7 @@ export function EnrollmentsWorkspace({
   const [prefillClassroomId, setPrefillClassroomId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("");
   const [gradeFilter, setGradeFilter] = useState("");
-  const [dateFilter, setDateFilter] = useState("");
+  const [dateFilter, setDateFilter] = useState(() => currentMonthDayRangeValue());
   const [cancelTarget, setCancelTarget] = useState<EnrollmentRow | null>(null);
 
   const currentYear = useCurrentAcademicYear();

@@ -110,11 +110,6 @@ export function formatPreferredMonth(
   return `${MONTHS_SHORT[month - 1]} ${year}`;
 }
 
-/** Grouped digits without a currency unit, for layouts that render the unit separately. */
-export function formatMoneyDigits(value: number): string {
-  return Math.round(value).toLocaleString("en-US");
-}
-
 /**
  * Money per the tenant's currency preference. MMK keeps the formatMMK contract
  * (whole kyats, full digits); other currencies show up to two decimals.

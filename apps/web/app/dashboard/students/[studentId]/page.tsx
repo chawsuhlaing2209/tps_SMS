@@ -1,5 +1,5 @@
 "use client";
-import { FormInput } from "../../../../components/shared/form-input";
+import { FormInput, FormTextarea } from "../../../../components/shared/form-input";
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
@@ -1086,7 +1086,7 @@ export default function StudentDetailPage({
                   <FormInput {...editForm.register("address")} />
                 </Field>
                 <Field label={t("medicalNotes")}>
-                  <textarea {...editForm.register("medicalNotes")} rows={3} />
+                  <FormTextarea {...editForm.register("medicalNotes")} rows={3} />
                 </Field>
                 <div className="student-profile-edit-divider">
                   <h4>{t("guardianContactTitle")}</h4>

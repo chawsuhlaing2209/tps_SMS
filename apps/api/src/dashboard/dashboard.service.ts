@@ -208,6 +208,23 @@ export class DashboardService {
     return upcomingTerm ?? null;
   }
 
+  /** Lightweight brand payload for the sidebar — readable by every tenant role. */
+  async getSchoolBrand(tenantId: string) {
+    const [settings] = await this.db
+      .select({
+        schoolName: tenantSettings.schoolName,
+        logoFileId: tenantSettings.logoFileId
+      })
+      .from(tenantSettings)
+      .where(eq(tenantSettings.tenantId, tenantId))
+      .limit(1);
+
+    return {
+      schoolName: settings?.schoolName ?? null,
+      logoFileId: settings?.logoFileId ?? null
+    };
+  }
+
   async getHome(tenantId: string): Promise<DashboardHome> {
     const today = this.todayIsoDate();
     const dayOfWeek = this.jsDayToTimetableDay();

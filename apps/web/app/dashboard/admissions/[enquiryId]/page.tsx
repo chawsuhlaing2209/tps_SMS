@@ -223,7 +223,7 @@ export default function EnquiryDetailPage({
         showTitle={false}
         segment={{ label: data.prospectiveStudentName, href: enquiryHref }}
         breadcrumbs={[
-          { label: nav("group_business") },
+          { label: nav("group_enrollment") },
           { label: nav("admissions"), href: "/dashboard/admissions" },
           { label: data.prospectiveStudentName },
         ]}

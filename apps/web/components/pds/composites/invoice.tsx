@@ -19,6 +19,8 @@ export type InvoiceAction = {
 export type InvoiceProps = {
   schoolName: string;
   schoolContact?: string | null;
+  /** School logo shown in the ink header; falls back to the brand mark. */
+  logoUrl?: string | null;
   billedToLabel: string;
   studentName: string;
   studentMeta?: string | null;
@@ -38,6 +40,7 @@ export type InvoiceProps = {
 export function Invoice({
   schoolName,
   schoolContact,
+  logoUrl,
   billedToLabel,
   studentName,
   studentMeta,
@@ -58,6 +61,7 @@ export function Invoice({
         variant="invoice"
         title={schoolName}
         description={schoolContact}
+        logoUrl={logoUrl}
         onClose={onClose}
         closeLabel={closeLabel}
       />

@@ -20,7 +20,6 @@ import { RecordFormSheet } from "../../../lib/record-sheet";
 import { TablePanelBody, TablePanelHead } from "../../../lib/table-panel";
 import { zodResolver } from "../../../lib/zod-resolver";
 import { ModulePageHeader } from "../../module-page-header";
-import { moduleBreadcrumbs } from "../../../lib/page-header-utils";
 
 type AcademicYearOverview = {
   id: string;
@@ -54,7 +53,6 @@ const invalidateYearPaths = (tenant: string) => [
 export default function AcademicYearsPage() {
   const t = useTranslations("academics");
   const setup = useTranslations("academicSetup");
-  const nav = useTranslations("nav");
   const c = useTranslations("common");
   const [formMode, setFormMode] = useState<FormMode | null>(null);
   const [toggleConfirm, setToggleConfirm] = useState<ToggleConfirm | null>(null);
@@ -224,9 +222,8 @@ export default function AcademicYearsPage() {
   return (
     <>
       <ModulePageHeader
-        navKey="academicSetup"
+        navKey="academicYears"
         title={setup("years")}
-        breadcrumbs={moduleBreadcrumbs("academicSetup", nav, [{ label: setup("years") }])}
         actions={
           <>
             <button type="button" className="pds-type-body-m-bold btn-primary" onClick={openCreate}>

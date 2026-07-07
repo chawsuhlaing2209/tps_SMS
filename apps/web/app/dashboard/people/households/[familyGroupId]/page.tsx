@@ -226,7 +226,7 @@ export default function HouseholdDetailPage({
         title={data.name}
         segment={{ label: data.name, href: `/dashboard/people/households/${familyGroupId}` }}
         breadcrumbs={[
-          { label: nav("group_school") },
+          { label: nav("group_people") },
           { label: p("directoryTitle"), href: "/dashboard/people" },
           { label: t("directoryTitle"), href: "/dashboard/people?tab=households" }
         ]}

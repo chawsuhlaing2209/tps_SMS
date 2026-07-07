@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { clampPercentString } from "@sms/shared";
+import { clsx } from "clsx";
 import { cn } from "../../lib/utils";
 import { Icon } from "../../app/lib/material-icon";
 import { PdsSelectField, type SelectFieldOption } from "../pds/fields/select-field";
@@ -57,13 +58,15 @@ export const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>(
       );
     }
 
+    // clsx, not cn: tailwind-merge mis-parses our custom `text-*` classes as
+    // Tailwind font utilities and drops all but the last one.
     return (
-      <div className={cn("text-input", suffix && "text-input--suffix", className)}>
+      <div className={clsx("text-input", suffix && "text-input--suffix", className)}>
         <input
           ref={ref}
           type={type}
           disabled={isDisabled}
-          className={cn(
+          className={clsx(
             "pds-type-body-m-medium form-input text-input__field",
             inputStateClass(inputState, isDisabled),
             inputClassName
@@ -130,8 +133,10 @@ export const TextAreaInput = React.forwardRef<HTMLTextAreaElement, TextAreaInput
     const counter = maxLength != null && showCount ? `${length}/${maxLength}` : null;
 
     return (
+      // clsx, not cn: tailwind-merge treats `text-area-input` and its modifier
+      // classes as conflicting `text-*` utilities and strips the base class.
       <div
-        className={cn(
+        className={clsx(
           "text-area-input",
           `text-area-input--${size}`,
           inputState === "error" && "text-area-input--error",
@@ -154,7 +159,7 @@ export const TextAreaInput = React.forwardRef<HTMLTextAreaElement, TextAreaInput
               value={value}
               defaultValue={defaultValue}
               onChange={handleChange}
-              className={cn("pds-type-body-m-medium text-area-input__field", textareaClassName)}
+              className={clsx("pds-type-body-m-medium text-area-input__field", textareaClassName)}
               aria-invalid={inputState === "error" ? true : undefined}
               {...props}
             />

@@ -2,7 +2,8 @@
 
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { financeBreadcrumbs } from "../../../../lib/page-header-utils";
+import { moduleBreadcrumbs } from "../../../../lib/page-header-utils";
+import type { DashboardNavKey } from "../../../../lib/permissions";
 import { PageHeader } from "../../../page-header-context";
 import {
   InvoicesActionsProvider,
@@ -10,6 +11,8 @@ import {
 } from "./invoices-actions-provider";
 
 type Props = {
+  /** Top-level nav item this page lives under ("invoices" or "collection"). */
+  navKey: DashboardNavKey;
   title: string;
   children: ReactNode;
   /** Generate + Create Invoice in the title row (invoices page only). */
@@ -19,6 +22,7 @@ type Props = {
 };
 
 export function InvoicesBillingShell({
+  navKey,
   title,
   children,
   showHeaderActions = false,
@@ -31,7 +35,7 @@ export function InvoicesBillingShell({
       <div className="fees-page">
         <PageHeader
           title={title}
-          breadcrumbs={financeBreadcrumbs(nav)}
+          breadcrumbs={moduleBreadcrumbs(navKey, nav)}
           actionsPortal={actionsPortal}
         />
 

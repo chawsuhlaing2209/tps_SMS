@@ -10,7 +10,9 @@ import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { FormInput, FormSelect } from "../../../../components/shared/form-input";
-import { apiUpload, useApiMutation, useApiQuery } from "../../../lib/api";
+import { useQueryClient } from "@tanstack/react-query";
+import { apiUpload, invalidateTenantPaths, useApiMutation, useApiQuery } from "../../../lib/api";
+import { SCHOOL_BRAND_PATH } from "../../../lib/use-school-brand";
 import { Field } from "../../../lib/form";
 import { Icon } from "../../../lib/material-icon";
 import { toastError, toastSuccess } from "../../../lib/toast";
@@ -40,6 +42,7 @@ export function SchoolProfileWorkspace() {
   const nav = useTranslations("nav");
 
   const profile = useApiQuery<SchoolProfile>(PROFILE_PATH);
+  const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -56,7 +59,7 @@ export function SchoolProfileWorkspace() {
       path: LOGO_PATH(tenant),
       init: { method: "DELETE" }
     }),
-    { invalidatePaths: (_, tenant) => [PROFILE_PATH(tenant)] }
+    { invalidatePaths: (_, tenant) => [PROFILE_PATH(tenant), SCHOOL_BRAND_PATH(tenant)] }
   );
 
   const form = useForm<SchoolProfileInput>({
@@ -80,7 +83,10 @@ export function SchoolProfileWorkspace() {
     setUploading(true);
     try {
       await apiUpload(LOGO_PATH(profile.tenantId), file);
-      await profile.refetch();
+      await Promise.all([
+        profile.refetch(),
+        invalidateTenantPaths(queryClient, profile.tenantId, [SCHOOL_BRAND_PATH(profile.tenantId)])
+      ]);
       toastSuccess(t("logoUploaded"));
     } catch (error) {
       toastError(error);
