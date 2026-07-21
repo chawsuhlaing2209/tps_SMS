@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Icon } from "../lib/material-icon";
 import { LanguageSwitcher } from "../lib/language-switcher";
 import { TopNavBar } from "../../components/pds/composites/top-nav-bar";
+import { NotificationsBell } from "./notifications-bell";
 import { WorkingYearBadge } from "./working-year-badge";
 import { useResolvedPageHeader } from "./page-header-context";
 
@@ -38,14 +39,7 @@ export function DashboardPageChrome({ onMenuClick }: { onMenuClick?: () => void 
           ) : null}
           <LanguageSwitcher variant="segmented" />
           <WorkingYearBadge variant="topNav" />
-          <button
-            type="button"
-            className="pds-top-nav-bar__notifications"
-            aria-label={t("notifications")}
-          >
-            <Icon name="notifications" size={20} />
-            <span className="pds-top-nav-bar__notifications-dot" aria-hidden />
-          </button>
+          <NotificationsBell />
         </>
       }
     />

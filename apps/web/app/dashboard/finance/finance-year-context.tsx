@@ -1,9 +1,20 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
+import {
+  createContext,
+  useContext,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  type ReactNode
+} from "react";
+import { createPortal } from "react-dom";
 import { PdsSelectField } from "../../../components/pds";
 import { useReferenceApiQuery } from "../../lib/api";
+import { DASH_PAGE_TITLE_ACTIONS_ID } from "../dashboard-page-title";
+import { useResolvedPageHeader } from "../page-header-context";
 
 export const LIFETIME = "lifetime";
 
@@ -63,10 +74,21 @@ export function useFinanceYear(): FinanceYearContextValue {
   return ctx;
 }
 
-/** Right-aligned year filter rendered at the top of every finance page. */
+/**
+ * Module-wide year filter. Rendered into the page-title actions row (next to
+ * Export CSV etc.) so it sits at the top of every finance page; falls back to
+ * its own right-aligned row on pages without a title actions area.
+ */
 export function FinanceYearBar() {
   const t = useTranslations("finance");
   const { selection, setSelection, years, yearsLoading } = useFinanceYear();
+  const pathname = usePathname();
+  const { actions, actionsPortal } = useResolvedPageHeader();
+  const [target, setTarget] = useState<HTMLElement | null>(null);
+
+  useLayoutEffect(() => {
+    setTarget(document.getElementById(DASH_PAGE_TITLE_ACTIONS_ID));
+  }, [pathname, actions, actionsPortal]);
 
   if (yearsLoading && years.length === 0) {
     return null;
@@ -81,8 +103,8 @@ export function FinanceYearBar() {
     { value: LIFETIME, label: t("yearFilterLifetime") }
   ];
 
-  return (
-    <div className="finance-year-bar">
+  const field = (
+    <div className="finance-year-filter">
       <PdsSelectField
         variant="filter"
         value={selection}
@@ -93,4 +115,10 @@ export function FinanceYearBar() {
       />
     </div>
   );
+
+  if (target) {
+    return createPortal(field, target);
+  }
+
+  return <div className="finance-year-bar">{field}</div>;
 }

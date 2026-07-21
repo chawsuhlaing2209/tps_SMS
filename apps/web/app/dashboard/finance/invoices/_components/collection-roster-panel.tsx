@@ -61,6 +61,7 @@ type RosterRow = import("./record-payment-modal").RosterRow;
 
 function CollectionRosterExportPortal({
   academicYearId,
+  isLifetime = false,
   gradeId,
   status,
   search,
@@ -70,6 +71,7 @@ function CollectionRosterExportPortal({
   loading
 }: {
   academicYearId: string;
+  isLifetime?: boolean;
   gradeId: string;
   status: StatusFilter;
   search: string;
@@ -87,7 +89,7 @@ function CollectionRosterExportPortal({
 
   return createPortal(
     <ExportCsvButton
-      disabled={loading || !academicYearId}
+      disabled={loading || (!academicYearId && !isLifetime)}
       onExport={async () => {
         const tenantId = getSession()?.tenantId;
         if (!tenantId) {
@@ -96,12 +98,16 @@ function CollectionRosterExportPortal({
         const rows = await fetchAllPaginated<RosterRow>(
           (limit, offset) => {
             const params = new URLSearchParams({
-              academicYearId,
               limit: String(limit),
               offset: String(offset),
               sortBy: sortKey,
               sortDir
             });
+            if (isLifetime) {
+              params.set("yearMode", "lifetime");
+            } else {
+              params.set("academicYearId", academicYearId);
+            }
             if (gradeId) params.set("gradeId", gradeId);
             if (status !== "all") params.set("status", status);
             if (search.trim()) params.set("search", search.trim());
@@ -143,9 +149,9 @@ export function CollectionRosterPanel() {
   const tFees = useTranslations("finance.feesBilling");
   const { formatMoney } = useTenantFormats();
 
-  // The collection roster is inherently per-year; Lifetime falls back to the active year.
   const financeYear = useFinanceYear();
-  const academicYearId = financeYear.academicYearId || financeYear.activeYearId;
+  const academicYearId = financeYear.academicYearId;
+  const isLifetime = financeYear.isLifetime;
 
   const [gradeId, setGradeId] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
@@ -167,22 +173,28 @@ export function CollectionRosterPanel() {
 
   const rosterQuery = useMemo(() => {
     const params = new URLSearchParams({
-      academicYearId,
       limit: String(PAGE_SIZE),
       offset: String(page * PAGE_SIZE),
       sortBy: sortKey,
       sortDir
     });
+    if (isLifetime) {
+      params.set("yearMode", "lifetime");
+    } else {
+      params.set("academicYearId", academicYearId);
+    }
     if (gradeId) params.set("gradeId", gradeId);
     if (status !== "all") params.set("status", status);
     if (search.trim()) params.set("search", search.trim());
     appendIssueDateRangeParams(params, issueDateRange);
     return params.toString();
-  }, [academicYearId, issueDateRange, gradeId, page, search, sortDir, sortKey, status]);
+  }, [academicYearId, isLifetime, issueDateRange, gradeId, page, search, sortDir, sortKey, status]);
 
   const roster = useLiveApiQuery<Roster>(
     (tenant) =>
-      academicYearId ? `/tenants/${tenant}/finance/billing/roster?${rosterQuery}` : null
+      academicYearId || isLifetime
+        ? `/tenants/${tenant}/finance/billing/roster?${rosterQuery}`
+        : null
   );
 
   const data = roster.data;
@@ -200,6 +212,7 @@ export function CollectionRosterPanel() {
     <>
       <CollectionRosterExportPortal
         academicYearId={academicYearId}
+        isLifetime={isLifetime}
         gradeId={gradeId}
         status={status}
         search={search}
@@ -210,7 +223,7 @@ export function CollectionRosterPanel() {
       />
       <p className="pds-type-body-s-regular muted panel-help">{tFees("collectionViewHelp")}</p>
 
-      <section className="fees-metrics" aria-label={tFees("collectionRate")}>
+      <section className="fees-metrics" aria-label={tFees("collected")}>
         <article className="fees-metric fees-metric--accent">
           <span className="pds-type-body-s-semibold fees-metric__label">
             <Icon name="account_balance_wallet" size={16} />
@@ -247,20 +260,6 @@ export function CollectionRosterPanel() {
           </strong>
           <span className="pds-type-body-s-regular fees-metric__sub">
             {tFees("studentsPastDue", { count: metrics?.overdueStudents ?? 0 })}
-          </span>
-        </article>
-
-        <article className="fees-metric">
-          <span className="pds-type-body-s-semibold fees-metric__label">
-            <Icon name="donut_large" size={16} />
-            {tFees("collectionRate")}
-          </span>
-          <strong className="pds-type-title-m-extrabold fees-metric__value">{metrics?.collectionRate ?? 0}%</strong>
-          <span className="fees-progress" aria-hidden>
-            <span
-              className="fees-progress__fill"
-              style={{ width: `${Math.min(100, metrics?.collectionRate ?? 0)}%` }}
-            />
           </span>
         </article>
       </section>
@@ -440,7 +439,7 @@ export function CollectionRosterPanel() {
         onOpenChange={setModalOpen}
         variant="roster"
         initialStudentId={collectStudentId}
-        academicYearId={academicYearId}
+        academicYearId={academicYearId || financeYear.activeYearId}
         gradeId={gradeId || undefined}
         onCollected={() => void roster.refetch()}
       />

@@ -1,18 +1,22 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { DB, type Database } from "../db/db.module.js";
 import {
   academicYears,
   assessmentResults,
   classrooms,
   classroomStudents,
+  enquiries,
   enrollmentFeePlans,
   examSchedules,
   feeItems,
   gradeSubjects,
   grades,
+  invoices,
+  payments,
   staff,
   studentDiscounts,
+  students,
   subjects,
   tenantSettings,
   terms,
@@ -346,5 +350,97 @@ export class DashboardService {
       classrooms: classroomRows,
       todaySchedule
     };
+  }
+
+  /**
+   * Actionable notifications for the top-bar bell, derived from pending work
+   * queues (no notifications table). Each source is gated by the actor's
+   * permissions so e.g. teachers never receive finance items.
+   */
+  async getNotifications(tenantId: string, permissions: string[]) {
+    const canFinance = permissions.includes("finance.manage");
+    const canAdmissions = permissions.includes("admissions.manage");
+
+    const [discountRows, paymentRows, enquiryRows] = await Promise.all([
+      canFinance
+        ? this.db
+            .select({
+              id: studentDiscounts.id,
+              name: students.fullName,
+              createdAt: studentDiscounts.createdAt
+            })
+            .from(studentDiscounts)
+            .leftJoin(students, eq(studentDiscounts.studentId, students.id))
+            .where(
+              and(eq(studentDiscounts.tenantId, tenantId), eq(studentDiscounts.status, "submitted"))
+            )
+            .orderBy(desc(studentDiscounts.createdAt))
+            .limit(10)
+        : Promise.resolve([]),
+      canFinance
+        ? this.db
+            .select({
+              id: payments.id,
+              name: students.fullName,
+              amount: payments.amount,
+              createdAt: payments.createdAt
+            })
+            .from(payments)
+            .leftJoin(invoices, eq(payments.invoiceId, invoices.id))
+            .leftJoin(students, eq(invoices.studentId, students.id))
+            .where(
+              and(
+                eq(payments.tenantId, tenantId),
+                eq(payments.kind, "payment"),
+                isNull(payments.verifiedAt)
+              )
+            )
+            .orderBy(desc(payments.createdAt))
+            .limit(10)
+        : Promise.resolve([]),
+      canAdmissions
+        ? this.db
+            .select({
+              id: enquiries.id,
+              name: enquiries.prospectiveStudentName,
+              createdAt: enquiries.createdAt
+            })
+            .from(enquiries)
+            .where(and(eq(enquiries.tenantId, tenantId), eq(enquiries.status, "new")))
+            .orderBy(desc(enquiries.createdAt))
+            .limit(10)
+        : Promise.resolve([])
+    ]);
+
+    const items = [
+      ...discountRows.map((row) => ({
+        id: `discount-${row.id}`,
+        type: "discountRequest" as const,
+        name: row.name ?? "",
+        amount: null as number | null,
+        href: "/dashboard/finance/discounts",
+        createdAt: row.createdAt
+      })),
+      ...paymentRows.map((row) => ({
+        id: `payment-${row.id}`,
+        type: "paymentUnverified" as const,
+        name: row.name ?? "",
+        amount: Number(row.amount),
+        href: "/dashboard/finance/payments",
+        createdAt: row.createdAt
+      })),
+      ...enquiryRows.map((row) => ({
+        id: `enquiry-${row.id}`,
+        type: "newEnquiry" as const,
+        name: row.name,
+        amount: null as number | null,
+        href: "/dashboard/admissions",
+        createdAt: row.createdAt
+      }))
+    ]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 15);
+
+    return { items, total: items.length };
   }
 }

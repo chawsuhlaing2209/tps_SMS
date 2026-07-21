@@ -1,6 +1,8 @@
 import { Controller, Get, Param, UseGuards } from "@nestjs/common";
 import { RequireAnyPermissions } from "../identity/permissions.decorator.js";
 import { PermissionsGuard } from "../identity/permissions.guard.js";
+import { ReqTenantContext } from "../identity/tenant-context.decorator.js";
+import type { TenantContext } from "../tenancy/tenant-context.js";
 import { DashboardService } from "./dashboard.service.js";
 
 @Controller("tenants/:tenantId/dashboard")
@@ -40,6 +42,17 @@ export class DashboardController {
   @RequireAnyPermissions("student.view", "report.view")
   schoolBrand(@Param("tenantId") tenantId: string) {
     return this.dashboardService.getSchoolBrand(tenantId);
+  }
+
+  @Get("notifications")
+  // student.view + report.view together cover every tenant role; the service
+  // filters notification sources by the actor's actual permissions.
+  @RequireAnyPermissions("student.view", "report.view")
+  notifications(
+    @Param("tenantId") tenantId: string,
+    @ReqTenantContext() ctx: TenantContext
+  ) {
+    return this.dashboardService.getNotifications(tenantId, ctx.permissions);
   }
 
   @Get("home")

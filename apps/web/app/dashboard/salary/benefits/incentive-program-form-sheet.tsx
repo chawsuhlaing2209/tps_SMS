@@ -8,6 +8,7 @@ import { z } from "zod";
 import { FormInput, FormTextarea, PercentInput } from "../../../../components/shared/form-input";
 import { cn } from "../../../../lib/utils";
 import { Icon } from "../../../lib/material-icon";
+import { formatMMK } from "../../../lib/money";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { zodResolver } from "../../../lib/zod-resolver";
 import { benefitIconTone } from "./benefit-icon-themes";
@@ -58,7 +59,7 @@ function formatPreviewAmount(value: string, awardType: string) {
   if (awardType === "percent") {
     return `${amount}%`;
   }
-  return `${Math.round(amount).toLocaleString()} MMK`;
+  return formatMMK(amount);
 }
 
 type Props = {

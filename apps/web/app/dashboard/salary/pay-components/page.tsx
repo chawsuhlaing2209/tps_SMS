@@ -10,6 +10,7 @@ import { filterByArchiveVisibility, isArchivedRecord, type ArchiveVisibility } f
 import { useApiMutation, useApiQuery } from "../../../lib/api";
 import { DataTable } from "../../../lib/data-table";
 import { Icon } from "../../../lib/material-icon";
+import { formatMoneyDigits } from "../../../lib/money";
 import { hasAnyPermission } from "../../../lib/permissions";
 import { getSession } from "../../../lib/session";
 import { DataTableSection, TablePanelBody } from "../../../lib/table-panel";
@@ -22,9 +23,7 @@ import {
 const PAY_COMPONENTS_PATH = (tenant: string) => `/tenants/${tenant}/pay-components`;
 
 /** Bare formatted number — the awardFixedValue message supplies the "MMK". */
-function formatMoney(value: number): string {
-  return Math.round(value).toLocaleString("en-US");
-}
+const formatMoney = formatMoneyDigits;
 
 function formatDefaultAmount(
   component: PayComponentRecord,

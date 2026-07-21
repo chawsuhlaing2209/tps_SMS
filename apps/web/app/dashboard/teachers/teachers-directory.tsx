@@ -50,7 +50,7 @@ type StaffOverviewPage = {
   offset: number;
 };
 
-type GradeOption = { id: string; name: string };
+type GradeOption = { id: string; name: string; sortOrder?: number };
 
 const PAGE_SIZE = 50;
 
@@ -134,6 +134,21 @@ export function TeachersDirectory() {
     return map;
   }, [grades.data]);
 
+  const gradeSortById = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const grade of grades.data ?? []) {
+      map.set(grade.id, grade.sortOrder ?? Number.MAX_SAFE_INTEGER);
+    }
+    return map;
+  }, [grades.data]);
+
+  const sortGradeIds = (ids: string[]) =>
+    [...ids].sort(
+      (a, b) =>
+        (gradeSortById.get(a) ?? Number.MAX_SAFE_INTEGER) -
+        (gradeSortById.get(b) ?? Number.MAX_SAFE_INTEGER)
+    );
+
   const columns: ColumnDef<TeacherOverview, unknown>[] = [
     {
       id: "name",
@@ -155,7 +170,7 @@ export function TeachersDirectory() {
 
         return (
           <ChipGroup>
-            {gradeIds.map((gradeId) => (
+            {sortGradeIds(gradeIds).map((gradeId) => (
               <Chip key={gradeId}>{gradeShortLabel(gradeNameById.get(gradeId) ?? gradeId)}</Chip>
             ))}
           </ChipGroup>

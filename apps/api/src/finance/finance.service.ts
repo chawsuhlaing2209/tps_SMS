@@ -1433,7 +1433,13 @@ export class FinanceService {
     if (query.verified === true) conditions.push(isNotNull(payments.verifiedAt))
     if (query.verified === false) conditions.push(isNull(payments.verifiedAt))
     if (query.dateFrom) conditions.push(gte(payments.paidAt, new Date(query.dateFrom)))
-    if (query.dateTo) conditions.push(lte(payments.paidAt, new Date(query.dateTo)))
+    if (query.dateTo) {
+      // A bare YYYY-MM-DD upper bound must include the whole day.
+      const dateTo = /^\d{4}-\d{2}-\d{2}$/.test(query.dateTo)
+        ? new Date(`${query.dateTo}T23:59:59.999`)
+        : new Date(query.dateTo)
+      conditions.push(lte(payments.paidAt, dateTo))
+    }
 
     if (query.academicYearId) {
       conditions.push(this.paymentAcademicYearFilter(tenantId, query.academicYearId))
@@ -1980,10 +1986,18 @@ export class FinanceService {
    */
   async getBillingRoster(tenantId: string, query: BillingRosterQueryDto) {
     const metricsOnly = query.metricsOnly === true
-    const { year, currentTerm, periodStart, periodEnd } = await this.resolveBillingPeriod(
-      tenantId,
-      query.academicYearId,
-    )
+    const lifetime = query.yearMode === 'lifetime'
+    if (!lifetime && !query.academicYearId) {
+      throw new BadRequestException('academicYearId is required unless yearMode=lifetime')
+    }
+    const { year, currentTerm, periodStart, periodEnd } = lifetime
+      ? {
+          year: null as { id: string; name: string } | null,
+          currentTerm: null,
+          periodStart: '1970-01-01',
+          periodEnd: '2999-12-31',
+        }
+      : await this.resolveBillingPeriod(tenantId, query.academicYearId!)
     const issueDateRange = this.resolveIssueDateFilter(query)
     const { start: filterStart, end: filterEnd } = issueDateRange ?? {
       start: periodStart,
@@ -2005,7 +2019,7 @@ export class FinanceService {
         .where(
           and(
             eq(enrollments.tenantId, tenantId),
-            eq(enrollments.academicYearId, query.academicYearId),
+            ...(lifetime ? [] : [eq(enrollments.academicYearId, query.academicYearId!)]),
             isNotNull(enrollments.confirmedAt),
           ),
         )
@@ -2019,7 +2033,7 @@ export class FinanceService {
 
     const enrollmentConditions = [
       eq(enrollments.tenantId, tenantId),
-      eq(enrollments.academicYearId, query.academicYearId),
+      ...(lifetime ? [] : [eq(enrollments.academicYearId, query.academicYearId!)]),
       isNotNull(enrollments.confirmedAt),
     ]
     if (query.gradeId) enrollmentConditions.push(eq(enrollments.gradeId, query.gradeId))
@@ -2263,7 +2277,7 @@ export class FinanceService {
 
     if (metricsOnly) {
       return {
-        academicYear: { id: year.id, name: year.name },
+        academicYear: year ? { id: year.id, name: year.name } : null,
         term: currentTerm ? { id: currentTerm.id, name: currentTerm.name } : null,
         grades: [],
         metrics: { ...metrics, collectionRate, totalStudents: studentIds.length },
@@ -2317,7 +2331,7 @@ export class FinanceService {
     const gradeList = [...gradeSet.values()].sort((a, b) => a.sortOrder - b.sortOrder)
 
     return {
-      academicYear: { id: year.id, name: year.name },
+      academicYear: year ? { id: year.id, name: year.name } : null,
       term: currentTerm ? { id: currentTerm.id, name: currentTerm.name } : null,
       grades: gradeList.map((grade) => ({
         id: grade.id,

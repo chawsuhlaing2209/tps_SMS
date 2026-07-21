@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 import { useApiMutation, useApiQuery } from "../../../../lib/api";
 import { hasAnyPermission } from "../../../../lib/permissions";
 import { getSession } from "../../../../lib/session";
@@ -52,10 +53,12 @@ export function BillingInvoicePreviewModal({
 }) {
   const t = useTranslations("finance.invoiceDocument");
   const c = useTranslations("common");
+  const router = useRouter();
   const canVerifyPayments = hasAnyPermission(getSession()?.permissions, ["finance.manage"]);
 
-  const invoice = useApiQuery<InvoiceDetail>((tenant) =>
-    open && invoiceId ? `/tenants/${tenant}/finance/invoices/${invoiceId}` : null
+  const invoice = useApiQuery<InvoiceDetail>(
+    (tenant) =>
+      open && invoiceId ? `/tenants/${tenant}/finance/invoices/${invoiceId}` : null
   );
 
   const send = useApiMutation<undefined, { sent: boolean }>(
@@ -89,7 +92,11 @@ export function BillingInvoicePreviewModal({
   };
 
   return (
-    <InvoicePreviewModal invoiceId={invoiceId} open={open} onOpenChange={onOpenChange}>
+    <InvoicePreviewModal
+      invoiceId={invoiceId}
+      open={open}
+      onOpenChange={onOpenChange}
+    >
       {invoice.isLoading ? (
         <p className="invoice-modal__state muted">{c("loading")}</p>
       ) : invoice.isError || !doc ? (
@@ -101,6 +108,14 @@ export function BillingInvoicePreviewModal({
           onClose={() => onOpenChange(false)}
           onPrint={handlePrint}
           onSend={handleSend}
+          onViewDetails={
+            invoiceId
+              ? () => {
+                  onOpenChange(false);
+                  router.push(`/dashboard/finance/invoices/${invoiceId}`);
+                }
+              : undefined
+          }
           sendPending={send.isPending}
           canVerifyPayments={canVerifyPayments}
         />

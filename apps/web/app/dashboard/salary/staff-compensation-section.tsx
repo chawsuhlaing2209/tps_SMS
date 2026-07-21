@@ -10,6 +10,7 @@ import {
 import { TextInput } from "../../../components/shared/form-input";
 import { InputWrapper } from "../../../components/shared/input-wrapper";
 import { useApiMutation, useApiQuery } from "../../lib/api";
+import { formatMoneyDigits } from "../../lib/money";
 import { hasAnyPermission } from "../../lib/permissions";
 import { getSession } from "../../lib/session";
 import type { BenefitPackageRecord } from "./benefits/benefit-package-form-sheet";
@@ -39,9 +40,7 @@ type StaffCompensation = {
 const compensationPath = (tenant: string, staffId: string) =>
   `/tenants/${tenant}/staff/${staffId}/compensation`;
 
-function formatMoney(value: number) {
-  return Math.round(value).toLocaleString();
-}
+const formatMoney = formatMoneyDigits;
 
 function parseMoneyInput(value: string) {
   return value.replace(/[^\d]/g, "");
@@ -50,7 +49,7 @@ function parseMoneyInput(value: string) {
 function formatMoneyInput(value: string) {
   const digits = parseMoneyInput(value);
   if (!digits) return "";
-  return Math.round(Number(digits)).toLocaleString();
+  return formatMoneyDigits(Number(digits));
 }
 
 function resolveIncentiveIcon(name: string): string {

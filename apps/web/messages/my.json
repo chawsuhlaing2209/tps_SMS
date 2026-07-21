@@ -119,6 +119,10 @@
     "signedIn": "ဝင်ရောက်ထားသည်",
     "searchPlaceholder": "ကျောင်းသား၊ ဝန်ထမ်း ရှာရန်…",
     "notifications": "အသိပေးချက်များ",
+    "notificationsEmpty": "အသိပေးချက် အသစ် မရှိပါ။",
+    "notifDiscountRequest": "{name} အတွက် ကြေးလျှော့ တောင်းဆိုထားသည်",
+    "notifPaymentUnverified": "{name} ၏ ငွေပေးချေမှု {amount} အတည်ပြုရန် စောင့်နေသည်",
+    "notifNewEnquiry": "{name} ထံမှ ကျောင်းဝင်ခွင့် စုံစမ်းမှုအသစ်",
     "accountMenu": "အကောင့် မီနူး",
     "language": "ဘာသာစကား",
     "brandTagline": "School OS",
@@ -1546,6 +1550,21 @@
         "verify": "ငွေပေးချေမှု verify လုပ်ခဲ့သည်",
         "refund": "ငွေပေးချေမှု ပြန်အမ်းခဲ့သည်"
       }
+    },
+    "activitySystemActor": "စနစ်",
+    "activityTimeline": {
+      "invoice": {
+        "create": "{actor} က ဤငွေတောင်းခံလွှာကို ဖန်တီးခဲ့သည်",
+        "generate_monthly": "{actor} က လစဉ် billing run ဖြင့် ဤငွေတောင်းခံလွှာကို ထုတ်ခဲ့သည်",
+        "send_guardian": "{actor} က ဤငွေတောင်းခံလွှာကို အုပ်ထိန်းသူထံ ပေးပို့ခဲ့သည်"
+      },
+      "payment": {
+        "collect": "{actor} က {method} ဖြင့် ငွေပေးချေမှု {amount} ကို ကောက်ခံခဲ့သည်",
+        "record": "{actor} က {method} ဖြင့် ငွေပေးချေမှု {amount} ကို မှတ်တမ်းတင်ခဲ့သည်",
+        "verify": "{actor} က {method} ဖြင့် ငွေပေးချေမှု {amount} ကို အတည်ပြုခဲ့သည်",
+        "refund": "{actor} က {amount} ကို ပြန်အမ်းခဲ့သည်"
+      },
+      "generic": "{actor} · {label}"
     },
     "actions": "လုပ်ဆောင်ချက်များ",
     "reason": "အကြောင်းပြချက်",
