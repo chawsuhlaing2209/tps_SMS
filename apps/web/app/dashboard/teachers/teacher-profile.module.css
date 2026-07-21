@@ -48,7 +48,7 @@
 
 .teacherProfileStatIconGreen {
   background: var(--pds-color-green-500);
-  border-radius: 10px;
+  border-radius: var(--pds-radius-12);
 }
 
 .teacherProfileStatValue {
@@ -202,7 +202,7 @@
 .teacherProfileSubjectIcon {
   align-items: center;
   background: var(--pds-background-card);
-  border-radius: 10px;
+  border-radius: var(--pds-radius-12);
   color: var(--pds-text-secondary);
   display: inline-flex;
   flex-shrink: 0;
@@ -328,7 +328,7 @@
 }
 
 .teacherProfileScheduleMarkMustard {
-  background: #f5b73d;
+  background: var(--pds-color-yellow-500);
 }
 
 .teacherProfileGradeRow {
@@ -355,7 +355,7 @@
 
 .teacherProfileDarkCardDivider {
   align-self: stretch;
-  background: #25503c;
+  background: var(--pds-color-spring-green-850);
   flex-shrink: 0;
   width: 1px;
 }

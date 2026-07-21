@@ -39,7 +39,7 @@ import { PageHeader } from "../../page-header-context";
 import { StudentFamilyPanel } from "../student-family-panel";
 import { StudentRecurrentBillingPanel } from "../student-recurrent-billing-panel";
 import { StudentDocumentsPanel } from "../student-documents-panel";
-import { BillingInvoicePreviewModal } from "../../finance/billing/invoice-preview-modal";
+import { BillingInvoicePreviewModal } from "../../finance/invoices/_components/invoice-preview-modal";
 import { CancelEnrollmentDialog } from "../cancel-enrollment-dialog";
 
 type StudentProfile = {

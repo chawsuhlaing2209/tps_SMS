@@ -8,8 +8,7 @@ import {
   EntityList,
   EntityListItem,
   EntityListPanel,
-  InfoCard,
-  PdsSearchBar
+  InfoCard
 } from "../../components/pds";
 import { EmptyState } from "../../components/shared/empty-state";
 import { StatCard } from "../../components/shared/stat-card";
@@ -66,26 +65,9 @@ export function HomeDashboardWorkspace() {
   const greeting = useMemo(() => greetingKey(new Date().getHours()), []);
   const todayLabel = useMemo(() => formatTodayDate(undefined), []);
 
-  const headerActions = (
-    <>
-      <PdsSearchBar
-        width="fluid"
-        className="home-dashboard__search"
-        placeholder={nav("searchPlaceholder")}
-        aria-label={nav("searchPlaceholder")}
-      />
-      <Button asChild buttonType="filled" buttonColor="primary">
-        <Link href="/dashboard/structure">
-          <Icon name="add" />
-          {t("create")}
-        </Link>
-      </Button>
-    </>
-  );
-
   return (
     <>
-      <PageHeader title={nav("overview")} showTitle={false} actions={headerActions} />
+      <PageHeader title={nav("overview")} showTitle={false} />
 
       <div className="home-dashboard page-stack">
         {home.isLoading ? (

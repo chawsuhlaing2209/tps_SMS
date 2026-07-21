@@ -172,7 +172,9 @@ export class MonthlyReportQueryDto {
 }
 
 export class BillingRosterQueryDto {
-  @IsUUID() declare academicYearId: string
+  @IsUUID() @IsOptional() academicYearId?: string
+  /** 'lifetime' spans every academic year; academicYearId is then ignored. */
+  @IsIn(['lifetime']) @IsOptional() yearMode?: 'lifetime'
   @IsString() @IsOptional() month?: string
   @IsString() @IsOptional() dateFrom?: string
   @IsString() @IsOptional() dateTo?: string

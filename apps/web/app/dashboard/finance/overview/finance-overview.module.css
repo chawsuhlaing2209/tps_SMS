@@ -363,7 +363,7 @@
 
 .cashUnit {
   color: var(--pds-text-placeholder);
-  font-size: var(--pds-type-body-m-semibold-font-size);
+  font-size: var(--pds-type-body-m-medium-font-size);
 }
 
 .cashAccounts {

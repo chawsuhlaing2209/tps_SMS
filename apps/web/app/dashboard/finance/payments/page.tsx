@@ -18,10 +18,17 @@ import { PadaukTableWrap } from "../../../lib/padauk-table-wrap";
 import { PaginationControls } from "../../../lib/pagination-controls";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { useFinanceYear } from "../finance-year-context";
+import { moduleBreadcrumbs } from "../../../lib/page-header-utils";
 import { PageHeader } from "../../page-header-context";
 import { FinanceTableShell } from "../finance-table-shell";
-import { formatBillingMonth, formatCreatedAt } from "../format-finance";
-import { PdsSearchBar, PdsSearchFiltersRow, SegmentedControl } from "../../../../components/pds";
+import { appendIssueDateRangeParams, formatBillingMonth, formatCreatedAt } from "../format-finance";
+import {
+  PdsDatePickerField,
+  PdsSearchBar,
+  PdsSearchFiltersRow,
+  SegmentedControl
+} from "../../../../components/pds";
+import { currentMonthDayRangeValue } from "../../../../components/pds/date-picker-utils";
 import { ExportCsvButton } from "../../../../components/shared/export-csv-button";
 import { RowMoreActionsMenu, type RowMoreActionItem } from "../../../../components/shared/row-more-actions";
 
@@ -51,17 +58,6 @@ type PaymentRow = {
 
 type PaymentList = { data: PaymentRow[]; total: number; limit: number; offset: number };
 
-type PaymentMetrics = {
-  receivedTotal: number;
-  receivedCount: number;
-  todayTotal: number;
-  todayCount: number;
-  topMethod: string | null;
-  topMethodShare: number;
-  averageReceipt: number;
-  termName: string | null;
-};
-
 type MethodFilter = "" | "kbzpay" | "wavepay" | "bank_transfer" | "cash";
 
 const METHOD_FILTERS: MethodFilter[] = ["", "kbzpay", "wavepay", "bank_transfer", "cash"];
@@ -74,7 +70,6 @@ const METHOD_ICONS: Record<string, string> = {
   cash: "payments"
 };
 
-const compactMMK = formatMMK;
 const fullNumber = formatMMK;
 
 function formatDate(value: string | null) {
@@ -96,6 +91,7 @@ function PaymentsExportPortal({
   academicYearId,
   isLifetime = false,
   method,
+  dateRange,
   searchDebounced,
   loading,
   methodLabel
@@ -103,6 +99,7 @@ function PaymentsExportPortal({
   academicYearId: string;
   isLifetime?: boolean;
   method: MethodFilter;
+  dateRange: string;
   searchDebounced: string;
   loading: boolean;
   methodLabel: (method: string) => string;
@@ -133,6 +130,7 @@ function PaymentsExportPortal({
             if (academicYearId) params.set("academicYearId", academicYearId);
             if (method) params.set("method", method);
             if (searchDebounced.trim()) params.set("search", searchDebounced.trim());
+            appendIssueDateRangeParams(params, dateRange);
             return `/tenants/${tenantId}/finance/payments?${params.toString()}`;
           },
           (json) => {
@@ -178,6 +176,7 @@ export default function PaymentsPage() {
   const { academicYearId, isLifetime, yearsLoading } = useFinanceYear();
 
   const [method, setMethod] = useState<MethodFilter>("");
+  const [dateRange, setDateRange] = useState(() => currentMonthDayRangeValue());
   const [search, setSearch] = useState("");
   const [searchDebounced, setSearchDebounced] = useState("");
   const [page, setPage] = useState(0);
@@ -194,13 +193,6 @@ export default function PaymentsPage() {
     return () => window.clearTimeout(timer);
   }, [search]);
 
-  const metricsQuery = useMemo(() => {
-    const params = new URLSearchParams();
-    if (academicYearId) params.set("academicYearId", academicYearId);
-    const qs = params.toString();
-    return qs ? `?${qs}` : "";
-  }, [academicYearId]);
-
   const listQuery = useMemo(() => {
     const params = new URLSearchParams({
       limit: String(PAGE_SIZE),
@@ -209,14 +201,9 @@ export default function PaymentsPage() {
     if (academicYearId) params.set("academicYearId", academicYearId);
     if (method) params.set("method", method);
     if (searchDebounced.trim()) params.set("search", searchDebounced.trim());
+    appendIssueDateRangeParams(params, dateRange);
     return `?${params.toString()}`;
-  }, [academicYearId, method, page, searchDebounced]);
-
-  const metrics = useLiveApiQuery<PaymentMetrics>((tenant) =>
-    academicYearId || isLifetime
-      ? `/tenants/${tenant}/finance/payments/metrics${metricsQuery}`
-      : null
-  );
+  }, [academicYearId, dateRange, method, page, searchDebounced]);
 
   const payments = useLiveApiQuery<PaymentList>((tenant) =>
     academicYearId || isLifetime ? `/tenants/${tenant}/finance/payments${listQuery}` : null
@@ -233,7 +220,6 @@ export default function PaymentsPage() {
     {
       invalidatePaths: (_v, tenant) => [
         `/tenants/${tenant}/finance/payments`,
-        `/tenants/${tenant}/finance/payments/metrics`,
         `/tenants/${tenant}/finance/invoices`
       ],
       successMessage: tFinance("refundRecorded")
@@ -259,11 +245,6 @@ export default function PaymentsPage() {
   );
 
   const rows = payments.data?.data ?? [];
-  const metricData = metrics.data;
-  const termName = metricData?.termName ?? null;
-  const topMethodLabel = metricData?.topMethod
-    ? tPay(`paymentMethods.${metricData.topMethod}`)
-    : "—";
 
   const closeVerify = () => {
     setVerifyTarget(null);
@@ -295,82 +276,48 @@ export default function PaymentsPage() {
 
   return (
     <div className="fees-page">
-      <PageHeader title={t("title")} breadcrumbs={[{ label: nav("financeCrumb") }]} actionsPortal />
+      <PageHeader
+        title={t("title")}
+        breadcrumbs={moduleBreadcrumbs("payments", nav)}
+        actionsPortal
+      />
       <PaymentsExportPortal
         academicYearId={academicYearId}
         isLifetime={isLifetime}
         method={method}
+        dateRange={dateRange}
         searchDebounced={searchDebounced}
         loading={payments.isLoading || yearsLoading}
         methodLabel={(value) => tPay(`paymentMethods.${value}` as "paymentMethods.cash")}
       />
 
-      <section className="fees-metrics" aria-label={t("title")}>
-        <article className="fees-metric fees-metric--accent">
-          <span className="pds-type-body-s-semibold fees-metric__label">
-            <Icon name="account_balance_wallet" size={16} />
-            {t("received")}
-            {termName ? <span className="pds-type-caption-s fees-metric__chip">{termName}</span> : null}
-          </span>
-          <strong className="pds-type-title-m-extrabold fees-metric__value">
-            {compactMMK(metricData?.receivedTotal ?? 0)}
-          </strong>
-          <span className="pds-type-body-s-regular fees-metric__sub">
-            {t("transactionCount", { count: metricData?.receivedCount ?? 0 })}
-          </span>
-        </article>
-
-        <article className="fees-metric">
-          <span className="pds-type-body-s-semibold fees-metric__label">
-            <Icon name="today" size={16} />
-            {t("today")}
-          </span>
-          <strong className="pds-type-title-m-extrabold fees-metric__value">{compactMMK(metricData?.todayTotal ?? 0)}</strong>
-          <span className="pds-type-body-s-regular fees-metric__sub">
-            {t("receiptsToday", { count: metricData?.todayCount ?? 0 })}
-          </span>
-        </article>
-
-        <article className="fees-metric">
-          <span className="pds-type-body-s-semibold fees-metric__label">
-            <Icon name="qr_code_2" size={16} />
-            {t("topMethod")}
-          </span>
-          <strong className="pds-type-title-m-extrabold fees-metric__value fees-metric__value--compact">
-            {topMethodLabel}
-          </strong>
-          <span className="pds-type-body-s-regular fees-metric__sub">
-            {metricData?.topMethod
-              ? t("methodShare", {
-                  share: metricData.topMethodShare ?? 0
-                })
-              : "—"}
-          </span>
-        </article>
-
-        <article className="fees-metric">
-          <span className="pds-type-body-s-semibold fees-metric__label">
-            <Icon name="trending_up" size={16} />
-            {t("avgReceipt")}
-          </span>
-          <strong className="pds-type-title-m-extrabold fees-metric__value">
-            {compactMMK(metricData?.averageReceipt ?? 0)}
-          </strong>
-          <span className="pds-type-body-s-regular fees-metric__sub">{t("perTransaction")}</span>
-        </article>
-      </section>
-
       <PdsSearchFiltersRow
         filters={
-          <PdsSearchBar
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value);
-              setPage(0);
-            }}
-            placeholder={t("searchPlaceholder")}
-            aria-label={t("searchPlaceholder")}
-          />
+          <>
+            <PdsSearchBar
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(0);
+              }}
+              placeholder={t("searchPlaceholder")}
+              aria-label={t("searchPlaceholder")}
+            />
+            <div className="pds-search-filters-row__filter--range">
+              <PdsDatePickerField
+                type="day"
+                variant="filter"
+                selectionMode="range"
+                value={dateRange}
+                onValueChange={(value) => {
+                  setDateRange(value ?? "");
+                  setPage(0);
+                }}
+                ariaLabel={tFinance("issueDateRange")}
+                placeholder={tFinance("issueDateRange")}
+              />
+            </div>
+          </>
         }
         statusControl={
           <SegmentedControl

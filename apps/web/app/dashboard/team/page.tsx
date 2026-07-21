@@ -11,9 +11,9 @@ export default function TeamPage() {
   return (
     <div className="directory-page">
       <PageHeader
-        title={t("title")}
+        title={nav("team")}
         description={t("description")}
-        breadcrumbs={[{ label: nav("group_admin") }, { label: nav("team") }]}
+        breadcrumbs={[{ label: nav("group_people") }, { label: nav("team") }]}
         actionsPortal
       />
       <TeamEditor />

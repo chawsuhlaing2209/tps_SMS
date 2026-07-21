@@ -141,7 +141,7 @@
   background: var(--pds-background-layout-primary);
   border-bottom: 1px solid var(--pds-border-color-primary);
   color: var(--pds-text-placeholder);
-  font-size: var(--pds-type-caption-s-size, 0.6875rem);
+  font-size: var(--pds-type-caption-s-font-size, 0.6875rem);
   font-weight: 700;
   letter-spacing: 0.04em;
   padding: var(--pds-padding-small) var(--pds-padding-large);
@@ -184,7 +184,7 @@
   color: var(--pds-text-primary);
   cursor: pointer;
   display: inline-flex;
-  font-size: var(--pds-type-body-s-semibold-size, 0.75rem);
+  font-size: var(--pds-type-body-s-semibold-font-size, 0.75rem);
   font-weight: 700;
   gap: var(--pds-gap-xx-small);
   padding: var(--pds-padding-x-small) var(--pds-padding-small);

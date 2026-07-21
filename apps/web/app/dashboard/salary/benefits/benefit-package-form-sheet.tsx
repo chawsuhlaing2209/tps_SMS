@@ -7,6 +7,7 @@ import { z } from "zod";
 import { FormInput, FormTextarea } from "../../../../components/shared/form-input";
 import { cn } from "../../../../lib/utils";
 import { Icon } from "../../../lib/material-icon";
+import { formatMoneyDigits } from "../../../lib/money";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { zodResolver } from "../../../lib/zod-resolver";
 
@@ -47,7 +48,7 @@ function formatPreviewAmount(value: string) {
   if (!value.trim() || Number.isNaN(amount)) {
     return "0";
   }
-  return Math.round(amount).toLocaleString();
+  return formatMoneyDigits(amount);
 }
 
 type Props = {

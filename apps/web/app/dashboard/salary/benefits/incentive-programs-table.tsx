@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { Icon } from "../../../lib/material-icon";
+import { formatMMK, formatMoneyDigits } from "../../../lib/money";
 import { PadaukTableWrap } from "../../../lib/padauk-table-wrap";
 import { cn } from "../../../../lib/utils";
 import { RowMoreActionsMenu } from "../../../../components/shared/row-more-actions";
@@ -17,9 +18,7 @@ const FALLBACK_ICONS = [
   "celebration"
 ] as const;
 
-function formatMoney(value: number) {
-  return Math.round(value).toLocaleString();
-}
+const formatMoney = formatMoneyDigits;
 
 function iconForProgram(program: IncentiveProgramRecord) {
   if (program.icon) return program.icon;
@@ -34,7 +33,7 @@ function paidDisplay(program: IncentiveProgramRecord) {
   }
   const recipients = program.recipients ?? program.eligibleCount ?? 0;
   const total = program.amount * recipients;
-  return total > 0 ? `${formatMoney(total)} MMK` : null;
+  return total > 0 ? formatMMK(total) : null;
 }
 
 type Props = {

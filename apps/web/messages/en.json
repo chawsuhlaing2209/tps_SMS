@@ -119,6 +119,10 @@
     "signedIn": "Signed in",
     "searchPlaceholder": "Search students, staff…",
     "notifications": "Notifications",
+    "notificationsEmpty": "You're all caught up.",
+    "notifDiscountRequest": "{name} requested a fee waiver",
+    "notifPaymentUnverified": "{amount} payment from {name} awaits verification",
+    "notifNewEnquiry": "New admission enquiry from {name}",
     "accountMenu": "Account menu",
     "language": "Language",
     "brandTagline": "School OS",
@@ -1547,6 +1551,21 @@
         "verify": "Payment verified",
         "refund": "Payment refunded"
       }
+    },
+    "activitySystemActor": "System",
+    "activityTimeline": {
+      "invoice": {
+        "create": "{actor} created this invoice",
+        "generate_monthly": "{actor} generated this invoice in the monthly billing run",
+        "send_guardian": "{actor} sent this invoice to the guardian"
+      },
+      "payment": {
+        "collect": "{actor} collected a {method} payment of {amount}",
+        "record": "{actor} recorded a {method} payment of {amount}",
+        "verify": "{actor} verified a {method} payment of {amount}",
+        "refund": "{actor} refunded {amount}"
+      },
+      "generic": "{actor} · {label}"
     },
     "actions": "Actions",
     "reason": "Reason",
