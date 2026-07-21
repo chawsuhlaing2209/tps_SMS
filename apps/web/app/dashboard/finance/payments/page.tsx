@@ -7,7 +7,6 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useApiMutation, useLiveApiQuery } from "../../../lib/api";
 import { appendNavigationTrail } from "../../../lib/navigation-trail";
-import { formatMMK } from "../../../lib/money";
 import { useDashPageTitleActionsTarget } from "../../dashboard-page-title";
 import { fetchAllPaginated } from "../../../lib/export-csv";
 import { getSession } from "../../../lib/session";
@@ -19,9 +18,10 @@ import { PaginationControls } from "../../../lib/pagination-controls";
 import { RecordFormSheet } from "../../../lib/record-sheet";
 import { useFinanceYear } from "../finance-year-context";
 import { moduleBreadcrumbs } from "../../../lib/page-header-utils";
+import { useTenantFormats } from "../../../lib/use-tenant-formats";
 import { PageHeader } from "../../page-header-context";
 import { FinanceTableShell } from "../finance-table-shell";
-import { appendIssueDateRangeParams, formatBillingMonth, formatCreatedAt } from "../format-finance";
+import { appendIssueDateRangeParams } from "../format-finance";
 import {
   PdsDatePickerField,
   PdsSearchBar,
@@ -69,17 +69,6 @@ const METHOD_ICONS: Record<string, string> = {
   bank_transfer: "account_balance",
   cash: "payments"
 };
-
-const fullNumber = formatMMK;
-
-function formatDate(value: string | null) {
-  if (!value) return "—";
-  return new Date(value).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric"
-  });
-}
 
 function defaultPaidAtLocal() {
   const now = new Date();
@@ -172,6 +161,7 @@ export default function PaymentsPage() {
   const nav = useTranslations("nav");
   const c = useTranslations("common");
   const router = useRouter();
+  const { formatDate, formatDateTime, formatMonth, formatMoney } = useTenantFormats();
 
   const { academicYearId, isLifetime, yearsLoading } = useFinanceYear();
 
@@ -364,8 +354,8 @@ export default function PaymentsPage() {
                     <td>
                       <strong>{row.paymentNumber ?? row.receiptNumber ?? row.referenceNumber ?? "—"}</strong>
                     </td>
-                    <td className="padauk-table__muted">{formatCreatedAt(row.createdAt)}</td>
-                    <td>{formatBillingMonth(row.billingMonth)}</td>
+                    <td className="padauk-table__muted">{formatDateTime(row.createdAt)}</td>
+                    <td>{formatMonth(row.billingMonth)}</td>
                     <td>{tFinance(`paymentPlanLabels.${row.paymentPlan}`)}</td>
                     <td className="padauk-table__muted">{formatDate(row.paidAt)}</td>
                     <td>
@@ -383,7 +373,7 @@ export default function PaymentsPage() {
                     <td className="padauk-table__num">
                       <div className="pds-type-body-s-regular padauk-table__stack">
                         <strong className="padauk-table__amount">
-                          +{fullNumber(Number(row.amount))}
+                          +{formatMoney(Number(row.amount))}
                         </strong>
                         <span>{row.recordedByName ?? "—"}</span>
                       </div>
@@ -483,7 +473,7 @@ export default function PaymentsPage() {
             <div className="verify-summary__row">
               <dt className="pds-type-body-s-regular muted">{tFinance("amount")}</dt>
               <dd className="pds-type-title-xxs-extrabold verify-summary__amount">
-                {fullNumber(Number(verifyTarget.amount))}
+                {formatMoney(Number(verifyTarget.amount))}
               </dd>
             </div>
             <div className="verify-summary__row">
@@ -500,7 +490,7 @@ export default function PaymentsPage() {
             <div className="verify-summary__row">
               <dt className="pds-type-body-s-regular muted">{tFinance("paidAt")}</dt>
               <dd className="pds-type-body-m-medium">
-                {formatCreatedAt(verifyTarget.paidAt)}
+                {formatDateTime(verifyTarget.paidAt)}
               </dd>
             </div>
           </dl>

@@ -639,7 +639,7 @@ h3,
 
 .dash-nav-sublink {
   align-items: center;
-  border-radius: var(--pds-radius-12);
+  border-radius: var(--pds-radius-8);
   color: var(--pds-muted-on-dark);
   column-gap: var(--pds-gap-small);
   display: flex;
@@ -3794,7 +3794,7 @@ button.btn-hero-outline:hover {
 .pds-attendance-toggle--present {
   background: var(--pds-notification-background-success-hover);
   border-color: var(--pds-status-success-lower);
-  color: var(--pds-status-success);
+  color: var(--pds-notification-foreground-success);
 }
 
 .pds-attendance-toggle--late {
@@ -4629,11 +4629,11 @@ button.btn-hero-outline:hover {
 .people-billing__row {
   align-items: center;
   border: 1px solid var(--pds-border-color-primary);
-  border-radius: var(--pds-border-radius-12, 12px);
+  border-radius: var(--pds-radius-12);
   display: flex;
   gap: var(--pds-gap-medium);
   justify-content: space-between;
-  padding: var(--pds-padding-medium, 16px);
+  padding: var(--pds-padding-medium);
 }
 
 .people-billing__main {
@@ -5501,7 +5501,7 @@ button.btn-hero-outline:hover {
   opacity: 0.8;
 }.archived-record-banner {
   align-items: center;
-  background: var(--pds-background-layout-primary);
+  background: var(--pds-background-secondary);
   border: 1px solid var(--pds-border-color-primary);
   border-radius: var(--pds-radius-12);
   display: flex;
@@ -6532,7 +6532,7 @@ button.btn-hero-outline:hover {
 
 .input-wrapper__required {
   color: var(--pds-status-error);
-  font-size: var(--pds-type-body-m-medium-size, 0.875rem);
+  font-size: var(--pds-type-body-m-medium-font-size);
   line-height: 1;
 }
 
@@ -6568,8 +6568,8 @@ button.btn-hero-outline:hover {
 }
 
 .input-wrapper__link a {
-  color: var(--pds-foreground-link, var(--pds-color-spring-green-700));
-  font-size: var(--pds-type-body-m-medium-font-size, 0.875rem);
+  color: var(--pds-foreground-link);
+  font-size: var(--pds-type-body-m-medium-font-size);
   font-weight: 500;
   text-decoration: underline;
 }
@@ -8578,9 +8578,9 @@ button.btn-hero-outline:hover {
 /* Read-only payment summary shown inside the Verify payment modal so the
    operator can match amount / method / reference against the bank or wallet. */
 .verify-summary {
-  background: var(--pds-background-subtle, var(--pds-background-card));
+  background: var(--pds-background-secondary);
   border: 1px solid var(--pds-border-color-primary);
-  border-radius: var(--pds-border-radius-12, 12px);
+  border-radius: var(--pds-radius-12);
   display: flex;
   flex-direction: column;
   gap: var(--pds-gap-small);
@@ -10210,7 +10210,7 @@ button.btn-hero-outline:hover {
 .record-sheet__content {
   background: var(--pds-background-card);
   border-left: 1px solid var(--pds-border-color-primary);
-  box-shadow: var(--pds-shadow-lg, 0 8px 32px rgba(15, 47, 31, 0.12));
+  box-shadow: 0 8px 32px color-mix(in srgb, var(--pds-color-spring-green-950) 12%, transparent);
 }
 
 .record-sheet__close {

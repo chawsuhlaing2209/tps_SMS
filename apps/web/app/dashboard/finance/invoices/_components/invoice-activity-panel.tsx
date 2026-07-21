@@ -4,8 +4,7 @@ import { useTranslations } from "next-intl";
 import { useApiQuery } from "../../../../lib/api";
 import { EmptyState } from "../../../../../components/shared/empty-state";
 import { Icon } from "../../../../lib/material-icon";
-import { formatMMK } from "../../../../lib/money";
-import { formatCreatedAt } from "../../format-finance";
+import { useTenantFormats } from "../../../../lib/use-tenant-formats";
 
 type InvoiceActivityEvent = {
   id: string;
@@ -33,6 +32,7 @@ const ACTION_PRESENTATION: Record<string, { icon: string; tone: "neutral" | "pos
 export function InvoiceActivityPanel({ invoiceId }: { invoiceId: string }) {
   const t = useTranslations("finance");
   const tPay = useTranslations("enrollments");
+  const { formatDateTime, formatMoney } = useTenantFormats();
 
   const { data, isLoading } = useApiQuery<{ data: InvoiceActivityEvent[] }>(
     (tid) => `/tenants/${tid}/finance/invoices/${invoiceId}/activity`
@@ -52,7 +52,7 @@ export function InvoiceActivityPanel({ invoiceId }: { invoiceId: string }) {
     const rawAmount = event.after?.amount;
     const amount =
       typeof rawAmount === "string" || typeof rawAmount === "number"
-        ? formatMMK(Number(rawAmount))
+        ? formatMoney(Number(rawAmount))
         : "";
     const method = methodLabel(event.after?.method);
 
@@ -90,7 +90,7 @@ export function InvoiceActivityPanel({ invoiceId }: { invoiceId: string }) {
                     {sentence(event)}
                   </p>
                   <p className="pds-type-body-s-regular muted activity-timeline__meta">
-                    {formatCreatedAt(event.createdAt)}
+                    {formatDateTime(event.createdAt)}
                     {event.reason ? <> · {event.reason}</> : null}
                   </p>
                 </div>

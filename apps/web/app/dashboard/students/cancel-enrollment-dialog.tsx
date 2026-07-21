@@ -6,8 +6,8 @@ import { paymentMethods, type PaymentMethod } from "@sms/shared";
 import { useApiMutation, useApiQuery } from "../../lib/api";
 import { Field } from "../../lib/form";
 import { Icon } from "../../lib/material-icon";
-import { formatMMK } from "../../lib/money";
 import { RecordFormSheet } from "../../lib/record-sheet";
+import { useTenantFormats } from "../../lib/use-tenant-formats";
 import { toastSuccess } from "../../lib/toast";
 import {
   FormSelect,
@@ -40,6 +40,7 @@ export function CancelEnrollmentDialog({
   const f = useTranslations("finance");
   const c = useTranslations("common");
   const tPay = useTranslations("enrollments.paymentMethods");
+  const { formatMoney } = useTenantFormats();
 
   const [refundMode, setRefundMode] = useState<RefundMode>("none");
   const [refundAmount, setRefundAmount] = useState("");
@@ -134,7 +135,7 @@ export function CancelEnrollmentDialog({
     >
       <div className="cancel-enrollment__summary">
         <span className="pds-type-body-s-regular muted">{t("netCashPaid")}</span>
-        <strong className="pds-type-title-xxs-extrabold">{formatMMK(netCash)}</strong>
+        <strong className="pds-type-title-xxs-extrabold">{formatMoney(netCash)}</strong>
       </div>
 
       <Field label={t("refundMode")}>
@@ -189,8 +190,8 @@ export function CancelEnrollmentDialog({
 
       <p className="pds-type-body-s-regular muted cancel-enrollment__preview">
         {t("cancelPreview", {
-          refunded: formatMMK(refundPreview),
-          forfeited: formatMMK(forfeitPreview)
+          refunded: formatMoney(refundPreview),
+          forfeited: formatMoney(forfeitPreview)
         })}
       </p>
     </RecordFormSheet>

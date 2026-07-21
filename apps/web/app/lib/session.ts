@@ -1,5 +1,7 @@
 "use client";
 
+import type { TenantPreferences } from "@sms/shared";
+
 const STORAGE_KEY = "sms.session";
 
 export type Session = {
@@ -11,6 +13,8 @@ export type Session = {
   isPlatform?: boolean;
   roles?: string[];
   permissions?: string[];
+  /** Tenant display preferences cached from /auth/me for instant first paint. */
+  preferences?: TenantPreferences | null;
 };
 
 export function isPlatformSession(session: Session | null | undefined): boolean {

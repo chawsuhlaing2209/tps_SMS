@@ -31,14 +31,6 @@ export const metadata: Metadata = {
   }
 };
 
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  // Draw under notches/home indicators; safe-area insets are handled in CSS.
-  viewportFit: "cover",
-  themeColor: "#0a2a1d" // --pds-color-spring-green-1000
-};
-
 export default async function RootLayout({
   children
 }: Readonly<{

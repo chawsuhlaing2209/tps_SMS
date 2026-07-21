@@ -4,8 +4,8 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { EmptyState } from "../../../components/shared/empty-state";
 import { TrailLink } from "../../../components/shared/trail-link";
-import { formatMMK } from "../../lib/money";
 import { Icon } from "../../lib/material-icon";
+import { useTenantFormats } from "../../lib/use-tenant-formats";
 import { RecordPaymentModal } from "../finance/invoices/_components/record-payment-modal";
 
 export type BillingMember = {
@@ -45,6 +45,7 @@ export function PeopleBillingPanel({
 }) {
   const f = useTranslations("finance");
   const c = useTranslations("common");
+  const { formatMoney } = useTenantFormats();
   const [collectStudentId, setCollectStudentId] = useState<string | null>(null);
 
   return (
@@ -72,14 +73,14 @@ export function PeopleBillingPanel({
                   {member.fullName}
                 </TrailLink>
                 <span className="pds-type-body-s-regular muted">
-                  {f("totalPaid")}: {formatMMK(member.totalPaid)}
+                  {f("totalPaid")}: {formatMoney(member.totalPaid)}
                 </span>
               </div>
               <div className="people-billing__trailing">
                 <div className="people-billing__amount">
                   <span className="pds-type-body-s-regular muted">{f("totalOutstanding")}</span>
                   <strong className="pds-type-title-xxs-extrabold">
-                    {formatMMK(member.totalOutstanding)}
+                    {formatMoney(member.totalOutstanding)}
                   </strong>
                 </div>
                 {canCollect && academicYearId && member.recordable > 0 ? (
