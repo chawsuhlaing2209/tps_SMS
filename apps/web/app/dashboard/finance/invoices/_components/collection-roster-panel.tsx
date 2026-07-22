@@ -47,7 +47,9 @@ type Roster = {
 type StatusFilter = "all" | "paid" | "partial" | "due" | "overdue";
 
 const PAGE_SIZE = 50;
-const STATUS_FILTER_OPTIONS: StatusFilter[] = ["all", "paid", "partial", "due", "overdue"];
+// "Partial" stays as a row badge but not as a filter: Due now includes partial
+// payers (balance > 0, not past due), so Due + Overdue = the Outstanding card.
+const STATUS_FILTER_OPTIONS: StatusFilter[] = ["all", "paid", "due", "overdue"];
 const STATUS_TONES: Record<import("./record-payment-modal").RosterRow["status"], BadgeTone> = {
   paid: "success",
   partial: "warning",

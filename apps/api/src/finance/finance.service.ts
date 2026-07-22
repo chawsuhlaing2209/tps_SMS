@@ -1,6 +1,6 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common'
 import { buildInvoiceNumber, buildPaymentNumber, billingMonthFromIssueDate, computeRecordablePaymentBalance, paymentPlanKeyFromInvoiceSource } from '@sms/shared'
-import { and, eq, gte, lte, inArray, isNotNull, isNull, ne, sql, sum, count, asc, desc, exists, ilike, or } from 'drizzle-orm'
+import { and, eq, gte, lt, lte, inArray, isNotNull, isNull, ne, sql, sum, count, asc, desc, exists, ilike, or } from 'drizzle-orm'
 import { AuditService } from '../audit/audit.service.js'
 import { DB, type Database } from '../db/db.module.js'
 import {
@@ -904,8 +904,24 @@ export class FinanceService {
 
   async listInvoices(tenantId: string, query: ListInvoicesQueryDto) {
     const conditions = [eq(invoices.tenantId, tenantId)]
-    const statusFilter = query.status === 'due' ? 'unpaid' : query.status
-    if (statusFilter) conditions.push(eq(invoices.status, statusFilter as any))
+    // Status semantics are date-aware, not the stored column alone: nothing
+    // flips a stored status to 'overdue' when a due date passes, so "due" and
+    // "overdue" are derived — due = open and not past due (includes partially
+    // paid), overdue = open and past due. This keeps the list in lockstep with
+    // the Collection/Overview cards, which compute overdue from due dates.
+    const todayIso = new Date().toISOString().slice(0, 10)
+    const openStatuses = ['unpaid', 'partial', 'overdue'] as const
+    if (query.status === 'due') {
+      conditions.push(inArray(invoices.status, openStatuses as any))
+      conditions.push(
+        or(isNull(invoices.dueDate), gte(invoices.dueDate, todayIso))!
+      )
+    } else if (query.status === 'overdue') {
+      conditions.push(inArray(invoices.status, openStatuses as any))
+      conditions.push(lt(invoices.dueDate, todayIso))
+    } else if (query.status) {
+      conditions.push(eq(invoices.status, query.status as any))
+    }
     if (query.studentId) conditions.push(eq(invoices.studentId, query.studentId))
     if (query.source) conditions.push(eq(invoices.source, query.source as 'enrollment' | 'recurring' | 'ad_hoc'))
 
@@ -1037,9 +1053,22 @@ export class FinanceService {
     const data = rows.map((row) => {
       const total = Number(row.total)
       const paid = Number(row.verifiedPaid ?? 0)
+      const balanceDue = Math.max(0, total - paid)
+      // Derive the display status live (see the filter note above): stored
+      // statuses go stale once a due date passes or a partial payment lands.
+      const isOpen = (openStatuses as readonly string[]).includes(row.status)
+      const status =
+        isOpen && balanceDue > 0
+          ? row.dueDate && row.dueDate < todayIso
+            ? ('overdue' as const)
+            : paid > 0
+              ? ('partial' as const)
+              : ('unpaid' as const)
+          : row.status
       return {
         ...row,
-        balanceDue: Math.max(0, total - paid),
+        status,
+        balanceDue,
         verifiedPaid: paid,
         billingMonth: billingMonthFromIssueDate(row.issueDate),
         paymentPlan: paymentPlanKeyFromInvoiceSource(row.source),
@@ -2290,7 +2319,14 @@ export class FinanceService {
 
     let filtered = rows
     if (query.owingOnly) filtered = filtered.filter((row) => row.balance > 0)
-    if (query.status) filtered = filtered.filter((row) => row.status === query.status)
+    if (query.status === 'due') {
+      // "Due" means the student owes money and isn't past due yet — including
+      // partial payers. Due + Overdue together equal the Outstanding card's
+      // "students owing" count, so the list always reconciles with the cards.
+      filtered = filtered.filter((row) => row.balance > 0 && row.status !== 'overdue')
+    } else if (query.status) {
+      filtered = filtered.filter((row) => row.status === query.status)
+    }
     if (query.search) {
       const needle = query.search.toLowerCase()
       filtered = filtered.filter(

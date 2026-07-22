@@ -50,7 +50,9 @@ type InvoiceList = { data: InvoiceRow[]; total: number; limit: number; offset: n
 type StatusFilter = "all" | "paid" | "partial" | "due" | "overdue";
 type SourceFilter = "all" | InvoiceSource;
 
-const STATUS_FILTER_OPTIONS: StatusFilter[] = ["all", "paid", "partial", "due", "overdue"];
+// "Partial" stays as a row badge but not as a filter: Due now includes partial
+// payers (open + not past due), so Due + Overdue = everything owing.
+const STATUS_FILTER_OPTIONS: StatusFilter[] = ["all", "paid", "due", "overdue"];
 const PAGE_SIZE = 50;
 
 const STATUS_TONES: Record<string, BadgeTone> = {
