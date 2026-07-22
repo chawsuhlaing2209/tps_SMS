@@ -350,7 +350,7 @@ export function InvoicesListPanel() {
                 const dueLabel = row.dueDate ? formatDate(row.dueDate) : null;
                 const gradeRoom = [row.gradeName, row.classroomName].filter(Boolean).join(" · ");
                 const openInvoice = () => {
-                  appendNavigationTrail({ label: tFees("title"), href: currentUrl });
+                  appendNavigationTrail({ label: t("title"), href: currentUrl });
                   router.push(`/dashboard/finance/invoices/${row.id}`);
                 };
                 return (
