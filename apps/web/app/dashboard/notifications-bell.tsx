@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useLiveApiQuery } from "../lib/api";
 import { Icon } from "../lib/material-icon";
 import { formatMMK } from "../lib/money";
+import { useTenantFormats } from "../lib/use-tenant-formats";
 
 const SEEN_KEY = "pds-notifications-seen-at";
 
@@ -25,18 +26,10 @@ const TYPE_ICONS: Record<NotificationItem["type"], string> = {
   newEnquiry: "how_to_reg"
 };
 
-function formatWhen(value: string) {
-  return new Date(value).toLocaleString("en-GB", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
-}
-
 /** Top-bar notifications bell: actionable work queues, dot for unseen items. */
 export function NotificationsBell() {
   const t = useTranslations("nav");
+  const { formatDateTime } = useTenantFormats();
   const router = useRouter();
   const [seenAt, setSeenAt] = useState<string | null>(null);
 
@@ -122,7 +115,7 @@ export function NotificationsBell() {
                       {itemLabel(item)}
                     </span>
                     <span className="pds-type-caption-s muted notif-menu__when">
-                      {formatWhen(item.createdAt)}
+                      {formatDateTime(item.createdAt)}
                     </span>
                   </span>
                 </button>

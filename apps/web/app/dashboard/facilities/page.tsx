@@ -230,7 +230,10 @@ export default function FacilitiesPage() {
                     <span className="facility-rooms-table__name">{row.name}</span>
                   </td>
                   <td className="padauk-table__num">{row.capacity ?? "—"}</td>
-                  <td className="padauk-table__muted facility-rooms-table__note">
+                  <td
+                    className="padauk-table__muted facility-rooms-table__note"
+                    title={row.note ?? undefined}
+                  >
                     {row.note ? row.note : "—"}
                   </td>
                   <td>

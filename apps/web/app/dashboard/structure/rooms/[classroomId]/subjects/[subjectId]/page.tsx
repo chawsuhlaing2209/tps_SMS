@@ -5,6 +5,7 @@ import { useMemo, use } from "react";
 import { useApiQuery } from "../../../../../../lib/api";
 import { RecordList, RecordListItem, RecordListPanel } from "../../../../../../lib/record-list";
 import { useCurrentAcademicYear } from "../../../../../../lib/use-current-academic-year";
+import { useTenantFormats } from "../../../../../../lib/use-tenant-formats";
 import { PageHeader } from "../../../../../page-header-context";
 import { EmptyState } from "../../../../../../../components/shared/empty-state";
 import { NavigationBackLink } from "../../../../../../../components/shared/navigation-back-link";
@@ -51,6 +52,7 @@ export default function StructureSubjectClassroomPage({
   const { classroomId, subjectId } = use(params);
   const t = useTranslations("academics");
   const c = useTranslations("common");
+  const { formatDate } = useTenantFormats();
   const currentYear = useCurrentAcademicYear();
 
   const classroom = useApiQuery<Classroom>((tenant) => `/tenants/${tenant}/classrooms/${classroomId}`);
@@ -180,7 +182,7 @@ export default function StructureSubjectClassroomPage({
                 title={assignment.title}
                 meta={
                   assignment.dueAt
-                    ? t("dueOn", { date: new Date(assignment.dueAt).toLocaleDateString() })
+                    ? t("dueOn", { date: formatDate(assignment.dueAt) })
                     : t("noDueDate")
                 }
               />

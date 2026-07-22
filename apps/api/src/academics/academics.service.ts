@@ -1536,6 +1536,9 @@ export class AcademicsService {
           )
         )
         .groupBy(classrooms.academicYearId),
+      // No grade-status filter: archiving a year archives its grades, and this
+      // overview must still report how many grades that year ran with (matches
+      // classroomCount/studentCount, which never filtered by status).
       this.db.execute<{ year_id: string; count: number }>(sql`
         SELECT year_id, COUNT(DISTINCT grade_id)::int AS count
         FROM (
@@ -1544,15 +1547,13 @@ export class AcademicsService {
           INNER JOIN ${grades} g ON g.id = c.grade_id
           WHERE c.tenant_id = ${tenantId}
             AND g.tenant_id = ${tenantId}
-            AND g.status = 'active'
           UNION
           SELECT gs.academic_year_id AS year_id, gs.grade_id AS grade_id
           FROM ${gradeSubjects} gs
           INNER JOIN ${grades} g ON g.id = gs.grade_id
           WHERE gs.tenant_id = ${tenantId}
             AND g.tenant_id = ${tenantId}
-            AND g.status = 'active'
-        ) active_grades
+        ) year_grades
         GROUP BY year_id
       `)
     ]);

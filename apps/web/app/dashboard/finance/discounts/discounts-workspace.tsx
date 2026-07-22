@@ -28,6 +28,7 @@ import { getSession } from "../../../lib/session";
 import { useFinanceYear } from "../finance-year-context";
 import { useTenantFormats } from "../../../lib/use-tenant-formats";
 import { PageHeader } from "../../page-header-context";
+import { moduleBreadcrumbs } from "../../../lib/page-header-utils";
 import { DiscountSetupModal } from "./discount-setup-workspace";
 import { type DiscountRuleRecord } from "./discount-form";
 
@@ -354,10 +355,7 @@ export function DiscountsWorkspace() {
     <div className="discounts-config-page">
       <PageHeader
         title={t("pageTitle")}
-        breadcrumbs={[
-          { label: nav("finance"), href: "/dashboard/finance/invoices" },
-          { label: t("pageTitle") }
-        ]}
+        breadcrumbs={moduleBreadcrumbs("discounts", nav)}
         actions={
           canManage ? (
             <button type="button" className="btn-primary" onClick={openCreate}>

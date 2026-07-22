@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, renderHook, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactNode } from "react";
@@ -24,13 +25,20 @@ function mockMatchMedia(matches: boolean) {
 }
 
 function wrap(ui: ReactNode) {
+  // DataTable formats "Last updated" through useTenantFormats, which reads
+  // tenant preferences via react-query — the render needs a QueryClient.
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } }
+  });
   return render(
-    <NextIntlClientProvider
-      locale="en"
-      messages={{ common: { lastUpdated: "Last updated", openRecord: "Open record" } }}
-    >
-      {ui}
-    </NextIntlClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <NextIntlClientProvider
+        locale="en"
+        messages={{ common: { lastUpdated: "Last updated", openRecord: "Open record" } }}
+      >
+        {ui}
+      </NextIntlClientProvider>
+    </QueryClientProvider>
   );
 }
 

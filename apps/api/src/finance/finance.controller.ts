@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Patch, Put, Delete, Body, Param, Query, Headers, UseGuards,
+  Controller, Get, Post, Patch, Put, Delete, Body, Param, ParseUUIDPipe, Query, Headers, UseGuards,
 } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { PermissionsGuard } from '../identity/permissions.guard.js'
@@ -160,7 +160,7 @@ export class FinanceController {
   @RequirePermissions('finance.manage')
   getFeeStructureSummary(
     @Param('tenantId') tenantId: string,
-    @Query('academicYearId') academicYearId: string,
+    @Query('academicYearId', new ParseUUIDPipe()) academicYearId: string,
   ) {
     return this.financeService.getFeeStructureSummary(tenantId, academicYearId)
   }

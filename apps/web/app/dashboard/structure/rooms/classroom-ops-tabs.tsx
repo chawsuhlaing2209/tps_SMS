@@ -14,6 +14,7 @@ import { CancelEnrollmentDialog } from "../../students/cancel-enrollment-dialog"
 import { useDashPageTitleActionsTarget } from "../../dashboard-page-title";
 import { getSession } from "../../../lib/session";
 import { DataTable } from "../../../lib/data-table";
+import { useTenantFormats } from "../../../lib/use-tenant-formats";
 import { Field } from "../../../lib/form";
 import { Icon } from "../../../lib/material-icon";
 import { EntityList, EntityListItem, PdsSelectField, SegmentedControl } from "../../../../components/pds";
@@ -115,6 +116,7 @@ export function ClassroomOpsTabs({
 }) {
   const t = useTranslations("classrooms");
   const c = useTranslations("common");
+  const { formatDate } = useTenantFormats();
   const permissions = getSession()?.permissions;
   const canMark = hasAnyPermission(permissions, ["attendance.mark"]);
   const canLms = hasAnyPermission(permissions, ["lms.manage"]);
@@ -348,7 +350,7 @@ export function ClassroomOpsTabs({
     {
       id: "due",
       header: t("dueDate"),
-      accessorFn: (row) => (row.dueAt ? new Date(row.dueAt).toLocaleDateString() : "—")
+      accessorFn: (row) => (row.dueAt ? formatDate(row.dueAt) : "—")
     }
   ];
 
