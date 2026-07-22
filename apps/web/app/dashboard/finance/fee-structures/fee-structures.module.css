@@ -118,6 +118,13 @@
   margin: var(--pds-gap-small) 0 0;
 }
 
+.heroAside {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pds-gap-medium);
+}
+
 .heroStats {
   align-items: flex-start;
   display: flex;

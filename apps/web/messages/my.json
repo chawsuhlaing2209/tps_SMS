@@ -1352,6 +1352,7 @@
     "appliedGradesStat": "သက်ဆိုင်သည့်အတန်း",
     "whereItApplies": "သက်ဆိုင်သည့် အတန်းများ",
     "renameComponent": "အမည်ပြောင်းမည်",
+    "editComponent": "ကြေးအစိတ်အပိုင်း ပြင်ဆင်မည်",
     "archiveComponent": "အစိတ်အပိုင်းကို ဖျောက်မလား။",
     "deleteComponent": "Component ဖျက်မည်",
     "deleteComponentHelp": "{name} ကို သက်ဆိုင်သော အတန်းအားလုံးမှ ဖယ်ရှားမည်။ ပြန်မရနိုင်ပါ။",
