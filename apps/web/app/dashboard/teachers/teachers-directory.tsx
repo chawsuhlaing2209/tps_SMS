@@ -22,6 +22,7 @@ import { TeacherCreateSheet } from "./teacher-create-sheet";
 import { ConfirmDialog } from "../../../components/shared/confirm-dialog";
 import { RowMoreActionsMenu } from "../../../components/shared/row-more-actions";
 import { useTeachersActions } from "./teachers-actions-provider";
+import { useListParams } from "../../lib/use-list-params";
 
 type TeacherProfile = {
   eligibleGradeIds?: string[];
@@ -92,15 +93,24 @@ export function TeachersDirectory() {
   const canView = canManageHr || hasAnyPermission(permissions, ["classroom.manage"]);
   const { createOpen, setCreateOpen } = useTeachersActions();
 
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [gradeFilter, setGradeFilter] = useState("");
-  const [viewFilter, setViewFilter] = useState<"active" | "archived" | "all">("active");
-  const [page, setPage] = useState(0);
+  // Filters live in the URL so opening a profile and coming back restores them.
+  const { get, patch } = useListParams();
+  const statusFilter = get("status");
+  const gradeFilter = get("grade");
+  const viewFilter = (get("view") || "active") as "active" | "archived" | "all";
+  const urlSearch = get("q");
+  const [search, setSearch] = useState(urlSearch);
+  const page = Math.max(0, Number(get("page", "0")) || 0);
 
   useEffect(() => {
-    setPage(0);
-  }, [search, statusFilter, gradeFilter, viewFilter]);
+    const timer = window.setTimeout(() => {
+      const next = search.trim();
+      if (next !== urlSearch) {
+        patch({ q: next || null, page: null });
+      }
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [search, urlSearch, patch]);
 
   const queryPath = useMemo(
     () => (tenant: string) =>
@@ -301,7 +311,7 @@ export function TeachersDirectory() {
                 <PdsSelectField
                   variant="filter"
                   value={gradeFilter}
-                  onValueChange={(value) => setGradeFilter(typeof value === "string" ? value : "")}
+                  onValueChange={(value) => patch({ grade: (typeof value === "string" && value) || null, page: null })}
                   placeholder={t("allGrades")}
                   options={(grades.data ?? [])
                     .filter((grade) => grade.status !== "archived")
@@ -315,7 +325,7 @@ export function TeachersDirectory() {
                 <PdsSelectField
                   variant="filter"
                   value={statusFilter}
-                  onValueChange={(value) => setStatusFilter(typeof value === "string" ? value : "")}
+                  onValueChange={(value) => patch({ status: (typeof value === "string" && value) || null, page: null })}
                   placeholder={t("allStatuses")}
                   options={[
                     { value: "active", label: t("statusActive") },
@@ -328,7 +338,7 @@ export function TeachersDirectory() {
             </>
           }
           statusControl={
-            <ArchiveVisibilityFilter value={viewFilter} onChange={setViewFilter} />
+            <ArchiveVisibilityFilter value={viewFilter} onChange={(value) => patch({ view: value === "active" ? null : value, page: null })} />
           }
         />
 
@@ -362,7 +372,7 @@ export function TeachersDirectory() {
         page={page}
         pageSize={PAGE_SIZE}
         total={teachers.data?.total ?? 0}
-        onPageChange={setPage}
+        onPageChange={(next) => patch({ page: next > 0 ? String(next) : null })}
       />
 
       <TeacherCreateSheet

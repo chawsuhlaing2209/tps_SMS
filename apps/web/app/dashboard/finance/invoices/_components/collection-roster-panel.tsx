@@ -22,6 +22,8 @@ import { BillingInvoicePreviewModal } from "./invoice-preview-modal";
 import { InvoicesIssueDateRangeFilter, useInvoicesActionsContext } from "./invoices-actions-provider";
 import { RecordPaymentModal } from "./record-payment-modal";
 import { appendIssueDateRangeParams } from "../../format-finance";
+import { useListParams } from "../../../../lib/use-list-params";
+import { isPadaukRowInteractiveTarget } from "../../../../lib/table-row-interaction";
 
 type Roster = {
   academicYear: { id: string; name: string };
@@ -155,10 +157,13 @@ export function CollectionRosterPanel() {
   const academicYearId = financeYear.academicYearId;
   const isLifetime = financeYear.isLifetime;
 
-  const [gradeId, setGradeId] = useState("");
-  const [status, setStatus] = useState<StatusFilter>("all");
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(0);
+  // Filters live in the URL so opening an invoice and coming back restores them.
+  const { get, patch } = useListParams();
+  const gradeId = get("grade");
+  const status = (get("status") || "all") as StatusFilter;
+  const urlSearch = get("q");
+  const [search, setSearch] = useState(urlSearch);
+  const page = Math.max(0, Number(get("page", "0")) || 0);
   const [modalOpen, setModalOpen] = useState(false);
   const [collectStudentId, setCollectStudentId] = useState<string | null>(null);
   const [previewInvoiceId, setPreviewInvoiceId] = useState<string | null>(null);
@@ -170,8 +175,20 @@ export function CollectionRosterPanel() {
   });
 
   useEffect(() => {
-    setPage(0);
-  }, [gradeId, status, search, sortKey, sortDir, issueDateRange]);
+    const timer = window.setTimeout(() => {
+      const next = search.trim();
+      if (next !== urlSearch) {
+        patch({ q: next || null, page: null });
+      }
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [search, urlSearch, patch]);
+
+  useEffect(() => {
+    // Sort changes re-rank the whole list — jump back to the first page.
+    patch({ page: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortKey, sortDir, issueDateRange]);
 
   const rosterQuery = useMemo(() => {
     const params = new URLSearchParams({
@@ -187,7 +204,7 @@ export function CollectionRosterPanel() {
     }
     if (gradeId) params.set("gradeId", gradeId);
     if (status !== "all") params.set("status", status);
-    if (search.trim()) params.set("search", search.trim());
+    if (urlSearch) params.set("search", urlSearch);
     appendIssueDateRangeParams(params, issueDateRange);
     return params.toString();
   }, [academicYearId, isLifetime, issueDateRange, gradeId, page, search, sortDir, sortKey, status]);
@@ -279,7 +296,7 @@ export function CollectionRosterPanel() {
               <PdsSelectField
                 variant="filter"
                 value={gradeId}
-                onValueChange={(value) => setGradeId(typeof value === "string" ? value : "")}
+                onValueChange={(value) => patch({ grade: (typeof value === "string" && value) || null, page: null })}
                 placeholder={tFees("allGrades")}
                 options={grades.map((grade) => ({ value: grade.id, label: grade.name }))}
               />
@@ -289,7 +306,8 @@ export function CollectionRosterPanel() {
                 variant="filter"
                 value={status}
                 onValueChange={(value) => {
-                  setStatus((typeof value === "string" ? value : "all") as StatusFilter);
+                  const next = typeof value === "string" ? value : "all";
+                  patch({ status: next === "all" ? null : next, page: null });
                 }}
                 placeholder={tFees("statusFilters.all")}
                 options={STATUS_FILTER_OPTIONS.map((value) => ({
@@ -361,7 +379,23 @@ export function CollectionRosterPanel() {
               {rows.map((row) => {
                 const gradeRoom = [row.gradeName, row.classroomName].filter(Boolean).join(" · ");
                 return (
-                  <tr key={row.studentId}>
+                  <tr
+                    key={row.studentId}
+                    className={row.primaryInvoiceId ? "table-row--clickable" : undefined}
+                    tabIndex={row.primaryInvoiceId ? 0 : undefined}
+                    onClick={(event) => {
+                      if (!row.primaryInvoiceId) return;
+                      if (isPadaukRowInteractiveTarget(event.target)) return;
+                      setPreviewInvoiceId(row.primaryInvoiceId);
+                    }}
+                    onKeyDown={(event) => {
+                      if (!row.primaryInvoiceId) return;
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      if (isPadaukRowInteractiveTarget(event.target)) return;
+                      event.preventDefault();
+                      setPreviewInvoiceId(row.primaryInvoiceId);
+                    }}
+                  >
                     <td>
                       <DirectoryMemberCell
                         name={row.studentFullName}
@@ -433,7 +467,7 @@ export function CollectionRosterPanel() {
         page={page}
         pageSize={PAGE_SIZE}
         total={data?.total ?? 0}
-        onPageChange={setPage}
+        onPageChange={(next) => patch({ page: next > 0 ? String(next) : null })}
       />
 
       <RecordPaymentModal

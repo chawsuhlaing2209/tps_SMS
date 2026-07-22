@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { apiFetch, useApiQuery, useReferenceApiQuery } from "../../lib/api";
 import { useCurrentAcademicYear } from "../../lib/use-current-academic-year";
+import { useListParams } from "../../lib/use-list-params";
 import { getSession } from "../../lib/session";
 import { DataTable, deriveInitials } from "../../lib/data-table";
 import { Icon } from "../../lib/material-icon";
@@ -68,9 +69,11 @@ export function EnrollmentsWorkspace({
   const [resumeEnrollmentId, setResumeEnrollmentId] = useState<string | null>(null);
   const [prefillStudentId, setPrefillStudentId] = useState<string | null>(null);
   const [prefillClassroomId, setPrefillClassroomId] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState("");
-  const [gradeFilter, setGradeFilter] = useState("");
-  const [dateFilter, setDateFilter] = useState(() => currentMonthDayRangeValue());
+  // Filters live in the URL so opening a record and coming back restores them.
+  const { get, patch } = useListParams();
+  const statusFilter = get("status");
+  const gradeFilter = get("grade");
+  const dateFilter = get("range", currentMonthDayRangeValue());
   const [cancelTarget, setCancelTarget] = useState<EnrollmentRow | null>(null);
 
   const currentYear = useCurrentAcademicYear();
@@ -287,7 +290,7 @@ export function EnrollmentsWorkspace({
                 <PdsSelectField
                   variant="filter"
                   value={statusFilter}
-                  onValueChange={(value) => setStatusFilter(typeof value === "string" ? value : "")}
+                  onValueChange={(value) => patch({ status: (typeof value === "string" && value) || null })}
                   placeholder={t("allStatuses")}
                   options={[
                     { value: "draft", label: t("status_draft") },
@@ -301,7 +304,7 @@ export function EnrollmentsWorkspace({
                 <PdsSelectField
                   variant="filter"
                   value={gradeFilter}
-                  onValueChange={(value) => setGradeFilter(typeof value === "string" ? value : "")}
+                  onValueChange={(value) => patch({ grade: (typeof value === "string" && value) || null })}
                   placeholder={t("allGrades")}
                   options={(grades.data ?? []).map((g) => ({ value: g.id, label: g.name }))}
                 />
@@ -312,7 +315,7 @@ export function EnrollmentsWorkspace({
                   variant="filter"
                   selectionMode="range"
                   value={dateFilter}
-                  onValueChange={setDateFilter}
+                  onValueChange={(value) => patch({ range: value ?? "" })}
                   ariaLabel={t("enrolledBetween")}
                   placeholder={t("enrolledBetween")}
                 />

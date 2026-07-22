@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useApiQuery } from "../../../../lib/api";
@@ -18,6 +19,9 @@ import { Badge, type BadgeTone } from "../../../../../components/shared/badge";
 import { FinanceTableShell } from "../../finance-table-shell";
 import { appendIssueDateRangeParams } from "../../format-finance";
 import { PadaukSortHeader, usePadaukSort } from "../../table-sort";
+import { useListParams } from "../../../../lib/use-list-params";
+import { appendNavigationTrail } from "../../../../lib/navigation-trail";
+import { isPadaukRowInteractiveTarget } from "../../../../lib/table-row-interaction";
 import {
   PdsSearchBar,
   PdsSearchFiltersRow,
@@ -180,14 +184,17 @@ export function InvoicesListPanel() {
   const tFees = useTranslations("finance.feesBilling");
   const tFinance = useTranslations("finance");
   const { formatDate, formatDateTime, formatMonth, formatMoney } = useTenantFormats();
+  const router = useRouter();
 
   const { academicYearId, isLifetime, yearsLoading } = useFinanceYear();
 
-  const [status, setStatus] = useState<StatusFilter>("all");
-  const [source, setSource] = useState<SourceFilter>("all");
-  const [search, setSearch] = useState("");
-  const [searchDebounced, setSearchDebounced] = useState("");
-  const [page, setPage] = useState(0);
+  // Filters live in the URL so opening an invoice and coming back restores them.
+  const { get, patch, currentUrl } = useListParams();
+  const status = (get("status") || "all") as StatusFilter;
+  const source = (get("source") || "all") as SourceFilter;
+  const page = Math.max(0, Number(get("page", "0")) || 0);
+  const searchDebounced = get("q");
+  const [search, setSearch] = useState(searchDebounced);
   const { issueDateRange } = useInvoicesActionsContext();
   const { sortKey, sortDir, toggleSort } = usePadaukSort({
     defaultKey: "createdAt",
@@ -195,13 +202,14 @@ export function InvoicesListPanel() {
   });
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setSearchDebounced(search), 300);
+    const timer = window.setTimeout(() => {
+      const next = search.trim();
+      if (next !== searchDebounced) {
+        patch({ q: next || null, page: null });
+      }
+    }, 300);
     return () => window.clearTimeout(timer);
-  }, [search]);
-
-  useEffect(() => {
-    setPage(0);
-  }, [issueDateRange]);
+  }, [search, searchDebounced, patch]);
 
   const listQuery = useMemo(() => {
     const params = new URLSearchParams({
@@ -263,7 +271,6 @@ export function InvoicesListPanel() {
               value={search}
               onChange={(event) => {
                 setSearch(event.target.value);
-                setPage(0);
               }}
               placeholder={t("searchPlaceholder")}
               aria-label={t("searchPlaceholder")}
@@ -273,8 +280,8 @@ export function InvoicesListPanel() {
                 variant="filter"
                 value={source}
                 onValueChange={(value) => {
-                  setSource((typeof value === "string" ? value : "all") as SourceFilter);
-                  setPage(0);
+                  const next = typeof value === "string" ? value : "all";
+                  patch({ source: next === "all" ? null : next, page: null });
                 }}
                 placeholder={tFinance("allSources")}
                 options={[
@@ -293,8 +300,8 @@ export function InvoicesListPanel() {
                 variant="filter"
                 value={status}
                 onValueChange={(value) => {
-                  setStatus((typeof value === "string" ? value : "all") as StatusFilter);
-                  setPage(0);
+                  const next = typeof value === "string" ? value : "all";
+                  patch({ status: next === "all" ? null : next, page: null });
                 }}
                 placeholder={tFees("statusFilters.all")}
                 options={STATUS_FILTER_OPTIONS.map((value) => ({
@@ -325,7 +332,7 @@ export function InvoicesListPanel() {
                     direction={sortDir}
                     onClick={() => {
                       toggleSort("createdAt");
-                      setPage(0);
+                      patch({ page: null });
                     }}
                   />
                 </th>
@@ -342,8 +349,26 @@ export function InvoicesListPanel() {
               {rows.map((row) => {
                 const dueLabel = row.dueDate ? formatDate(row.dueDate) : null;
                 const gradeRoom = [row.gradeName, row.classroomName].filter(Boolean).join(" · ");
+                const openInvoice = () => {
+                  appendNavigationTrail({ label: tFees("title"), href: currentUrl });
+                  router.push(`/dashboard/finance/invoices/${row.id}`);
+                };
                 return (
-                  <tr key={row.id}>
+                  <tr
+                    key={row.id}
+                    className="table-row--clickable"
+                    tabIndex={0}
+                    onClick={(event) => {
+                      if (isPadaukRowInteractiveTarget(event.target)) return;
+                      openInvoice();
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      if (isPadaukRowInteractiveTarget(event.target)) return;
+                      event.preventDefault();
+                      openInvoice();
+                    }}
+                  >
                     <td>
                       <Link
                         href={`/dashboard/finance/invoices/${row.id}`}
@@ -394,7 +419,7 @@ export function InvoicesListPanel() {
         page={page}
         pageSize={PAGE_SIZE}
         total={invoices.data?.total ?? 0}
-        onPageChange={setPage}
+        onPageChange={(next) => patch({ page: next > 0 ? String(next) : null })}
       />
     </>
   );
