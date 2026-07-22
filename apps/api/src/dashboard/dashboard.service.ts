@@ -3,7 +3,6 @@ import { and, desc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { DB, type Database } from "../db/db.module.js";
 import {
   academicYears,
-  assessmentResults,
   classrooms,
   classroomStudents,
   enquiries,

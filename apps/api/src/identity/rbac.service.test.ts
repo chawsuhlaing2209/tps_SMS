@@ -6,7 +6,7 @@ describe("RbacService", () => {
   const service = new RbacService();
 
   it("expands role permissions", () => {
-    expect(service.permissionsForRoles(["teacher"])).toContain("attendance.mark");
+    expect(service.permissionsForRoles(["teacher"])).toContain("student.view");
   });
 
   it("rejects cross-tenant access", () => {

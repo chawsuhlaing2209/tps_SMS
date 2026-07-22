@@ -29,13 +29,6 @@ export type SmsJob =
       };
     }
   | {
-      name: "render-report-card-pdf";
-      data: {
-        tenantId: string;
-        reportCardId: string;
-      };
-    }
-  | {
       name: "render-payslip-pdf";
       data: {
         tenantId: string;

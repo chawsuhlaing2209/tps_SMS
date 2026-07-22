@@ -25,9 +25,6 @@ for (const queueName of Object.values(queueNames)) {
         case "send-email-notification":
           console.log("Sending email notification", job.data);
           break;
-        case "render-report-card-pdf":
-          console.log("Rendering report card PDF", job.data);
-          break;
         case "render-payslip-pdf": {
           const result = await handleRenderPayslipPdf(job.data);
           console.log("Payslip PDF rendered", result);

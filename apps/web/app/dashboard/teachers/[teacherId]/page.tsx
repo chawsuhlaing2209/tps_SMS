@@ -238,12 +238,6 @@ const DEMO_TODAY_CLASSES = [
   }
 ];
 
-const DEMO_TO_GRADE = [
-  { title: "Physics — Week 6 assessment", meta: { room: "Room 11-A", due: "20 Jun" }, count: 3, tone: "purple" as const },
-  { title: "Physics — Week 6 lab report", meta: { room: "Room 11-B", due: "21 Jun" }, count: 4, tone: "purple" as const },
-  { title: "Chemistry — Midterm scripts", meta: { room: "Room 10-A", due: "22 Jun" }, count: 5, tone: "pink" as const }
-];
-
 type TaughtSubjectRow = {
   subjectId: string;
   subjectName: string;
@@ -833,53 +827,7 @@ export default function TeacherProfilePage({
           </section>
 
           <div className={styles.teacherProfileStack}>
-            <section className={styles.teacherProfileCard}>
-              <div className={styles.teacherProfileCardHead}>
-                <div>
-                  <h2 className={cn("pds-type-title-xs-bold", styles.teacherProfileCardTitle)}>{t("toGrade")}</h2>
-                  <p className={cn("pds-type-body-s-regular", styles.teacherProfileCardSubtitle)}>
-                    {t("assessmentsSummary", { count: DEMO_TO_GRADE.length })}
-                  </p>
-                </div>
-                <span className={cn("pds-type-label-s-medium", styles.teacherProfileActionBadge)}>
-                  {t("actionNeeded")}
-                </span>
-              </div>
-              <ul className={styles.teacherProfileRowList}>
-                {DEMO_TO_GRADE.map((item) => (
-                  <li key={item.title} className={styles.teacherProfileGradeRow}>
-                    <span
-                      className={cn(
-                        styles.teacherProfileGradeIcon,
-                        item.tone === "pink"
-                          ? styles.teacherProfileSubjectPink
-                          : styles.teacherProfileSubjectPurple
-                      )}
-                    >
-                      <Icon name="grading" size={18} />
-                    </span>
-                    <div className={styles.teacherProfileRowBody}>
-                      <span className={cn("pds-type-body-m-bold", styles.teacherProfileRowTitle)}>{item.title}</span>
-                      <span className={cn("pds-type-body-s-regular", styles.teacherProfileRowMeta)}>
-                        {t("gradeAssessmentMeta", item.meta)}
-                      </span>
-                    </div>
-                    <span className={cn("pds-type-body-m-bold", styles.teacherProfileGradeCount)}>{item.count}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-
             <section className={cn(styles.teacherProfileCard, styles.teacherProfileDarkCard)}>
-              <div className={styles.teacherProfileDarkStat}>
-                <strong className={cn("pds-type-title-xl-extrabold", styles.teacherProfileDarkStatValueAccent)}>
-                  96%
-                </strong>
-                <span className={cn("pds-type-body-s-regular", styles.teacherProfileDarkStatLabel)}>
-                  {t("registersOnTime")}
-                </span>
-              </div>
-              <div className={styles.teacherProfileDarkCardDivider} aria-hidden />
               <div className={styles.teacherProfileDarkStat}>
                 <strong className={cn("pds-type-title-xl-extrabold", styles.teacherProfileDarkStatValue)}>14</strong>
                 <span className={cn("pds-type-body-s-regular", styles.teacherProfileDarkStatLabel)}>
