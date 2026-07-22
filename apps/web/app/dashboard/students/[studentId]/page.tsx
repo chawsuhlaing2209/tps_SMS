@@ -819,14 +819,7 @@ export default function StudentDetailPage({
                     : f("totalPaid")}
                 </span>
               </article>
-            ) : (
-              <article className="student-profile-stat">
-                <span className="pds-type-body-s-regular student-profile-stat__label">
-                  {t("bestMonthStat")}
-                </span>
-                <strong className="student-profile-stat__value">{t("bestMonthPlaceholder")}</strong>
-              </article>
-            )}
+            ) : null}
             <article className="student-profile-stat">
               <span className="pds-type-body-s-regular student-profile-stat__label">
                 {t("guardianStat")}

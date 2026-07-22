@@ -65,7 +65,7 @@ function withCollapsedTooltip(
 }
 
 type SubmoduleTranslators = Record<
-  "nav" | "finance" | "academicSetup" | "settings" | "exams" | "salary" | "leaves",
+  "nav" | "finance" | "academicSetup" | "settings" | "salary" | "leaves",
   ReturnType<typeof useTranslations>
 >;
 
@@ -147,7 +147,6 @@ function SidebarContent({
   const tFinance = useTranslations("finance");
   const tAcademicSetup = useTranslations("academicSetup");
   const tSettings = useTranslations("settings");
-  const tExams = useTranslations("exams");
   const tSalary = useTranslations("salary");
   const tLeaves = useTranslations("leaves");
 
@@ -157,11 +156,10 @@ function SidebarContent({
       finance: tFinance,
       academicSetup: tAcademicSetup,
       settings: tSettings,
-      exams: tExams,
       salary: tSalary,
       leaves: tLeaves
     }),
-    [t, tFinance, tAcademicSetup, tSettings, tExams, tSalary, tLeaves]
+    [t, tFinance, tAcademicSetup, tSettings, tSalary, tLeaves]
   );
 
   const navGroups = useMemo(

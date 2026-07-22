@@ -626,8 +626,7 @@ export class HrService {
       stats: {
         periodsPerWeek: teachingClasses.reduce((sum, row) => sum + row.periodsPerWeek, 0),
         classesTaught: classroomIds.size,
-        students: studentCount,
-        avgClassScore: null as number | null
+        students: studentCount
       },
       yearsExperience,
       qualifications

@@ -150,7 +150,7 @@ export default function TermsPage() {
       <ModulePageHeader
         navKey="terms"
         title={setup("terms")}
-        description={setup("description")}
+        description={setup("termsHelp")}
         actions={
           <>
             {canManage && contextYearId ? (
