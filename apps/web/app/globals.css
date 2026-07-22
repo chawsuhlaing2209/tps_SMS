@@ -49,7 +49,17 @@ h3,
   margin: 0;
 }
 
-/* Material Symbols Rounded icon glyphs (ligature names as text content). */
+/* Material Symbols Rounded icon glyphs (ligature names as text content).
+   Self-hosted variable font: no Google CDN dependency, and font-display: block
+   hides the raw ligature text instead of flashing it while the font loads. */
+@font-face {
+  font-family: "Material Symbols Rounded";
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: block;
+  src: url("/fonts/material-symbols-rounded.woff2") format("woff2");
+}
+
 .ms {font-family: "Material Symbols Rounded";
   font-weight: normal;
   font-style: normal;
