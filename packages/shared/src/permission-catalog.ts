@@ -27,20 +27,10 @@ export const tenantPermissionCatalog: PermissionCatalogGroup[] = [
   {
     category: "academic",
     items: [
-      { permission: "attendance.mark", labelKey: "attendanceMark" },
-      { permission: "attendance.correct", labelKey: "attendanceCorrect" },
-      { permission: "grade.submit", labelKey: "gradeSubmit" },
-      { permission: "grade.approve", labelKey: "gradeApprove" },
-      { permission: "report_card.generate", labelKey: "reportCardView" },
-      { permission: "report_card.approve", labelKey: "reportCardEdit" },
-      { permission: "exam.manage", labelKey: "examManage" },
       { permission: "classroom.manage", labelKey: "classroomManage" },
       { permission: "facility.manage", labelKey: "facilityManage" },
-      { permission: "lms.manage", labelKey: "lmsManage" },
       { permission: "academic_setup.manage", labelKey: "academicSetupManage" },
-      { permission: "calendar.manage", labelKey: "calendarManage" },
-      { permission: "timetable.manage", labelKey: "timetableManage" },
-      { permission: "attendance.audit.view", labelKey: "attendanceAuditView" }
+      { permission: "timetable.manage", labelKey: "timetableManage" }
     ]
   },
   {

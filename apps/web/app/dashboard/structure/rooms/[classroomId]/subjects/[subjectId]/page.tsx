@@ -1,11 +1,9 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useMemo, use } from "react";
+import { use } from "react";
 import { useApiQuery } from "../../../../../../lib/api";
-import { RecordList, RecordListItem, RecordListPanel } from "../../../../../../lib/record-list";
 import { useCurrentAcademicYear } from "../../../../../../lib/use-current-academic-year";
-import { useTenantFormats } from "../../../../../../lib/use-tenant-formats";
 import { PageHeader } from "../../../../../page-header-context";
 import { EmptyState } from "../../../../../../../components/shared/empty-state";
 import { NavigationBackLink } from "../../../../../../../components/shared/navigation-back-link";
@@ -27,21 +25,6 @@ type ClassroomSubject = {
   teacherStaffId: string | null;
 };
 
-type LearningMaterial = {
-  id: string;
-  title: string;
-  description: string | null;
-  subjectId: string;
-};
-
-type Assignment = {
-  id: string;
-  title: string;
-  subjectId: string;
-  instructions: string | null;
-  dueAt: string | null;
-};
-
 type StaffMember = { id: string; fullName: string };
 
 export default function StructureSubjectClassroomPage({
@@ -52,7 +35,6 @@ export default function StructureSubjectClassroomPage({
   const { classroomId, subjectId } = use(params);
   const t = useTranslations("academics");
   const c = useTranslations("common");
-  const { formatDate } = useTenantFormats();
   const currentYear = useCurrentAcademicYear();
 
   const classroom = useApiQuery<Classroom>((tenant) => `/tenants/${tenant}/classrooms/${classroomId}`);
@@ -63,28 +45,12 @@ export default function StructureSubjectClassroomPage({
   const staff = useApiQuery<{ data: StaffMember[] }>((tenant) =>
     `/tenants/${tenant}/hr/staff?employmentRole=teacher&limit=200`
   );
-  const materials = useApiQuery<LearningMaterial[]>((tenant) =>
-    `/tenants/${tenant}/lms/classrooms/${classroomId}/materials`
-  );
-  const assignments = useApiQuery<Assignment[]>((tenant) =>
-    `/tenants/${tenant}/lms/classrooms/${classroomId}/assignments`
-  );
 
   const subjectRow = subjects.data?.find((row) => row.subjectId === subjectId);
   const grade = grades.data?.find((row) => row.id === classroom.data?.gradeId);
   const teacherName = subjectRow?.teacherStaffId
     ? (staff.data?.data?.find((member) => member.id === subjectRow.teacherStaffId)?.fullName ?? "—")
     : "—";
-
-  const subjectMaterials = useMemo(
-    () => (materials.data ?? []).filter((row) => row.subjectId === subjectId),
-    [materials.data, subjectId]
-  );
-
-  const subjectAssignments = useMemo(
-    () => (assignments.data ?? []).filter((row) => row.subjectId === subjectId),
-    [assignments.data, subjectId]
-  );
 
   if (classroom.isLoading || subjects.isLoading) {
     return <p className="pds-type-body-s-regular muted">{c("loading")}</p>;
@@ -141,55 +107,6 @@ export default function StructureSubjectClassroomPage({
           </p>
         </div>
       </section>
-
-      <div className="structure-room-layout">
-        <RecordListPanel
-          title={t("materialsTitle")}
-          empty={!subjectMaterials.length ? t("noMaterialsYet") : undefined}
-        >
-          {subjectMaterials.length ? (
-            <RecordList>
-              {subjectMaterials.map((material) => (
-                <RecordListItem
-                  key={material.id}
-                  icon="description"
-                  nameForColor={subjectRow.subjectName}
-                  title={material.title}
-                  meta={material.description ?? undefined}
-                />
-              ))}
-            </RecordList>
-          ) : null}
-        </RecordListPanel>
-
-        <aside className="structure-side-stack">
-          <section className="panel structure-panel--accent">
-            <p className="pds-type-caption-s structure-stat-card__label">{t("assignmentsTitle")}</p>
-            <strong className="pds-type-title-l-extrabold structure-stat-card__value">{subjectAssignments.length}</strong>
-            <span className="pds-type-body-s-regular muted">{t("assignmentsHelp")}</span>
-          </section>
-        </aside>
-      </div>
-
-      {subjectAssignments.length ? (
-        <RecordListPanel title={t("assignmentsTitle")}>
-          <RecordList>
-            {subjectAssignments.map((assignment) => (
-              <RecordListItem
-                key={assignment.id}
-                icon="assignment"
-                nameForColor={subjectRow.subjectName}
-                title={assignment.title}
-                meta={
-                  assignment.dueAt
-                    ? t("dueOn", { date: formatDate(assignment.dueAt) })
-                    : t("noDueDate")
-                }
-              />
-            ))}
-          </RecordList>
-        </RecordListPanel>
-      ) : null}
     </div>
   );
 }

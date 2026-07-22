@@ -208,34 +208,6 @@ export class StudentsService {
       }
     }
 
-    const [attendanceRow] = await this.db
-      .select({
-        total: sql<number>`count(*)::int`,
-        present: sql<number>`count(*) filter (where ${attendanceRecords.status} in ('present', 'late'))::int`
-      })
-      .from(attendanceRecords)
-      .where(and(eq(attendanceRecords.tenantId, tenantId), eq(attendanceRecords.studentId, studentId)));
-
-    const attendancePercent =
-      attendanceRow && attendanceRow.total > 0
-        ? Math.round((attendanceRow.present / attendanceRow.total) * 100)
-        : null;
-
-    const [latestReportCard] = await this.db
-      .select({ data: reportCards.data })
-      .from(reportCards)
-      .where(and(eq(reportCards.tenantId, tenantId), eq(reportCards.studentId, studentId)))
-      .orderBy(desc(reportCards.createdAt))
-      .limit(1);
-
-    const reportData = latestReportCard?.data as { gpa?: number; overallGpa?: number } | undefined;
-    const termGpa =
-      typeof reportData?.gpa === "number"
-        ? reportData.gpa
-        : typeof reportData?.overallGpa === "number"
-          ? reportData.overallGpa
-          : null;
-
     const invoiceRows = await this.db
       .select({ status: invoices.status })
       .from(invoices)
@@ -275,8 +247,6 @@ export class StudentsService {
         gradeName,
         streamLabel,
         enrolledAt,
-        attendancePercent,
-        termGpa,
         feeStatus,
         primaryGuardian,
         subjects: subjectRows

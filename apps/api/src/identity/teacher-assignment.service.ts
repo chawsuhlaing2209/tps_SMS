@@ -17,8 +17,7 @@ import type { TeacherScopeOptions } from "./teacher-scope.decorator.js";
 const BYPASS_ASSIGNMENT_SCOPING: Permission[] = [
   "classroom.manage",
   "academic_setup.manage",
-  "student.manage",
-  "attendance.audit.view"
+  "student.manage"
 ];
 
 interface ScopedRequest {

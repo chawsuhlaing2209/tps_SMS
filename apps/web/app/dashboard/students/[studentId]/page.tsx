@@ -66,8 +66,6 @@ type StudentProfile = {
     gradeName: string | null;
     streamLabel: string | null;
     enrolledAt: string | null;
-    attendancePercent: number | null;
-    termGpa: number | null;
     feeStatus: "none" | "paid_in_full" | "partial" | "outstanding";
     primaryGuardian: {
       id: string;
@@ -807,22 +805,6 @@ export default function StudentDetailPage({
           </section>
 
           <div className="student-profile-stats">
-            <article className="student-profile-stat">
-              <span className="pds-type-body-s-regular student-profile-stat__label">
-                {t("attendanceStat")}
-              </span>
-              <strong className="student-profile-stat__value">
-                {profile.attendancePercent != null ? `${profile.attendancePercent}%` : "—"}
-              </strong>
-            </article>
-            <article className="student-profile-stat">
-              <span className="pds-type-body-s-regular student-profile-stat__label">
-                {t("termGpaStat")}
-              </span>
-              <strong className="student-profile-stat__value">
-                {profile.termGpa != null ? profile.termGpa.toFixed(1) : "—"}
-              </strong>
-            </article>
             {canViewFinance ? (
               <article className="student-profile-stat">
                 <span className="pds-type-body-s-regular student-profile-stat__label">

@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useMemo, useState, use } from "react";
 import { ConfirmDialog } from "../../../../../components/shared/confirm-dialog";
 import { NavigationBackLink } from "../../../../../components/shared/navigation-back-link";
@@ -44,7 +44,6 @@ type RoomDetail = {
     employeeNumber: string | null;
   } | null;
   studentCount: number;
-  avgAttendanceRate: number | null;
   subjects: {
     subjectId: string;
     subjectName: string;
@@ -77,7 +76,6 @@ export default function StructureRoomPage({
   params: Promise<{ classroomId: string }>;
 }) {
   const { classroomId } = use(params);
-  const searchParams = useSearchParams();
   const router = useRouter();
   const t = useTranslations("academics");
   const c = useTranslations("common");
@@ -90,7 +88,6 @@ export default function StructureRoomPage({
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [assigningSubject, setAssigningSubject] = useState<SubjectRow | null>(null);
 
-  const initialTab = searchParams.get("tab") === "attendance" ? "attendance" : "roster";
 
   const detail = useApiQuery<RoomDetail>(
     (tenant) => `/tenants/${tenant}/classrooms/${classroomId}/room-detail`
@@ -272,11 +269,6 @@ export default function StructureRoomPage({
             {heroMoreActions.length ? (
               <HeroMoreActionsMenu label={c("moreActions")} items={heroMoreActions} />
             ) : null}
-            <Button buttonType="filled" buttonColor="primary" prefixIcon="calendar_add_on" asChild>
-              <Link href={`/dashboard/structure/rooms/${classroomId}?tab=attendance`}>
-                {t("takeAttendance")}
-              </Link>
-            </Button>
           </>
         }
       />
@@ -382,20 +374,12 @@ export default function StructureRoomPage({
               <strong>{data.studentCount}</strong>
               <span>{t("students")}</span>
             </div>
-            <div>
-              <strong>{data.avgAttendanceRate != null ? `${data.avgAttendanceRate}%` : "—"}</strong>
-              <span>{t("avgAttendance")}</span>
-            </div>
           </section>
         </aside>
       </div>
 
       <div className="structure-room-ops">
-        <ClassroomOpsTabs
-          classroomId={classroomId}
-          classroomName={data.name}
-          initialTab={initialTab}
-        />
+        <ClassroomOpsTabs classroomId={classroomId} classroomName={data.name} />
       </div>
 
       {canEdit ? (

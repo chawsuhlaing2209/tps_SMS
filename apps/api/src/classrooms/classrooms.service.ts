@@ -4,8 +4,6 @@ import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
 import {
   academicYears,
-  attendanceRecords,
-  attendanceSessions,
   classroomStudents,
   classroomSubjectTeachers,
   classrooms,
@@ -458,27 +456,6 @@ export class ClassroomsService {
         )
       );
 
-    const [attendanceRow] = await this.db
-      .select({
-        rate: sql<number>`round(
-          100.0 * count(*) filter (
-            where ${attendanceRecords.status} in ('present', 'late', 'half_day')
-          ) / nullif(count(*)::numeric, 0)
-        )::int`
-      })
-      .from(attendanceRecords)
-      .innerJoin(
-        attendanceSessions,
-        eq(attendanceRecords.attendanceSessionId, attendanceSessions.id)
-      )
-      .where(
-        and(
-          eq(attendanceRecords.tenantId, tenantId),
-          eq(attendanceSessions.classroomId, classroomId),
-          sql`${attendanceSessions.submittedAt} IS NOT NULL`
-        )
-      );
-
     const subjectRows = await this.db
       .select({
         subjectId: subjects.id,
@@ -541,7 +518,6 @@ export class ClassroomsService {
       classTeacherStaffId: classroom.classTeacherStaffId,
       homeroomTeacher,
       studentCount: studentCountRow?.count ?? 0,
-      avgAttendanceRate: attendanceRow?.rate ?? null,
       subjects: uniqueSubjects.map((row) => ({
         subjectId: row.subjectId,
         subjectName: row.subjectName,

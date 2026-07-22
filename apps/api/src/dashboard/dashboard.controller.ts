@@ -29,9 +29,7 @@ export class DashboardController {
     "finance.manage",
     "admissions.manage",
     "classroom.manage",
-    "calendar.manage",
-    "timetable.manage",
-    "exam.manage"
+    "timetable.manage"
   )
   currentAcademicYear(@Param("tenantId") tenantId: string) {
     return this.dashboardService.getCurrentAcademicYear(tenantId);
@@ -63,9 +61,7 @@ export class DashboardController {
     "finance.manage",
     "admissions.manage",
     "classroom.manage",
-    "calendar.manage",
     "timetable.manage",
-    "exam.manage",
     "hr.manage"
   )
   home(@Param("tenantId") tenantId: string) {
