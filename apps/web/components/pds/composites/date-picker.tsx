@@ -7,7 +7,10 @@ import { DatePickerTrigger } from "../subcomponents/date-picker-trigger";
 import { DatePickerPosition } from "./date-picker-position";
 import { MonthCalendar } from "./month-calendar";
 import { DateCalendar } from "./date-calendar";
-import { FilterRangeCalendar } from "./filter-range-calendar";
+import {
+  DEFAULT_FILTER_RANGE_PRESET_LABELS,
+  FilterRangeCalendar,
+} from "./filter-range-calendar";
 import {
   formatDayLabel,
   formatDayRangeLabel,
@@ -171,9 +174,17 @@ export function PdsDatePicker({
 
   const displayValue = React.useMemo(() => {
     if (type === "month") return formatMonthLabel(value, "long");
-    if (selectionMode === "range") return formatDayRangeLabel(value);
+    if (selectionMode === "range") {
+      const label = formatDayRangeLabel(value);
+      // An empty range on a filter picker IS the "All time" state — show it as
+      // the selected value rather than falling back to the placeholder.
+      if (!label && variant === "filter") {
+        return (presetLabels ?? DEFAULT_FILTER_RANGE_PRESET_LABELS)["all-time"];
+      }
+      return label;
+    }
     return formatDayLabel(value, variant);
-  }, [selectionMode, type, value, variant]);
+  }, [presetLabels, selectionMode, type, value, variant]);
 
   const commitMonth = (month: number) => {
     onValueChange?.(toMonthValue(viewYear, month));
