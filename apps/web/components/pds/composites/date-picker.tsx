@@ -296,6 +296,11 @@ export function PdsDatePicker({
             presetLabels={presetLabels}
             onRangeChange={handleRangeChange}
             onConfirm={confirmSelection}
+            onClear={() => {
+              setDraftRange({});
+              onValueChange?.("");
+              setOpen(false);
+            }}
             prevLabel={prevLabel}
             nextLabel={nextLabel}
             okayLabel={okayLabel}

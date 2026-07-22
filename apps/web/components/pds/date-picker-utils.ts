@@ -225,7 +225,8 @@ export type DateRangePresetId =
   | "this-week"
   | "last-7-days"
   | "this-month"
-  | "last-month";
+  | "last-month"
+  | "all-time";
 
 export const DATE_RANGE_PRESET_ORDER: DateRangePresetId[] = [
   "today",
@@ -233,6 +234,7 @@ export const DATE_RANGE_PRESET_ORDER: DateRangePresetId[] = [
   "last-7-days",
   "this-month",
   "last-month",
+  "all-time",
 ];
 
 export function dateFromParts(parts: DateParts) {
@@ -262,6 +264,16 @@ export function getDateRangePreset(
 ): { start: DateParts; end: DateParts } {
   const now = new Date();
   const today = partsFromDate(now);
+
+  if (id === "all-time") {
+    // Sentinel bounds — the filter calendar intercepts this preset and clears
+    // the range instead of committing these; they only exist so the id stays
+    // a valid argument.
+    return {
+      start: { year: 1970, month: 1, day: 1 },
+      end: { year: 2999, month: 12, day: 31 },
+    };
+  }
 
   if (id === "today") {
     return { start: today, end: today };
