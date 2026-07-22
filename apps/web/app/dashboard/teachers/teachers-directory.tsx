@@ -22,6 +22,7 @@ import { TeacherCreateSheet } from "./teacher-create-sheet";
 import { ConfirmDialog } from "../../../components/shared/confirm-dialog";
 import { RowMoreActionsMenu } from "../../../components/shared/row-more-actions";
 import { useTeachersActions } from "./teachers-actions-provider";
+import { useListParams } from "../../lib/use-list-params";
 
 type TeacherProfile = {
   eligibleGradeIds?: string[];
@@ -50,7 +51,7 @@ type StaffOverviewPage = {
   offset: number;
 };
 
-type GradeOption = { id: string; name: string; sortOrder?: number };
+type GradeOption = { id: string; name: string; sortOrder?: number; status?: string };
 
 const PAGE_SIZE = 50;
 
@@ -92,15 +93,24 @@ export function TeachersDirectory() {
   const canView = canManageHr || hasAnyPermission(permissions, ["classroom.manage"]);
   const { createOpen, setCreateOpen } = useTeachersActions();
 
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [gradeFilter, setGradeFilter] = useState("");
-  const [viewFilter, setViewFilter] = useState<"active" | "archived" | "all">("active");
-  const [page, setPage] = useState(0);
+  // Filters live in the URL so opening a profile and coming back restores them.
+  const { get, patch } = useListParams();
+  const statusFilter = get("status");
+  const gradeFilter = get("grade");
+  const viewFilter = (get("view") || "active") as "active" | "archived" | "all";
+  const urlSearch = get("q");
+  const [search, setSearch] = useState(urlSearch);
+  const page = Math.max(0, Number(get("page", "0")) || 0);
 
   useEffect(() => {
-    setPage(0);
-  }, [search, statusFilter, gradeFilter, viewFilter]);
+    const timer = window.setTimeout(() => {
+      const next = search.trim();
+      if (next !== urlSearch) {
+        patch({ q: next || null, page: null });
+      }
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [search, urlSearch, patch]);
 
   const queryPath = useMemo(
     () => (tenant: string) =>
@@ -142,6 +152,17 @@ export function TeachersDirectory() {
     return map;
   }, [grades.data]);
 
+  // Grade chips reflect only grades that still exist in the current year;
+  // archived grades from a prior (rolled-over) year are hidden so a teacher's
+  // eligibility doesn't list classes the school no longer runs.
+  const activeGradeIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const grade of grades.data ?? []) {
+      if (grade.status !== "archived") set.add(grade.id);
+    }
+    return set;
+  }, [grades.data]);
+
   const sortGradeIds = (ids: string[]) =>
     [...ids].sort(
       (a, b) =>
@@ -163,7 +184,9 @@ export function TeachersDirectory() {
       accessorFn: (row) => row.teacherProfile?.eligibleGradeIds?.join(",") ?? "",
       enableSorting: false,
       cell: ({ row }) => {
-        const gradeIds = row.original.teacherProfile?.eligibleGradeIds ?? [];
+        const gradeIds = (row.original.teacherProfile?.eligibleGradeIds ?? []).filter((id) =>
+          activeGradeIds.has(id)
+        );
         if (gradeIds.length === 0) {
           return <span className="pds-type-body-s-regular muted">—</span>;
         }
@@ -288,19 +311,21 @@ export function TeachersDirectory() {
                 <PdsSelectField
                   variant="filter"
                   value={gradeFilter}
-                  onValueChange={(value) => setGradeFilter(typeof value === "string" ? value : "")}
+                  onValueChange={(value) => patch({ grade: (typeof value === "string" && value) || null, page: null })}
                   placeholder={t("allGrades")}
-                  options={(grades.data ?? []).map((grade) => ({
-                    value: grade.id,
-                    label: grade.name
-                  }))}
+                  options={(grades.data ?? [])
+                    .filter((grade) => grade.status !== "archived")
+                    .map((grade) => ({
+                      value: grade.id,
+                      label: grade.name
+                    }))}
                 />
               </div>
               <div className="pds-search-filters-row__filter--160">
                 <PdsSelectField
                   variant="filter"
                   value={statusFilter}
-                  onValueChange={(value) => setStatusFilter(typeof value === "string" ? value : "")}
+                  onValueChange={(value) => patch({ status: (typeof value === "string" && value) || null, page: null })}
                   placeholder={t("allStatuses")}
                   options={[
                     { value: "active", label: t("statusActive") },
@@ -313,7 +338,7 @@ export function TeachersDirectory() {
             </>
           }
           statusControl={
-            <ArchiveVisibilityFilter value={viewFilter} onChange={setViewFilter} />
+            <ArchiveVisibilityFilter value={viewFilter} onChange={(value) => patch({ view: value === "active" ? null : value, page: null })} />
           }
         />
 
@@ -347,7 +372,7 @@ export function TeachersDirectory() {
         page={page}
         pageSize={PAGE_SIZE}
         total={teachers.data?.total ?? 0}
-        onPageChange={setPage}
+        onPageChange={(next) => patch({ page: next > 0 ? String(next) : null })}
       />
 
       <TeacherCreateSheet

@@ -79,6 +79,17 @@ export function useFinanceYear(): FinanceYearContextValue {
  * Export CSV etc.) so it sits at the top of every finance page; falls back to
  * its own right-aligned row on pages without a title actions area.
  */
+/** Finance list routes that get the year filter. Detail/form pages (an invoice
+ *  belongs to exactly one year) deliberately don't show it. */
+const YEAR_BAR_ROUTES = new Set([
+  "/dashboard/finance/overview",
+  "/dashboard/finance/billing",
+  "/dashboard/finance/invoices",
+  "/dashboard/finance/payments",
+  "/dashboard/finance/fee-structures",
+  "/dashboard/finance/discounts"
+]);
+
 export function FinanceYearBar() {
   const t = useTranslations("finance");
   const { selection, setSelection, years, yearsLoading } = useFinanceYear();
@@ -89,6 +100,10 @@ export function FinanceYearBar() {
   useLayoutEffect(() => {
     setTarget(document.getElementById(DASH_PAGE_TITLE_ACTIONS_ID));
   }, [pathname, actions, actionsPortal]);
+
+  if (!YEAR_BAR_ROUTES.has(pathname)) {
+    return null;
+  }
 
   if (yearsLoading && years.length === 0) {
     return null;

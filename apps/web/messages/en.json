@@ -1352,6 +1352,7 @@
     "appliedGradesStat": "Applied to",
     "whereItApplies": "Applies to grades",
     "renameComponent": "Rename component",
+    "editComponent": "Edit component",
     "archiveComponent": "Archive component?",
     "deleteComponent": "Delete component",
     "deleteComponentHelp": "Remove {name} from all grade levels it applies to. This cannot be undone.",

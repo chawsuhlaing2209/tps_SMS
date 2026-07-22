@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { useListParams } from "../../../../lib/use-list-params";
 import { createPortal } from "react-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -85,7 +86,14 @@ export function InvoicesActionsProvider({
   const [sheetOpen, setSheetOpen] = useState(false);
   const [generateModalOpen, setGenerateModalOpen] = useState(false);
   const [generateMonth, setGenerateMonth] = useState(() => currentBillingMonth());
-  const [issueDateRange, setIssueDateRange] = useState(() => currentMonthDayRangeValue());
+  // The date range lives in the URL so it survives opening an invoice and
+  // coming back (absent param = current month; empty param = All time).
+  const { get, patch } = useListParams();
+  const issueDateRange = get("range", currentMonthDayRangeValue());
+  const setIssueDateRange = useCallback(
+    (value: string) => patch({ range: value, page: null }),
+    [patch]
+  );
 
   const currentYear = useCurrentAcademicYear();
   const generateYearId = currentYear.data?.id ?? "";
@@ -206,7 +214,7 @@ export function InvoicesActionsProvider({
       generatePending: generate.isPending,
       generateDisabled: !generateYearId || generate.isPending,
     }),
-    [issueDateRange, gradeId, gradeName, generate.isPending, generateYearId, handleGenerate]
+    [issueDateRange, setIssueDateRange, gradeId, gradeName, generate.isPending, generateYearId, handleGenerate]
   );
 
   return (

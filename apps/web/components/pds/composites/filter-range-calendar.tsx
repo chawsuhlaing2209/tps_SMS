@@ -3,6 +3,7 @@
 import * as React from "react";
 import {
   addMonths,
+  DATE_RANGE_PRESET_ORDER,
   getDateRangePreset,
   matchDateRangePreset,
   type DateParts,
@@ -21,6 +22,7 @@ export const DEFAULT_FILTER_RANGE_PRESET_LABELS: FilterRangeCalendarPresetLabels
   "last-7-days": "Last 7 days",
   "this-month": "This month",
   "last-month": "Last month",
+  "all-time": "All time",
 };
 
 export type FilterRangeCalendarProps = {
@@ -30,6 +32,8 @@ export type FilterRangeCalendarProps = {
   presets?: DateRangePresetId[];
   onRangeChange: (range: { start: DateParts; end?: DateParts }) => void;
   onConfirm?: () => void;
+  /** Clears the range entirely ("All time"). The preset is hidden when omitted. */
+  onClear?: () => void;
   prevLabel?: string;
   nextLabel?: string;
   okayLabel?: string;
@@ -43,6 +47,7 @@ export function FilterRangeCalendar({
   presets,
   onRangeChange,
   onConfirm,
+  onClear,
   prevLabel = "Previous month",
   nextLabel = "Next month",
   okayLabel = "Okay",
@@ -60,12 +65,22 @@ export function FilterRangeCalendar({
 
   const rightMonth = React.useMemo(() => addMonths(leftYear, leftMonth, 1), [leftMonth, leftYear]);
 
-  const activePreset = React.useMemo(
-    () => matchDateRangePreset(range, weekStartsOn),
-    [range, weekStartsOn]
-  );
+  const activePreset = React.useMemo(() => {
+    // An empty range means the filter is off — that's the "All time" state.
+    if (onClear && !range?.start && !range?.end) return "all-time" as const;
+    return matchDateRangePreset(range, weekStartsOn);
+  }, [onClear, range, weekStartsOn]);
+
+  const resolvedPresets = React.useMemo(() => {
+    const base = presets ?? DATE_RANGE_PRESET_ORDER;
+    return onClear ? base : base.filter((preset) => preset !== "all-time");
+  }, [onClear, presets]);
 
   const handlePreset = (preset: DateRangePresetId) => {
+    if (preset === "all-time") {
+      onClear?.();
+      return;
+    }
     const next = getDateRangePreset(preset, weekStartsOn);
     onRangeChange(next);
     setLeftYear(next.start.year);
@@ -77,7 +92,7 @@ export function FilterRangeCalendar({
       <DateCalendarPresets
         activePreset={activePreset}
         labels={presetLabels}
-        presets={presets}
+        presets={resolvedPresets}
         onSelect={handlePreset}
       />
       <div className="pds-filter-range-calendar__body">

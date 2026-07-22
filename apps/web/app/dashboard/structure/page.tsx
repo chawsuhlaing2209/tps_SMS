@@ -28,6 +28,7 @@ import { useCurrentAcademicYear } from "../../lib/use-current-academic-year";
 import { ClassroomFormSheet, type ClassroomFormValues, type FacilityRoomOption } from "./classroom-form-sheet";
 import { roomAccentColor, roomLetter, resolveSubjectChipColorKey } from "./subject-colors";
 import { PageHeader } from "../page-header-context";
+import { moduleBreadcrumbs } from "../../lib/page-header-utils";
 
 type YearOverview = {
   id: string;
@@ -282,10 +283,7 @@ export default function SchoolStructurePage() {
       <PageHeader
         title={t("structureTitle")}
         description={t("description")}
-        breadcrumbs={[
-          { label: nav("group_academics") },
-          { label: nav("structure") }
-        ]}
+        breadcrumbs={moduleBreadcrumbs("structure", nav)}
         actionsPortal
       />
       <StructureExportPortal

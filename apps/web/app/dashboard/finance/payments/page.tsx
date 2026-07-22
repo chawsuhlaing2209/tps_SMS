@@ -7,6 +7,8 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useApiMutation, useLiveApiQuery } from "../../../lib/api";
 import { appendNavigationTrail } from "../../../lib/navigation-trail";
+import { useListParams } from "../../../lib/use-list-params";
+import { isPadaukRowInteractiveTarget } from "../../../lib/table-row-interaction";
 import { useDashPageTitleActionsTarget } from "../../dashboard-page-title";
 import { fetchAllPaginated } from "../../../lib/export-csv";
 import { getSession } from "../../../lib/session";
@@ -165,11 +167,13 @@ export default function PaymentsPage() {
 
   const { academicYearId, isLifetime, yearsLoading } = useFinanceYear();
 
-  const [method, setMethod] = useState<MethodFilter>("");
-  const [dateRange, setDateRange] = useState(() => currentMonthDayRangeValue());
-  const [search, setSearch] = useState("");
-  const [searchDebounced, setSearchDebounced] = useState("");
-  const [page, setPage] = useState(0);
+  // Filters live in the URL so opening an invoice and coming back restores them.
+  const { get, patch, currentUrl } = useListParams();
+  const method = get("method") as MethodFilter;
+  const dateRange = get("range", currentMonthDayRangeValue());
+  const page = Math.max(0, Number(get("page", "0")) || 0);
+  const searchDebounced = get("q");
+  const [search, setSearch] = useState(searchDebounced);
   const [refundTarget, setRefundTarget] = useState<PaymentRow | null>(null);
   const [refundAmount, setRefundAmount] = useState("");
   const [refundReason, setRefundReason] = useState("");
@@ -179,9 +183,14 @@ export default function PaymentsPage() {
   const [verifyReason, setVerifyReason] = useState("");
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setSearchDebounced(search), 300);
+    const timer = window.setTimeout(() => {
+      const next = search.trim();
+      if (next !== searchDebounced) {
+        patch({ q: next || null, page: null });
+      }
+    }, 300);
     return () => window.clearTimeout(timer);
-  }, [search]);
+  }, [search, searchDebounced, patch]);
 
   const listQuery = useMemo(() => {
     const params = new URLSearchParams({
@@ -286,10 +295,7 @@ export default function PaymentsPage() {
           <>
             <PdsSearchBar
               value={search}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setPage(0);
-              }}
+              onChange={(event) => setSearch(event.target.value)}
               placeholder={t("searchPlaceholder")}
               aria-label={t("searchPlaceholder")}
             />
@@ -299,10 +305,7 @@ export default function PaymentsPage() {
                 variant="filter"
                 selectionMode="range"
                 value={dateRange}
-                onValueChange={(value) => {
-                  setDateRange(value ?? "");
-                  setPage(0);
-                }}
+                onValueChange={(value) => patch({ range: value ?? "", page: null })}
                 ariaLabel={tFinance("issueDateRange")}
                 placeholder={tFinance("issueDateRange")}
               />
@@ -313,10 +316,9 @@ export default function PaymentsPage() {
           <SegmentedControl
             ariaLabel={tFinance("method")}
             value={method || "all"}
-            onChange={(id) => {
-              setMethod(id === "all" ? "" : (id as MethodFilter));
-              setPage(0);
-            }}
+            onChange={(id) =>
+              patch({ method: id === "all" ? null : id, page: null })
+            }
             options={METHOD_FILTERS.map((value) => ({
               id: value || "all",
               label: value ? t(`methodFilters.${value}`) : t("methodFilters.all")
@@ -350,7 +352,25 @@ export default function PaymentsPage() {
               {rows.map((row) => {
                 const gradeRoom = [row.gradeName, row.classroomName].filter(Boolean).join(" · ");
                 return (
-                  <tr key={row.id}>
+                  <tr
+                    key={row.id}
+                    className={row.invoiceId ? "table-row--clickable" : undefined}
+                    tabIndex={row.invoiceId ? 0 : undefined}
+                    onClick={(event) => {
+                      if (!row.invoiceId) return;
+                      if (isPadaukRowInteractiveTarget(event.target)) return;
+                      appendNavigationTrail({ label: t("title"), href: currentUrl });
+                      router.push(`/dashboard/finance/invoices/${row.invoiceId}`);
+                    }}
+                    onKeyDown={(event) => {
+                      if (!row.invoiceId) return;
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      if (isPadaukRowInteractiveTarget(event.target)) return;
+                      event.preventDefault();
+                      appendNavigationTrail({ label: t("title"), href: currentUrl });
+                      router.push(`/dashboard/finance/invoices/${row.invoiceId}`);
+                    }}
+                  >
                     <td>
                       <strong>{row.paymentNumber ?? row.receiptNumber ?? row.referenceNumber ?? "—"}</strong>
                     </td>
@@ -408,10 +428,7 @@ export default function PaymentsPage() {
                             label: t("viewInvoice"),
                             icon: "visibility",
                             onSelect: () => {
-                              appendNavigationTrail({
-                                label: t("title"),
-                                href: "/dashboard/finance/payments"
-                              });
+                              appendNavigationTrail({ label: t("title"), href: currentUrl });
                               router.push(`/dashboard/finance/invoices/${row.invoiceId}`);
                             }
                           });
@@ -434,7 +451,7 @@ export default function PaymentsPage() {
         page={page}
         pageSize={PAGE_SIZE}
         total={payments.data?.total ?? 0}
-        onPageChange={setPage}
+        onPageChange={(next) => patch({ page: next > 0 ? String(next) : null })}
       />
 
       {verifyTarget ? (

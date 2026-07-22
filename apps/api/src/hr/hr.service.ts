@@ -16,6 +16,7 @@ import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
 import { DepartmentsService } from "../departments/departments.service.js";
 import {
+  academicYears,
   assignments,
   classroomStudents,
   classroomSubjectTeachers,
@@ -165,6 +166,18 @@ export class HrService {
     }
 
     if (staffIds.length > 0) {
+      // Classroom/subject counts reflect the current teaching year only, so a
+      // teacher archived from last year's classes doesn't show phantom counts.
+      const [activeYear] = await this.db
+        .select({ id: academicYears.id })
+        .from(academicYears)
+        .where(and(eq(academicYears.tenantId, tenantId), eq(academicYears.status, "active")))
+        .limit(1);
+      const activeYearId = activeYear?.id ?? null;
+      const activeYearFilter = activeYearId
+        ? [eq(classrooms.academicYearId, activeYearId)]
+        : [];
+
       const homeroomRows = await this.db
         .select({
           staffId: classrooms.classTeacherStaffId,
@@ -174,7 +187,8 @@ export class HrService {
         .where(
           and(
             eq(classrooms.tenantId, tenantId),
-            inArray(classrooms.classTeacherStaffId, staffIds)
+            inArray(classrooms.classTeacherStaffId, staffIds),
+            ...activeYearFilter
           )
         )
         .groupBy(classrooms.classTeacherStaffId);
@@ -192,7 +206,8 @@ export class HrService {
         .where(
           and(
             eq(classrooms.tenantId, tenantId),
-            inArray(classrooms.classTeacherStaffId, staffIds)
+            inArray(classrooms.classTeacherStaffId, staffIds),
+            ...activeYearFilter
           )
         );
 
@@ -210,10 +225,12 @@ export class HrService {
           subjectId: classroomSubjectTeachers.subjectId
         })
         .from(classroomSubjectTeachers)
+        .innerJoin(classrooms, eq(classroomSubjectTeachers.classroomId, classrooms.id))
         .where(
           and(
             eq(classroomSubjectTeachers.tenantId, tenantId),
-            inArray(classroomSubjectTeachers.teacherStaffId, staffIds)
+            inArray(classroomSubjectTeachers.teacherStaffId, staffIds),
+            ...activeYearFilter
           )
         );
 
@@ -609,8 +626,7 @@ export class HrService {
       stats: {
         periodsPerWeek: teachingClasses.reduce((sum, row) => sum + row.periodsPerWeek, 0),
         classesTaught: classroomIds.size,
-        students: studentCount,
-        avgClassScore: null as number | null
+        students: studentCount
       },
       yearsExperience,
       qualifications

@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { type ColumnDef } from "@tanstack/react-table";
 import { PdsSearchBar, PdsSearchFiltersRow, PdsSelectField } from "../../../components/pds";
@@ -22,6 +22,7 @@ import { getSession } from "../../lib/session";
 import { TablePanelBody, DataTableSection } from "../../lib/table-panel";
 import { useTenantFormats } from "../../lib/use-tenant-formats";
 import { usePeopleDirectoryActions } from "./people-directory-actions";
+import { useListParams } from "../../lib/use-list-params";
 import { StudentRegistrationWizard } from "./student-registration-wizard";
 
 type Student = {
@@ -52,10 +53,13 @@ export function StudentsDirectory() {
   const { formatDate } = useTenantFormats();
   const formatDateOfBirth = (value: string | null) => (value ? formatDate(value) : "—");
   const { studentsRegisterOpen, setStudentsRegisterOpen } = usePeopleDirectoryActions();
-  const [statusFilter, setStatusFilter] = useState("");
-  const [viewFilter, setViewFilter] = useState<"active" | "archived" | "all">("active");
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(0);
+  // Filters live in the URL so opening a profile and coming back restores them.
+  const { get, patch } = useListParams();
+  const statusFilter = get("status");
+  const viewFilter = (get("view") || "active") as "active" | "archived" | "all";
+  const urlSearch = get("q");
+  const [search, setSearch] = useState(urlSearch);
+  const page = Math.max(0, Number(get("page", "0")) || 0);
 
   const queryPath = (tenant: string) => {
     const params = new URLSearchParams({
@@ -73,6 +77,16 @@ export function StudentsDirectory() {
   };
 
   const students = useApiQuery<StudentList>(queryPath);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const next = search.trim();
+      if (next !== urlSearch) {
+        patch({ q: next || null, page: null });
+      }
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [search, urlSearch, patch]);
 
   const [deletingStudent, setDeletingStudent] = useState<Student | null>(null);
 
@@ -213,7 +227,6 @@ export function StudentsDirectory() {
               value={search}
               onChange={(event) => {
                 setSearch(event.target.value);
-                setPage(0);
               }}
               placeholder={p("searchStudents")}
               aria-label={p("searchStudents")}
@@ -223,8 +236,7 @@ export function StudentsDirectory() {
                 variant="filter"
                 value={statusFilter}
                 onValueChange={(value) => {
-                  setStatusFilter(typeof value === "string" ? value : "");
-                  setPage(0);
+                  patch({ status: (typeof value === "string" && value) || null, page: null });
                 }}
                 placeholder={t("allStatuses")}
                 options={[
@@ -241,8 +253,7 @@ export function StudentsDirectory() {
           <ArchiveVisibilityFilter
             value={viewFilter}
             onChange={(value) => {
-              setViewFilter(value);
-              setPage(0);
+              patch({ view: value === "active" ? null : value, page: null });
             }}
           />
         }
@@ -281,7 +292,7 @@ export function StudentsDirectory() {
         page={page}
         pageSize={PAGE_SIZE}
         total={students.data?.total ?? 0}
-        onPageChange={setPage}
+        onPageChange={(next) => patch({ page: next > 0 ? String(next) : null })}
       />
 
       {canManage ? (

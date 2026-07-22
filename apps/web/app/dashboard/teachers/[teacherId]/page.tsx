@@ -82,7 +82,6 @@ type TeacherProfile = {
     periodsPerWeek: number;
     classesTaught: number;
     students: number;
-    avgClassScore: number | null;
   };
 };
 
@@ -226,17 +225,6 @@ function initials(name: string) {
   }
   return name.slice(0, 2).toUpperCase();
 }
-
-const DEMO_TODAY_CLASSES = [
-  { time: "08:30", title: "Physics · Room 11-A", subtitleKey: "schedulePeriod", subtitleArgs: { period: 1 }, tone: "purple" as const },
-  { time: "10:15", title: "Physics · Room 11-B", subtitleKey: "schedulePeriod", subtitleArgs: { period: 3 }, tone: "purple" as const },
-  {
-    time: "13:00",
-    title: "Grade 11 grade chiefs meeting",
-    subtitle: "Physics team · Staff room",
-    tone: "mustard" as const
-  }
-];
 
 type TaughtSubjectRow = {
   subjectId: string;
@@ -673,15 +661,6 @@ export default function TeacherProfilePage({
             <strong className={cn("pds-type-title-l-extrabold", styles.teacherProfileStatValue)}>{teacher.stats.students}</strong>
             <span className={cn("pds-type-body-s-regular", styles.teacherProfileStatLabel)}>{t("statStudents")}</span>
           </article>
-          <article className={styles.teacherProfileStatCard}>
-            <span className={`${styles.teacherProfileStatIcon} ${styles.teacherProfileStatIconGreen}`}>
-              <Icon name="trending_up" size={19} />
-            </span>
-            <strong className={cn("pds-type-title-l-extrabold", styles.teacherProfileStatValue)}>
-              {teacher.stats.avgClassScore != null ? `${teacher.stats.avgClassScore}%` : "—"}
-            </strong>
-          <span className={cn("pds-type-body-s-regular", styles.teacherProfileStatLabel)}>{t("statAvgScore")}</span>
-        </article>
       </div>
 
       <SegmentedControl
@@ -791,52 +770,6 @@ export default function TeacherProfilePage({
             </dl>
           </section>
 
-          <div className={styles.teacherProfileTabGrid}>
-          <section className={styles.teacherProfileCard}>
-            <div className={styles.teacherProfileCardHead}>
-              <div>
-                <h2 className={cn("pds-type-title-xs-bold", styles.teacherProfileCardTitle)}>{t("todaysClasses")}</h2>
-                <p className={cn("pds-type-body-s-regular", styles.teacherProfileCardSubtitle)}>
-                  {t("classesSummary", { count: DEMO_TODAY_CLASSES.length })}
-                </p>
-              </div>
-            </div>
-            <ul className={styles.teacherProfileRowList}>
-              {DEMO_TODAY_CLASSES.map((item) => (
-                <li key={item.time} className={styles.teacherProfileScheduleRow}>
-                  <span className={cn("pds-type-body-s-semibold", styles.teacherProfileScheduleTime)}>{item.time}</span>
-                  <span
-                    className={cn(
-                      styles.teacherProfileScheduleMark,
-                      item.tone === "mustard"
-                        ? styles.teacherProfileScheduleMarkMustard
-                        : styles.teacherProfileScheduleMarkPurple
-                    )}
-                  />
-                  <div className={styles.teacherProfileRowBody}>
-                    <span className={cn("pds-type-body-m-bold", styles.teacherProfileRowTitle)}>{item.title}</span>
-                    <span className={cn("pds-type-body-s-regular", styles.teacherProfileRowMeta)}>
-                      {"subtitle" in item
-                        ? item.subtitle
-                        : t(item.subtitleKey!, item.subtitleArgs!)}
-                    </span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <div className={styles.teacherProfileStack}>
-            <section className={cn(styles.teacherProfileCard, styles.teacherProfileDarkCard)}>
-              <div className={styles.teacherProfileDarkStat}>
-                <strong className={cn("pds-type-title-xl-extrabold", styles.teacherProfileDarkStatValue)}>14</strong>
-                <span className={cn("pds-type-body-s-regular", styles.teacherProfileDarkStatLabel)}>
-                  {t("leaveDaysLeft")}
-                </span>
-              </div>
-            </section>
-          </div>
-        </div>
         </>
       ) : null}
 

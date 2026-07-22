@@ -94,6 +94,7 @@ export const DASHBOARD_NAV: DashboardNavItem[] = [
   { href: "/dashboard/enrollments", key: "enrollments", anyOf: ["student.manage"] },
 
   // TEACHING — weekly rhythm (attendance/exams/report cards land here later).
+  { href: "/dashboard/structure", key: "structure", anyOf: ["academic_setup.manage"] },
   {
     href: "/dashboard/timetable",
     key: "timetable",
@@ -135,7 +136,6 @@ export const DASHBOARD_NAV: DashboardNavItem[] = [
     key: "gradesClassrooms",
     anyOf: ["academic_setup.manage"]
   },
-  { href: "/dashboard/structure", key: "structure", anyOf: ["academic_setup.manage"] },
   { href: "/dashboard/facilities", key: "facilities", anyOf: ["facility.manage"] },
 
   // MASTER SETTINGS — 1–2×/year configuration.
@@ -172,7 +172,7 @@ export const DASHBOARD_NAV_GROUPS: DashboardNavGroup[] = [
   { key: "home", items: groupItems(["overview"]) },
   { key: "people", items: groupItems(["students", "teachers", "team"]) },
   { key: "enrollment", items: groupItems(["admissions", "enrollments"]) },
-  { key: "teaching", items: groupItems(["timetable"]) },
+  { key: "teaching", items: groupItems(["structure", "timetable"]) },
   {
     key: "finance",
     items: groupItems([
@@ -192,7 +192,6 @@ export const DASHBOARD_NAV_GROUPS: DashboardNavGroup[] = [
       "terms",
       "subjects",
       "gradesClassrooms",
-      "structure",
       "facilities"
     ])
   },

@@ -41,14 +41,8 @@ export default async function RootLayout({
 
   return (
     <html lang={locale} className={`${display.variable} ${body.variable}`}>
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400,0..1,0&display=swap"
-          rel="stylesheet"
-        />
-      </head>
+      {/* Icon + text fonts are self-hosted (next/font + public/fonts) — no
+          runtime Google Fonts dependency, which matters on Myanmar networks. */}
       <body suppressHydrationWarning>
         <NextIntlClientProvider locale={locale} messages={messages}>
           <QueryProvider>

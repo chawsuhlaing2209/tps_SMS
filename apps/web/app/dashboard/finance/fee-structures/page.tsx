@@ -95,9 +95,9 @@ export default function FeeStructuresPage() {
   const [selectedFeeItemId, setSelectedFeeItemId] = useState<string | null>(null);
   const [draft, setDraft] = useState<GradeDraft>({});
   const [originalDraft, setOriginalDraft] = useState<GradeDraft>({});
-  const [addOpen, setAddOpen] = useState(false);
-  const [renaming, setRenaming] = useState<FeeItem | null>(null);
-  const [renameValue, setRenameValue] = useState("");
+  const [componentSheet, setComponentSheet] = useState<
+    { mode: "add" } | { mode: "edit"; item: FeeItem } | null
+  >(null);
   const [deleting, setDeleting] = useState<FeeItem | null>(null);
   const [restoring, setRestoring] = useState<FeeItem | null>(null);
   const [permanentDeleting, setPermanentDeleting] = useState<FeeItem | null>(null);
@@ -168,18 +168,23 @@ export default function FeeStructuresPage() {
   }, [selectedFeeItemId, yearPlans, activeGrades]);
 
   // Per-grade annual totals across all components (for the comparison chart + left rail counts).
+  // Count only grades still shown in the editor (active grades); a plan may carry
+  // grade IDs from a rolled-over year whose grades are now archived — those must
+  // not inflate the "N grades" summary shown next to the panel's grade list.
   const componentTotals = useMemo(() => {
+    const activeGradeIdSet = new Set(activeGrades.map((grade) => grade.id));
     const map = new Map<string, { grades: number; annual: number }>();
     for (const item of activeComponents) map.set(item.id, { grades: 0, annual: 0 });
     for (const plan of yearPlans) {
       const item = feeItems.data?.find((f) => f.id === plan.feeItemId);
       const entry = map.get(plan.feeItemId);
       if (!item || !entry) continue;
-      entry.grades += plan.gradeIds.length;
-      entry.annual += annualizeAmount(Number(plan.amount), item.billingType) * plan.gradeIds.length;
+      const appliedGrades = plan.gradeIds.filter((id) => activeGradeIdSet.has(id)).length;
+      entry.grades += appliedGrades;
+      entry.annual += annualizeAmount(Number(plan.amount), item.billingType) * appliedGrades;
     }
     return map;
-  }, [activeComponents, yearPlans, feeItems.data]);
+  }, [activeComponents, yearPlans, feeItems.data, activeGrades]);
 
   const includedCount = Object.values(draft).filter((d) => d.included).length;
   const editorAnnualTotal = useMemo(
@@ -229,9 +234,12 @@ export default function FeeStructuresPage() {
     { invalidatePaths: (_b, tenant) => [FEE_ITEMS_PATH(tenant)] }
   );
 
-  const updateFeeItem = useApiMutation<{ id: string; name?: string }, FeeItem>(
+  const updateFeeItem = useApiMutation<
+    { id: string; name?: string; feeType?: string; billingType?: string },
+    FeeItem
+  >(
     ({ id, ...body }, tenant) => ({ path: `${FEE_ITEMS_PATH(tenant)}/${id}`, init: { method: "PATCH", body: JSON.stringify(body) } }),
-    { invalidatePaths: (_b, tenant) => [FEE_ITEMS_PATH(tenant)] }
+    { invalidatePaths: (_b, tenant) => [FEE_ITEMS_PATH(tenant), PLANS_PATH(tenant)] }
   );
 
   const archiveFeeItem = useApiMutation<{ id: string }>(
@@ -294,6 +302,62 @@ export default function FeeStructuresPage() {
   const billingType = form.watch("billingType");
   const requiredValue = form.watch("required");
 
+  const openEditComponent = (item: FeeItem) => {
+    form.reset({
+      name: item.name,
+      billingType: item.billingType,
+      required: (mandatoryEnrollmentFeeTypes as readonly string[]).includes(item.feeType)
+    });
+    setFormError(null);
+    setComponentSheet({ mode: "edit", item });
+  };
+
+  const componentMenuItems = selectedComponent
+    ? [
+        {
+          id: "edit",
+          label: t("editComponent"),
+          icon: "edit",
+          onSelect: () => openEditComponent(selectedComponent)
+        },
+        ...(selectedArchived
+          ? [
+              {
+                id: "restore",
+                label: c("restore"),
+                icon: "restore",
+                onSelect: () => {
+                  void restoreFeeItem.mutateAsync({ id: selectedComponent.id }).then(() => {
+                    void feeItems.refetch();
+                  });
+                }
+              },
+              {
+                id: "delete",
+                label: c("deletePermanently"),
+                icon: "delete_forever",
+                destructive: true,
+                onSelect: () => {
+                  setDeleteError(null);
+                  setPermanentDeleting(selectedComponent);
+                }
+              }
+            ]
+          : [
+              {
+                id: "archive",
+                label: c("archive"),
+                icon: "archive",
+                destructive: true,
+                onSelect: () => {
+                  setDeleteError(null);
+                  setDeleting(selectedComponent);
+                }
+              }
+            ])
+      ]
+    : [];
+
   const isSaving = reconcile.isPending;
 
   return (
@@ -330,7 +394,7 @@ export default function FeeStructuresPage() {
                   onClick={() => {
                     form.reset({ name: "", billingType: "annual", required: false });
                     setFormError(null);
-                    setAddOpen(true);
+                    setComponentSheet({ mode: "add" });
                   }}
                 >
                   <Icon name="add" size={16} />
@@ -384,12 +448,21 @@ export default function FeeStructuresPage() {
                     <p className={cn("pds-type-display-m", styles.heroTotal)}>{formatMoney(editorAnnualTotal)}</p>
                     <p className={cn("pds-type-body-m-medium", styles.heroSub)}>{t("componentAnnualHint")}</p>
                   </div>
-                  <div className={styles.heroStats}>
-                    <div className={styles.heroStat}>
-                      <span className={cn("pds-type-label-s-bold", styles.heroStatLabel)}>{t("appliedGradesStat")}</span>
-                      <strong className={cn("pds-type-title-s-extrabold", styles.heroStatValue)}>
-                        {includedCount} / {activeGrades.length}
-                      </strong>
+                  <div className={styles.heroAside}>
+                    {canManage ? (
+                      <RowMoreActionsMenu
+                        tone="inverse"
+                        ariaLabel={c("moreActions")}
+                        items={componentMenuItems}
+                      />
+                    ) : null}
+                    <div className={styles.heroStats}>
+                      <div className={styles.heroStat}>
+                        <span className={cn("pds-type-label-s-bold", styles.heroStatLabel)}>{t("appliedGradesStat")}</span>
+                        <strong className={cn("pds-type-title-s-extrabold", styles.heroStatValue)}>
+                          {includedCount} / {activeGrades.length}
+                        </strong>
+                      </div>
                     </div>
                   </div>
                 </section>
@@ -410,55 +483,6 @@ export default function FeeStructuresPage() {
                           <Icon name="check" size={16} />
                           {isSaving ? c("loading") : t("saveChanges")}
                         </Button>
-                        <RowMoreActionsMenu
-                          ariaLabel={c("moreActions")}
-                          items={[
-                            {
-                              id: "rename",
-                              label: t("renameComponent"),
-                              icon: "edit",
-                              onSelect: () => {
-                                setRenaming(selectedComponent);
-                                setRenameValue(selectedComponent.name);
-                              }
-                            },
-                            ...(selectedArchived
-                              ? [
-                                  {
-                                    id: "restore",
-                                    label: c("restore"),
-                                    icon: "restore",
-                                    onSelect: () => {
-                                      void restoreFeeItem.mutateAsync({ id: selectedComponent.id }).then(() => {
-                                        void feeItems.refetch();
-                                      });
-                                    }
-                                  },
-                                  {
-                                    id: "delete",
-                                    label: c("deletePermanently"),
-                                    icon: "delete_forever",
-                                    destructive: true,
-                                    onSelect: () => {
-                                      setDeleteError(null);
-                                      setPermanentDeleting(selectedComponent);
-                                    }
-                                  }
-                                ]
-                              : [
-                                  {
-                                    id: "archive",
-                                    label: c("archive"),
-                                    icon: "archive",
-                                    destructive: true,
-                                    onSelect: () => {
-                                      setDeleteError(null);
-                                      setDeleting(selectedComponent);
-                                    }
-                                  }
-                                ])
-                          ]}
-                        />
                       </div>
                     ) : null}
                   </div>
@@ -538,36 +562,62 @@ export default function FeeStructuresPage() {
         </div>
       )}
 
-      {/* Add component */}
+      {/* Add / edit component */}
       <RecordFormSheet
-        open={addOpen}
+        open={componentSheet !== null}
         onOpenChange={(open) => {
-          setAddOpen(open);
-          if (!open) setFormError(null);
+          if (!open) {
+            setComponentSheet(null);
+            setFormError(null);
+          }
         }}
-        title={t("addComponent")}
+        title={componentSheet?.mode === "edit" ? t("editComponent") : t("addComponent")}
         onSubmit={form.handleSubmit(async (values) => {
           setFormError(null);
-          const feeType = values.required ? "tuition" : "other";
           try {
-            const item = await createFeeItem.mutateAsync({
-              name: values.name.trim(),
-              feeType,
-              billingType: values.billingType
-            });
-            setSelectedFeeItemId(item.id);
-            setAddOpen(false);
+            if (componentSheet?.mode === "edit") {
+              const item = componentSheet.item;
+              const wasRequired = (mandatoryEnrollmentFeeTypes as readonly string[]).includes(item.feeType);
+              // Preserve the original fee category (e.g. "registration") when the
+              // required toggle is unchanged; only remap to tuition/other when it flips.
+              const feeType =
+                values.required === wasRequired
+                  ? item.feeType
+                  : values.required
+                    ? "tuition"
+                    : "other";
+              await updateFeeItem.mutateAsync({
+                id: item.id,
+                name: values.name.trim(),
+                feeType,
+                billingType: values.billingType
+              });
+              setComponentSheet(null);
+            } else {
+              const feeType = values.required ? "tuition" : "other";
+              const item = await createFeeItem.mutateAsync({
+                name: values.name.trim(),
+                feeType,
+                billingType: values.billingType
+              });
+              setSelectedFeeItemId(item.id);
+              setComponentSheet(null);
+            }
           } catch (error) {
             setFormError(error instanceof ApiError ? error.message : c("somethingWrong"));
           }
         })}
         footer={
           <>
-            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setAddOpen(false)}>
+            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setComponentSheet(null)}>
               {c("cancel")}
             </button>
             <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? c("loading") : t("saveComponent")}
+              {form.formState.isSubmitting
+                ? c("loading")
+                : componentSheet?.mode === "edit"
+                  ? c("save")
+                  : t("saveComponent")}
             </button>
           </>
         }
@@ -602,35 +652,6 @@ export default function FeeStructuresPage() {
 
           {formError ? <p className="pds-type-body-s-regular error-text">{formError}</p> : null}
         </div>
-      </RecordFormSheet>
-
-      {/* Rename component */}
-      <RecordFormSheet
-        open={renaming !== null}
-        onOpenChange={(open) => {
-          if (!open) setRenaming(null);
-        }}
-        title={t("renameComponent")}
-        onSubmit={async (event) => {
-          event.preventDefault();
-          if (!renaming || !renameValue.trim()) return;
-          await updateFeeItem.mutateAsync({ id: renaming.id, name: renameValue.trim() });
-          setRenaming(null);
-        }}
-        footer={
-          <>
-            <button type="button" className="pds-type-body-m-bold btn-ghost" onClick={() => setRenaming(null)}>
-              {c("cancel")}
-            </button>
-            <button type="submit" className="pds-type-body-m-bold btn-primary" disabled={updateFeeItem.isPending}>
-              {updateFeeItem.isPending ? c("loading") : c("save")}
-            </button>
-          </>
-        }
-      >
-        <InputWrapper label={t("componentName")}>
-          <TextInput value={renameValue} onChange={(e) => setRenameValue(e.target.value)} />
-        </InputWrapper>
       </RecordFormSheet>
 
       <ConfirmDialog
