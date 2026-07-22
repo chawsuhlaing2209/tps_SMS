@@ -104,7 +104,14 @@ export default function AdmissionsPage() {
       header: c("status"),
       accessorKey: "status",
       cell: ({ row }) => (
-        <StatusBadge status={row.original.status} />
+        <StatusBadge
+          status={row.original.status}
+          label={
+            t.has(`status_${row.original.status}` as "status_new")
+              ? t(`status_${row.original.status}` as "status_new")
+              : row.original.status
+          }
+        />
       )
     },
     {

@@ -1953,6 +1953,12 @@ h3,
   white-space: nowrap;
 }.padauk-table__muted {
   color: var(--pds-muted);
+}.facility-rooms-table__note {
+  /* Long free-text notes must not force the whole table into horizontal
+     scroll — clamp and ellipsize; the cell's title attr carries the full text. */
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }.leaves-staff-sub {
   display: block;
   margin-top: var(--pds-gap-xx-small);

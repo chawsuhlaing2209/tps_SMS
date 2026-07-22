@@ -3408,8 +3408,10 @@ export class FinanceService {
 
   /**
    * "Lifetime" overview: revenue metrics summed across every academic year,
-   * payroll unclamped (all-time). Year-bound sections (grade billing, profile)
-   * stay empty — they have no meaning across years.
+   * payroll unclamped (all-time). Profile figures aggregate across years
+   * (distinct students/grades ever enrolled, all-time discount reach); only
+   * per-grade billing stays empty — grades differ per year, so merging them
+   * has no meaning.
    */
   private async getLifetimeFinanceOverview(
     tenantId: string,
@@ -3417,10 +3419,61 @@ export class FinanceService {
     scope: 'month' | 'term',
   ) {
     const years = await this.listAcademicYearOptions(tenantId)
-    const [perYearMetrics, monthly, receivableRows] = await Promise.all([
+    const firstYear = years[0]
+    const allStart = firstYear
+      ? years.reduce((min, y) => (y.startsOn < min ? y.startsOn : min), firstYear.startsOn)
+      : '1970-01-01'
+    const allEnd = firstYear
+      ? years.reduce((max, y) => (y.endsOn > max ? y.endsOn : max), firstYear.endsOn)
+      : '2999-12-31'
+
+    const [
+      perYearMetrics,
+      monthly,
+      receivableRows,
+      feeItemCount,
+      discountRuleCount,
+      bySource,
+      studentsWithDiscounts,
+      enrollmentStats,
+      planMixRows,
+    ] = await Promise.all([
       Promise.all(years.map((y) => this.getInvoiceMetrics(tenantId, { academicYearId: y.id }))),
       this.getMonthlyReport(tenantId, { month }),
       this.getReceivables(tenantId, {}),
+      this.db
+        .select({ count: count() })
+        .from(feeItems)
+        .where(and(eq(feeItems.tenantId, tenantId), eq(feeItems.status, 'active'))),
+      this.db
+        .select({ count: count() })
+        .from(discountRules)
+        .where(and(eq(discountRules.tenantId, tenantId), eq(discountRules.status, 'active'))),
+      this.getRevenueBySourceForYear(tenantId, allStart, allEnd),
+      this.countStudentsWithDiscountsForYear(tenantId, allStart, allEnd),
+      this.db.execute<{ students: number; grades: number }>(sql`
+        SELECT COUNT(DISTINCT student_id)::int AS students, COUNT(DISTINCT grade_id)::int AS grades
+        FROM ${enrollments}
+        WHERE tenant_id = ${tenantId} AND status = 'approved'
+      `),
+      // Same classification the roster uses (paymentPlanKeyFromInvoiceSource),
+      // applied to each student's most recent invoice.
+      this.db.execute<{ plan: string; count: number }>(sql`
+        SELECT plan, COUNT(*)::int AS count
+        FROM (
+          SELECT DISTINCT ON (student_id)
+            student_id,
+            CASE source
+              WHEN 'recurring' THEN 'monthly'
+              WHEN 'enrollment' THEN 'enrollment'
+              ELSE 'one_off'
+            END AS plan
+          FROM ${invoices}
+          WHERE tenant_id = ${tenantId}
+          ORDER BY student_id, created_at DESC
+        ) latest_per_student
+        GROUP BY plan
+      `),
     ])
 
     const totals = perYearMetrics.reduce(
@@ -3436,6 +3489,17 @@ export class FinanceService {
     )
     const collectionRate =
       totals.billed > 0 ? Math.round((totals.collected / totals.billed) * 100) : 0
+
+    const enrolledStudents = Number(enrollmentStats.rows[0]?.students ?? 0)
+    const gradesWithStudents = Number(enrollmentStats.rows[0]?.grades ?? 0)
+    const paymentPlanMix = { enrollment: 0, monthly: 0, one_off: 0 }
+    for (const row of planMixRows.rows) {
+      if (row.plan in paymentPlanMix) {
+        paymentPlanMix[row.plan as keyof typeof paymentPlanMix] = Number(row.count)
+      }
+    }
+    const discountExposurePercent =
+      enrolledStudents > 0 ? Math.round((studentsWithDiscounts / enrolledStudents) * 100) : 0
 
     const aging = this.buildReceivablesAging(receivableRows)
     const topOverdue = this.buildTopOverdue(receivableRows)
@@ -3459,14 +3523,15 @@ export class FinanceService {
       term: null,
       month,
       profile: {
-        enrolledStudents: 0,
-        gradesWithStudents: 0,
-        averageBilledPerStudent: 0,
-        activeFeeItems: 0,
-        activeDiscountRules: 0,
-        studentsWithDiscounts: 0,
-        discountExposurePercent: 0,
-        paymentPlanMix: { enrollment: 0, monthly: 0, one_off: 0 },
+        enrolledStudents,
+        gradesWithStudents,
+        averageBilledPerStudent:
+          enrolledStudents > 0 ? Math.round(totals.billed / enrolledStudents) : 0,
+        activeFeeItems: Number(feeItemCount[0]?.count ?? 0),
+        activeDiscountRules: Number(discountRuleCount[0]?.count ?? 0),
+        studentsWithDiscounts,
+        discountExposurePercent,
+        paymentPlanMix,
       },
       revenue: {
         billed: totals.billed,
@@ -3476,7 +3541,7 @@ export class FinanceService {
         collectionRate,
         owingStudents: totals.owingStudents,
         overdueStudents: totals.overdueStudents,
-        bySource: { enrollment: 0, recurring: 0, ad_hoc: 0 },
+        bySource,
         byGrade: [],
       },
       monthly: {

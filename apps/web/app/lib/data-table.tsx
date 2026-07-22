@@ -11,8 +11,9 @@ import {
 } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, Fragment, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { useCallback, useMemo, useState, Fragment, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { appendNavigationTrail, type NavigationSegment } from "./navigation-trail";
+import { useTenantFormats } from "./use-tenant-formats";
 import { isPadaukRowInteractiveTarget } from "./table-row-interaction";
 import { useIsMobileTable } from "./use-media-query";
 import { subjectColor } from "../dashboard/structure/subject-colors";
@@ -74,18 +75,13 @@ export function getRowTimestamp(row: unknown): number {
   return Number.isNaN(time) ? 0 : time;
 }
 
-export function formatRowTimestamp(row: unknown): string {
+function rowTimestampValue(row: unknown): string | null {
   if (!row || typeof row !== "object") {
-    return "—";
+    return null;
   }
 
   const record = row as TimestampRow;
-  const value = record.updatedAt ?? record.createdAt;
-  if (!value) {
-    return "—";
-  }
-
-  return new Date(value).toLocaleString();
+  return record.updatedAt ?? record.createdAt ?? null;
 }
 
 function columnHasStatus<TData>(column: ColumnDef<TData, unknown>): boolean {
@@ -126,7 +122,8 @@ function columnIsSortable<TData>(column: ColumnDef<TData, unknown>): boolean {
 function prepareColumns<TData>(
   columns: ColumnDef<TData, unknown>[],
   updatedAtLabel: string,
-  showUpdatedAt: boolean
+  showUpdatedAt: boolean,
+  formatTimestamp: (row: unknown) => string
 ): ColumnDef<TData, unknown>[] {
   const enhanced = columns.map((column) => {
     const next: ColumnDef<TData, unknown> = {
@@ -152,7 +149,7 @@ function prepareColumns<TData>(
             id: "updatedAt",
             header: updatedAtLabel,
             accessorFn: (row) => getRowTimestamp(row),
-            cell: ({ row }) => formatRowTimestamp(row.original),
+            cell: ({ row }) => formatTimestamp(row.original),
             enableSorting: true
           } as ColumnDef<TData, unknown>
         ];
@@ -290,6 +287,14 @@ export function DataTable<TData>({
 }) {
   const c = useTranslations("common");
   const router = useRouter();
+  const { formatDateTime } = useTenantFormats();
+  const formatRowUpdatedAt = useCallback(
+    (row: unknown) => {
+      const value = rowTimestampValue(row);
+      return value ? formatDateTime(value) : "—";
+    },
+    [formatDateTime]
+  );
   const resolvedUpdatedAtLabel = updatedAtLabel ?? c("lastUpdated");
   const resolvedInitialSorting =
     initialSorting ?? computeDefaultSorting(columns, showUpdatedAt);
@@ -297,8 +302,8 @@ export function DataTable<TData>({
   const rowIsInteractive = Boolean(getRowHref || onRowClick);
 
   const tableColumns = useMemo(
-    () => prepareColumns(columns, resolvedUpdatedAtLabel, showUpdatedAt),
-    [columns, showUpdatedAt, resolvedUpdatedAtLabel]
+    () => prepareColumns(columns, resolvedUpdatedAtLabel, showUpdatedAt, formatRowUpdatedAt),
+    [columns, showUpdatedAt, resolvedUpdatedAtLabel, formatRowUpdatedAt]
   );
 
   const table = useReactTable({

@@ -13,6 +13,7 @@ import { toastSuccess } from "../../../../lib/toast";
 import { hasAnyPermission } from "../../../../lib/permissions";
 import { getSession } from "../../../../lib/session";
 import { PageHeader } from "../../../page-header-context";
+import { moduleBreadcrumbs } from "../../../../lib/page-header-utils";
 import { StatusBadge } from "../../../../../components/shared/badge";
 import { EmptyState } from "../../../../../components/shared/empty-state";
 import { NavigationBackLink } from "../../../../../components/shared/navigation-back-link";
@@ -184,11 +185,7 @@ export function InvoiceDetailView({
           <PageHeader
             title={data.invoiceNumber}
             segment={{ label: data.invoiceNumber, href: `/dashboard/finance/invoices/${invoiceId}` }}
-            breadcrumbs={[
-              { label: nav("finance"), href: "/dashboard/finance/invoices" },
-              { label: t("invoices"), href: "/dashboard/finance/invoices" },
-              { label: data.invoiceNumber }
-            ]}
+            breadcrumbs={moduleBreadcrumbs("invoices", nav, [{ label: data.invoiceNumber }])}
           />
 
           <NavigationBackLink fallback={{ label: t("invoices"), href: "/dashboard/finance/invoices" }} />

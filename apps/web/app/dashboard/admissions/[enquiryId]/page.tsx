@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ApiError, useApiMutation, useApiQuery } from "../../../lib/api";
 import { useCurrentAcademicYear } from "../../../lib/use-current-academic-year";
+import { useTenantFormats } from "../../../lib/use-tenant-formats";
 import { Field } from "../../../lib/form";
 import { Icon } from "../../../lib/material-icon";
 import { FormInput, TextAreaInput } from "../../../../components/shared/form-input";
@@ -94,6 +95,7 @@ export default function EnquiryDetailPage({
   const t = useTranslations("admissions");
   const c = useTranslations("common");
   const nav = useTranslations("nav");
+  const { formatDateTime } = useTenantFormats();
   const [activityModalOpen, setActivityModalOpen] = useState(false);
   const [editSheetOpen, setEditSheetOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -345,7 +347,7 @@ export default function EnquiryDetailPage({
               {data.activities.map((activity) => (
                 <tr key={activity.id}>
                   <td className="pds-type-body-m-medium admission-activities-table__date">
-                    {new Date(activity.createdAt).toLocaleString()}
+                    {formatDateTime(activity.createdAt)}
                   </td>
                   <td className="pds-type-body-s-regular admission-activities-table__type">
                     {t(`activity_${activity.activityType}` as "activity_call")}

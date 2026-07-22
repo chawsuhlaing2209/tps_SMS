@@ -20,6 +20,7 @@ import { PaginationControls } from "../../lib/pagination-controls";
 import { hasAnyPermission } from "../../lib/permissions";
 import { getSession } from "../../lib/session";
 import { TablePanelBody, DataTableSection } from "../../lib/table-panel";
+import { useTenantFormats } from "../../lib/use-tenant-formats";
 import { usePeopleDirectoryActions } from "./people-directory-actions";
 import { StudentRegistrationWizard } from "./student-registration-wizard";
 
@@ -41,18 +42,6 @@ type StudentList = { data: Student[]; total: number };
 const STUDENTS_PATH = (tenant: string) => `/tenants/${tenant}/students`;
 const PAGE_SIZE = 50;
 
-function formatDateOfBirth(value: string | null) {
-  if (!value) {
-    return "—";
-  }
-
-  return new Date(value).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric"
-  });
-}
-
 export function StudentsDirectory() {
   const t = useTranslations("students");
   const p = useTranslations("people");
@@ -60,6 +49,8 @@ export function StudentsDirectory() {
   const c = useTranslations("common");
   const permissions = getSession()?.permissions;
   const canManage = hasAnyPermission(permissions, ["student.manage"]);
+  const { formatDate } = useTenantFormats();
+  const formatDateOfBirth = (value: string | null) => (value ? formatDate(value) : "—");
   const { studentsRegisterOpen, setStudentsRegisterOpen } = usePeopleDirectoryActions();
   const [statusFilter, setStatusFilter] = useState("");
   const [viewFilter, setViewFilter] = useState<"active" | "archived" | "all">("active");

@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Headers, Param, Post, Query, UseGuards } from "@nestjs/common";
-import { RequirePermissions } from "../identity/permissions.decorator.js";
+import { RequireAnyPermissions, RequirePermissions } from "../identity/permissions.decorator.js";
 import { PermissionsGuard } from "../identity/permissions.guard.js";
 import { GenerateReportCardsDto, ListReportCardsQueryDto } from "./dto.js";
 import { ReportCardsService } from "./report-cards.service.js";
@@ -10,7 +10,7 @@ export class ReportCardsController {
   constructor(private readonly reportCardsService: ReportCardsService) {}
 
   @Get()
-  @RequirePermissions("report_card.generate")
+  @RequireAnyPermissions("report_card.generate", "report_card.approve")
   list(
     @Param("tenantId") tenantId: string,
     @Query() query: ListReportCardsQueryDto
@@ -29,7 +29,7 @@ export class ReportCardsController {
   }
 
   @Get(":reportCardId")
-  @RequirePermissions("report_card.generate")
+  @RequireAnyPermissions("report_card.generate", "report_card.approve")
   getById(
     @Param("tenantId") tenantId: string,
     @Param("reportCardId") reportCardId: string

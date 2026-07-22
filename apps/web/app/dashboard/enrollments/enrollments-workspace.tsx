@@ -306,7 +306,7 @@ export function EnrollmentsWorkspace({
                   options={(grades.data ?? []).map((g) => ({ value: g.id, label: g.name }))}
                 />
               </div>
-              <div className="pds-search-filters-row__filter--160">
+              <div className="pds-search-filters-row__filter--range">
                 <PdsDatePickerField
                   type="day"
                   variant="filter"
