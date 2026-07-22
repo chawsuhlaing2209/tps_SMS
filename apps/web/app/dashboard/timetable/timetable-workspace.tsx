@@ -30,6 +30,7 @@ import { TimetablePeriodModal } from "./_components/timetable-period-modal";
 type GradeOverview = {
   id: string;
   name: string;
+  status?: string;
   classroomCount: number;
   subjectCount: number;
   subjects: Array<{ id: string; name: string; code: string | null; colorKey?: string | null }>;
@@ -199,11 +200,19 @@ export function TimetableWorkspace() {
     yearId ? gradesPath(tenant, yearId) : null
   );
 
+  // The grades endpoint returns every grade (the Grades & Classrooms page has an
+  // Active/Archived/All filter); the timetable only schedules the current year,
+  // so hide grades archived by a prior year's rollover.
+  const visibleGrades = useMemo(
+    () => (grades.data ?? []).filter((grade) => grade.status !== "archived"),
+    [grades.data]
+  );
+
   const classrooms = useApiQuery<ClassroomRow[]>((tenant) =>
     yearId && gradeId ? classroomsPath(tenant, yearId, gradeId) : null
   );
 
-  const resolvedGradeId = gradeId || grades.data?.[0]?.id || "";
+  const resolvedGradeId = gradeId || visibleGrades[0]?.id || "";
   const resolvedClassroomId = classroomId || classrooms.data?.[0]?.id || "";
 
   const roomDetail = useApiQuery<RoomDetail>((tenant) =>
@@ -219,11 +228,11 @@ export function TimetableWorkspace() {
   const schoolSettings = useApiQuery<SchoolScheduleSettings>((tenant) => schoolSchedulePath(tenant));
 
   useEffect(() => {
-    const firstGrade = grades.data?.[0];
+    const firstGrade = visibleGrades[0];
     if (!gradeId && firstGrade) {
       setGradeId(firstGrade.id);
     }
-  }, [gradeId, grades.data]);
+  }, [gradeId, visibleGrades]);
 
   useEffect(() => {
     const firstRoom = classrooms.data?.[0];
@@ -238,7 +247,7 @@ export function TimetableWorkspace() {
     setSelectedSlot(null);
   }, [resolvedClassroomId, resolvedGradeId]);
 
-  const activeGrade = grades.data?.find((grade) => grade.id === resolvedGradeId);
+  const activeGrade = visibleGrades.find((grade) => grade.id === resolvedGradeId);
   const activeClassroom = classrooms.data?.find((room) => room.id === resolvedClassroomId);
 
   const createSlot = useApiMutation<
@@ -608,7 +617,7 @@ export function TimetableWorkspace() {
       ) : (
         <>
           <section className="timetable-grade-nav" aria-label={t("gradeNavLabel")}>
-            {grades.data?.map((grade) => (
+            {visibleGrades.map((grade) => (
               <button
                 key={grade.id}
                 type="button"
