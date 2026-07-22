@@ -168,18 +168,23 @@ export default function FeeStructuresPage() {
   }, [selectedFeeItemId, yearPlans, activeGrades]);
 
   // Per-grade annual totals across all components (for the comparison chart + left rail counts).
+  // Count only grades still shown in the editor (active grades); a plan may carry
+  // grade IDs from a rolled-over year whose grades are now archived — those must
+  // not inflate the "N grades" summary shown next to the panel's grade list.
   const componentTotals = useMemo(() => {
+    const activeGradeIdSet = new Set(activeGrades.map((grade) => grade.id));
     const map = new Map<string, { grades: number; annual: number }>();
     for (const item of activeComponents) map.set(item.id, { grades: 0, annual: 0 });
     for (const plan of yearPlans) {
       const item = feeItems.data?.find((f) => f.id === plan.feeItemId);
       const entry = map.get(plan.feeItemId);
       if (!item || !entry) continue;
-      entry.grades += plan.gradeIds.length;
-      entry.annual += annualizeAmount(Number(plan.amount), item.billingType) * plan.gradeIds.length;
+      const appliedGrades = plan.gradeIds.filter((id) => activeGradeIdSet.has(id)).length;
+      entry.grades += appliedGrades;
+      entry.annual += annualizeAmount(Number(plan.amount), item.billingType) * appliedGrades;
     }
     return map;
-  }, [activeComponents, yearPlans, feeItems.data]);
+  }, [activeComponents, yearPlans, feeItems.data, activeGrades]);
 
   const includedCount = Object.values(draft).filter((d) => d.included).length;
   const editorAnnualTotal = useMemo(

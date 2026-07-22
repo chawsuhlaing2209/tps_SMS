@@ -50,7 +50,7 @@ type StaffOverviewPage = {
   offset: number;
 };
 
-type GradeOption = { id: string; name: string; sortOrder?: number };
+type GradeOption = { id: string; name: string; sortOrder?: number; status?: string };
 
 const PAGE_SIZE = 50;
 
@@ -142,6 +142,17 @@ export function TeachersDirectory() {
     return map;
   }, [grades.data]);
 
+  // Grade chips reflect only grades that still exist in the current year;
+  // archived grades from a prior (rolled-over) year are hidden so a teacher's
+  // eligibility doesn't list classes the school no longer runs.
+  const activeGradeIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const grade of grades.data ?? []) {
+      if (grade.status !== "archived") set.add(grade.id);
+    }
+    return set;
+  }, [grades.data]);
+
   const sortGradeIds = (ids: string[]) =>
     [...ids].sort(
       (a, b) =>
@@ -163,7 +174,9 @@ export function TeachersDirectory() {
       accessorFn: (row) => row.teacherProfile?.eligibleGradeIds?.join(",") ?? "",
       enableSorting: false,
       cell: ({ row }) => {
-        const gradeIds = row.original.teacherProfile?.eligibleGradeIds ?? [];
+        const gradeIds = (row.original.teacherProfile?.eligibleGradeIds ?? []).filter((id) =>
+          activeGradeIds.has(id)
+        );
         if (gradeIds.length === 0) {
           return <span className="pds-type-body-s-regular muted">—</span>;
         }
@@ -290,10 +303,12 @@ export function TeachersDirectory() {
                   value={gradeFilter}
                   onValueChange={(value) => setGradeFilter(typeof value === "string" ? value : "")}
                   placeholder={t("allGrades")}
-                  options={(grades.data ?? []).map((grade) => ({
-                    value: grade.id,
-                    label: grade.name
-                  }))}
+                  options={(grades.data ?? [])
+                    .filter((grade) => grade.status !== "archived")
+                    .map((grade) => ({
+                      value: grade.id,
+                      label: grade.name
+                    }))}
                 />
               </div>
               <div className="pds-search-filters-row__filter--160">

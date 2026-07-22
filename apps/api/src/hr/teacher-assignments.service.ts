@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException
 } from "@nestjs/common";
-import { and, eq, notInArray } from "drizzle-orm";
+import { and, eq, ne, notInArray } from "drizzle-orm";
 import type { TeacherProfileCapabilityInput, UpdateTeacherAssignmentsInput, UpdateTeacherTeachingSetupInput } from "@sms/shared";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
@@ -65,7 +65,7 @@ export class TeacherAssignmentsService {
       this.db
         .select({ id: grades.id, name: grades.name, sortOrder: grades.sortOrder })
         .from(grades)
-        .where(eq(grades.tenantId, tenantId))
+        .where(and(eq(grades.tenantId, tenantId), ne(grades.status, "archived")))
         .orderBy(grades.sortOrder),
       this.db
         .select({
@@ -214,8 +214,20 @@ export class TeacherAssignmentsService {
     return [...gradeIds];
   }
 
+  /** The tenant's current teaching year — assignments are scoped to it so the
+   *  directory/profile never surface a prior (archived) year's classes. */
+  private async resolveActiveYearId(tenantId: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ id: academicYears.id })
+      .from(academicYears)
+      .where(and(eq(academicYears.tenantId, tenantId), eq(academicYears.status, "active")))
+      .limit(1);
+    return row?.id ?? null;
+  }
+
   async getTeacherAssignments(tenantId: string, staffId: string) {
     await this.assertStaff(tenantId, staffId);
+    const activeYearId = await this.resolveActiveYearId(tenantId);
 
     const [gradeChiefRows, homeroomRows, subjectRows] = await Promise.all([
       this.db
@@ -232,7 +244,8 @@ export class TeacherAssignmentsService {
         .where(
           and(
             eq(gradeChiefAssignments.tenantId, tenantId),
-            eq(gradeChiefAssignments.staffId, staffId)
+            eq(gradeChiefAssignments.staffId, staffId),
+            ...(activeYearId ? [eq(gradeChiefAssignments.academicYearId, activeYearId)] : [])
           )
         ),
       this.db
@@ -251,7 +264,8 @@ export class TeacherAssignmentsService {
         .where(
           and(
             eq(classrooms.tenantId, tenantId),
-            eq(classrooms.classTeacherStaffId, staffId)
+            eq(classrooms.classTeacherStaffId, staffId),
+            ...(activeYearId ? [eq(classrooms.academicYearId, activeYearId)] : [])
           )
         ),
       this.db
@@ -272,7 +286,8 @@ export class TeacherAssignmentsService {
         .where(
           and(
             eq(classroomSubjectTeachers.tenantId, tenantId),
-            eq(classroomSubjectTeachers.teacherStaffId, staffId)
+            eq(classroomSubjectTeachers.teacherStaffId, staffId),
+            ...(activeYearId ? [eq(classrooms.academicYearId, activeYearId)] : [])
           )
         )
     ]);
