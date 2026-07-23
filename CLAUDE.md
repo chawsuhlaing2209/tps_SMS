@@ -19,6 +19,10 @@ packages/shared TypeScript-only: roles, permissions, Zod schemas, job types
 
 See `docs/unified-enrollment-billing-plan.md` and `.cursor/rules/unified-lifecycle.mdc`.
 
+## Deployment & release gate (mandatory)
+
+**`DEPLOYMENT.md` is the enforceable rulebook.** Before merging any feature to `main`, run its **Checklist A** (tenant scoping, audit logging, additive migrations + journal `when` gotcha, en+my i18n parity, MVP scope, flag-vs-unflagged rollout decision). Before any production deploy, run **Checklist B**; when onboarding a tenant, **Checklist C**. Its §1 architecture invariants (one deployment for all tenants, pool-model tenancy, session-derived tenant identity, additive-only migrations, tags for prod, per-tenant feature flags) override convenience — never work around them in a feature branch. Keep its status tables (§5 hardening, §6 decision log) updated in the same PR that changes reality.
+
 ## Key Conventions
 
 ### Backend (NestJS + Drizzle)

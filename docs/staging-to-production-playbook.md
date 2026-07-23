@@ -3,7 +3,9 @@
 This is the non-engineer guide to running tps_SMS in the real world: what
 staging and production are, how a feature travels from your laptop to paying
 schools, why customer data is never at risk from a deploy, and how to manage
-the git repository. The technical companion is [operations.md](./operations.md).
+the git repository. The technical companion is [operations.md](./operations.md);
+the per-release checklists Claude and you must run live in
+[DEPLOYMENT.md](../DEPLOYMENT.md).
 
 ---
 
