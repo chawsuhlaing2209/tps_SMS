@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
+import { ThrottlerModule } from "@nestjs/throttler";
 import { AcademicsModule } from "./academics/academics.module.js";
 import { AdmissionsModule } from "./admissions/admissions.module.js";
 import { AppController } from "./app.controller.js";
@@ -32,6 +33,12 @@ import { StorageModule } from "./storage/storage.module.js";
       // Load the API's own .env first, then fall back to the repo-root .env so
       // the app works whether it is started from apps/api or the workspace root.
       envFilePath: [".env", "../../.env"]
+    }),
+    // Rate-limit buckets for credential endpoints (login, activate, password
+    // reset). Guards are applied per-route, not globally, so normal app
+    // traffic is never throttled. In-memory storage: limits are per-instance.
+    ThrottlerModule.forRoot({
+      throttlers: [{ name: "credentials", ttl: 60_000, limit: 10 }]
     }),
     DbModule,
     StorageModule,

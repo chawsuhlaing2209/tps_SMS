@@ -134,7 +134,10 @@ deployed environment, not on a laptop:
 | httpOnly + `secure` + `sameSite` session cookie | done (verify `secure` flips on in prod) |
 | CORS locked to real web origin (`API_ALLOWED_ORIGINS`) | pending prod config |
 | Postgres RLS backstop + non-owner app DB role (I4) | planned |
-| Rate limiting on `/auth/login` (+ `helmet` on API) | planned |
+| Rate limiting on credential endpoints (`@nestjs/throttler`: login/activate/password-reset/resolve) | done (2026-07-23) |
+| `helmet` security headers + `x-powered-by` disabled on API | done (2026-07-23) |
+| Login enumeration collapsed to uniform `auth.invalidCredentials` 401 | done (2026-07-23) |
+| Swagger `/docs` disabled when `NODE_ENV=production` | done (2026-07-23) |
 | HTTPS-only + HSTS at the edge | pending hosting |
 | Managed daily backups + PITR + **one completed restore drill** | pending hosting |
 | Error tracking (Sentry) + uptime monitor on `/health` | planned |

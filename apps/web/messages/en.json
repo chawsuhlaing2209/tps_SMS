@@ -172,10 +172,7 @@
     "resetPasswordButton": "Update password",
     "resettingPassword": "Updating…",
     "resetFailed": "Could not reset password. The token may be invalid or expired.",
-    "unknownTenant": "We couldn't find a school with that name. Check the school / tenant.",
-    "unknownIdentifier": "No account with that email or phone in this school.",
-    "accountInactive": "This account isn't active yet. Contact your school admin.",
-    "wrongPassword": "Incorrect password. Try again or reset it."
+    "unknownTenant": "We couldn't find a school with that name. Check the school / tenant."
   },
   "platformAuth": {
     "eyebrow": "SMS Platform Console",
@@ -190,10 +187,7 @@
     "apiUnavailable": "Cannot reach the sign-in server. From the project root run npm run dev (starts API + web). Ensure Docker is running: npm run db:up.",
     "identifierRequired": "Enter your email or phone.",
     "passwordRequired": "Enter your password.",
-    "schoolSignIn": "School sign in",
-    "unknownIdentifier": "No platform account with that email or phone.",
-    "accountInactive": "This account isn't active.",
-    "wrongPassword": "Incorrect password."
+    "schoolSignIn": "School sign in"
   },
   "platformNav": {
     "console": "Platform",

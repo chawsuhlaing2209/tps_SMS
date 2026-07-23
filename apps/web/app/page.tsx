@@ -68,10 +68,7 @@ export default function LoginPage() {
         const failure = loginHttpFailure(response.status, body, {
           invalid: t("invalid"),
           apiUnavailable: t("apiUnavailable"),
-          unknownTenant: t("unknownTenant"),
-          unknownIdentifier: t("unknownIdentifier"),
-          accountInactive: t("accountInactive"),
-          wrongPassword: t("wrongPassword")
+          unknownTenant: t("unknownTenant")
         });
         if (failure.field) {
           setError(failure.field, { type: "server", message: failure.message });
