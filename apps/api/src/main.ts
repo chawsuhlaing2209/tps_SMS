@@ -2,11 +2,22 @@ import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import type { NextFunction, Request, Response } from "express";
 import helmet from "helmet";
 import { AppModule } from "./app.module.js";
+import {
+  tenantDbContextStorage,
+  tenantIdFromPath
+} from "./db/tenant-db-context.js";
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // Every request gets a tenant DB context (RLS backstop, DEPLOYMENT.md I4):
+  // pre-filled from UUID tenant paths; slug paths are stamped later by
+  // AuthService.resolveTenantId; PlatformAdminGuard enables the bypass.
+  app.use((req: Request, _res: Response, next: NextFunction) => {
+    tenantDbContextStorage.run({ tenantId: tenantIdFromPath(req.path) }, next);
+  });
   // API serves JSON only; a strict CSP is safe and blocks framing/sniffing abuse.
   app.use(helmet());
   app.disable("x-powered-by");

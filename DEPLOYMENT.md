@@ -21,7 +21,7 @@ recorded decision — not a convenient workaround in a feature branch.
 | I1 | **One codebase, one deployment, all tenants** | Never fork per client, never per-tenant branches, never a separate deployed copy per school. Tenant differences are **data** (feature flags, settings), never code. |
 | I2 | **Pool model: shared Postgres, shared schema, `tenant_id` everywhere** | Every tenant-owned table carries `tenant_id`; every query filters by it. No per-tenant databases/schemas at this stage. |
 | I3 | **Tenant identity comes from the session, never the request** | Guards resolve `TenantContext` from the httpOnly cookie. `tenantId` from a request body/query is untrusted display data only. |
-| I4 | **Database-level isolation backstop (RLS)** | Postgres Row-Level Security on all tenant-owned tables, with transaction-scoped `set_config('app.tenant_id', …, true)` and a non-owner app role. App-layer scoping (I2) stays mandatory — RLS is the net under it, not a replacement. *(Status: *planned* — flip to *live* when the RLS migration lands, then this row becomes enforced by the isolation test.)* |
+| I4 | **Database-level isolation backstop (RLS)** | Postgres Row-Level Security on all tenant-owned tables (migration `0037_rls_backstop`), evaluated against per-checkout `app.tenant_id` / `app.bypass_rls` session settings stamped by the API's `TenantContextPool`, with the non-owner `sms_app` role (`APP_DATABASE_URL`). Identity plumbing queried pre-auth (users, sessions, activation/reset tokens, roles, tenant_settings) is excluded and relies on app-layer scoping. App-layer scoping (I2) stays mandatory — RLS is the net under it, not a replacement. *(Status: **live**, enforced by the RLS suite in `tenant-isolation.test.ts`.)* |
 | I5 | **Migrations are additive; deploys never touch data** | Expand-then-contract. Never `DROP`/rename a column in the release that stops using it. `db:seed`/`db:reset`/`db:restore` never run against production. |
 | I6 | **`main` is always releasable; production runs a tag** | Trunk-based: feature branch → PR → green CI → merge. Staging tracks `main`; production deploys tagged releases (`vMAJOR.MINOR.PATCH`). |
 | I7 | **Secrets live only in the host's secret manager** | Nothing real in git. Each environment has its own `SESSION_SECRET`, DB credentials, S3 keys. |
@@ -56,6 +56,10 @@ that will reach tenants.
       > 1783900000000) — otherwise `db:migrate` silently skips it.
 - [ ] Migration rehearsed on staging (against a restored production backup
       once production exists) before the release tag.
+- [ ] **New tenant-owned table?** Its migration must also `ENABLE ROW LEVEL
+      SECURITY` and add the `tenant_isolation` + `platform_bypass` policies
+      (copy the pattern from `0037_rls_backstop.sql`) — grants are automatic
+      via default privileges, RLS is not.
 
 ### Product parity
 - [ ] All user-facing strings via `useTranslations()`, keys present in **both**
@@ -133,7 +137,7 @@ deployed environment, not on a laptop:
 |------|--------|
 | httpOnly + `secure` + `sameSite` session cookie | done (verify `secure` flips on in prod) |
 | CORS locked to real web origin (`API_ALLOWED_ORIGINS`) | pending prod config |
-| Postgres RLS backstop + non-owner app DB role (I4) | planned |
+| Postgres RLS backstop + non-owner `sms_app` role (I4); prod must set `APP_DATABASE_URL` + strong `sms_app` password | done (2026-07-23) |
 | Rate limiting on credential endpoints (`@nestjs/throttler`: login/activate/password-reset/resolve) | done (2026-07-23) |
 | `helmet` security headers + `x-powered-by` disabled on API | done (2026-07-23) |
 | Login enumeration collapsed to uniform `auth.invalidCredentials` 401 | done (2026-07-23) |
@@ -159,6 +163,11 @@ One production topology, mirrored by staging with its own isolated data stores.
 | Object storage | own bucket | S3-compatible managed bucket (Cloudflare R2 or equivalent; MinIO is dev-only) |
 | Email | real provider → test addresses | real provider + SPF/DKIM |
 | Domain/TLS | `staging.<domain>` behind HTTPS | `app.<domain>` behind HTTPS/CDN |
+
+> **Pooling caveat:** the RLS context is stamped per pool checkout, which is
+> safe with the API's own pg pool. If a transaction-pooling proxy (pgBouncer
+> in transaction mode) is ever introduced, the stamping must move into a
+> per-request transaction (`set_config(..., true)`) first.
 
 ### Decision log
 

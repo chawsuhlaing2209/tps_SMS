@@ -8,6 +8,7 @@ import {
 import { and, eq, isNull, or } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
+import { enableRlsBypass, setTenantDbContext } from "../db/tenant-db-context.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
 import {
   accountActivationTokens,
@@ -154,6 +155,10 @@ export class AuthService {
       });
     }
 
+    // Slug-addressed auth routes get their RLS scope stamped here — without
+    // this, the role/permission lookups below would be invisible under RLS.
+    setTenantDbContext(tenant.id);
+
     return tenant.id;
   }
 
@@ -291,6 +296,11 @@ export class AuthService {
     if (!valid) {
       throw invalidCredentials();
     }
+
+    // Credentials verified for a platform account: the rest of this request
+    // (audit write with null tenant_id) needs the cross-tenant RLS bypass —
+    // PlatformAdminGuard only covers requests made *after* login.
+    enableRlsBypass();
 
     const token = this.passwordService.generateToken();
     const tokenHash = this.passwordService.hashToken(token);
