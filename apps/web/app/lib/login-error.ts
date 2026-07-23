@@ -46,14 +46,13 @@ export type LoginFailureMessages = {
   invalid: string;
   apiUnavailable: string;
   unknownTenant?: string;
-  unknownIdentifier?: string;
-  accountInactive?: string;
-  wrongPassword?: string;
 };
 
 /**
- * Map the API's structured login error (`{ code, message }`) to a
- * field-specific failure so the form can highlight the exact input.
+ * Map the API's structured login error (`{ code, message }`) to a failure.
+ * Credential failures are deliberately uniform (`auth.invalidCredentials`,
+ * shown as a form-level banner) so the form can't be used to probe which
+ * accounts exist; only the tenant lookup stays field-specific.
  */
 export function loginHttpFailure(
   status: number,
@@ -67,12 +66,8 @@ export function loginHttpFailure(
   switch (body?.code) {
     case "auth.unknownTenant":
       return { field: "tenant", message: messages.unknownTenant ?? messages.invalid };
-    case "auth.unknownIdentifier":
-      return { field: "identifier", message: messages.unknownIdentifier ?? messages.invalid };
-    case "auth.accountInactive":
-      return { field: "identifier", message: messages.accountInactive ?? messages.invalid };
-    case "auth.wrongPassword":
-      return { field: "password", message: messages.wrongPassword ?? messages.invalid };
+    case "auth.invalidCredentials":
+      return { message: messages.invalid };
     default:
       return { message: body?.message ?? messages.invalid };
   }

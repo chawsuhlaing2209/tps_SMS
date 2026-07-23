@@ -1,4 +1,5 @@
-import { Body, Controller, Post, Req, Res } from "@nestjs/common";
+import { Body, Controller, Post, Req, Res, UseGuards } from "@nestjs/common";
+import { Throttle, ThrottlerGuard } from "@nestjs/throttler";
 import type { Request, Response } from "express";
 import { LoginDto } from "./auth.dto.js";
 import { AuthService } from "./auth.service.js";
@@ -13,6 +14,8 @@ export class PlatformAuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post("login")
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ credentials: { limit: 10, ttl: 60_000 } })
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
     const { token, ...rest } = await this.authService.platformLogin(dto);
     setSessionCookie(res, token);

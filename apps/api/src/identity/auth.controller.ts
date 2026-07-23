@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post, Req, Res, UseGuards } from "@nestjs/common";
+import { Throttle, ThrottlerGuard } from "@nestjs/throttler";
 import type { Request, Response } from "express";
 import type { TenantContext } from "../tenancy/tenant-context.js";
 import {
@@ -22,11 +23,15 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post("activate")
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ credentials: { limit: 10, ttl: 60_000 } })
   activate(@Param("tenantId") tenantId: string, @Body() dto: ActivateAccountDto) {
     return this.authService.activateAccount(tenantId, dto);
   }
 
   @Post("login")
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ credentials: { limit: 10, ttl: 60_000 } })
   async login(
     @Param("tenantId") tenantId: string,
     @Body() dto: LoginDto,
@@ -52,6 +57,8 @@ export class AuthController {
   }
 
   @Post("password-reset/request")
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ credentials: { limit: 5, ttl: 60_000 } })
   requestPasswordReset(
     @Param("tenantId") tenantId: string,
     @Body() dto: RequestPasswordResetDto
@@ -60,6 +67,8 @@ export class AuthController {
   }
 
   @Post("password-reset/confirm")
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ credentials: { limit: 10, ttl: 60_000 } })
   confirmPasswordReset(
     @Param("tenantId") tenantId: string,
     @Body() dto: ConfirmPasswordResetDto

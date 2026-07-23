@@ -59,10 +59,7 @@ export default function PlatformLoginPage() {
           | null;
         const failure = loginHttpFailure(response.status, body, {
           invalid: t("invalid"),
-          apiUnavailable: t("apiUnavailable"),
-          unknownIdentifier: t("unknownIdentifier"),
-          accountInactive: t("accountInactive"),
-          wrongPassword: t("wrongPassword")
+          apiUnavailable: t("apiUnavailable")
         });
         if (failure.field && failure.field !== "tenant") {
           setError(failure.field, { type: "server", message: failure.message });

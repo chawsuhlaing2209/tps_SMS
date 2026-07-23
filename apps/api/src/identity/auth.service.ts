@@ -8,6 +8,7 @@ import {
 import { and, eq, isNull, or } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { DB, type Database } from "../db/db.module.js";
+import { enableRlsBypass, setTenantDbContext } from "../db/tenant-db-context.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
 import {
   accountActivationTokens,
@@ -32,6 +33,18 @@ const RESET_TTL_MS = 1000 * 60 * 30;
 const ACTIVATION_TTL_MS = 1000 * 60 * 60 * 72;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Uniform credential failure: unknown identifier, wrong password, and
+ * inactive account are indistinguishable to the caller, so the login form
+ * cannot be used to probe which accounts exist.
+ */
+function invalidCredentials(): UnauthorizedException {
+  return new UnauthorizedException({
+    code: "auth.invalidCredentials",
+    message: "The login details are incorrect, or the account is not active."
+  });
+}
 
 @Injectable()
 export class AuthService {
@@ -119,9 +132,11 @@ export class AuthService {
    * Accepts either a tenant UUID or a tenant slug (e.g. "demo-alpha") and
    * returns the canonical tenant UUID.
    *
-   * Login failures carry a machine-readable `code` so the web login form can
-   * point at the exact field. Product decision: field-specific errors
-   * (tenant/identifier/password) are worth the account-enumeration tradeoff.
+   * Credential failures (unknown identifier / wrong password / inactive
+   * account) all return one uniform `auth.invalidCredentials` 401 so callers
+   * cannot enumerate accounts (deployment gate 2026-07-23; reverses the
+   * earlier field-specific-errors product decision). Only the tenant lookup
+   * stays specific — the slug is already public in the login URL.
    */
   private async resolveTenantId(tenantIdOrSlug: string): Promise<string> {
     const [tenant] = await this.db
@@ -140,6 +155,10 @@ export class AuthService {
       });
     }
 
+    // Slug-addressed auth routes get their RLS scope stamped here — without
+    // this, the role/permission lookups below would be invisible under RLS.
+    setTenantDbContext(tenant.id);
+
     return tenant.id;
   }
 
@@ -156,26 +175,13 @@ export class AuthService {
         )
       );
 
-    if (!user) {
-      throw new UnauthorizedException({
-        code: "auth.unknownIdentifier",
-        message: "No account with that email or phone in this school."
-      });
-    }
-
-    if (!user.passwordHash || user.status !== "active") {
-      throw new UnauthorizedException({
-        code: "auth.accountInactive",
-        message: "This account is not active yet."
-      });
+    if (!user || !user.passwordHash || user.status !== "active") {
+      throw invalidCredentials();
     }
 
     const valid = await this.passwordService.verify(user.passwordHash, dto.password);
     if (!valid) {
-      throw new UnauthorizedException({
-        code: "auth.wrongPassword",
-        message: "Incorrect password."
-      });
+      throw invalidCredentials();
     }
 
     const token = this.passwordService.generateToken();
@@ -282,27 +288,19 @@ export class AuthService {
         )
       );
 
-    if (!user) {
-      throw new UnauthorizedException({
-        code: "auth.unknownIdentifier",
-        message: "No platform account with that email or phone."
-      });
-    }
-
-    if (!user.passwordHash || user.status !== "active") {
-      throw new UnauthorizedException({
-        code: "auth.accountInactive",
-        message: "This account is not active yet."
-      });
+    if (!user || !user.passwordHash || user.status !== "active") {
+      throw invalidCredentials();
     }
 
     const valid = await this.passwordService.verify(user.passwordHash, dto.password);
     if (!valid) {
-      throw new UnauthorizedException({
-        code: "auth.wrongPassword",
-        message: "Incorrect password."
-      });
+      throw invalidCredentials();
     }
+
+    // Credentials verified for a platform account: the rest of this request
+    // (audit write with null tenant_id) needs the cross-tenant RLS bypass —
+    // PlatformAdminGuard only covers requests made *after* login.
+    enableRlsBypass();
 
     const token = this.passwordService.generateToken();
     const tokenHash = this.passwordService.hashToken(token);
