@@ -102,6 +102,7 @@ Example cron (UTC 02:00 daily):
 
 ## Related docs
 
+- [Deployment rulebook (release-gate checklists)](../DEPLOYMENT.md)
 - [MVP 1 foundation](./mvp-1-foundation.md)
 - [MVP 1 demo runbook](./mvp-1-demo-runbook.md)
 - [Tenant isolation](./tenant-isolation.md)
